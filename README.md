@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MANUTRIX PRO – ENTERPRISE</title>
+<style>
+:root{
+ --bg:#0f172a;--card:#1e293b;--input:#0f172a;
+ --primary:#10b981;--danger:#ef4444;--warning:#f59e0b;
+ --text:#f8fafc;--muted:#94a3b8;--border:#334155;
+}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Segoe UI}
+.container{max-width:700px;margin:auto;padding:10px}
+.card{background:var(--card);padding:18px;border-radius:14px;border:1px solid var(--border);margin-bottom:14px}
+h3{margin:0 0 12px}
+label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase}
+input,select,textarea,button{
+ width:100%;margin:8px 0 14px;padding:12px;
+ background:var(--input);color:#fff;border:1px solid var(--border);
+ border-radius:10px;font-size:14px
+}
+button{background:var(--primary);border:none;font-weight:bold;cursor:pointer}
+.hidden{display:none}
+.row{display:flex;gap:10px}
+.badge{font-size:10px;padding:3px 8px;border-radius:50px;background:var(--border)}
+.bg-danger{background:var(--danger)}
+.bg-warning{background:var(--warning);color:#000}
+.item{display:flex;justify-content:space-between;padding:8px;border-bottom:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<section id="auth" class="card">
+<h3>🔐 Acesso</h3>
+<input id="pin" type="password" placeholder="PIN Admin">
+<select id="role">
+ <option value="operador">Operador</option>
+ <option value="admin">Administrador</option>
+</select>
+<button onclick="Auth.login()">Entrar</button>
+</section>
+
+<section id="menu" class="card hidden">
+<h3>🛠 Painel</h3>
+<button onclick="App.showOS()">Registrar OS / Inspeção</button>
+<button class="bg-warning" onclick="App.showNC()">Pendências NC <span id="ncCount" class="badge">0</span></button>
+<button id="cfgBtn" onclick="App.showConfig()">Configurações</button>
+<button class="bg-danger" onclick="location.reload()">Sair</button>
+</section>
+
+<section id="os" class="card hidden">
+<h3>📋 Ordem de Serviço</h3>
+
+<label>Técnico</label>
+<select id="exec"></select>
+
+<label>Área</label>
+<select id="area" onchange="App.fillEquip()"></select>
+
+<label>Equipamento</label>
+<select id="equip"></select>
+
+<label>Tipo de Atividade</label>
+<select id="tipo" onchange="UI.toggleInspecao()">
+<option>Preventiva</option>
+<option>Corretiva</option>
+<option>Inspeção</option>
+</select>
+
+<div id="inspBox" class="hidden">
+<label>Status da Inspeção</label>
+<select id="inspStatus">
+<option value="OK">Conforme</option>
+<option value="NC">Não Conforme</option>
+</select>
+<textarea id="inspDesc" placeholder="Descrever não conformidade"></textarea>
+</div>
+
+<div class="row">
+<input type="time" id="ini">
+<input type="time" id="fim">
+</div>
+
+<textarea id="obs" placeholder="Observações técnicas"></textarea>
+<button onclick="App.save()">Salvar</button>
+<button onclick="App.back()">Voltar</button>
+</section>
+
+<section id="nc" class="card hidden">
+<h3>⚠️ Pendências</h3>
+<div id="ncList"></div>
+<button onclick="App.back()">Voltar</button>
+</section>
+
+<section id="config" class="card hidden">
+<h3>⚙️ Configurações</h3>
+
+<label>Técnicos</label>
+<input id="cfgExec">
+<button onclick="Cfg.addExec()">Adicionar</button>
+<div id="listExec"></div>
+
+<hr>
+
+<label>Ativos</label>
+<input id="cfgArea" placeholder="Área">
+<input id="cfgTipo" placeholder="Tipo do Equipamento">
+<input id="cfgTag" placeholder="TAG">
+<button onclick="Cfg.addEquip()">Adicionar</button>
+<div id="listEquip"></div>
+
+<hr>
+<button onclick="Cfg.exportCSV()">Exportar CSV</button>
+<button onclick="App.back()">Voltar</button>
+</section>
+
+</div>
+
+<script>
+const DB={
+ g:k=>JSON.parse(localStorage.getItem('mx_'+k)||'[]'),
+ s:(k,v)=>localStorage.setItem('mx_'+k,JSON.stringify(v)),
+ r:k=>localStorage.getItem('mx_'+k)
+};
+
+const Auth={
+ role:null,
+ login(){
+  if(!DB.r('pin')){
+   if(pin.value.length<4) return alert("Crie um PIN");
+   localStorage.setItem('mx_pin',pin.value);
+  }
+  if(pin.value!==DB.r('pin')) return alert("PIN incorreto");
+  this.role=role.value;
+  auth.classList.add('hidden');
+  menu.classList.remove('hidden');
+  if(this.role!=="admin") cfgBtn.classList.add('hidden');
+ }
+};
+
+const App={
+ showOS(){
+  menu.classList.add('hidden');os.classList.remove('hidden');
+  exec.innerHTML=DB.g('execs').map(e=>`<option>${e}</option>`).join('');
+  area.innerHTML=[...new Set(DB.g('equips').map(e=>e.area))].map(a=>`<option>${a}</option>`).join('');
+  this.fillEquip();
+ },
+ fillEquip(){
+  equip.innerHTML=DB.g('equips')
+   .filter(e=>e.area===area.value)
+   .map(e=>`<option>${e.tipo} | ${e.tag}</option>`).join('');
+ },
+ save(){
+  const a=ini.value.split(':'),b=fim.value.split(':');
+  let dur=(+b[0]*60+ +b[1])-(+a[0]*60+ +a[1]);
+  if(dur<0) dur+=1440;
+  if(dur<5||dur>720) alert("⚠️ Verifique a duração informada");
+
+  const rec={
+   tecnico:exec.value,
+   area:area.value,
+   equipamento:equip.value,
+   tipo:tipo.value,
+   duracaoMin:dur,
+   obs:obs.value.replace(/[,;]/g,'.'),
+   ts:Date.now()
+  };
+
+  const osList=DB.g('os'); osList.unshift(rec); DB.s('os',osList);
+
+  if(tipo.value==="Inspeção" && inspStatus.value==="NC"){
+   const nc=DB.g('nc');
+   nc.unshift({ativo:rec.equipamento,desc:inspDesc.value,ts:Date.now(),status:"Aberto"});
+   DB.s('nc',nc);
+  }
+  alert("OS registrada");
+  this.back();
+ },
+ showNC(){
+  menu.classList.add('hidden');nc.classList.remove('hidden');
+  ncList.innerHTML=DB.g('nc').map(n=>`<div class="item">${n.ativo}<span class="badge bg-warning">ABERTO</span></div>`).join('');
+ },
+ back(){location.reload()},
+ showConfig(){menu.classList.add('hidden');config.classList.remove('hidden');Cfg.render()}
+};
+
+const Cfg={
+ render(){
+  listExec.innerHTML=DB.g('execs').map((e,i)=>`<div class="item">${e}<span onclick="Cfg.del('execs',${i})">❌</span></div>`).join('');
+  listEquip.innerHTML=DB.g('equips').map((e,i)=>`<div class="item">${e.area} | ${e.tipo} | ${e.tag}<span onclick="Cfg.del('equips',${i})">❌</span></div>`).join('');
+ },
+ addExec(){const d=DB.g('execs');d.push(cfgExec.value);DB.s('execs',d);cfgExec.value="";this.render()},
+ addEquip(){
+  const d=DB.g('equips');
+  d.push({area:cfgArea.value,tipo:cfgTipo.value,tag:cfgTag.value});
+  DB.s('equips',d);cfgArea.value=cfgTipo.value=cfgTag.value="";this.render()
+ },
+ del(k,i){const d=DB.g(k);d.splice(i,1);DB.s(k,d);this.render()},
+ exportCSV(){
+  const o=DB.g('os');
+  let c="Data,Tecnico,Area,Equipamento,Tipo,Duracao,Obs\n";
+  o.forEach(r=>c+=`${new Date(r.ts).toLocaleString()},${r.tecnico},${r.area},${r.equipamento},${r.tipo},${r.duracaoMin},${r.obs}\n`);
+  const b=new Blob([c]);const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download="manutrix.csv";a.click();
+ }
+};
+
+const UI={toggleInspecao:()=>inspBox.classList.toggle('hidden',tipo.value!=="Inspeção")};
+ncCount.innerText=DB.g('nc').length;
+</script>
+
+</body>
+</html>
