@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>MANUTRIX PRO</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root{
+ --bg:#080a10;--card:#111827;--input:#1f2937;
+ --primary:#34d399;--danger:#ef4444;
+ --text:#f3f4f6;--muted:#9ca3af;
+}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Segoe UI}
+.container{max-width:900px;margin:auto}
+.card{background:var(--card);margin:14px;padding:16px;border-radius:12px}
+h3{margin:0 0 10px;font-size:16px}
+label{font-size:12px;color:var(--muted)}
+input,select,textarea,button{
+ width:100%;margin-top:6px;margin-bottom:12px;
+ padding:10px;background:var(--input);color:#fff;
+ border:1px solid #374151;border-radius:8px
+}
+button{background:var(--primary);color:#064e3b;font-weight:bold;cursor:pointer}
+.danger{background:var(--danger);color:#fff}
+.hidden{display:none}
+.row{display:flex;gap:10px}
+.small{font-size:12px;color:var(--muted)}
+hr{border:0;border-top:1px solid #374151;margin:10px 0}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<!-- PIN -->
+<div id="pinSetup" class="card hidden">
+ <h3>🔐 Criar PIN Administrativo</h3>
+ <input id="newPin" type="password" placeholder="PIN (mínimo 4 dígitos)">
+ <button onclick="setPin()">Salvar PIN</button>
+</div>
+
+<div id="loginView" class="card hidden">
+ <h3>🔐 Login</h3>
+ <input id="pinInput" type="password" placeholder="Digite o PIN">
+ <button onclick="login()">Entrar</button>
+</div>
+
+<!-- MENU -->
+<div id="menu" class="card hidden">
+ <button onclick="showApp()">🛠 Registrar Atividade</button>
+ <button onclick="showConfig()">⚙️ Configurações</button>
+</div>
+
+<!-- CONFIG -->
+<div id="configView" class="card hidden">
+ <h3>⚙️ Configurações</h3>
+
+ <label>Novo Técnico</label>
+ <input id="cfgExec">
+ <button onclick="addExec()">Adicionar Técnico</button>
+ <div id="listExec"></div>
+
+ <hr>
+
+ <label>Equipamento</label>
+ <input id="cfgPlanta" placeholder="Planta">
+ <input id="cfgEquip" placeholder="TAG do Equipamento">
+ <button onclick="addEquip()">Adicionar Equipamento</button>
+ <div id="listEquip"></div>
+
+ <hr>
+
+ <h3>🔗 Gerar QR Code (Link)</h3>
+ <select id="qrPlanta"></select>
+ <select id="qrEquip"></select>
+ <input id="qrLink" readonly>
+</div>
+
+<!-- APP -->
+<div id="appView" class="card hidden">
+ <h3>📍 Registro de Atividade</h3>
+
+ <label>Executante</label>
+ <select id="exec"></select>
+
+ <label>Planta</label>
+ <select id="planta"></select>
+
+ <label>Equipamento</label>
+ <select id="equip"></select>
+
+ <label>Tipo</label>
+ <select id="tipo">
+  <option>Preventiva</option>
+  <option>Corretiva</option>
+  <option>Inspeção</option>
+ </select>
+
+ <div class="row">
+  <input type="time" id="ini">
+  <input type="time" id="fim">
+ </div>
+
+ <textarea id="obs" placeholder="Registro técnico"></textarea>
+ <button onclick="finalizar()">Salvar OS</button>
+</div>
+
+</div>
+
+<script>
+/* ===== BASE ===== */
+const DB={
+ execs:JSON.parse(localStorage.getItem("mp_exec")||"[]"),
+ equip:JSON.parse(localStorage.getItem("mp_equip")||"[]"),
+ os:JSON.parse(localStorage.getItem("mp_os")||"[]"),
+ pin:localStorage.getItem("mp_pin")
+};
+
+/* ===== QR PARAMS ===== */
+const params=new URLSearchParams(location.hash.replace("#",""));
+const qPlanta=params.get("planta");
+const qEquip=params.get("equip");
+
+/* ===== FLOW ===== */
+hideAll();
+if(!DB.pin) pinSetup.classList.remove("hidden");
+else if(qEquip){showApp(true);}
+else loginView.classList.remove("hidden");
+
+function hideAll(){
+ document.querySelectorAll(".card").forEach(d=>d.classList.add("hidden"));
+}
+
+/* ===== AUTH ===== */
+function setPin(){
+ if(newPin.value.length<4) return alert("PIN inválido");
+ DB.pin=newPin.value;save();
+ hideAll();loginView.classList.remove("hidden");
+}
+function login(){
+ if(pinInput.value!==DB.pin) return alert("PIN incorreto");
+ hideAll();menu.classList.remove("hidden");
+}
+
+/* ===== MENU ===== */
+function showApp(fromQR=false){
+ hideAll();appView.classList.remove("hidden");
+ exec.innerHTML=DB.execs.map(e=>`<option>${e}</option>`).join("");
+ planta.innerHTML=[...new Set(DB.equip.map(e=>e.planta))]
+  .map(p=>`<option>${p}</option>`).join("");
+ renderEquip();
+
+ if(fromQR){
+  planta.value=qPlanta;
+  renderEquip();
+  equip.value=qEquip;
+  planta.disabled=true;
+  equip.disabled=true;
+ }
+}
+function showConfig(){
+ hideAll();configView.classList.remove("hidden");
+ renderConfig();
+}
+
+/* ===== CONFIG ===== */
+function renderConfig(){
+ listExec.innerHTML=DB.execs.map((e,i)=>`
+  <div>${e} <button class="danger" onclick="delExec(${i})">X</button></div>`).join("");
+
+ listEquip.innerHTML=DB.equip.map((e,i)=>`
+  <div>${e.planta} - ${e.equip}
+   <button class="danger" onclick="delEquip(${i})">X</button></div>`).join("");
+
+ if(DB.equip.length>0){
+  qrPlanta.innerHTML=[...new Set(DB.equip.map(e=>e.planta))]
+   .map(p=>`<option>${p}</option>`).join("");
+  updateQR();
+ } else {
+  qrPlanta.innerHTML="<option>Cadastre equipamentos</option>";
+  qrEquip.innerHTML="";
+  qrLink.value="";
+ }
+}
+function addExec(){
+ if(!cfgExec.value)return;
+ DB.execs.push(cfgExec.value);cfgExec.value="";
+ save();renderConfig();
+}
+function delExec(i){DB.execs.splice(i,1);save();renderConfig();}
+function addEquip(){
+ if(!cfgPlanta.value||!cfgEquip.value)return;
+ DB.equip.push({planta:cfgPlanta.value,equip:cfgEquip.value});
+ cfgPlanta.value=cfgEquip.value="";
+ save();renderConfig();
+}
+function delEquip(i){DB.equip.splice(i,1);save();renderConfig();}
+
+/* ===== QR ===== */
+function updateQR(){
+ qrEquip.innerHTML=DB.equip.filter(e=>e.planta===qrPlanta.value)
+  .map(e=>`<option>${e.equip}</option>`).join("");
+ qrEquip.onchange=genQR;
+ genQR();
+}
+function genQR(){
+ qrLink.value=`index.html#planta=${qrPlanta.value}&equip=${qrEquip.value}`;
+}
+
+/* ===== APP ===== */
+planta.onchange=renderEquip;
+function renderEquip(){
+ equip.innerHTML=DB.equip.filter(e=>e.planta===planta.value)
+  .map(e=>`<option>${e.equip}</option>`).join("");
+}
+function finalizar(){
+ DB.os.unshift({
+  equip:equip.value,exec:exec.value,
+  tipo:tipo.value,obs:obs.value,
+  date:new Date().toLocaleString(),ts:Date.now()
+ });
+ save();alert("OS registrada");obs.value="";
+}
+
+/* ===== SAVE ===== */
+function save(){
+ localStorage.setItem("mp_exec",JSON.stringify(DB.execs));
+ localStorage.setItem("mp_equip",JSON.stringify(DB.equip));
+ localStorage.setItem("mp_os",JSON.stringify(DB.os));
+ localStorage.setItem("mp_pin",DB.pin);
+}
+</script>
+</body>
+</html>
