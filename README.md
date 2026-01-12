@@ -37,8 +37,8 @@ button{background:var(--primary);border:none;font-weight:bold;cursor:pointer}
 <!-- LOGIN -->
 <section id="screen-login" class="card">
 <h3>🔐 Login</h3>
-<input id="login-user" placeholder="Usuário">
-<input id="login-pin" type="password" inputmode="numeric" placeholder="PIN">
+<input id="loginUser" placeholder="Usuário">
+<input id="loginPin" type="password" inputmode="numeric" placeholder="PIN">
 <button onclick="Auth.login()">Entrar</button>
 </section>
 
@@ -56,7 +56,7 @@ button{background:var(--primary);border:none;font-weight:bold;cursor:pointer}
 <h3>📋 Ordem de Serviço</h3>
 
 <label>Técnico</label>
-<input id="os-user" disabled>
+<input id="osUser" disabled>
 
 <label>Área</label>
 <select id="area" onchange="App.fillEquip()"></select>
@@ -100,16 +100,17 @@ button{background:var(--primary);border:none;font-weight:bold;cursor:pointer}
 
 <!-- CONFIG -->
 <section id="screen-config" class="card hidden">
-<h3>⚙️ Configurações</h3>
+<h3>⚙️ Configurações (ADM)</h3>
 
-<label>Usuários</label>
+<label>Novo Usuário</label>
 <input id="cfgUser" placeholder="Nome">
-<input id="cfgPin" placeholder="PIN">
+<input id="cfgPin" placeholder="PIN (mín. 4)">
 <select id="cfgRole">
 <option value="operador">Operador</option>
 <option value="admin">Administrador</option>
 </select>
 <button onclick="Cfg.addUser()">Adicionar Usuário</button>
+
 <div id="userList"></div>
 
 <hr>
@@ -135,19 +136,23 @@ const DB={
  s:(k,v)=>localStorage.setItem('mx_'+k,JSON.stringify(v))
 };
 
-/* ===== INIT ADMIN ===== */
-if(DB.g('users').length===0){
- DB.s('users',[{nome:"ADMIN",pin:"9937",role:"admin"}]);
-}
+/* ===== BOOTSTRAP ADMIN ===== */
+(function(){
+ const users=DB.g('users');
+ if(!users.some(u=>u.nome==="ADMIN")){
+  users.push({nome:"ADMIN",pin:"9937",role:"admin"});
+  DB.s('users',users);
+ }
+})();
 
 /* ===== AUTH ===== */
 const Auth={
  current:null,
  login(){
-  const nome=login-user.value.trim();
-  const pin=login-pin.value.trim();
+  const nome=loginUser.value.trim();
+  const pin=loginPin.value.trim();
   const user=DB.g('users').find(u=>u.nome===nome&&u.pin===pin);
-  if(!user) return alert("Login inválido");
+  if(!user) return alert("Usuário ou PIN inválido");
   this.current=user;
   DB.s('session',user);
   screen-login.classList.add('hidden');
@@ -162,7 +167,7 @@ const App={
  showOS(){
   screen-menu.classList.add('hidden');
   screen-os.classList.remove('hidden');
-  os-user.value=Auth.current.nome;
+  osUser.value=Auth.current.nome;
   const equips=DB.g('equips');
   area.innerHTML=[...new Set(equips.map(e=>e.area))].map(a=>`<option>${a}</option>`).join('');
   this.fillEquip();
@@ -174,6 +179,7 @@ const App={
    .map(e=>`<option>${e}</option>`).join('');
  },
  save(){
+  if(!ini.value||!fim.value) return alert("Horários obrigatórios");
   const a=ini.value.split(':'),b=fim.value.split(':');
   let dur=(+b[0]*60+ +b[1])-(+a[0]*60+ +a[1]);
   if(dur<0) dur+=1440;
@@ -192,7 +198,7 @@ const App={
    nc.unshift({ativo:rec.equipamento,desc:inspDesc.value,ts:Date.now(),status:"Aberto"});
    DB.s('nc',nc);
   }
-  alert("OS registrada");
+  alert("OS registrada com sucesso");
   location.reload();
  },
  showNC(){
@@ -207,20 +213,23 @@ const App={
 /* ===== CONFIG ===== */
 const Cfg={
  render(){
-  userList.innerHTML=DB.g('users').map((u,i)=>`<div class="item">${u.nome} (${u.role})</div>`).join('');
+  userList.innerHTML=DB.g('users').map(u=>`<div class="item">${u.nome} (${u.role})</div>`).join('');
   equipList.innerHTML=DB.g('equips').map(e=>`<div class="item">${e.area} | ${e.tipo} | ${e.tag}</div>`).join('');
  },
  addUser(){
-  const u={nome:cfgUser.value,pin:cfgPin.value,role:cfgRole.value};
-  if(!u.nome||u.pin.length<4) return alert("Dados inválidos");
-  const users=DB.g('users'); users.push(u); DB.s('users',users);
-  cfgUser.value=cfgPin.value=""; this.render();
+  if(cfgUser.value===""||cfgPin.value.length<4) return alert("Dados inválidos");
+  const users=DB.g('users');
+  users.push({nome:cfgUser.value,pin:cfgPin.value,role:cfgRole.value});
+  DB.s('users',users);
+  cfgUser.value=cfgPin.value="";
+  this.render();
  },
  addEquip(){
   const d=DB.g('equips');
   d.push({area:cfgArea.value,tipo:cfgTipo.value,tag:cfgTag.value});
   DB.s('equips',d);
-  cfgArea.value=cfgTipo.value=cfgTag.value=""; this.render();
+  cfgArea.value=cfgTipo.value=cfgTag.value="";
+  this.render();
  },
  exportCSV(){
   const o=DB.g('os');
