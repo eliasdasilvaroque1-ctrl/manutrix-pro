@@ -1,0 +1,141 @@
+{
+  "identity": {
+    "name": "MANUTRIX",
+    "persona": "The Industrial Commander",
+    "tone": "Rugged, High-Precision, Tactical, Uncompromising Safety",
+    "aesthetic": "Dark Industrial, HUD (Heads-Up Display), High Contrast, Utility-First",
+    "core_values": [
+      "Safety (High visibility alerts)",
+      "Efficiency (One-tap actions)",
+      "Reliability (Offline-first indicators)",
+      "Clarity (Data over decoration)"
+    ]
+  },
+  "technical_stack": {
+    "framework": "React 18",
+    "styling": "Tailwind CSS",
+    "components": "Shadcn/UI",
+    "icons": "Lucide React",
+    "fonts": "Google Fonts (Barlow Condensed, Inter, JetBrains Mono)"
+  },
+  "theme": {
+    "mode": "dark",
+    "strategy": "OLED/Industrial Dark Mode (No Light Mode)",
+    "colors": {
+      "background": {
+        "hex": "#020617",
+        "tailwind": "bg-slate-950",
+        "description": "Deep void blue/black for maximum contrast in low light"
+      },
+      "surface": {
+        "hex": "#0f172a",
+        "tailwind": "bg-slate-900",
+        "description": "Slightly lighter panels for card separation"
+      },
+      "primary": {
+        "hex": "#10b981",
+        "tailwind": "bg-emerald-500",
+        "description": "Action, Safe, Go, Conformity"
+      },
+      "alert": {
+        "hex": "#f59e0b",
+        "tailwind": "bg-amber-500",
+        "description": "Warning, Inspection Needed, Non-Critical Fault"
+      },
+      "destructive": {
+        "hex": "#ef4444",
+        "tailwind": "bg-red-500",
+        "description": "Critical Failure, Stop, Danger"
+      },
+      "text": {
+        "primary": "#f8fafc",
+        "secondary": "#94a3b8",
+        "muted": "#64748b"
+      }
+    }
+  },
+  "typography": {
+    "headings": {
+      "family": "Barlow Condensed, sans-serif",
+      "weights": ["600", "700"],
+      "usage": "Page titles, KPI numbers, Modal headers. Adds the 'Industrial' feel."
+    },
+    "body": {
+      "family": "Inter, sans-serif",
+      "weights": ["400", "500"],
+      "usage": "General text, form labels, instructions."
+    },
+    "mono": {
+      "family": "JetBrains Mono, monospace",
+      "weights": ["500"],
+      "usage": "Asset Tags, QR Codes, Serial Numbers, Technical Specs."
+    }
+  },
+  "layout": {
+    "strategy": "Mobile-First Industrial",
+    "breakpoints": {
+      "mobile": "default (0px)",
+      "tablet": "md (768px)",
+      "desktop": "lg (1024px)"
+    },
+    "navigation": {
+      "mobile": "Fixed Bottom Navigation Bar (Home, Inspections, Scan, Assets, Profile)",
+      "desktop": "Sidebar Navigation (collapsed by default to maximize data view)"
+    },
+    "spacing": {
+      "touch_targets": "min-h-[48px] min-w-[48px]",
+      "containers": "p-4 or p-6",
+      "gap": "gap-4 (dense) to gap-6 (layout)"
+    }
+  },
+  "components": {
+    "buttons": {
+      "style": "Rectangular with slight rounding (rounded-md)",
+      "primary": "bg-emerald-500 text-slate-950 font-bold uppercase tracking-wider hover:bg-emerald-400",
+      "secondary": "border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800",
+      "destructive": "bg-red-900/50 border border-red-500 text-red-100 hover:bg-red-900",
+      "size": "h-12 (Large enough for gloved usage)"
+    },
+    "cards": {
+      "style": "Flat, bordered, no shadow or hard shadow.",
+      "classes": "bg-slate-950 border border-slate-800 rounded-lg"
+    },
+    "inputs": {
+      "style": "High contrast borders, large text.",
+      "classes": "h-12 bg-slate-950 border-slate-700 focus:border-emerald-500 text-lg"
+    },
+    "status_badges": {
+      "good": "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
+      "warning": "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+      "critical": "bg-red-500/10 text-red-400 border border-red-500/20"
+    }
+  },
+  "visual_enhancers": {
+    "borders": "1px solid borders are preferred over shadows for separation.",
+    "patterns": "Subtle striped backgrounds (hazard stripes) for warning areas.",
+    "glassmorphism": "Avoid. Use solid high-contrast backgrounds for readability.",
+    "animations": "Instant feedback. minimize drift/fade. Snap transitions."
+  },
+  "images": {
+    "login_background": "https://images.unsplash.com/photo-1720036236694-d0a231c52563?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwyfHxpbmR1c3RyaWFsJTIwbWFpbnRlbmFuY2UlMjB0ZWNobmljaWFuJTIwZmFjdG9yeSUyMG1hY2hpbmVyeXxlbnwwfHx8fDE3NzM3ODQ1NDl8MA&ixlib=rb-4.1.0&q=85",
+    "empty_state": "https://images.unsplash.com/photo-1721745250213-c3e1a2f4eeeb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwzfHxpbmR1c3RyaWFsJTIwbWFpbnRlbmFuY2UlMjB0ZWNobmljaWFuJTIwZmFjdG9yeSUyMG1hY2hpbmVyeXxlbnwwfHx8fDE3NzM3ODQ1NDl8MA&ixlib=rb-4.1.0&q=85",
+    "technician_avatar": "https://images.unsplash.com/photo-1748348713828-12035b2d0a57?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwxfHxpbmR1c3RyaWFsJTIwbWFpbnRlbmFuY2UlMjB0ZWNobmljaWFuJTIwZmFjdG9yeSUyMG1hY2hpbmVyeXxlbnwwfHx8fDE3NzM3ODQ1NDl8MA&ixlib=rb-4.1.0&q=85"
+  },
+  "instructions_to_main_agent": [
+    "1. FONTS: Import 'Barlow Condensed' (weights 600,700), 'Inter' (400,500), and 'JetBrains Mono' from Google Fonts in index.css or index.html.",
+    "2. THEME OVERRIDE: Modify `index.css` :root and .dark variables. Set --background to '222 47% 5%' (Slate 950) and --primary to '160 84% 39%' (Emerald 500). Ensure these values are applied.",
+    "3. MOBILE NAV: Create a `BottomNav` component for mobile viewports (< md) with icons: Home, ClipboardCheck (Inspections), Scan (Center, Large), Box (Assets), User.",
+    "4. QR SCANNER: The center button of the mobile nav should be a prominent 'SCAN' button (larger than others, primary color).",
+    "5. TOUCH ZONES: Ensure all clickable elements (buttons, list items, checkboxes) have `min-h-[48px]` and `min-w-[48px]` for gloved usage.",
+    "6. OFFLINE INDICATOR: Implement a global banner that appears at the top when navigator.onLine is false (Amber/Red background).",
+    "7. LISTS: Use 'Card Lists' for assets/work orders on mobile. Row-based tables only on desktop.",
+    "8. COMPATIBILITY: Do not delete existing Shadcn components. Customize them via `className` props or wrapper components."
+  ],
+  "universal_guidelines": [
+    "Use data-testid attributes for all interactive elements.",
+    "Ensure contrast ratios meet WCAG AA standards (4.5:1 for normal text).",
+    "Avoid gradients for text. Use solid colors.",
+    "All forms must have validation feedback.",
+    "Use skeleton loaders instead of spinners for content loading."
+  ]
+}
