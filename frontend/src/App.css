@@ -1,34 +1,222 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* MANUTRIX Industrial Theme */
+
+/* Base Resets */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+html {
+  scroll-behavior: smooth;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+body {
+  background-color: #020617;
+  color: #f8fafc;
+  min-height: 100vh;
 }
 
-.App-link {
-    color: #61dafb;
+/* Selection */
+::selection {
+  background-color: rgba(16, 185, 129, 0.3);
+  color: #f8fafc;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Focus States */
+*:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+/* Form Elements */
+input, select, textarea {
+  background-color: #020617;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  font-family: 'Inter', sans-serif;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #64748b;
+}
+
+select {
+  cursor: pointer;
+}
+
+select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+/* Buttons */
+button {
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s ease;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Links */
+a {
+  color: #10b981;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Hide scrollbar on mobile */
+@media (max-width: 768px) {
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Safe area for mobile bottom nav */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease forwards;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.page-exit {
+  opacity: 1;
+}
+
+.page-exit-active {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+/* Touch optimizations */
+@media (hover: none) and (pointer: coarse) {
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Larger touch targets on mobile */
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .card-industrial {
+    border-width: 2px;
+  }
+  
+  .status-good, .status-warning, .status-critical {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
 }
