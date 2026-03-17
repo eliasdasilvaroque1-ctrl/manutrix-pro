@@ -1,16 +1,20 @@
-# MANUTRIX - Sistema de Gestão de Manutenção Industrial
+# MANUTRIX v2.0 - Sistema de Gestão de Manutenção Industrial
 
 ## Visão Geral
-Sistema CMMS/EAM (Computerized Maintenance Management System / Enterprise Asset Management) de classe enterprise para gestão de manutenção industrial.
+Sistema CMMS/EAM (Computerized Maintenance Management System / Enterprise Asset Management) de classe enterprise para gestão de manutenção industrial. **Mobile-first** com tema escuro industrial otimizado para uso em campo.
 
 ## Data de Início
 17/03/2026
 
+## Última Atualização
+17/03/2026 - v2.0 Major Release
+
 ## Stack Técnica
-- **Frontend**: React 18 + Tailwind CSS + Shadcn/UI
-- **Backend**: FastAPI (Python)
+- **Frontend**: React 18 + Tailwind CSS + Shadcn/UI + Lucide Icons
+- **Backend**: FastAPI (Python) + aiofiles
 - **Banco de Dados**: MongoDB
-- **Autenticação**: JWT com RBAC
+- **Autenticação**: JWT com RBAC (admin, supervisor, técnico, inspetor, viewer)
+- **Upload**: Suporte a fotos (jpg, png, webp)
 
 ## User Personas
 
@@ -104,50 +108,98 @@ Sistema CMMS/EAM (Computerized Maintenance Management System / Enterprise Asset 
 - Interceptors Axios para auth
 - Detecção de modo offline
 
+## O que foi Implementado na v2.0 (Melhorias)
+
+### ✅ Scanner QR Code Real
+- Acesso à câmera nativa via MediaDevices API
+- BarcodeDetector para leitura de QR Codes
+- Flashlight automático para ambientes escuros
+- Busca manual por TAG ou código QR
+
+### ✅ Modo Ronda
+- Seleção de área para iniciar ronda
+- Lista sequencial de ativos por área
+- Barra de progresso durante a ronda
+- Navegação entre ativos (anterior/próximo)
+- Priorização por criticidade e pendências
+
+### ✅ Sistema de Notificações
+- Bell com contador de não-lidas
+- Notificações automáticas para:
+  - OS atribuídas a técnicos
+  - Falhas detectadas em inspeções
+  - Estoque crítico
+- Marcar como lida / marcar todas
+
+### ✅ Upload de Fotos
+- Endpoint /api/upload para imagens
+- Suporte a jpg, png, webp, gif
+- Storage local com nomes únicos
+
+### ✅ Mais Dados de Demonstração
+- 10 Ativos (bombas, compressor, esteiras, misturador, etc.)
+- 4 Rotas de Inspeção (Diária, Mensal, Semanal)
+- 10 Itens de Estoque com categorias
+- 4 Usuários (admin, supervisor, 2 técnicos)
+
+### ✅ UI/UX Melhorias
+- Desktop Sidebar navigation
+- KPIs expandidos com subtítulos
+- OS por prioridade no dashboard
+- Alertas visuais para falhas e estoque crítico
+- Progress bar em inspeções e rondas
+- Animações (fadeIn, slideIn, pulse-glow, scan)
+- Empty states com ícones e call-to-action
+
 ## Backlog Priorizado
 
 ### P0 - Crítico
-- [ ] Implementar PWA com Service Workers para offline real
-- [ ] Scanner de QR Code nativo (react-qr-reader)
-- [ ] Upload de fotos em inspeções
+- [ ] PWA com Service Workers para offline real
+- [ ] Sincronização de dados offline
+- [ ] Cache de ativos frequentes
 
 ### P1 - Alta Prioridade
-- [ ] Modo "Ronda" com lista sequencial de inspeções
-- [ ] Notificações push para OS urgentes
 - [ ] Relatórios PDF exportáveis
+- [ ] Gráficos históricos (MTTR, MTBF)
+- [ ] Assinatura digital do técnico
+- [ ] Checklist dinâmico por tipo de OS
 
 ### P2 - Média Prioridade
 - [ ] Integração com sensores IoT (preditiva)
 - [ ] Assistente IA para técnicos
 - [ ] Agendamento inteligente de OS
+- [ ] Notificações push (FCM)
 
 ### P3 - Backlog Futuro
 - [ ] Digital Twin simplificado
 - [ ] Integração ERP (SAP, TOTVS)
 - [ ] SSO (SAML/OIDC)
 - [ ] Dashboard executivo mobile
+- [ ] Análise de custo de ciclo de vida (LCC)
 
 ## Credenciais de Teste
 ```
 Admin: admin@manutrix.com / admin123
-Técnico: tecnico@manutrix.com / tecnico123
+Supervisor: supervisor@manutrix.com / supervisor123
+Técnico 1: tecnico@manutrix.com / tecnico123
+Técnico 2: pedro@manutrix.com / pedro123
 ```
 
-## Dados de Demonstração
-- 1 Organização
-- 1 Planta
-- 4 Áreas (Utilidades, Produção, Embalagem, Manutenção)
-- 7 Ativos (bombas, compressor, esteira, etc.)
-- 1 Rota de Inspeção (Bomba Centrífuga - Mensal)
-- 1 OS de exemplo
-- 4 Itens de estoque
+## Dados de Demonstração v2.0
+- 1 Organização: Indústria Demo
+- 1 Planta: Planta Principal (São Paulo)
+- 4 Áreas: Utilidades, Produção, Embalagem, Manutenção
+- 10 Ativos: BOM-001, BOM-002, CMP-001, EST-001, EST-002, MIS-001, EMB-001, EMB-002, TOR-001, FRE-001
+- 4 Rotas de Inspeção: Diária/Mensal Bomba, Semanal Compressor, Diária Esteira
+- 3 OS de exemplo: 1 preventiva, 1 inspeção, 1 calibração
+- 10 Itens de estoque: Rolamentos, Óleos, Vedações, Correias, Filtros, Graxa
 
 ## URLs
 - Frontend: https://procure-manutrix.preview.emergentagent.com
 - API: https://procure-manutrix.preview.emergentagent.com/api
 
 ## Próximos Passos
-1. Implementar scanner QR Code real
-2. Adicionar upload de fotos
-3. Criar PWA com cache offline
-4. Adicionar mais rotas de inspeção por tipo de ativo
+1. Implementar PWA com Service Workers
+2. Adicionar gráficos de tendência nos KPIs
+3. Criar relatórios PDF
+4. Implementar notificações push
