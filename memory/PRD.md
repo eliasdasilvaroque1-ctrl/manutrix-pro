@@ -1,205 +1,174 @@
-# MANUTRIX v2.0 - Sistema de Gestão de Manutenção Industrial
+# MANUTRIX v3.0 - Sistema de Gestao de Manutencao Industrial
 
-## Visão Geral
-Sistema CMMS/EAM (Computerized Maintenance Management System / Enterprise Asset Management) de classe enterprise para gestão de manutenção industrial. **Mobile-first** com tema escuro industrial otimizado para uso em campo.
+## Visao Geral
+Sistema CMMS/EAM (Computerized Maintenance Management System / Enterprise Asset Management) de classe enterprise para gestao de manutencao industrial. **Mobile-first** com tema escuro industrial otimizado para uso em campo.
 
-## Data de Início
+## Data de Inicio
 17/03/2026
 
-## Última Atualização
-17/03/2026 - v2.0 Major Release
+## Ultima Atualizacao
+11/04/2026 - v3.0 P0 Fixes Release
 
-## Stack Técnica
+## Stack Tecnica
 - **Frontend**: React 18 + Tailwind CSS + Shadcn/UI + Lucide Icons
 - **Backend**: FastAPI (Python) + aiofiles
 - **Banco de Dados**: MongoDB
-- **Autenticação**: JWT com RBAC (admin, supervisor, técnico, inspetor, viewer)
+- **Autenticacao**: JWT com RBAC (admin, supervisor, tecnico, inspetor, viewer)
 - **Upload**: Suporte a fotos (jpg, png, webp)
 
 ## User Personas
 
-### 1. Técnico de Manutenção (João)
-- Executa inspeções em campo via celular
+### 1. Tecnico de Manutencao (Joao)
+- Executa inspecoes em campo via celular
 - Escaneia QR Code dos ativos
-- Registra falhas e observações
+- Registra falhas e observacoes
 - Acompanha suas OS
 
 ### 2. Supervisor (Maria)
 - Monitora KPIs do departamento
-- Distribui OS entre técnicos
-- Aprova fechamento de inspeções
+- Distribui OS entre tecnicos
+- Aprova fechamento de inspecoes
 - Analisa backlog
 
 ### 3. Administrador (Carlos)
 - Configura hierarquia de ativos
-- Gerencia usuários e permissões
-- Define rotas de inspeção
+- Gerencia usuarios e permissoes
+- Define rotas de inspecao
 - Acompanha indicadores gerenciais
+- **Acesso total a todas operacoes CRUD**
 
-## Core Requirements (Implementados)
+## Implementado (v1.0 - v3.0)
 
-### ✅ Autenticação e Autorização
-- Login com email/senha
-- JWT tokens
-- RBAC (admin, supervisor, técnico, inspetor, viewer)
+### Autenticacao e Autorizacao
+- Login com email/senha + JWT tokens
+- RBAC (admin, supervisor, tecnico, inspetor, viewer)
 - Multi-tenant por organization_id
+- Admin bypass (acesso total)
+- check_write_permission helper para RBAC
 
-### ✅ Hierarquia de Ativos
-- Organização → Planta → Área → Ativo
-- TAG única por organização
+### Hierarquia de Ativos - CRUD Completo
+- Organizacao > Planta > Area > Ativo
+- TAG unica por organizacao (auto-gerada)
 - QR Code gerado automaticamente
-- Criticidade por Matriz de Miller (A/B/C/D)
-- Status: Operacional, Parado, Falha, Manutenção, Inspeção Pendente
+- Criticidade (Baixa/Media/Alta/Critica)
+- Status: Operacional, Parado, Manutencao, Desativado
+- Campos: fabricante, modelo, serie, MTBF, MTTR, custos, garantia
 
-### ✅ Rotas de Inspeção
-- Templates de checklist por tipo de ativo
-- Itens: boolean, número, texto, foto
-- Frequência: Diária, Semanal, Mensal, Trimestral, Anual
+### Estoque - CRUD Completo
+- SKU auto-gerado
+- Categorias: rolamento, lubrificante, eletrica, mecanica, etc.
+- Controle: quantidade, minimo, maximo, unidade, custo
+- Alertas de estoque critico
+- Movimentacoes (entrada/saida/ajuste) via body model
+- Localizacao: almoxarifado, prateleira, posicao
 
-### ✅ Inspeções
-- Execução via checklist digital
-- Status: Em Andamento, Concluída, Com Pendências
-- **Geração automática de OS** quando detectada não-conformidade
+### Ordens de Servico - CRUD Completo
+- Workflow: ABERTA > INICIADA > PAUSADA > CONCLUIDA/CANCELADA
+- Tipo: Preventiva, Corretiva, Preditiva, Emergencia, **FALHA** (P0 fix)
+- Origem: Inspecao, Manual, Preventiva, Preditiva, Emergencia, Agendamento IA, **FALHA**
+- Prioridade por criticidade
+- Calculo de tempo efetivo e custos
+- Vinculacao com ativo, tecnico, equipe
 
-### ✅ Ordens de Serviço
-- Workflow: ABERTA → INICIADA → PAUSADA → CONCLUÍDA/CANCELADA
-- Origem: Inspeção, Manual, Preventiva, Preditiva, Emergência
-- Cálculo de tempo efetivo
-- Vinculação com ativo e técnico
+### Inspecoes - CRUD Completo
+- Execucao via checklist digital (boolean, numero, texto)
+- Geracao automatica de OS quando nao-conforme
+- Workflow: Pendente > Em Andamento > Concluida/Com Pendencias
+- Rotas de inspecao com templates
 
-### ✅ KPIs Industriais
-- MTTR (Mean Time To Repair)
-- MTBF (Mean Time Between Failures)
-- Disponibilidade Física (%)
-- Taxa de Conformidade em Inspeções
-- Backlog de OS
+### KPIs Industriais
+- MTTR, MTBF, Disponibilidade, Confiabilidade
+- Taxa de Conformidade em Inspecoes
+- Backlog de OS, OS atrasadas
+- Custo manutencao mensal
+- Preventiva vs Corretiva %
 
-### ✅ Dashboard
+### Dashboard
 - Cards de KPIs com cores indicativas
-- Visão geral de ativos, OS e inspeções
-- Ações rápidas: Escanear QR, Nova OS
+- Alertas: OS atrasadas, estoque critico, ativos parados
+- Acoes rapidas: Escanear QR, Ronda, Nova OS, Inspecao
 
-### ✅ Estoque
-- Controle por SKU
-- Movimentações via transações
-- Alerta de estoque mínimo
+### UI/UX Enterprise
+- Tema escuro industrial (Slate 950)
+- Modais profissionais com secoes (Identificacao, Operacional, Financeiro, etc.)
+- Sidebar desktop + bottom nav mobile
+- Toast notifications (sonner)
+- Glass-card design, status badges, priority badges
+- Loading skeletons, empty states
 
-### ✅ UI/UX Industrial
-- Tema escuro (Slate 950)
-- Mobile-first para uso em campo
-- Botões touch-friendly (48x48dp)
-- Navegação inferior (mobile)
-- Fontes: Barlow Condensed, Inter, JetBrains Mono
+### MongoDB _id Fix
+- Todos endpoints POST usam pop('_id', None) em vez de "_id": None
+- Nenhum endpoint retorna ObjectId serialization errors
 
-## O que foi Implementado (v1.0)
-
-### Backend (/app/backend/server.py)
-- 30+ endpoints REST
-- Modelos Pydantic completos
-- Soft delete em todas entidades
-- Auditoria de operações
-- Funções RPC atômicas para fechamento de inspeção e OS
-- Seed data para demonstração
-
-### Frontend (/app/frontend/src/App.js)
-- 12 páginas/telas
-- Componentes reutilizáveis
-- Estado global via Context API
-- Interceptors Axios para auth
-- Detecção de modo offline
-
-## O que foi Implementado na v2.0 (Melhorias)
-
-### ✅ Scanner QR Code Real
-- Acesso à câmera nativa via MediaDevices API
-- BarcodeDetector para leitura de QR Codes
-- Flashlight automático para ambientes escuros
-- Busca manual por TAG ou código QR
-
-### ✅ Modo Ronda
-- Seleção de área para iniciar ronda
-- Lista sequencial de ativos por área
-- Barra de progresso durante a ronda
-- Navegação entre ativos (anterior/próximo)
-- Priorização por criticidade e pendências
-
-### ✅ Sistema de Notificações
-- Bell com contador de não-lidas
-- Notificações automáticas para:
-  - OS atribuídas a técnicos
-  - Falhas detectadas em inspeções
-  - Estoque crítico
-- Marcar como lida / marcar todas
-
-### ✅ Upload de Fotos
-- Endpoint /api/upload para imagens
-- Suporte a jpg, png, webp, gif
-- Storage local com nomes únicos
-
-### ✅ Mais Dados de Demonstração
-- 10 Ativos (bombas, compressor, esteiras, misturador, etc.)
-- 4 Rotas de Inspeção (Diária, Mensal, Semanal)
-- 10 Itens de Estoque com categorias
-- 4 Usuários (admin, supervisor, 2 técnicos)
-
-### ✅ UI/UX Melhorias
-- Desktop Sidebar navigation
-- KPIs expandidos com subtítulos
-- OS por prioridade no dashboard
-- Alertas visuais para falhas e estoque crítico
-- Progress bar em inspeções e rondas
-- Animações (fadeIn, slideIn, pulse-glow, scan)
-- Empty states com ícones e call-to-action
+## P0 Fixes Aplicados (11/04/2026)
+- [x] Enum FALHA adicionado a OSTipo e OSOrigem
+- [x] CRUD Ativos funcionando (criar, ler, editar, excluir)
+- [x] CRUD Estoque funcionando (criar, ler, editar, excluir)
+- [x] CRUD OS funcionando (criar, ler, editar, excluir, workflow)
+- [x] CRUD Inspecoes funcionando (criar, ler, editar, excluir, workflow + auto-OS)
+- [x] _id removido corretamente de todas as respostas POST
+- [x] Admin consegue fazer todas as operacoes (check_write_permission)
+- [x] ConcluirInspecaoBody/ConcluirOSBody/MovimentacaoCreateBody - proper JSON bodies
+- [x] Frontend modais enterprise (Ativos, Estoque, OS, Inspecoes) todos funcionais
 
 ## Backlog Priorizado
 
-### P0 - Crítico
-- [ ] PWA com Service Workers para offline real
-- [ ] Sincronização de dados offline
-- [ ] Cache de ativos frequentes
-
 ### P1 - Alta Prioridade
-- [ ] Relatórios PDF exportáveis
-- [ ] Gráficos históricos (MTTR, MTBF)
-- [ ] Assinatura digital do técnico
-- [ ] Checklist dinâmico por tipo de OS
+- [ ] Melhorias visuais enterprise: glass effects, Framer Motion, loading skeletons polidos
+- [ ] Dashboard avancado com graficos de OS por tipo/status (Kanban visual)
+- [ ] Sistema de notificacoes funcional com badge no sino
+- [ ] Relatorios PDF exportaveis
+- [ ] Graficos historicos (MTTR, MTBF)
 
-### P2 - Média Prioridade
-- [ ] Integração com sensores IoT (preditiva)
-- [ ] Assistente IA para técnicos
-- [ ] Agendamento inteligente de OS
-- [ ] Notificações push (FCM)
+### P2 - Media Prioridade
+- [ ] PWA com Service Workers para offline real
+- [ ] Sincronizacao de dados offline
+- [ ] Assinatura digital do tecnico
+- [ ] Checklist dinamico por tipo de OS
+- [ ] Notificacoes push (FCM)
 
 ### P3 - Backlog Futuro
+- [ ] Integracao com sensores IoT (preditiva)
+- [ ] Assistente IA para tecnicos
 - [ ] Digital Twin simplificado
-- [ ] Integração ERP (SAP, TOTVS)
+- [ ] Integracao ERP (SAP, TOTVS)
 - [ ] SSO (SAML/OIDC)
 - [ ] Dashboard executivo mobile
-- [ ] Análise de custo de ciclo de vida (LCC)
+- [ ] Analise de custo de ciclo de vida (LCC)
 
 ## Credenciais de Teste
 ```
 Admin: admin@manutrix.com / admin123
 Supervisor: supervisor@manutrix.com / supervisor123
-Técnico 1: tecnico@manutrix.com / tecnico123
-Técnico 2: pedro@manutrix.com / pedro123
+Tecnico 1: tecnico@manutrix.com / tecnico123
+Tecnico 2: pedro@manutrix.com / pedro123
 ```
-
-## Dados de Demonstração v2.0
-- 1 Organização: Indústria Demo
-- 1 Planta: Planta Principal (São Paulo)
-- 4 Áreas: Utilidades, Produção, Embalagem, Manutenção
-- 10 Ativos: BOM-001, BOM-002, CMP-001, EST-001, EST-002, MIS-001, EMB-001, EMB-002, TOR-001, FRE-001
-- 4 Rotas de Inspeção: Diária/Mensal Bomba, Semanal Compressor, Diária Esteira
-- 3 OS de exemplo: 1 preventiva, 1 inspeção, 1 calibração
-- 10 Itens de estoque: Rolamentos, Óleos, Vedações, Correias, Filtros, Graxa
 
 ## URLs
 - Frontend: https://procure-manutrix.preview.emergentagent.com
 - API: https://procure-manutrix.preview.emergentagent.com/api
 
-## Próximos Passos
-1. Implementar PWA com Service Workers
-2. Adicionar gráficos de tendência nos KPIs
-3. Criar relatórios PDF
-4. Implementar notificações push
+## Arquitetura
+```
+/app/
+  backend/
+    server.py          # FastAPI app, 40+ endpoints, RBAC, MongoDB
+    requirements.txt
+    .env
+    uploads/
+    tests/
+  frontend/
+    src/
+      App.js           # Main React component (~2800 lines)
+      App.css
+      index.css
+    package.json
+    .env
+  memory/
+    PRD.md
+    test_credentials.md
+  test_reports/
+    iteration_1.json
+    iteration_2.json
+    iteration_3.json   # P0 verification - 97% backend, 100% frontend
+```
