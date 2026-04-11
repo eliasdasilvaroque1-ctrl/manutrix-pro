@@ -111,6 +111,12 @@ Sistema CMMS/EAM (Computerized Maintenance Management System / Enterprise Asset 
 - [x] ConcluirInspecaoBody/ConcluirOSBody/MovimentacaoCreateBody - proper JSON bodies
 - [x] Frontend modais enterprise (Ativos, Estoque, OS, Inspecoes) todos funcionais
 
+## Bug Fixes (11/04/2026)
+- [x] Inspecao checklist: botoes Conforme/Nao Conforme nao apareciam (tipo field missing - fix: fallback + migracao)
+- [x] QR Code: era apenas icone estatico, agora gera QR real escaneavel com qrcode.react (QRCodeSVG)
+- [x] Scanner: camera funcional com BarcodeDetector, busca manual por TAG, resolve URLs do QR
+- [x] Migracao automatica no startup para corrigir checklist items sem campo tipo
+
 ## Backlog Priorizado
 
 ### P1 - Alta Prioridade
