@@ -74,7 +74,12 @@ Sistema CMMS/EAM (Computerized Maintenance Management System / Enterprise Asset 
 - Execucao via checklist digital (boolean, numero, texto)
 - Geracao automatica de OS quando nao-conforme
 - Workflow: Pendente > Em Andamento > Concluida/Com Pendencias
-- Rotas de inspecao com templates
+- Frequencias simplificadas: Diaria (5 itens), Quinzenal (7 itens), Mensal (9 itens)
+- Checklist auto-gerado baseado na frequencia selecionada
+- **Lubrificacao por Equipamento**: tipo lubrificante, quantidade, ponto, metodo, data/hora
+- Modal unificado com abas: Inspecao | Lubrificacao
+- Badges coloridos na lista: Lubrificacao (ambar), Diaria/Quinzenal/Mensal (azul)
+- Card de dados de lubrificacao na pagina de detalhe
 
 ### KPIs Industriais
 - MTTR, MTBF, Disponibilidade, Confiabilidade
