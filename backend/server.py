@@ -297,8 +297,16 @@ class InspecaoCreate(BaseModel):
     ativo_id: str
     rota_id: Optional[str] = None
     responsavel_id: str
-    tipo: str = "checklist"
+    tipo: str = "checklist"  # checklist, lubrificacao
+    frequencia: Optional[str] = None  # diaria, quinzenal, mensal
+    data_programada: Optional[str] = None
     checklist: Optional[List[ChecklistItem]] = None
+    # Lubrificação fields
+    tipo_lubrificante: Optional[str] = None
+    quantidade_lubrificante: Optional[str] = None
+    ponto_lubrificacao: Optional[str] = None
+    metodo_aplicacao: Optional[str] = None
+    observacoes_lubrificacao: Optional[str] = None
 
 class InspecaoUpdate(BaseModel):
     status: Optional[InspecaoStatus] = None
@@ -1255,22 +1263,63 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
     
     org_id = ativo.get('organization_id', user.get('organization_id', ''))
     
-    # Get checklist from rota if provided
     checklist = data.checklist or []
-    if data.rota_id and not checklist:
+
+    if data.tipo == "lubrificacao":
+        # Build lubrificação checklist automatically
+        checklist = [
+            {"id": str(uuid.uuid4()), "descricao": "Ponto de lubrificação acessível", "tipo": "boolean", "obrigatorio": True},
+            {"id": str(uuid.uuid4()), "descricao": "Área limpa antes da aplicação", "tipo": "boolean", "obrigatorio": True},
+            {"id": str(uuid.uuid4()), "descricao": "Lubrificante aplicado corretamente", "tipo": "boolean", "obrigatorio": True},
+            {"id": str(uuid.uuid4()), "descricao": "Sem vazamentos após aplicação", "tipo": "boolean", "obrigatorio": True},
+            {"id": str(uuid.uuid4()), "descricao": "Quantidade aplicada (ml/g)", "tipo": "numero", "unidade": data.quantidade_lubrificante or "ml", "obrigatorio": False},
+            {"id": str(uuid.uuid4()), "descricao": "Observações", "tipo": "texto", "obrigatorio": False},
+        ]
+    elif data.rota_id and not checklist:
         rota = await db.rotas_inspecao.find_one({"id": data.rota_id}, {"_id": 0})
         if rota:
             checklist = rota.get('itens', [])
     
-    # Default checklist if none
+    # Default checklist for regular inspection if none
     if not checklist:
-        checklist = [
-            {"id": str(uuid.uuid4()), "descricao": "Vibração OK", "tipo": "boolean", "obrigatorio": True},
-            {"id": str(uuid.uuid4()), "descricao": "Temperatura OK", "tipo": "boolean", "obrigatorio": True},
-            {"id": str(uuid.uuid4()), "descricao": "Ruído OK", "tipo": "boolean", "obrigatorio": True},
-            {"id": str(uuid.uuid4()), "descricao": "Vazamento OK", "tipo": "boolean", "obrigatorio": True},
-            {"id": str(uuid.uuid4()), "descricao": "Observações", "tipo": "texto", "obrigatorio": False},
-        ]
+        if data.frequencia == "diaria":
+            checklist = [
+                {"id": str(uuid.uuid4()), "descricao": "Vibração normal", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Temperatura normal", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Sem ruídos anormais", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Sem vazamentos", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Observações", "tipo": "texto", "obrigatorio": False},
+            ]
+        elif data.frequencia == "quinzenal":
+            checklist = [
+                {"id": str(uuid.uuid4()), "descricao": "Vibração normal", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Temperatura normal", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Sem ruídos anormais", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Sem vazamentos", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Nível de óleo adequado", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Fixações e parafusos OK", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Observações", "tipo": "texto", "obrigatorio": False},
+            ]
+        elif data.frequencia == "mensal":
+            checklist = [
+                {"id": str(uuid.uuid4()), "descricao": "Vibração (mm/s)", "tipo": "numero", "tolerancia_min": 0, "tolerancia_max": 4.5, "unidade": "mm/s", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Temperatura (°C)", "tipo": "numero", "tolerancia_min": 20, "tolerancia_max": 80, "unidade": "°C", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Sem ruídos anormais", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Sem vazamentos", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Nível de óleo adequado", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Alinhamento verificado", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Fixações e parafusos OK", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Correias/acoplamentos OK", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Observações", "tipo": "texto", "obrigatorio": False},
+            ]
+        else:
+            checklist = [
+                {"id": str(uuid.uuid4()), "descricao": "Vibração OK", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Temperatura OK", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Ruído OK", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Vazamento OK", "tipo": "boolean", "obrigatorio": True},
+                {"id": str(uuid.uuid4()), "descricao": "Observações", "tipo": "texto", "obrigatorio": False},
+            ]
     
     insp_id = str(uuid.uuid4())
     insp_doc = {
@@ -1280,16 +1329,23 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         "responsavel_id": data.responsavel_id,
         "organization_id": org_id,
         "tipo": data.tipo,
+        "frequencia": data.frequencia,
         "status": "pendente",
         "resultado": "pendente",
         "checklist": checklist,
-        "data_programada": datetime.now(timezone.utc).isoformat(),
+        "data_programada": data.data_programada or datetime.now(timezone.utc).isoformat(),
         "data_inicio": None,
         "data_conclusao": None,
         "duracao_minutos": None,
         "observacoes": None,
         "fotos": [],
         "os_gerada_id": None,
+        # Lubrificação specific
+        "tipo_lubrificante": data.tipo_lubrificante,
+        "quantidade_lubrificante": data.quantidade_lubrificante,
+        "ponto_lubrificacao": data.ponto_lubrificacao,
+        "metodo_aplicacao": data.metodo_aplicacao,
+        "observacoes_lubrificacao": data.observacoes_lubrificacao,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None
