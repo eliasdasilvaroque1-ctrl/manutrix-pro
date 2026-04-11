@@ -77,6 +77,16 @@ class OSTipo(str, Enum):
     CORRETIVA = "corretiva"
     PREDITIVA = "preditiva"
     EMERGENCIA = "emergencia"
+    FALHA = "falha"
+
+class OSOrigem(str, Enum):
+    INSPECAO = "inspecao"
+    MANUAL = "manual"
+    PREVENTIVA = "preventiva"
+    PREDITIVA = "preditiva"
+    EMERGENCIA = "emergencia"
+    AGENDAMENTO_IA = "agendamento_ia"
+    FALHA = "falha"
 
 class InspecaoStatus(str, Enum):
     PENDENTE = "pendente"
@@ -246,6 +256,7 @@ class EstoqueUpdate(BaseModel):
 class OSCreate(BaseModel):
     ativo_id: str
     tipo: OSTipo = OSTipo.CORRETIVA
+    origem: OSOrigem = OSOrigem.MANUAL
     prioridade: Criticidade = Criticidade.MEDIA
     titulo: str
     descricao: Optional[str] = None
@@ -374,6 +385,18 @@ async def generate_os_numero(org_id: str) -> str:
     ano = datetime.now().year
     count = await db.ordens_servico.count_documents({"organization_id": org_id})
     return f"{ano}-{str(count + 1).zfill(5)}"
+
+def is_admin(user: Dict) -> bool:
+    """Admin bypass - admin can do everything"""
+    return user.get('role') == 'admin'
+
+def check_write_permission(user: Dict, allowed_roles: list = None):
+    """Check if user has write permission. Admin always passes."""
+    if is_admin(user):
+        return True
+    if allowed_roles and user.get('role') in allowed_roles:
+        return True
+    raise HTTPException(status_code=403, detail="Sem permissão para esta operação")
 
 async def criar_notificacao(usuario_id: str, org_id: str, tipo: NotificacaoTipo, titulo: str, mensagem: str, link: str = None):
     notif = Notificacao(
@@ -581,6 +604,7 @@ async def get_ativo_by_tag(tag: str, user: Dict = Depends(get_current_user)):
 
 @api_router.post("/ativos")
 async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'supervisor'])
     area = await db.areas.find_one({"id": data.area_id}, {"_id": 0})
     if not area:
         raise HTTPException(status_code=404, detail="Área não encontrada")
@@ -627,7 +651,8 @@ async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)
     }
     
     await db.ativos.insert_one(ativo_doc)
-    return {**ativo_doc, "_id": None}
+    ativo_doc.pop('_id', None)
+    return ativo_doc
 
 @api_router.put("/ativos/{ativo_id}")
 async def update_ativo(ativo_id: str, data: AtivoUpdate, user: Dict = Depends(get_current_user)):
@@ -657,6 +682,7 @@ async def update_ativo(ativo_id: str, data: AtivoUpdate, user: Dict = Depends(ge
 
 @api_router.delete("/ativos/{ativo_id}")
 async def delete_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin'])
     existing = await db.ativos.find_one({"id": ativo_id, "deleted_at": None})
     if not existing:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
@@ -732,6 +758,7 @@ async def get_estoque_item(item_id: str, user: Dict = Depends(get_current_user))
 
 @api_router.post("/estoque")
 async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'supervisor'])
     org_id = user.get('organization_id', '')
     
     # Generate SKU if not provided
@@ -784,7 +811,8 @@ async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_u
         }
         await db.movimentacoes_estoque.insert_one(mov_doc)
     
-    return {**item_doc, "_id": None}
+    item_doc.pop('_id', None)
+    return item_doc
 
 @api_router.put("/estoque/{item_id}")
 async def update_estoque(item_id: str, data: EstoqueUpdate, user: Dict = Depends(get_current_user)):
@@ -810,6 +838,7 @@ async def update_estoque(item_id: str, data: EstoqueUpdate, user: Dict = Depends
 
 @api_router.delete("/estoque/{item_id}")
 async def delete_estoque(item_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin'])
     existing = await db.itens_estoque.find_one({"id": item_id, "deleted_at": None})
     if not existing:
         raise HTTPException(status_code=404, detail="Item não encontrado")
@@ -820,16 +849,23 @@ async def delete_estoque(item_id: str, user: Dict = Depends(get_current_user)):
     )
     return {"success": True, "message": "Item excluído com sucesso"}
 
+class MovimentacaoCreateBody(BaseModel):
+    tipo: str  # entrada, saida, ajuste
+    quantidade: float
+    motivo: Optional[str] = None
+    custo_unitario: Optional[float] = None
+
 @api_router.post("/estoque/{item_id}/movimentacao")
 async def criar_movimentacao(
     item_id: str,
-    tipo: str,
-    quantidade: float,
-    motivo: Optional[str] = None,
-    custo_unitario: Optional[float] = None,
+    body: MovimentacaoCreateBody,
     user: Dict = Depends(get_current_user)
 ):
     """Create stock movement (entrada/saida/ajuste)"""
+    tipo = body.tipo
+    quantidade = body.quantidade
+    custo_unitario = body.custo_unitario
+    motivo = body.motivo
     item = await db.itens_estoque.find_one({"id": item_id, "deleted_at": None}, {"_id": 0})
     if not item:
         raise HTTPException(status_code=404, detail="Item não encontrado")
@@ -1011,6 +1047,7 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
 
 @api_router.post("/ordens-servico")
 async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
     ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
@@ -1025,6 +1062,7 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "ativo_id": data.ativo_id,
         "organization_id": org_id,
         "tipo": data.tipo.value,
+        "origem": data.origem.value,
         "prioridade": data.prioridade.value,
         "titulo": data.titulo,
         "descricao": data.descricao,
@@ -1058,7 +1096,8 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
             f"/os/{os_id}"
         )
     
-    return {**os_doc, "_id": None}
+    os_doc.pop('_id', None)
+    return os_doc
 
 @api_router.put("/ordens-servico/{os_id}")
 async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current_user)):
@@ -1091,6 +1130,7 @@ async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current
 
 @api_router.delete("/ordens-servico/{os_id}")
 async def delete_os(os_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin'])
     existing = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None})
     if not existing:
         raise HTTPException(status_code=404, detail="OS não encontrada")
@@ -1125,8 +1165,11 @@ async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
     )
     return {"success": True, "message": "OS pausada"}
 
+class ConcluirOSBody(BaseModel):
+    observacoes: Optional[str] = None
+
 @api_router.post("/ordens-servico/{os_id}/concluir")
-async def concluir_os(os_id: str, observacoes: Optional[str] = None, user: Dict = Depends(get_current_user)):
+async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user: Dict = Depends(get_current_user)):
     os = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os:
         raise HTTPException(status_code=404, detail="OS não encontrada")
@@ -1142,7 +1185,7 @@ async def concluir_os(os_id: str, observacoes: Optional[str] = None, user: Dict 
             "status": "concluida",
             "data_conclusao": datetime.now(timezone.utc).isoformat(),
             "tempo_execucao_minutos": tempo,
-            "observacoes": observacoes,
+            "observacoes": body.observacoes,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
@@ -1262,7 +1305,8 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         f"/inspecoes/{insp_id}"
     )
     
-    return {**insp_doc, "_id": None}
+    insp_doc.pop('_id', None)
+    return insp_doc
 
 @api_router.put("/inspecoes/{inspecao_id}")
 async def update_inspecao(inspecao_id: str, data: InspecaoUpdate, user: Dict = Depends(get_current_user)):
@@ -1278,6 +1322,7 @@ async def update_inspecao(inspecao_id: str, data: InspecaoUpdate, user: Dict = D
 
 @api_router.delete("/inspecoes/{inspecao_id}")
 async def delete_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'supervisor'])
     existing = await db.inspecoes.find_one({"id": inspecao_id, "deleted_at": None})
     if not existing:
         raise HTTPException(status_code=404, detail="Inspeção não encontrada")
@@ -1300,13 +1345,18 @@ async def iniciar_inspecao(inspecao_id: str, user: Dict = Depends(get_current_us
     )
     return {"success": True}
 
+class ConcluirInspecaoBody(BaseModel):
+    checklist: List[Dict[str, Any]]
+    observacoes: Optional[str] = None
+
 @api_router.post("/inspecoes/{inspecao_id}/concluir")
 async def concluir_inspecao(
     inspecao_id: str,
-    checklist: List[Dict],
-    observacoes: Optional[str] = None,
+    body: ConcluirInspecaoBody,
     user: Dict = Depends(get_current_user)
 ):
+    checklist = body.checklist
+    observacoes = body.observacoes
     insp = await db.inspecoes.find_one({"id": inspecao_id, "deleted_at": None}, {"_id": 0})
     if not insp:
         raise HTTPException(status_code=404, detail="Inspeção não encontrada")
@@ -1439,7 +1489,8 @@ async def create_rota(data: RotaInspecaoCreate, user: Dict = Depends(get_current
     }
     
     await db.rotas_inspecao.insert_one(rota_doc)
-    return {**rota_doc, "_id": None}
+    rota_doc.pop('_id', None)
+    return rota_doc
 
 # ============== RONDA ==============
 

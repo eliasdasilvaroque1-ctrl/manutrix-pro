@@ -1017,6 +1017,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                   { value: 'corretiva', label: 'Corretiva' },
                   { value: 'preditiva', label: 'Preditiva' },
                   { value: 'emergencia', label: 'Emergência' },
+                  { value: 'falha', label: 'Falha' },
                 ]}
               />
             </FormInput>
