@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, usePa
 import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
+import { QRCodeSVG } from "qrcode.react";
 import { 
   Home, ClipboardCheck, Box, User, Settings, LogOut, 
   AlertTriangle, CheckCircle, XCircle, Clock, Wrench, Package,
@@ -1819,11 +1820,17 @@ const AtivoDetailPage = () => {
       {/* QR Code */}
       <div className="glass-card p-4 flex items-center gap-4">
         <div className="bg-white p-3 rounded-lg">
-          <QrCode size={80} className="text-slate-900" />
+          <QRCodeSVG 
+            value={`${window.location.origin}/ativos/${ativo.id}`} 
+            size={80} 
+            level="H"
+            includeMargin={false}
+          />
         </div>
         <div>
           <p className="text-sm text-slate-400">QR Code</p>
-          <p className="font-mono text-xs text-slate-500">{ativo.qr_code}</p>
+          <p className="font-mono text-xs text-slate-500">{ativo.tag}</p>
+          <p className="text-xs text-slate-600 mt-1">Escaneie para acessar este ativo</p>
         </div>
       </div>
       
@@ -2477,7 +2484,9 @@ const InspecaoDetailPage = () => {
             </span>
           </div>
           
-          {checklist.map((item, idx) => (
+          {checklist.map((item, idx) => {
+            const itemTipo = item.tipo || 'boolean';
+            return (
             <div key={item.id} className={`glass-card p-4 ${item.resultado !== undefined ? 'border-emerald-500/30' : ''}`}>
               <div className="flex items-start gap-3">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
@@ -2487,7 +2496,7 @@ const InspecaoDetailPage = () => {
                   <p className="text-slate-200">{item.descricao}</p>
                   {item.obrigatorio && <span className="text-xs text-red-400">* Obrigatório</span>}
                   
-                  {!isFinished && item.tipo === 'boolean' && (
+                  {!isFinished && itemTipo === 'boolean' && (
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => {
@@ -2516,7 +2525,7 @@ const InspecaoDetailPage = () => {
                     </div>
                   )}
                   
-                  {!isFinished && item.tipo === 'numero' && (
+                  {!isFinished && itemTipo === 'numero' && (
                     <div className="mt-3 flex gap-2">
                       <input
                         type="number"
@@ -2536,7 +2545,7 @@ const InspecaoDetailPage = () => {
                     </div>
                   )}
                   
-                  {!isFinished && item.tipo === 'texto' && (
+                  {!isFinished && itemTipo === 'texto' && (
                     <textarea
                       value={item.resultado || ''}
                       onChange={(e) => handleItemChange(item.id, 'resultado', e.target.value)}
@@ -2547,21 +2556,21 @@ const InspecaoDetailPage = () => {
                   
                   {isFinished && (
                     <div className="mt-2">
-                      {item.tipo === 'boolean' && (
+                      {itemTipo === 'boolean' && (
                         <StatusBadge status={item.conforme ? 'conforme' : 'nao_conforme'} size="sm" />
                       )}
-                      {item.tipo === 'numero' && item.resultado !== undefined && (
+                      {itemTipo === 'numero' && item.resultado !== undefined && (
                         <span className={`text-sm ${item.conforme ? 'text-emerald-400' : 'text-red-400'}`}>
                           {item.resultado} {item.unidade}
                         </span>
                       )}
-                      {item.tipo === 'texto' && item.resultado && (
+                      {itemTipo === 'texto' && item.resultado && (
                         <p className="text-sm text-slate-300">{item.resultado}</p>
                       )}
                     </div>
                   )}
                   
-                  {!isFinished && item.resultado === false && item.tipo === 'boolean' && (
+                  {!isFinished && item.resultado === false && itemTipo === 'boolean' && (
                     <textarea
                       value={item.observacao || ''}
                       onChange={(e) => handleItemChange(item.id, 'observacao', e.target.value)}
@@ -2573,7 +2582,8 @@ const InspecaoDetailPage = () => {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       
@@ -2680,40 +2690,126 @@ const RondaPage = () => {
 const ScannerPage = () => {
   const [manualCode, setManualCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
   const navigate = useNavigate();
   
+  const resolveScannedValue = async (value) => {
+    // If scanned value is a URL containing /ativos/, extract the ID
+    const ativoMatch = value.match(/\/ativos\/([a-f0-9-]+)/i);
+    if (ativoMatch) {
+      navigate(`/ativos/${ativoMatch[1]}`);
+      return;
+    }
+    // Otherwise try QR code field, then TAG
+    try {
+      const response = await api.get(`/ativos/qr/${value}`);
+      navigate(`/ativos/${response.data.id}`);
+      return;
+    } catch {}
+    try {
+      const response = await api.get(`/ativos/tag/${value.toUpperCase()}`);
+      navigate(`/ativos/${response.data.id}`);
+      return;
+    } catch {}
+    toast.error('Ativo não encontrado');
+  };
+
   const handleSearch = async () => {
     if (!manualCode.trim()) return;
     setLoading(true);
     try {
-      try {
-        const response = await api.get(`/ativos/qr/${manualCode}`);
-        navigate(`/ativos/${response.data.id}`);
-        return;
-      } catch {}
-      const response = await api.get(`/ativos/tag/${manualCode}`);
-      navigate(`/ativos/${response.data.id}`);
-    } catch (error) {
-      toast.error('Ativo não encontrado');
+      await resolveScannedValue(manualCode.trim());
     } finally {
       setLoading(false);
     }
   };
+
+  const startCamera = async () => {
+    setCameraError('');
+    setScanning(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      // Use BarcodeDetector if available
+      if ('BarcodeDetector' in window) {
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        const scanLoop = async () => {
+          if (!streamRef.current || !videoRef.current) return;
+          try {
+            const barcodes = await detector.detect(videoRef.current);
+            if (barcodes.length > 0) {
+              const value = barcodes[0].rawValue;
+              stopCamera();
+              toast.success('QR Code detectado!');
+              await resolveScannedValue(value);
+              return;
+            }
+          } catch {}
+          if (streamRef.current) requestAnimationFrame(scanLoop);
+        };
+        // Wait for video to be ready
+        videoRef.current.onloadedmetadata = () => {
+          scanLoop();
+        };
+      } else {
+        setCameraError('BarcodeDetector não suportado neste navegador. Use a busca manual por TAG.');
+      }
+    } catch (err) {
+      setCameraError('Não foi possível acessar a câmera. Verifique as permissões.');
+      setScanning(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setScanning(false);
+  };
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
   
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-100">Identificar Ativo</h1>
       
-      <div className="glass-card p-8 flex flex-col items-center justify-center gap-4">
-        <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center">
-          <Camera size={48} className="text-emerald-400" />
+      {scanning ? (
+        <div className="glass-card p-4 space-y-4">
+          <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
+            <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-48 h-48 border-2 border-emerald-400 rounded-lg animate-pulse opacity-60" />
+            </div>
+          </div>
+          {cameraError && <p className="text-sm text-amber-400 text-center">{cameraError}</p>}
+          <button onClick={stopCamera} className="btn-secondary w-full flex items-center justify-center gap-2">
+            <X size={20} /> Fechar Câmera
+          </button>
         </div>
-        <div className="text-center">
-          <p className="text-lg text-slate-200">Escanear QR Code</p>
-          <p className="text-sm text-slate-500">Use a câmera para ler o código</p>
+      ) : (
+        <div className="glass-card p-8 flex flex-col items-center justify-center gap-4">
+          <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <Camera size={48} className="text-emerald-400" />
+          </div>
+          <div className="text-center">
+            <p className="text-lg text-slate-200">Escanear QR Code</p>
+            <p className="text-sm text-slate-500">Use a câmera para ler o código do ativo</p>
+          </div>
+          <button onClick={startCamera} className="btn-primary" data-testid="open-camera-btn">Abrir Câmera</button>
         </div>
-        <button className="btn-primary">Abrir Câmera</button>
-      </div>
+      )}
       
       <div className="flex items-center gap-4">
         <div className="flex-1 h-px bg-slate-800"></div>
@@ -2722,7 +2818,7 @@ const ScannerPage = () => {
       </div>
       
       <div className="glass-card p-4 space-y-4">
-        <p className="text-sm text-slate-400">Buscar por código ou TAG</p>
+        <p className="text-sm text-slate-400">Buscar por TAG do ativo</p>
         <div className="flex gap-2">
           <input
             type="text"
@@ -2731,8 +2827,9 @@ const ScannerPage = () => {
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Ex: BOM-001"
             className="input-industrial flex-1 px-4 font-mono"
+            data-testid="manual-search-input"
           />
-          <button onClick={handleSearch} disabled={loading} className="btn-primary px-6">
+          <button onClick={handleSearch} disabled={loading} className="btn-primary px-6" data-testid="manual-search-btn">
             {loading ? <RefreshCw size={20} className="animate-spin" /> : <Search size={20} />}
           </button>
         </div>

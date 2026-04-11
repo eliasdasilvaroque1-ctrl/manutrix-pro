@@ -1970,6 +1970,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def migrate_checklist_tipo():
+    """Migration: ensure all checklist items have 'tipo' field"""
+    try:
+        inspecoes = await db.inspecoes.find({"deleted_at": None, "checklist": {"$exists": True}}).to_list(1000)
+        for insp in inspecoes:
+            updated = False
+            checklist = insp.get('checklist', [])
+            for item in checklist:
+                if 'tipo' not in item or not item['tipo']:
+                    item['tipo'] = 'boolean'
+                    updated = True
+                if 'obrigatorio' not in item:
+                    item['obrigatorio'] = True
+                    updated = True
+            if updated:
+                await db.inspecoes.update_one({"_id": insp["_id"]}, {"$set": {"checklist": checklist}})
+        
+        rotas = await db.rotas_inspecao.find({"deleted_at": None, "itens": {"$exists": True}}).to_list(100)
+        for rota in rotas:
+            updated = False
+            itens = rota.get('itens', [])
+            for item in itens:
+                if 'tipo' not in item or not item['tipo']:
+                    item['tipo'] = 'boolean'
+                    updated = True
+            if updated:
+                await db.rotas_inspecao.update_one({"_id": rota["_id"]}, {"$set": {"itens": itens}})
+        logger.info("Migration: checklist tipo field verified")
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
