@@ -18,6 +18,8 @@ node_modules/
 
 # Testing
 /coverage
+test_credentials.md
+/app/memory/test_credentials.md
 
 # Next.js
 /.next/

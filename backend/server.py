@@ -574,10 +574,12 @@ async def list_ativos(
         search_lower = search.lower()
         ativos = [a for a in ativos if search_lower in a.get('tag', '').lower() or search_lower in a.get('nome', '').lower()]
     
-    # Enrich with area info
+    # Batch fetch areas (fix N+1)
+    area_ids = list(set(a.get('area_id') for a in ativos if a.get('area_id')))
+    areas = await db.areas.find({"id": {"$in": area_ids}}, {"_id": 0}).to_list(len(area_ids)) if area_ids else []
+    area_map = {a['id']: a for a in areas}
     for ativo in ativos:
-        area = await db.areas.find_one({"id": ativo.get('area_id')}, {"_id": 0, "nome": 1, "cor": 1})
-        ativo['area'] = area
+        ativo['area'] = area_map.get(ativo.get('area_id'))
     
     return ativos
 
@@ -964,15 +966,17 @@ async def list_os(
     
     os_list = await db.ordens_servico.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
-    # Enrich with ativo and responsavel info
+    # Batch fetch ativos and responsáveis (fix N+1)
+    ativo_ids = list(set(o.get('ativo_id') for o in os_list if o.get('ativo_id')))
+    resp_ids = list(set(o.get('responsavel_id') for o in os_list if o.get('responsavel_id')))
+    ativos_batch = await db.ativos.find({"id": {"$in": ativo_ids}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1}).to_list(len(ativo_ids)) if ativo_ids else []
+    resp_batch = await db.users.find({"id": {"$in": resp_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(resp_ids)) if resp_ids else []
+    ativo_map = {a['id']: a for a in ativos_batch}
+    resp_map = {r['id']: r for r in resp_batch}
+    
     for os in os_list:
-        ativo = await db.ativos.find_one({"id": os.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        os['ativo'] = ativo
-        if os.get('responsavel_id'):
-            resp = await db.users.find_one({"id": os['responsavel_id']}, {"_id": 0, "nome": 1})
-            os['responsavel'] = resp
-        
-        # Check if overdue
+        os['ativo'] = ativo_map.get(os.get('ativo_id'))
+        os['responsavel'] = resp_map.get(os.get('responsavel_id'))
         if os.get('data_planejada') and os.get('status') not in ['concluida', 'cancelada']:
             planned = datetime.fromisoformat(os['data_planejada'].replace('Z', '+00:00')) if isinstance(os['data_planejada'], str) else os['data_planejada']
             os['atrasada'] = datetime.now(timezone.utc) > planned
