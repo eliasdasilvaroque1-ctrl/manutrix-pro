@@ -10,10 +10,14 @@
 
 ## Seed Data
 - POST /api/seed - Cria dados de demonstração
-- Se dados já existem, retorna "Dados já existem"
 
-## Permissões RBAC
-- Admin: Acesso total (CRUD completo em tudo)
-- Supervisor: Criar/Editar ativos, estoque, OS, inspeções
-- Tecnico: Criar OS, executar inspeções, visualizar dados
-- Inspetor/Viewer: Somente leitura
+## Permissões RBAC Industrial
+| Perfil | Permissões |
+|--------|------------|
+| Admin | Controle total: CRUD completo, gestão de usuários, ativos, empresas |
+| Gerente | Dashboard e relatórios (somente leitura), exporta dados |
+| PCM | Gerencia OS, estoque, sobressalentes, relatórios, exporta |
+| Supervisor | Gerencia OS, inspeções, rondas |
+| Técnico | Preenche inspeções, abre anomalias, cria OS. NÃO edita/exclui |
+| Inspetor | Executa inspeções |
+| Viewer | Somente leitura |
