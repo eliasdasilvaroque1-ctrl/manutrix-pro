@@ -334,6 +334,8 @@ const NotificationBell = () => {
 // Modal Novo Ativo
 const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = null }) => {
   const [loading, setLoading] = useState(false);
+  const [pdfFiles, setPdfFiles] = useState([]);
+  const [existingManuais, setExistingManuais] = useState([]);
   const [form, setForm] = useState({
     tag: '', nome: '', tipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
     area_id: '', centro_custo: '', criticidade: 'media', status: 'operacional',
@@ -371,6 +373,13 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
         valor_aquisicao: '', depreciacao_anual: '', fornecedor: '', observacoes: ''
       });
     }
+    setPdfFiles([]);
+    // Load existing manuals for edit mode
+    if (editData?.id) {
+      api.get(`/ativos/${editData.id}/manuais`).then(res => setExistingManuais(res.data)).catch(() => {});
+    } else {
+      setExistingManuais([]);
+    }
   }, [editData, isOpen]);
   
   const handleSubmit = async (e) => {
@@ -392,9 +401,23 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
       
       if (editData) {
         await api.put(`/ativos/${editData.id}`, payload);
+        // Upload new PDFs for existing ativo
+        for (const file of pdfFiles) {
+          const formData = new FormData();
+          formData.append('file', file);
+          await api.post(`/ativos/${editData.id}/manual`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        }
         toast.success('Ativo atualizado com sucesso!');
       } else {
-        await api.post('/ativos', payload);
+        const res = await api.post('/ativos', payload);
+        // Upload PDFs for new ativo
+        if (pdfFiles.length > 0 && res.data?.id) {
+          for (const file of pdfFiles) {
+            const formData = new FormData();
+            formData.append('file', file);
+            await api.post(`/ativos/${res.data.id}/manual`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+          }
+        }
         toast.success('Ativo criado com sucesso!');
       }
       onSuccess();
@@ -595,6 +618,61 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
               />
             </FormInput>
           </div>
+        </div>
+        
+        {/* Manuais PDF */}
+        <div className="glass-card p-4 space-y-4">
+          <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+            <FileText size={16} /> Manuais Técnicos (PDF)
+          </h3>
+          
+          {/* Existing manuals (edit mode) */}
+          {existingManuais.length > 0 && (
+            <div className="space-y-2">
+              {existingManuais.map((m) => (
+                <div key={m.id} className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <FileText size={16} className="text-red-400" />
+                    <span className="text-sm text-slate-300">{m.filename}</span>
+                    <span className="text-xs text-slate-600">{(m.size_bytes / 1024).toFixed(0)}KB</span>
+                  </div>
+                  <button type="button" onClick={() => window.open(`${BACKEND_URL}${m.url}`, '_blank')} className="text-xs text-blue-400 hover:text-blue-300">Abrir</button>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* New files to upload */}
+          {pdfFiles.length > 0 && (
+            <div className="space-y-2">
+              {pdfFiles.map((f, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Upload size={16} className="text-emerald-400" />
+                    <span className="text-sm text-slate-300">{f.name}</span>
+                    <span className="text-xs text-slate-600">{(f.size / 1024).toFixed(0)}KB</span>
+                  </div>
+                  <button type="button" onClick={() => setPdfFiles(prev => prev.filter((_, i) => i !== idx))} className="text-xs text-red-400 hover:text-red-300">Remover</button>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all">
+            <Upload size={20} className="text-slate-500" />
+            <span className="text-sm text-slate-400">Clique para adicionar PDF</span>
+            <input
+              type="file"
+              accept=".pdf"
+              multiple
+              onChange={(e) => {
+                const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+                if (files.length > 0) setPdfFiles(prev => [...prev, ...files]);
+                e.target.value = '';
+              }}
+              className="hidden"
+            />
+          </label>
         </div>
         
         {/* Observações */}
@@ -2157,9 +2235,24 @@ const AtivoDetailPage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <a href={`${BACKEND_URL}${m.url}`} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-blue-500/10 rounded-lg transition-colors" title="Abrir PDF">
+                  <button onClick={() => {
+                    const url = `${BACKEND_URL}${m.url}`;
+                    window.open(url, '_blank');
+                  }} className="p-2 hover:bg-blue-500/10 rounded-lg transition-colors" title="Abrir PDF">
                     <Eye size={16} className="text-blue-400" />
-                  </a>
+                  </button>
+                  <button onClick={async () => {
+                    try {
+                      const res = await fetch(`${BACKEND_URL}${m.url}`);
+                      const blob = await res.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url; a.download = m.filename; a.click();
+                      window.URL.revokeObjectURL(url);
+                    } catch { toast.error('Erro ao baixar'); }
+                  }} className="p-2 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Baixar PDF">
+                    <Download size={16} className="text-emerald-400" />
+                  </button>
                   {user?.role === 'admin' && (
                     <button onClick={() => handleDeleteManual(m.id)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" title="Remover">
                       <Trash2 size={16} className="text-red-400" />
@@ -3402,15 +3495,27 @@ const AssistentePage = () => {
   const [input, setInput] = useState('');
   const [ativoId, setAtivoId] = useState('');
   const [ativos, setAtivos] = useState([]);
+  const [manuaisDisponiveis, setManuaisDisponiveis] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const fetchAtivos = async () => {
-      try { const res = await api.get('/ativos'); setAtivos(res.data); } catch {}
+    const fetchData = async () => {
+      try { 
+        const res = await api.get('/ativos'); 
+        setAtivos(res.data);
+        // Collect all manuals
+        const manuaisPromises = res.data.map(a => api.get(`/ativos/${a.id}/manuais`).catch(() => ({ data: [] })));
+        const manuaisResults = await Promise.all(manuaisPromises);
+        const allManuais = [];
+        manuaisResults.forEach((m, idx) => {
+          m.data.forEach(manual => allManuais.push({ ...manual, ativo_tag: res.data[idx].tag, ativo_nome: res.data[idx].nome }));
+        });
+        setManuaisDisponiveis(allManuais);
+      } catch {}
     };
-    fetchAtivos();
+    fetchData();
   }, []);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -3444,6 +3549,21 @@ const AssistentePage = () => {
         <FormInput label="Contexto do Equipamento (opcional)">
           <Select value={ativoId} onChange={(v) => setAtivoId(v)} options={[{value:'', label:'Geral (todos os manuais)'}, ...ativos.map(a => ({value: a.id, label: `${a.tag} - ${a.nome}`}))]} />
         </FormInput>
+        {manuaisDisponiveis.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-800">
+            <p className="text-xs text-slate-500 mb-2 flex items-center gap-1"><FileText size={12} /> {manuaisDisponiveis.length} manual(is) disponível(is) para a IA:</p>
+            <div className="flex flex-wrap gap-2">
+              {(ativoId ? manuaisDisponiveis.filter(m => m.ativo_id === ativoId) : manuaisDisponiveis).map(m => (
+                <span key={m.id} className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded">
+                  {m.ativo_tag} - {m.filename}
+                </span>
+              ))}
+              {ativoId && manuaisDisponiveis.filter(m => m.ativo_id === ativoId).length === 0 && (
+                <span className="text-xs text-amber-400">Nenhum manual carregado para este ativo. Vá em Ativos > Detalhe > Enviar PDF.</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4">
