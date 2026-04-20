@@ -1433,6 +1433,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         { icon: Box, label: 'Ativos', path: '/ativos' },
         { icon: Wrench, label: 'Ordens de Serviço', path: '/os' },
         { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
+        { icon: AlertTriangle, label: 'Anomalias', path: '/anomalias' },
         { icon: Target, label: 'Ronda', path: '/ronda' },
       ]
     },
@@ -1440,14 +1441,21 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       label: 'MATERIAIS',
       items: [
         { icon: Package, label: 'Estoque', path: '/estoque' },
+        { icon: Cog, label: 'Sobressalentes', path: '/sobressalentes' },
       ]
     },
     {
-      label: 'ANÁLISE',
+      label: 'SUPORTE',
       items: [
-        { icon: BarChart3, label: 'Relatórios', path: '/relatorios' },
+        { icon: Zap, label: 'Assistente IA', path: '/assistente' },
       ]
-    }
+    },
+    ...(user?.role === 'admin' ? [{
+      label: 'ADMIN',
+      items: [
+        { icon: Users, label: 'Usuários', path: '/admin/usuarios' },
+      ]
+    }] : [])
   ];
   
   return (
@@ -1826,6 +1834,7 @@ const AtivosPage = () => {
   const [deleteItem, setDeleteItem] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   
   useEffect(() => {
     const status = searchParams.get('status');
@@ -1873,10 +1882,15 @@ const AtivosPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Ativos</h1>
-        <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-ativo-btn">
-          <Plus size={20} /> Novo Ativo
-        </button>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-slate-100">Ativos</h1>
+          <ExportButtons entity="ativos" />
+        </div>
+        {user?.role === 'admin' && (
+          <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-ativo-btn">
+            <Plus size={20} /> Novo Ativo
+          </button>
+        )}
       </div>
       
       {/* Filters */}
@@ -1941,14 +1955,16 @@ const AtivosPage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="hidden group-hover:flex items-center gap-1">
-                    <button onClick={() => { setEditItem(ativo); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg">
-                      <Edit size={16} className="text-slate-400" />
-                    </button>
-                    <button onClick={() => setDeleteItem(ativo)} className="p-2 hover:bg-red-500/10 rounded-lg">
-                      <Trash2 size={16} className="text-red-400" />
-                    </button>
-                  </div>
+                  {user?.role === 'admin' && (
+                    <div className="hidden group-hover:flex items-center gap-1">
+                      <button onClick={() => { setEditItem(ativo); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg">
+                        <Edit size={16} className="text-slate-400" />
+                      </button>
+                      <button onClick={() => setDeleteItem(ativo)} className="p-2 hover:bg-red-500/10 rounded-lg">
+                        <Trash2 size={16} className="text-red-400" />
+                      </button>
+                    </div>
+                  )}
                   <PriorityBadge priority={ativo.criticidade} />
                   <ChevronRight className="text-slate-600" />
                 </div>
@@ -2143,7 +2159,10 @@ const OSPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Ordens de Serviço</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-slate-100">Ordens de Serviço</h1>
+          <ExportButtons entity="ordens-servico" />
+        </div>
         <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-os-btn">
           <Plus size={20} /> Nova OS
         </button>
@@ -2391,7 +2410,10 @@ const EstoquePage = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Estoque</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-slate-100">Estoque</h1>
+          <ExportButtons entity="estoque" />
+        </div>
         <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-estoque-btn">
           <Plus size={20} /> Novo Item
         </button>
@@ -2533,7 +2555,10 @@ const InspecoesPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Inspeções</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-slate-100">Inspeções</h1>
+          <ExportButtons entity="inspecoes" />
+        </div>
         <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-inspecao-btn">
           <Plus size={20} /> Nova Inspeção
         </button>
@@ -3093,6 +3118,423 @@ const ScannerPage = () => {
   );
 };
 
+
+// ============== SOBRESSALENTES PAGE ==============
+
+const SobressalentesPage = () => {
+  const [spares, setSpares] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ descricao: '', modelo: '', fabricante: '', status: 'estoque', localizacao: '', custo: '' });
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+
+  const fetchData = async () => {
+    try {
+      const res = await api.get('/sobressalentes');
+      setSpares(res.data);
+    } catch (e) { toast.error('Erro ao carregar sobressalentes'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { fetchData(); }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.descricao) { toast.error('Descrição é obrigatória'); return; }
+    setSaving(true);
+    try {
+      await api.post('/sobressalentes', { ...form, custo: form.custo ? parseFloat(form.custo) : null });
+      toast.success('Sobressalente criado!');
+      setShowModal(false);
+      setForm({ descricao: '', modelo: '', fabricante: '', status: 'estoque', localizacao: '', custo: '' });
+      fetchData();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    finally { setSaving(false); }
+  };
+
+  const handleExport = (fmt) => { window.open(`${API}/export/sobressalentes?format=${fmt}&token=${localStorage.getItem('manutrix_token')}`, '_blank'); };
+
+  const filtered = search ? spares.filter(s => s.descricao?.toLowerCase().includes(search.toLowerCase()) || s.tag?.toLowerCase().includes(search.toLowerCase())) : spares;
+
+  const statusConfig = {
+    estoque: { class: 'bg-emerald-500/10 text-emerald-400', label: 'Em Estoque' },
+    em_uso: { class: 'bg-blue-500/10 text-blue-400', label: 'Em Uso' },
+    em_reforma: { class: 'bg-amber-500/10 text-amber-400', label: 'Em Reforma' },
+    descartado: { class: 'bg-red-500/10 text-red-400', label: 'Descartado' },
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-100">Sobressalentes</h1>
+        <div className="flex gap-2">
+          {['admin','pcm'].includes(user?.role) && (
+            <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-spare-btn"><Plus size={20} /> Novo</button>
+          )}
+        </div>
+      </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar sobressalente..." className="input-industrial w-full pl-10 pr-4" />
+      </div>
+      {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
+        <div className="space-y-2">
+          {filtered.map((sp) => (
+            <div key={sp.id} className="glass-card p-4 hover:border-slate-600 transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-mono text-emerald-400 text-sm">{sp.tag}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded ${statusConfig[sp.status]?.class || ''}`}>{statusConfig[sp.status]?.label || sp.status}</span>
+                  </div>
+                  <p className="text-slate-100">{sp.descricao}</p>
+                  <p className="text-xs text-slate-500">{[sp.fabricante, sp.modelo, sp.localizacao].filter(Boolean).join(' • ')}</p>
+                  {sp.ativo_vinculado && <p className="text-xs text-blue-400 mt-1">Ativo: {sp.ativo_vinculado.tag} - {sp.ativo_vinculado.nome}</p>}
+                </div>
+                {sp.custo && <p className="text-lg font-bold text-slate-200">R$ {sp.custo.toFixed(2)}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : <EmptyState icon={Cog} title="Nenhum sobressalente" description="Cadastre sobressalentes." />}
+
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Novo Sobressalente" size="md">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormInput label="Descrição" required>
+            <input value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Rolamento 6205-2RS" required />
+          </FormInput>
+          <div className="grid grid-cols-2 gap-4">
+            <FormInput label="Fabricante"><input value={form.fabricante} onChange={(e) => setForm({...form, fabricante: e.target.value})} className="input-industrial w-full px-4" /></FormInput>
+            <FormInput label="Modelo"><input value={form.modelo} onChange={(e) => setForm({...form, modelo: e.target.value})} className="input-industrial w-full px-4" /></FormInput>
+            <FormInput label="Localização"><input value={form.localizacao} onChange={(e) => setForm({...form, localizacao: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Almox A-01" /></FormInput>
+            <FormInput label="Custo (R$)"><input type="number" step="0.01" value={form.custo} onChange={(e) => setForm({...form, custo: e.target.value})} className="input-industrial w-full px-4" /></FormInput>
+          </div>
+          <FormInput label="Status">
+            <Select value={form.status} onChange={(v) => setForm({...form, status: v})} options={[{value:'estoque',label:'Em Estoque'},{value:'em_uso',label:'Em Uso'},{value:'em_reforma',label:'Em Reforma'}]} />
+          </FormInput>
+          <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Salvando...' : 'Salvar'}</button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+};
+
+// ============== ANOMALIAS PAGE ==============
+
+const AnomaliasPage = () => {
+  const [anomalias, setAnomalias] = useState([]);
+  const [ativos, setAtivos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ ativo_id: '', descricao: '', severidade: 'media', gerar_os: true });
+  const [saving, setSaving] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      const [anomRes, ativosRes] = await Promise.all([api.get('/anomalias'), api.get('/ativos')]);
+      setAnomalias(anomRes.data);
+      setAtivos(ativosRes.data);
+    } catch (e) { toast.error('Erro ao carregar'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { fetchData(); }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.ativo_id || !form.descricao) { toast.error('Preencha ativo e descrição'); return; }
+    setSaving(true);
+    try {
+      const res = await api.post('/anomalias', form);
+      toast.success(`Anomalia criada! Prioridade: ${res.data.prioridade_os?.toUpperCase()}${res.data.os_gerada_id ? ' - OS gerada automaticamente' : ''}`);
+      setShowModal(false);
+      fetchData();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-100">Anomalias</h1>
+        <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-anomalia-btn"><Plus size={20} /> Reportar Anomalia</button>
+      </div>
+      {loading ? <Loading rows={5} /> : anomalias.length > 0 ? (
+        <div className="space-y-2">
+          {anomalias.map((a) => (
+            <div key={a.id} className="glass-card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    {a.ativo && <span className="font-mono text-emerald-400 text-sm">{a.ativo.tag}</span>}
+                    <PriorityBadge priority={a.severidade} />
+                    <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded">Score: {a.score_prioridade}</span>
+                  </div>
+                  <p className="text-slate-100">{a.descricao}</p>
+                  <p className="text-xs text-slate-500">{new Date(a.created_at).toLocaleDateString('pt-BR')}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <PriorityBadge priority={a.prioridade_calculada} />
+                  {a.os_gerada_id && <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded">OS Gerada</span>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : <EmptyState icon={AlertTriangle} title="Nenhuma anomalia" description="Reporte anomalias detectadas nos equipamentos." action={() => setShowModal(true)} actionLabel="Reportar" />}
+
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Reportar Anomalia" size="md">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormInput label="Equipamento" required>
+            <Select value={form.ativo_id} onChange={(v) => setForm({...form, ativo_id: v})} options={ativos.map(a => ({value: a.id, label: `${a.tag} - ${a.nome}`}))} placeholder="Selecione..." />
+          </FormInput>
+          <FormInput label="Descrição da Anomalia" required>
+            <textarea value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4 py-3 min-h-[100px]" placeholder="Descreva o problema encontrado..." required />
+          </FormInput>
+          <FormInput label="Severidade">
+            <Select value={form.severidade} onChange={(v) => setForm({...form, severidade: v})} options={[{value:'baixa',label:'Baixa'},{value:'media',label:'Média'},{value:'alta',label:'Alta'},{value:'critica',label:'Crítica'}]} />
+          </FormInput>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" checked={form.gerar_os} onChange={(e) => setForm({...form, gerar_os: e.target.checked})} className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-emerald-500" />
+            <span className="text-slate-300">Gerar OS automaticamente</span>
+          </label>
+          <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Criando...' : 'Reportar'}</button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+};
+
+// ============== ASSISTENTE IA PAGE ==============
+
+const AssistentePage = () => {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [ativoId, setAtivoId] = useState('');
+  const [ativos, setAtivos] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState('');
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    const fetchAtivos = async () => {
+      try { const res = await api.get('/ativos'); setAtivos(res.data); } catch {}
+    };
+    fetchAtivos();
+  }, []);
+
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    const userMsg = input.trim();
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setLoading(true);
+    try {
+      const res = await api.post('/assistente/chat', { message: userMsg, ativo_id: ativoId || null, session_id: sessionId || null });
+      setSessionId(res.data.session_id);
+      setMessages(prev => [...prev, { role: 'assistant', content: res.data.response }]);
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Erro ao processar. Tente novamente.' }]);
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-6rem)]">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Assistente Técnico IA</h1>
+          <p className="text-sm text-slate-500">Tire dúvidas sobre equipamentos e manutenção</p>
+        </div>
+        <button onClick={() => { setMessages([]); setSessionId(''); }} className="btn-secondary flex items-center gap-2"><RefreshCw size={16} /> Nova conversa</button>
+      </div>
+
+      <div className="glass-card p-3 mb-4">
+        <FormInput label="Contexto do Equipamento (opcional)">
+          <Select value={ativoId} onChange={(v) => setAtivoId(v)} options={[{value:'', label:'Geral (todos os manuais)'}, ...ativos.map(a => ({value: a.id, label: `${a.tag} - ${a.nome}`}))]} />
+        </FormInput>
+      </div>
+
+      <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4"><Zap size={40} className="text-emerald-400" /></div>
+            <h3 className="text-lg text-slate-300 mb-2">Como posso ajudar?</h3>
+            <p className="text-slate-500 max-w-md">Faça perguntas sobre manutenção, equipamentos, procedimentos técnicos. Se um manual estiver carregado no ativo, usarei como referência.</p>
+            <div className="flex flex-wrap gap-2 mt-4 justify-center">
+              {['Como verificar vibração?','Procedimento de lubrificação','Troubleshoot bomba centrífuga'].map(q => (
+                <button key={q} onClick={() => { setInput(q); }} className="text-xs px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors">{q}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] p-3 rounded-xl text-sm whitespace-pre-wrap ${
+              msg.role === 'user' ? 'bg-emerald-500/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-800 text-slate-200 border border-slate-700'
+            }`}>
+              {msg.content}
+            </div>
+          </div>
+        ))}
+        {loading && <div className="flex justify-start"><div className="bg-slate-800 border border-slate-700 p-3 rounded-xl text-sm text-slate-400 animate-pulse">Pensando...</div></div>}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && !loading && handleSend()}
+          placeholder="Digite sua dúvida técnica..."
+          className="input-industrial flex-1 px-4"
+          disabled={loading}
+          data-testid="ai-chat-input"
+        />
+        <button onClick={handleSend} disabled={loading || !input.trim()} className="btn-primary px-6" data-testid="ai-chat-send">
+          {loading ? <RefreshCw size={20} className="animate-spin" /> : <Zap size={20} />}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ============== ADMIN USUARIOS PAGE ==============
+
+const AdminUsuariosPage = () => {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ nome: '', email: '', password: '', role: 'tecnico', telefone: '' });
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+
+  const fetchUsers = async () => {
+    try { const res = await api.get('/admin/users'); setUsers(res.data); }
+    catch (e) { toast.error('Sem permissão'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { fetchUsers(); }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.nome || !form.email || !form.password) { toast.error('Preencha todos os campos obrigatórios'); return; }
+    setSaving(true);
+    try {
+      await api.post('/admin/users', form);
+      toast.success('Usuário criado!');
+      setShowModal(false);
+      setForm({ nome: '', email: '', password: '', role: 'tecnico', telefone: '' });
+      fetchUsers();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (uid) => {
+    if (uid === user?.id) { toast.error('Não pode excluir a si mesmo'); return; }
+    try { await api.delete(`/admin/users/${uid}`); toast.success('Removido'); fetchUsers(); } catch { toast.error('Erro'); }
+  };
+
+  const roleLabels = { admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tecnico: 'Técnico', inspetor: 'Inspetor', viewer: 'Visualizador' };
+  const roleColors = { admin: 'text-red-400 bg-red-500/10', gerente: 'text-purple-400 bg-purple-500/10', pcm: 'text-blue-400 bg-blue-500/10', supervisor: 'text-amber-400 bg-amber-500/10', tecnico: 'text-emerald-400 bg-emerald-500/10', inspetor: 'text-cyan-400 bg-cyan-500/10', viewer: 'text-slate-400 bg-slate-500/10' };
+
+  if (user?.role !== 'admin') return <EmptyState icon={Shield} title="Acesso Restrito" description="Apenas administradores podem gerenciar usuários." />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-100">Gestão de Usuários</h1>
+        <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-user-btn"><Plus size={20} /> Novo Usuário</button>
+      </div>
+      {loading ? <Loading rows={5} /> : (
+        <div className="space-y-2">
+          {users.map((u) => (
+            <div key={u.id} className="glass-card p-4 flex items-center justify-between group">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center"><User size={20} className="text-emerald-400" /></div>
+                <div>
+                  <p className="text-slate-100 font-medium">{u.nome}</p>
+                  <p className="text-xs text-slate-500">{u.email}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs px-3 py-1 rounded-full font-medium ${roleColors[u.role] || ''}`}>{roleLabels[u.role] || u.role}</span>
+                {u.id !== user?.id && (
+                  <button onClick={() => handleDelete(u.id)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} className="text-red-400" /></button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Novo Usuário" size="md">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormInput label="Nome Completo" required><input value={form.nome} onChange={(e) => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-4" required /></FormInput>
+          <div className="grid grid-cols-2 gap-4">
+            <FormInput label="Email" required><input type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="input-industrial w-full px-4" required /></FormInput>
+            <FormInput label="Senha" required><input type="password" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="input-industrial w-full px-4" required /></FormInput>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormInput label="Perfil" required>
+              <Select value={form.role} onChange={(v) => setForm({...form, role: v})} options={[
+                {value:'admin',label:'Administrador'},{value:'gerente',label:'Gerente'},{value:'pcm',label:'PCM'},
+                {value:'supervisor',label:'Supervisor'},{value:'tecnico',label:'Técnico'},{value:'inspetor',label:'Inspetor'},{value:'viewer',label:'Visualizador'}
+              ]} />
+            </FormInput>
+            <FormInput label="Telefone"><input value={form.telefone} onChange={(e) => setForm({...form, telefone: e.target.value})} className="input-industrial w-full px-4" /></FormInput>
+          </div>
+          <div className="glass-card p-3 text-xs text-slate-500">
+            <p className="font-semibold text-slate-400 mb-1">Permissões por perfil:</p>
+            <p><span className="text-red-400">Admin</span>: Controle total</p>
+            <p><span className="text-purple-400">Gerente</span>: Dashboard e relatórios (somente leitura)</p>
+            <p><span className="text-blue-400">PCM</span>: Gerencia OS, estoque, relatórios, exporta dados</p>
+            <p><span className="text-emerald-400">Técnico</span>: Preenche inspeções, abre anomalias</p>
+          </div>
+          <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Criando...' : 'Criar Usuário'}</button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+};
+
+// ============== EXPORT BUTTONS COMPONENT ==============
+
+const ExportButtons = ({ entity }) => {
+  const { user } = useAuth();
+  if (!['admin','pcm','gerente'].includes(user?.role)) return null;
+  
+  const handleExport = async (format) => {
+    try {
+      const res = await api.get(`/export/${entity}?format=${format}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${entity}_manutrix.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success(`Exportado em ${format.toUpperCase()}`);
+    } catch (e) { toast.error('Erro ao exportar'); }
+  };
+
+  return (
+    <div className="flex gap-1">
+      <button onClick={() => handleExport('excel')} className="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors" title="Excel"><FileText size={16} /></button>
+      <button onClick={() => handleExport('pdf')} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors" title="PDF"><FileText size={16} /></button>
+    </div>
+  );
+};
+
 // ============== LAYOUT ==============
 
 const ProtectedRoute = ({ children }) => {
@@ -3161,6 +3603,10 @@ function App() {
           <Route path="/inspecoes/:id" element={<ProtectedRoute><AppLayout><InspecaoDetailPage /></AppLayout></ProtectedRoute>} />
           <Route path="/ronda" element={<ProtectedRoute><AppLayout><RondaPage /></AppLayout></ProtectedRoute>} />
           <Route path="/scanner" element={<ProtectedRoute><AppLayout><ScannerPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/sobressalentes" element={<ProtectedRoute><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/anomalias" element={<ProtectedRoute><AppLayout><AnomaliasPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
+          <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster position="top-center" richColors />

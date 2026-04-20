@@ -1,11 +1,12 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Form, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import io
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
@@ -18,6 +19,7 @@ from enum import Enum
 import aiofiles
 import random
 import string
+import json
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -47,6 +49,8 @@ logger = logging.getLogger(__name__)
 
 class UserRole(str, Enum):
     ADMIN = "admin"
+    GERENTE = "gerente"
+    PCM = "pcm"
     SUPERVISOR = "supervisor"
     TECNICO = "tecnico"
     INSPETOR = "inspetor"
@@ -406,6 +410,19 @@ def check_write_permission(user: Dict, allowed_roles: list = None):
         return True
     raise HTTPException(status_code=403, detail="Sem permissão para esta operação")
 
+def check_admin_only(user: Dict):
+    """Only admin can perform this action"""
+    if not is_admin(user):
+        raise HTTPException(status_code=403, detail="Apenas administradores podem realizar esta operação")
+
+def can_export(user: Dict) -> bool:
+    """PCM, Gerente, Admin can export data"""
+    return user.get('role') in ['admin', 'pcm', 'gerente']
+
+def can_view_dashboard(user: Dict) -> bool:
+    """Gerente, PCM, Admin can view dashboard"""
+    return user.get('role') in ['admin', 'pcm', 'gerente', 'supervisor']
+
 async def criar_notificacao(usuario_id: str, org_id: str, tipo: NotificacaoTipo, titulo: str, mensagem: str, link: str = None):
     notif = Notificacao(
         usuario_id=usuario_id,
@@ -612,7 +629,7 @@ async def get_ativo_by_tag(tag: str, user: Dict = Depends(get_current_user)):
 
 @api_router.post("/ativos")
 async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'supervisor'])
+    check_admin_only(user)
     area = await db.areas.find_one({"id": data.area_id}, {"_id": 0})
     if not area:
         raise HTTPException(status_code=404, detail="Área não encontrada")
@@ -664,6 +681,7 @@ async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)
 
 @api_router.put("/ativos/{ativo_id}")
 async def update_ativo(ativo_id: str, data: AtivoUpdate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
     existing = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
@@ -1175,17 +1193,34 @@ async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
 
 class ConcluirOSBody(BaseModel):
     observacoes: Optional[str] = None
+    descricao_servico: Optional[str] = None
+    tempo_gasto_minutos: Optional[int] = None
 
 @api_router.post("/ordens-servico/{os_id}/concluir")
 async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user: Dict = Depends(get_current_user)):
-    os = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
-    if not os:
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
     
-    tempo = None
-    if os.get('data_inicio'):
-        start = datetime.fromisoformat(os['data_inicio'].replace('Z', '+00:00'))
+    # REGRA: OS não fecha sem descrição do serviço
+    descricao = body.descricao_servico or body.observacoes or os_doc.get('descricao')
+    if not descricao:
+        raise HTTPException(status_code=400, detail="Descrição do serviço é obrigatória para fechar a OS")
+    
+    # REGRA: OS corretiva/falha exige foto (attachment)
+    if os_doc.get('tipo') in ['corretiva', 'falha']:
+        attachments = await db.attachments.count_documents({"entity_type": "work_order", "entity_id": os_id})
+        if attachments == 0:
+            raise HTTPException(status_code=400, detail="OS corretiva exige pelo menos uma foto/evidência anexada")
+    
+    # Calculate execution time
+    tempo = body.tempo_gasto_minutos
+    if not tempo and os_doc.get('data_inicio'):
+        start = datetime.fromisoformat(os_doc['data_inicio'].replace('Z', '+00:00'))
         tempo = int((datetime.now(timezone.utc) - start).total_seconds() / 60)
+    
+    if not tempo:
+        raise HTTPException(status_code=400, detail="Tempo gasto é obrigatório para fechar a OS")
     
     await db.ordens_servico.update_one(
         {"id": os_id},
@@ -1193,14 +1228,14 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
             "status": "concluida",
             "data_conclusao": datetime.now(timezone.utc).isoformat(),
             "tempo_execucao_minutos": tempo,
+            "descricao_servico": descricao,
             "observacoes": body.observacoes,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
     
-    # Update asset status to operational
     await db.ativos.update_one(
-        {"id": os.get('ativo_id')},
+        {"id": os_doc.get('ativo_id')},
         {"$set": {"status": "operacional", "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     
@@ -2009,6 +2044,790 @@ async def seed_data():
             "tecnico": {"email": "tecnico@manutrix.com", "password": "tecnico123"}
         }
     }
+
+# ============== MANUAL PDF UPLOAD ==============
+
+MANUALS_DIR = ROOT_DIR / 'uploads' / 'manuals'
+MANUALS_DIR.mkdir(parents=True, exist_ok=True)
+
+@api_router.post("/ativos/{ativo_id}/manual")
+async def upload_manual(ativo_id: str, file: UploadFile = File(...), user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin'])
+    
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    
+    ext = Path(file.filename).suffix.lower()
+    if ext != '.pdf':
+        raise HTTPException(status_code=400, detail="Apenas arquivos PDF são permitidos")
+    
+    filename = f"{ativo_id}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = MANUALS_DIR / filename
+    
+    async with aiofiles.open(filepath, 'wb') as f:
+        content = await file.read()
+        await f.write(content)
+    
+    # Extract text from PDF for AI context
+    extracted_text = ""
+    try:
+        from PyPDF2 import PdfReader
+        reader = PdfReader(str(filepath))
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                extracted_text += text + "\n"
+    except Exception as e:
+        logger.warning(f"PDF text extraction failed: {e}")
+    
+    manual_doc = {
+        "id": str(uuid.uuid4()),
+        "ativo_id": ativo_id,
+        "filename": file.filename,
+        "filepath": str(filepath),
+        "url": f"/api/uploads/manuals/{filename}",
+        "extracted_text": extracted_text[:50000],  # Limit to 50k chars
+        "size_bytes": len(content),
+        "uploaded_by": user['id'],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.manuais.insert_one(manual_doc)
+    manual_doc.pop('_id', None)
+    
+    # Update ativo with manual ref
+    await db.ativos.update_one({"id": ativo_id}, {"$set": {"manual_url": manual_doc['url'], "updated_at": datetime.now(timezone.utc).isoformat()}})
+    
+    return {"success": True, "manual": {k: v for k, v in manual_doc.items() if k != 'extracted_text'}}
+
+@api_router.get("/ativos/{ativo_id}/manuais")
+async def list_manuais(ativo_id: str, user: Dict = Depends(get_current_user)):
+    manuais = await db.manuais.find({"ativo_id": ativo_id}, {"_id": 0, "extracted_text": 0}).sort("created_at", -1).to_list(50)
+    return manuais
+
+@api_router.delete("/manuais/{manual_id}")
+async def delete_manual(manual_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    manual = await db.manuais.find_one({"id": manual_id})
+    if not manual:
+        raise HTTPException(status_code=404, detail="Manual não encontrado")
+    try:
+        Path(manual['filepath']).unlink(missing_ok=True)
+    except Exception:
+        pass
+    await db.manuais.delete_one({"id": manual_id})
+    return {"success": True}
+
+@api_router.get("/uploads/manuals/{filename}")
+async def get_manual_file(filename: str):
+    filepath = MANUALS_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    return FileResponse(filepath, media_type="application/pdf")
+
+# ============== AI ASSISTANT ==============
+
+class ChatMessage(BaseModel):
+    message: str
+    ativo_id: Optional[str] = None
+    session_id: Optional[str] = None
+
+@api_router.post("/assistente/chat")
+async def assistente_chat(data: ChatMessage, user: Dict = Depends(get_current_user)):
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    
+    llm_key = os.environ.get('EMERGENT_LLM_KEY')
+    if not llm_key:
+        raise HTTPException(status_code=500, detail="Chave de IA não configurada")
+    
+    # Build context from manuals
+    context_parts = []
+    if data.ativo_id:
+        manuais = await db.manuais.find({"ativo_id": data.ativo_id}, {"_id": 0}).to_list(10)
+        ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
+        if ativo:
+            context_parts.append(f"Ativo: {ativo.get('tag', '')} - {ativo.get('nome', '')} | Tipo: {ativo.get('tipo_equipamento', 'N/A')} | Fabricante: {ativo.get('fabricante', 'N/A')} | Modelo: {ativo.get('modelo', 'N/A')}")
+        for m in manuais:
+            if m.get('extracted_text'):
+                context_parts.append(f"Manual '{m.get('filename', '')}': {m['extracted_text'][:15000]}")
+    else:
+        # Get all manuals for general questions
+        manuais = await db.manuais.find({}, {"_id": 0, "extracted_text": 1, "filename": 1, "ativo_id": 1}).to_list(20)
+        for m in manuais:
+            if m.get('extracted_text'):
+                ativo = await db.ativos.find_one({"id": m.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
+                label = f"{ativo.get('tag', '')} - {ativo.get('nome', '')}" if ativo else m.get('filename', '')
+                context_parts.append(f"Manual de {label}: {m['extracted_text'][:8000]}")
+    
+    manual_context = "\n\n".join(context_parts) if context_parts else "Nenhum manual carregado no sistema."
+    
+    system_msg = f"""Você é o Assistente Técnico MANUTRIX, especialista em manutenção industrial.
+Responda em português do Brasil, de forma clara e objetiva.
+Seu papel é ajudar mecânicos e eletricistas a resolver problemas e tirar dúvidas sobre equipamentos.
+Use as informações dos manuais técnicos disponíveis como referência.
+Se não souber a resposta ou não encontrar nos manuais, diga honestamente e sugira verificar o manual físico.
+
+=== MANUAIS DISPONÍVEIS ===
+{manual_context}
+"""
+    
+    session_id = data.session_id or f"manutrix_{user['id']}_{uuid.uuid4().hex[:8]}"
+    
+    # Load chat history from DB
+    history = await db.chat_history.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(20)
+    
+    chat = LlmChat(
+        api_key=llm_key,
+        session_id=session_id,
+        system_message=system_msg
+    ).with_model("gemini", "gemini-2.5-flash")
+    
+    # Replay history
+    for h in history:
+        if h.get('role') == 'user':
+            chat.messages.append({"role": "user", "content": h['content']})
+        elif h.get('role') == 'assistant':
+            chat.messages.append({"role": "assistant", "content": h['content']})
+    
+    try:
+        response = await chat.send_message(UserMessage(text=data.message))
+        
+        # Save to history
+        now = datetime.now(timezone.utc).isoformat()
+        await db.chat_history.insert_many([
+            {"session_id": session_id, "role": "user", "content": data.message, "ativo_id": data.ativo_id, "user_id": user['id'], "created_at": now},
+            {"session_id": session_id, "role": "assistant", "content": response, "ativo_id": data.ativo_id, "created_at": now}
+        ])
+        
+        return {"response": response, "session_id": session_id}
+    except Exception as e:
+        logger.error(f"AI Assistant error: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro no assistente: {str(e)}")
+
+@api_router.get("/assistente/historico")
+async def get_chat_history(session_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    query = {"user_id": user['id']}
+    if session_id:
+        query['session_id'] = session_id
+    history = await db.chat_history.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return history
+
+@api_router.get("/assistente/sessoes")
+async def list_chat_sessions(user: Dict = Depends(get_current_user)):
+    pipeline = [
+        {"$match": {"user_id": user['id'], "role": "user"}},
+        {"$group": {"_id": "$session_id", "last_message": {"$last": "$content"}, "ativo_id": {"$last": "$ativo_id"}, "created_at": {"$last": "$created_at"}}},
+        {"$sort": {"created_at": -1}},
+        {"$limit": 20}
+    ]
+    sessions = await db.chat_history.aggregate(pipeline).to_list(20)
+    result = []
+    for s in sessions:
+        ativo = None
+        if s.get('ativo_id'):
+            ativo = await db.ativos.find_one({"id": s['ativo_id']}, {"_id": 0, "tag": 1, "nome": 1})
+        result.append({"session_id": s['_id'], "last_message": s.get('last_message', '')[:80], "ativo": ativo, "created_at": s.get('created_at')})
+    return result
+
+# ============== EXPORT ENDPOINTS ==============
+
+@api_router.get("/export/ativos")
+async def export_ativos(format: str = "excel", user: Dict = Depends(get_current_user)):
+    if not can_export(user):
+        raise HTTPException(status_code=403, detail="Sem permissão para exportar")
+    
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    ativos = await db.ativos.find(query, {"_id": 0}).to_list(5000)
+    
+    if format == "excel":
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Ativos"
+        headers = ["TAG", "Nome", "Tipo", "Fabricante", "Modelo", "Série", "Criticidade", "Status", "Centro Custo", "MTBF (h)", "MTTR (h)", "Valor Aquisição"]
+        ws.append(headers)
+        for a in ativos:
+            ws.append([a.get('tag',''), a.get('nome',''), a.get('tipo_equipamento',''), a.get('fabricante',''), a.get('modelo',''), a.get('numero_serie',''), a.get('criticidade',''), a.get('status',''), a.get('centro_custo',''), a.get('mtbf_horas',''), a.get('mttr_horas',''), a.get('valor_aquisicao','')])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=ativos_manutrix.xlsx"})
+    
+    elif format == "pdf":
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        styles = getSampleStyleSheet()
+        elements = [Paragraph("MANUTRIX - Relatório de Ativos", styles['Title']), Spacer(1, 12)]
+        data = [["TAG", "Nome", "Tipo", "Fabricante", "Criticidade", "Status"]]
+        for a in ativos:
+            data.append([a.get('tag',''), a.get('nome','')[:30], a.get('tipo_equipamento','')[:20], a.get('fabricante','')[:20], a.get('criticidade',''), a.get('status','')])
+        t = Table(data)
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#10b981')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
+        elements.append(t)
+        doc.build(elements)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=ativos_manutrix.pdf"})
+
+@api_router.get("/export/ordens-servico")
+async def export_os(format: str = "excel", user: Dict = Depends(get_current_user)):
+    if not can_export(user):
+        raise HTTPException(status_code=403, detail="Sem permissão para exportar")
+    
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    os_list = await db.ordens_servico.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    
+    for os_item in os_list:
+        ativo = await db.ativos.find_one({"id": os_item.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
+        os_item['ativo_tag'] = ativo.get('tag', '') if ativo else ''
+        os_item['ativo_nome'] = ativo.get('nome', '') if ativo else ''
+    
+    if format == "excel":
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Ordens de Serviço"
+        headers = ["Número", "Ativo TAG", "Ativo", "Tipo", "Prioridade", "Status", "Título", "Data Abertura", "Data Conclusão", "Tempo (min)", "Custo Total"]
+        ws.append(headers)
+        for o in os_list:
+            ws.append([o.get('numero',''), o.get('ativo_tag',''), o.get('ativo_nome',''), o.get('tipo',''), o.get('prioridade',''), o.get('status',''), o.get('titulo',''), o.get('data_abertura',''), o.get('data_conclusao',''), o.get('tempo_execucao_minutos',''), o.get('custo_total',0)])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=ordens_servico_manutrix.xlsx"})
+    
+    elif format == "pdf":
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        styles = getSampleStyleSheet()
+        elements = [Paragraph("MANUTRIX - Relatório de Ordens de Serviço", styles['Title']), Spacer(1, 12)]
+        data = [["Nº", "TAG", "Tipo", "Prioridade", "Status", "Título", "Custo"]]
+        for o in os_list:
+            custo = o.get('custo_total') or 0
+            data.append([str(o.get('numero','')), str(o.get('ativo_tag','')), str(o.get('tipo','')), str(o.get('prioridade','')), str(o.get('status','')), str(o.get('titulo',''))[:25], f"R${float(custo):.2f}"])
+        t = Table(data)
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#3b82f6')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
+        elements.append(t)
+        doc.build(elements)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=ordens_servico_manutrix.pdf"})
+
+@api_router.get("/export/estoque")
+async def export_estoque(format: str = "excel", user: Dict = Depends(get_current_user)):
+    if not can_export(user):
+        raise HTTPException(status_code=403, detail="Sem permissão para exportar")
+    
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    items = await db.itens_estoque.find(query, {"_id": 0}).to_list(5000)
+    
+    if format == "excel":
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Estoque"
+        headers = ["SKU", "Nome", "Categoria", "Quantidade", "Unidade", "Mínimo", "Máximo", "Custo Unit.", "Valor Total", "Fornecedor", "Almoxarifado"]
+        ws.append(headers)
+        for i in items:
+            ws.append([i.get('sku',''), i.get('nome',''), i.get('categoria',''), i.get('quantidade',0), i.get('unidade',''), i.get('estoque_minimo',0), i.get('estoque_maximo',''), i.get('custo_unitario',0), i.get('valor_total',0), i.get('fornecedor',''), i.get('almoxarifado','')])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=estoque_manutrix.xlsx"})
+    
+    elif format == "pdf":
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        styles = getSampleStyleSheet()
+        elements = [Paragraph("MANUTRIX - Relatório de Estoque", styles['Title']), Spacer(1, 12)]
+        data = [["SKU", "Nome", "Categoria", "Qtd", "Un", "Mín", "Custo Unit.", "Valor Total"]]
+        for i in items:
+            data.append([i.get('sku',''), i.get('nome','')[:25], i.get('categoria',''), i.get('quantidade',0), i.get('unidade',''), i.get('estoque_minimo',0), f"R${i.get('custo_unitario',0):.2f}", f"R${i.get('valor_total',0):.2f}"])
+        t = Table(data)
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#8b5cf6')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
+        elements.append(t)
+        doc.build(elements)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=estoque_manutrix.pdf"})
+
+@api_router.get("/export/inspecoes")
+async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_current_user)):
+    if not can_export(user):
+        raise HTTPException(status_code=403, detail="Sem permissão para exportar")
+    
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    inspecoes = await db.inspecoes.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    
+    for insp in inspecoes:
+        ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
+        insp['ativo_tag'] = ativo.get('tag', '') if ativo else ''
+        insp['ativo_nome'] = ativo.get('nome', '') if ativo else ''
+    
+    if format == "excel":
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Inspeções"
+        headers = ["Ativo TAG", "Ativo", "Tipo", "Frequência", "Status", "Resultado", "Data Programada", "Data Conclusão", "Duração (min)", "Lubrificante", "Ponto Lubrificação"]
+        ws.append(headers)
+        for i in inspecoes:
+            ws.append([i.get('ativo_tag',''), i.get('ativo_nome',''), i.get('tipo',''), i.get('frequencia',''), i.get('status',''), i.get('resultado',''), i.get('data_programada',''), i.get('data_conclusao',''), i.get('duracao_minutos',''), i.get('tipo_lubrificante',''), i.get('ponto_lubrificacao','')])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=inspecoes_manutrix.xlsx"})
+    
+    elif format == "pdf":
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        styles = getSampleStyleSheet()
+        elements = [Paragraph("MANUTRIX - Relatório de Inspeções", styles['Title']), Spacer(1, 12)]
+        data = [["TAG", "Ativo", "Tipo", "Freq.", "Status", "Resultado", "Data"]]
+        for i in inspecoes:
+            data.append([i.get('ativo_tag',''), i.get('ativo_nome','')[:20], i.get('tipo',''), i.get('frequencia',''), i.get('status',''), i.get('resultado',''), i.get('data_programada','')[:10]])
+        t = Table(data)
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f59e0b')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
+        elements.append(t)
+        doc.build(elements)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=inspecoes_manutrix.pdf"})
+
+# ============== ATTACHMENTS ==============
+
+@api_router.post("/attachments")
+async def upload_attachment(
+    entity_type: str = Form(...),
+    entity_id: str = Form(...),
+    categoria: str = Form("foto"),
+    file: UploadFile = File(...),
+    user: Dict = Depends(get_current_user)
+):
+    """Upload attachment for any entity (inspection, work_order, anomaly, spare_asset)"""
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf']:
+        raise HTTPException(status_code=400, detail="Tipo de arquivo não permitido")
+    
+    filename = f"{entity_type}_{entity_id}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = UPLOAD_DIR / filename
+    
+    async with aiofiles.open(filepath, 'wb') as f:
+        content = await file.read()
+        await f.write(content)
+    
+    attach_doc = {
+        "id": str(uuid.uuid4()),
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "categoria": categoria,
+        "filename": file.filename,
+        "file_url": f"/api/uploads/{filename}",
+        "size_bytes": len(content),
+        "mime_type": file.content_type,
+        "uploaded_by": user['id'],
+        "organization_id": user.get('organization_id', ''),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.attachments.insert_one(attach_doc)
+    attach_doc.pop('_id', None)
+    return attach_doc
+
+@api_router.get("/attachments/{entity_type}/{entity_id}")
+async def list_attachments(entity_type: str, entity_id: str, user: Dict = Depends(get_current_user)):
+    attachments = await db.attachments.find(
+        {"entity_type": entity_type, "entity_id": entity_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return attachments
+
+@api_router.delete("/attachments/{attach_id}")
+async def delete_attachment(attach_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    attach = await db.attachments.find_one({"id": attach_id})
+    if not attach:
+        raise HTTPException(status_code=404, detail="Anexo não encontrado")
+    try:
+        filepath = UPLOAD_DIR / Path(attach['file_url']).name
+        filepath.unlink(missing_ok=True)
+    except Exception:
+        pass
+    await db.attachments.delete_one({"id": attach_id})
+    return {"success": True}
+
+# ============== SOBRESSALENTES (SPARE PARTS) ==============
+
+class SpareAssetCreate(BaseModel):
+    tag: Optional[str] = None
+    descricao: str
+    modelo: Optional[str] = None
+    fabricante: Optional[str] = None
+    numero_serie: Optional[str] = None
+    status: str = "estoque"  # estoque, em_uso, em_reforma, descartado
+    localizacao: Optional[str] = None
+    ativo_vinculado_id: Optional[str] = None
+    custo: Optional[float] = None
+    observacoes: Optional[str] = None
+
+class SpareAssetUpdate(BaseModel):
+    descricao: Optional[str] = None
+    modelo: Optional[str] = None
+    fabricante: Optional[str] = None
+    status: Optional[str] = None
+    localizacao: Optional[str] = None
+    ativo_vinculado_id: Optional[str] = None
+    custo: Optional[float] = None
+    observacoes: Optional[str] = None
+
+class SpareMovementCreate(BaseModel):
+    spare_id: str
+    tipo: str  # entrada, saida, reforma, retorno
+    quantidade: int = 1
+    motivo: Optional[str] = None
+    os_id: Optional[str] = None
+    nota_fiscal: Optional[str] = None
+    observacoes: Optional[str] = None
+
+@api_router.get("/sobressalentes")
+async def list_spares(
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    if status:
+        query['status'] = status
+    
+    spares = await db.spare_assets.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    if search:
+        s = search.lower()
+        spares = [sp for sp in spares if s in sp.get('tag', '').lower() or s in sp.get('descricao', '').lower()]
+    
+    for sp in spares:
+        if sp.get('ativo_vinculado_id'):
+            ativo = await db.ativos.find_one({"id": sp['ativo_vinculado_id']}, {"_id": 0, "tag": 1, "nome": 1})
+            sp['ativo_vinculado'] = ativo
+        sp['attachments_count'] = await db.attachments.count_documents({"entity_type": "spare_asset", "entity_id": sp['id']})
+    
+    return spares
+
+@api_router.get("/sobressalentes/{spare_id}")
+async def get_spare(spare_id: str, user: Dict = Depends(get_current_user)):
+    sp = await db.spare_assets.find_one({"id": spare_id, "deleted_at": None}, {"_id": 0})
+    if not sp:
+        raise HTTPException(status_code=404, detail="Sobressalente não encontrado")
+    
+    sp['movimentacoes'] = await db.spare_movements.find({"spare_id": spare_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    sp['attachments'] = await db.attachments.find({"entity_type": "spare_asset", "entity_id": spare_id}, {"_id": 0}).to_list(50)
+    
+    if sp.get('ativo_vinculado_id'):
+        sp['ativo_vinculado'] = await db.ativos.find_one({"id": sp['ativo_vinculado_id']}, {"_id": 0, "tag": 1, "nome": 1})
+    
+    return sp
+
+@api_router.post("/sobressalentes")
+async def create_spare(data: SpareAssetCreate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    
+    org_id = user.get('organization_id', '')
+    tag = data.tag or f"SP-{uuid.uuid4().hex[:6].upper()}"
+    
+    spare_id = str(uuid.uuid4())
+    spare_doc = {
+        "id": spare_id,
+        "tag": tag,
+        "descricao": data.descricao,
+        "modelo": data.modelo,
+        "fabricante": data.fabricante,
+        "numero_serie": data.numero_serie,
+        "status": data.status,
+        "localizacao": data.localizacao,
+        "ativo_vinculado_id": data.ativo_vinculado_id,
+        "custo": data.custo,
+        "observacoes": data.observacoes,
+        "organization_id": org_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.spare_assets.insert_one(spare_doc)
+    spare_doc.pop('_id', None)
+    return spare_doc
+
+@api_router.put("/sobressalentes/{spare_id}")
+async def update_spare(spare_id: str, data: SpareAssetUpdate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    existing = await db.spare_assets.find_one({"id": spare_id, "deleted_at": None}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Sobressalente não encontrado")
+    
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    await db.spare_assets.update_one({"id": spare_id}, {"$set": update_data})
+    return await db.spare_assets.find_one({"id": spare_id}, {"_id": 0})
+
+@api_router.delete("/sobressalentes/{spare_id}")
+async def delete_spare(spare_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    await db.spare_assets.update_one({"id": spare_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    return {"success": True}
+
+@api_router.post("/sobressalentes/movimentacao")
+async def create_spare_movement(data: SpareMovementCreate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
+    
+    spare = await db.spare_assets.find_one({"id": data.spare_id, "deleted_at": None}, {"_id": 0})
+    if not spare:
+        raise HTTPException(status_code=404, detail="Sobressalente não encontrado")
+    
+    # Update spare status based on movement
+    new_status = spare.get('status', 'estoque')
+    if data.tipo == 'saida':
+        new_status = 'em_uso'
+    elif data.tipo == 'entrada' or data.tipo == 'retorno':
+        new_status = 'estoque'
+    elif data.tipo == 'reforma':
+        new_status = 'em_reforma'
+    
+    mov_doc = {
+        "id": str(uuid.uuid4()),
+        "spare_id": data.spare_id,
+        "tipo": data.tipo,
+        "quantidade": data.quantidade,
+        "motivo": data.motivo,
+        "os_id": data.os_id,
+        "nota_fiscal": data.nota_fiscal,
+        "observacoes": data.observacoes,
+        "usuario_id": user['id'],
+        "organization_id": user.get('organization_id', ''),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.spare_movements.insert_one(mov_doc)
+    await db.spare_assets.update_one({"id": data.spare_id}, {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    
+    return {"success": True, "new_status": new_status}
+
+# ============== ANOMALIAS ==============
+
+class AnomaliaCreate(BaseModel):
+    ativo_id: str
+    descricao: str
+    severidade: str = "media"  # baixa, media, alta, critica
+    inspecao_id: Optional[str] = None
+    gerar_os: bool = True
+
+@api_router.get("/anomalias")
+async def list_anomalias(user: Dict = Depends(get_current_user)):
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    anomalias = await db.anomalias.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for a in anomalias:
+        ativo = await db.ativos.find_one({"id": a.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "criticidade": 1})
+        a['ativo'] = ativo
+    return anomalias
+
+@api_router.post("/anomalias")
+async def create_anomalia(data: AnomaliaCreate, user: Dict = Depends(get_current_user)):
+    """Técnico pode abrir anomalia. Se gerar_os=True, cria OS automaticamente com prioridade inteligente."""
+    ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    
+    org_id = ativo.get('organization_id', user.get('organization_id', ''))
+    
+    # PRIORIZAÇÃO INTELIGENTE: severidade anomalia × criticidade ativo
+    severidade_peso = {'baixa': 1, 'media': 2, 'alta': 3, 'critica': 4}
+    criticidade_peso = {'baixa': 1, 'media': 2, 'alta': 3, 'critica': 4}
+    score = severidade_peso.get(data.severidade, 2) * criticidade_peso.get(ativo.get('criticidade', 'media'), 2)
+    
+    if score >= 12:
+        prioridade_os = 'critica'
+    elif score >= 6:
+        prioridade_os = 'alta'
+    elif score >= 3:
+        prioridade_os = 'media'
+    else:
+        prioridade_os = 'baixa'
+    
+    anomalia_id = str(uuid.uuid4())
+    anomalia_doc = {
+        "id": anomalia_id,
+        "ativo_id": data.ativo_id,
+        "descricao": data.descricao,
+        "severidade": data.severidade,
+        "prioridade_calculada": prioridade_os,
+        "score_prioridade": score,
+        "inspecao_id": data.inspecao_id,
+        "status": "aberta",
+        "os_gerada_id": None,
+        "reportado_por": user['id'],
+        "organization_id": org_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    
+    os_id = None
+    if data.gerar_os:
+        numero = await generate_os_numero(org_id)
+        os_id = str(uuid.uuid4())
+        os_doc = {
+            "id": os_id,
+            "numero": numero,
+            "ativo_id": data.ativo_id,
+            "organization_id": org_id,
+            "tipo": "corretiva",
+            "origem": "falha",
+            "prioridade": prioridade_os,
+            "titulo": f"Anomalia - {ativo.get('tag', '')}",
+            "descricao": data.descricao,
+            "status": "aberta",
+            "responsavel_id": None,
+            "equipe": [],
+            "data_abertura": datetime.now(timezone.utc).isoformat(),
+            "custo_pecas": 0, "custo_mao_obra": 0, "custo_total": 0,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "deleted_at": None
+        }
+        await db.ordens_servico.insert_one(os_doc)
+        anomalia_doc['os_gerada_id'] = os_id
+    
+    await db.anomalias.insert_one(anomalia_doc)
+    anomalia_doc.pop('_id', None)
+    return {**anomalia_doc, "os_gerada_id": os_id, "prioridade_os": prioridade_os}
+
+# ============== KNOWLEDGE BASE (ESTRUTURA) ==============
+
+class KnowledgeBaseCreate(BaseModel):
+    tipo_equipamento: str
+    problema: str
+    solucao: str
+    tags: Optional[List[str]] = None
+
+@api_router.get("/knowledge-base")
+async def list_knowledge(
+    tipo_equipamento: Optional[str] = None,
+    search: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    query = {}
+    if tipo_equipamento:
+        query['tipo_equipamento'] = tipo_equipamento
+    items = await db.knowledge_base.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    if search:
+        s = search.lower()
+        items = [i for i in items if s in i.get('problema', '').lower() or s in i.get('solucao', '').lower() or s in i.get('tipo_equipamento', '').lower()]
+    return items
+
+@api_router.post("/knowledge-base")
+async def create_knowledge(data: KnowledgeBaseCreate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tipo_equipamento": data.tipo_equipamento,
+        "problema": data.problema,
+        "solucao": data.solucao,
+        "tags": data.tags or [],
+        "created_by": user['id'],
+        "organization_id": user.get('organization_id', ''),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.knowledge_base.insert_one(doc)
+    doc.pop('_id', None)
+    return doc
+
+@api_router.delete("/knowledge-base/{kb_id}")
+async def delete_knowledge(kb_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    await db.knowledge_base.delete_one({"id": kb_id})
+    return {"success": True}
+
+# ============== GESTÃO DE USUÁRIOS (ADMIN) ==============
+
+@api_router.get("/admin/users")
+async def admin_list_users(user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    return await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(200)
+
+@api_router.post("/admin/users")
+async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    existing = await db.users.find_one({"email": data.email, "deleted_at": None})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email já cadastrado")
+    
+    user_id = str(uuid.uuid4())
+    user_doc = {
+        "id": user_id,
+        "email": data.email,
+        "nome": data.nome,
+        "role": data.role.value,
+        "organization_id": data.organization_id or user.get('organization_id', ''),
+        "telefone": data.telefone,
+        "password_hash": hash_password(data.password),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.users.insert_one(user_doc)
+    return {k: v for k, v in user_doc.items() if k not in ['password_hash', '_id']}
+
+@api_router.delete("/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    await db.users.update_one({"id": user_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    return {"success": True}
+
+# ============== EXPORT SOBRESSALENTES ==============
+
+@api_router.get("/export/sobressalentes")
+async def export_spares(format: str = "excel", user: Dict = Depends(get_current_user)):
+    if not can_export(user):
+        raise HTTPException(status_code=403, detail="Sem permissão para exportar")
+    
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    spares = await db.spare_assets.find(query, {"_id": 0}).to_list(5000)
+    
+    if format == "excel":
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Sobressalentes"
+        ws.append(["TAG", "Descrição", "Modelo", "Fabricante", "Série", "Status", "Localização", "Custo"])
+        for s in spares:
+            ws.append([s.get('tag',''), s.get('descricao',''), s.get('modelo',''), s.get('fabricante',''), s.get('numero_serie',''), s.get('status',''), s.get('localizacao',''), s.get('custo','')])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=sobressalentes_manutrix.xlsx"})
 
 # ============== ROOT ==============
 
