@@ -78,6 +78,22 @@ CMMS/EAM enterprise para mineração e indústria pesada. Rastreabilidade comple
 - Admin: admin@manutrix.com / admin123
 - Tecnico: tecnico@manutrix.com / tecnico123
 
+### Manuais PDF por Ativo (v4.1)
+- Upload de PDFs na página de detalhe do ativo
+- Visualização e download do manual
+- Extração automática de texto para contexto da IA
+- Apenas Admin pode enviar/remover, todos podem visualizar
+- Integrado com Assistente IA para consulta baseada nos manuais
+
+### Integração Power BI (v4.1)
+- 4 endpoints REST JSON otimizados para Power BI:
+  - GET /api/powerbi/ativos (dados flat de ativos)
+  - GET /api/powerbi/ordens-servico (OS com dados do ativo)
+  - GET /api/powerbi/inspecoes (inspeções com frequência e lubrificação)
+  - GET /api/powerbi/kpis-historico (snapshot de KPIs)
+- Dados prontos para importação direta no Power BI Desktop
+- Autenticação via Bearer Token
+
 ## Backlog
 - P1: Gráficos históricos (MTTR/MTBF trend)
 - P1: Kanban visual de OS
