@@ -1,0 +1,111 @@
+{
+  "summary": "MANUTRIX Iteration 7 - PDF Manual Upload & Power BI Endpoints Testing Complete. Backend: 17/17 tests passed (100%). Frontend: All new features verified working. PDF manual upload, view, delete working. Power BI endpoints return flat JSON optimized for import.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "passed_tests": [
+    "Backend: Admin login successful",
+    "Backend: Tecnico login successful",
+    "Backend: List ativos to get ID for testing",
+    "Backend: Upload PDF manual (admin) - creates manual with extracted text",
+    "Backend: Non-PDF files rejected with 400 error",
+    "Backend: List manuais for ativo - returns array with correct structure",
+    "Backend: View/download manual PDF file - returns application/pdf",
+    "Backend: Tecnico blocked from uploading manuals (403)",
+    "Backend: Tecnico blocked from deleting manuals (403)",
+    "Backend: Admin can delete manual",
+    "Backend: Power BI /api/powerbi/ativos returns flat JSON array",
+    "Backend: Power BI /api/powerbi/ordens-servico returns flat JSON array",
+    "Backend: Power BI /api/powerbi/inspecoes returns flat JSON array",
+    "Backend: Power BI /api/powerbi/kpis-historico returns KPI snapshot",
+    "Backend: Power BI endpoints require authentication (401/403 without token)",
+    "Backend: Dashboard stats endpoint works",
+    "Backend: Ativos list endpoint works",
+    "Backend: OS list endpoint works",
+    "Backend: All sidebar navigation endpoints respond (ativos, os, inspecoes, estoque, sobressalentes, anomalias)",
+    "Frontend: Login as admin successful",
+    "Frontend: Ativo detail page loads with QR code",
+    "Frontend: 'Manuais Técnicos' section visible on ativo detail",
+    "Frontend: 'ENVIAR PDF' button visible for admin",
+    "Frontend: Existing manual (test_manual.pdf) displayed with size and date",
+    "Frontend: View PDF button (eye icon) visible",
+    "Frontend: Tecnico can view Manuais Técnicos section",
+    "Frontend: Tecnico can see view PDF button",
+    "Frontend: Tecnico CANNOT see 'ENVIAR PDF' button (RBAC working)",
+    "Frontend: Tecnico CANNOT see delete button (RBAC working)"
+  ],
+  
+  "new_features_verified": [
+    {
+      "feature": "PDF Manual Upload to Ativos",
+      "description": "Admin can upload PDF manuals to assets. PDFs are stored in /uploads/manuals/, text is extracted for AI context. Manuals listed with filename, size, date.",
+      "status": "VERIFIED WORKING"
+    },
+    {
+      "feature": "Manual View/Download",
+      "description": "Eye icon opens PDF in new tab via /api/uploads/manuals/{filename}",
+      "status": "VERIFIED WORKING"
+    },
+    {
+      "feature": "Manual Delete (Admin Only)",
+      "description": "Admin can delete manuals, file is removed from disk and database",
+      "status": "VERIFIED WORKING"
+    },
+    {
+      "feature": "Power BI Data Endpoints",
+      "description": "4 endpoints returning flat JSON optimized for Power BI import: /powerbi/ativos, /powerbi/ordens-servico, /powerbi/inspecoes, /powerbi/kpis-historico",
+      "status": "VERIFIED WORKING"
+    },
+    {
+      "feature": "RBAC for Manuals",
+      "description": "Only admin can upload/delete manuals. All users can view.",
+      "status": "VERIFIED WORKING"
+    }
+  ],
+  
+  "test_report_links": [
+    "/app/backend/tests/test_iteration7_features.py",
+    "/app/test_reports/pytest/pytest_results_iteration7.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [],
+  
+  "updated_files": [
+    "/app/backend/tests/test_iteration7_features.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  
+  "test_credentials": {
+    "admin": "admin@manutrix.com / admin123",
+    "tecnico": "tecnico@manutrix.com / tecnico123"
+  },
+  
+  "seed_data_creation": "Used existing seed data. Test manual (test_manual.pdf) already uploaded to first ativo.",
+  
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  
+  "context_for_next_testing_agent": "PDF manual upload and Power BI endpoints fully implemented and tested. Manual upload extracts PDF text for AI assistant context. Power BI endpoints return flat JSON arrays optimized for direct import (no nested objects). All RBAC working correctly - only admin can upload/delete manuals. Previous iteration features (Sobressalentes, Anomalias, Attachments, Knowledge Base, User Management, Export Excel) still working per iteration_6 tests.",
+  
+  "power_bi_endpoints": {
+    "GET /api/powerbi/ativos": "Flat array with: tag, nome, tipo_equipamento, fabricante, modelo, criticidade, status, area, centro_custo, mtbf_horas, mttr_horas, valor_aquisicao, data_instalacao, created_at",
+    "GET /api/powerbi/ordens-servico": "Flat array with: numero, ativo_tag, ativo_nome, ativo_criticidade, tipo, origem, prioridade, status, titulo, responsavel, data_abertura, data_inicio, data_conclusao, tempo_execucao_minutos, custo_pecas, custo_mao_obra, custo_total, created_at",
+    "GET /api/powerbi/inspecoes": "Flat array with: ativo_tag, ativo_nome, tipo, frequencia, status, resultado, data_programada, data_inicio, data_conclusao, duracao_minutos, tipo_lubrificante, created_at",
+    "GET /api/powerbi/kpis-historico": "Object with: data_snapshot, ativos_total, ativos_operacionais, ativos_parados, disponibilidade_pct, mttr_horas, mtbf_horas, backlog_total, taxa_conformidade_pct, os_concluidas_total, preventivas, corretivas"
+  }
+}

@@ -14,7 +14,7 @@ import {
   Zap, Target, Layers, Filter, MoreVertical, Eye, Edit, Trash2, Save,
   Phone, Mail, Building, Hash, Thermometer, Volume2, Droplet, Cog,
   DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
-  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List
+  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -2004,24 +2004,64 @@ const AtivosPage = () => {
 const AtivoDetailPage = () => {
   const { id } = useParams();
   const [ativo, setAtivo] = useState(null);
+  const [manuais, setManuais] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
   
-  useEffect(() => {
-    const fetchAtivo = async () => {
-      try {
-        const response = await api.get(`/ativos/${id}`);
-        setAtivo(response.data);
-      } catch (error) {
-        toast.error('Ativo não encontrado');
-        navigate('/ativos');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAtivo();
-  }, [id, navigate]);
+  const fetchAtivo = async () => {
+    try {
+      const [ativoRes, manuaisRes] = await Promise.all([
+        api.get(`/ativos/${id}`),
+        api.get(`/ativos/${id}/manuais`)
+      ]);
+      setAtivo(ativoRes.data);
+      setManuais(manuaisRes.data);
+    } catch (error) {
+      toast.error('Ativo não encontrado');
+      navigate('/ativos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchAtivo(); }, [id]);
   
+  const handleUploadManual = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Apenas arquivos PDF são permitidos');
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      await api.post(`/ativos/${id}/manual`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      toast.success('Manual carregado com sucesso!');
+      const res = await api.get(`/ativos/${id}/manuais`);
+      setManuais(res.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Erro ao carregar manual');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteManual = async (manualId) => {
+    try {
+      await api.delete(`/manuais/${manualId}`);
+      toast.success('Manual removido');
+      setManuais(prev => prev.filter(m => m.id !== manualId));
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Erro ao remover');
+    }
+  };
+
   if (loading) return <Loading rows={4} />;
   if (!ativo) return null;
   
@@ -2094,7 +2134,51 @@ const AtivoDetailPage = () => {
         </div>
       )}
       
-      {/* Actions */}
+      {/* Manuais PDF */}
+      <div className="glass-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2"><FileText size={16} /> Manuais Técnicos</h3>
+          {user?.role === 'admin' && (
+            <label className="btn-primary text-sm flex items-center gap-2 cursor-pointer" data-testid="upload-manual-btn">
+              <Upload size={16} /> {uploading ? 'Enviando...' : 'Enviar PDF'}
+              <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUploadManual} className="hidden" disabled={uploading} />
+            </label>
+          )}
+        </div>
+        {manuais.length > 0 ? (
+          <div className="space-y-2">
+            {manuais.map((m) => (
+              <div key={m.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg group">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-500/10 rounded-lg"><FileText size={20} className="text-red-400" /></div>
+                  <div>
+                    <p className="text-sm text-slate-200">{m.filename}</p>
+                    <p className="text-xs text-slate-500">{(m.size_bytes / 1024).toFixed(0)} KB • {new Date(m.created_at).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href={`${BACKEND_URL}${m.url}`} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-blue-500/10 rounded-lg transition-colors" title="Abrir PDF">
+                    <Eye size={16} className="text-blue-400" />
+                  </a>
+                  {user?.role === 'admin' && (
+                    <button onClick={() => handleDeleteManual(m.id)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" title="Remover">
+                      <Trash2 size={16} className="text-red-400" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-slate-500">
+            <FileText size={32} className="mx-auto mb-2 opacity-30" />
+            <p className="text-sm">Nenhum manual carregado</p>
+            {user?.role === 'admin' && <p className="text-xs mt-1">Clique em "Enviar PDF" para adicionar</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Actions - Ativo Detail */}
       <div className="grid grid-cols-2 gap-3">
         <button onClick={() => navigate(`/inspecoes?new=true&ativo=${ativo.id}`)} className="btn-primary py-4 flex items-center justify-center gap-2">
           <ClipboardCheck size={20} /> Nova Inspeção

@@ -2829,6 +2829,100 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         buf.seek(0)
         return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=sobressalentes_manutrix.xlsx"})
 
+# ============== POWER BI DATA ENDPOINTS ==============
+
+@api_router.get("/powerbi/ativos")
+async def powerbi_ativos(api_key: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    """Flat JSON data optimized for Power BI import"""
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    ativos = await db.ativos.find(query, {"_id": 0}).to_list(10000)
+    result = []
+    for a in ativos:
+        area = await db.areas.find_one({"id": a.get('area_id')}, {"_id": 0, "nome": 1})
+        result.append({
+            "tag": a.get('tag'), "nome": a.get('nome'), "tipo_equipamento": a.get('tipo_equipamento'),
+            "fabricante": a.get('fabricante'), "modelo": a.get('modelo'), "criticidade": a.get('criticidade'),
+            "status": a.get('status'), "area": area.get('nome') if area else '', "centro_custo": a.get('centro_custo'),
+            "mtbf_horas": a.get('mtbf_horas'), "mttr_horas": a.get('mttr_horas'),
+            "valor_aquisicao": a.get('valor_aquisicao'), "data_instalacao": a.get('data_instalacao'),
+            "created_at": a.get('created_at')
+        })
+    return result
+
+@api_router.get("/powerbi/ordens-servico")
+async def powerbi_os(user: Dict = Depends(get_current_user)):
+    """Flat JSON data for Power BI - Ordens de Serviço"""
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    os_list = await db.ordens_servico.find(query, {"_id": 0}).to_list(10000)
+    result = []
+    for o in os_list:
+        ativo = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "criticidade": 1})
+        resp = await db.users.find_one({"id": o.get('responsavel_id')}, {"_id": 0, "nome": 1}) if o.get('responsavel_id') else None
+        result.append({
+            "numero": o.get('numero'), "ativo_tag": ativo.get('tag') if ativo else '', "ativo_nome": ativo.get('nome') if ativo else '',
+            "ativo_criticidade": ativo.get('criticidade') if ativo else '', "tipo": o.get('tipo'), "origem": o.get('origem'),
+            "prioridade": o.get('prioridade'), "status": o.get('status'), "titulo": o.get('titulo'),
+            "responsavel": resp.get('nome') if resp else '', "data_abertura": o.get('data_abertura'),
+            "data_inicio": o.get('data_inicio'), "data_conclusao": o.get('data_conclusao'),
+            "tempo_execucao_minutos": o.get('tempo_execucao_minutos'), "custo_pecas": o.get('custo_pecas', 0),
+            "custo_mao_obra": o.get('custo_mao_obra', 0), "custo_total": o.get('custo_total', 0),
+            "created_at": o.get('created_at')
+        })
+    return result
+
+@api_router.get("/powerbi/inspecoes")
+async def powerbi_inspecoes(user: Dict = Depends(get_current_user)):
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    inspecoes = await db.inspecoes.find(query, {"_id": 0, "checklist": 0}).to_list(10000)
+    result = []
+    for i in inspecoes:
+        ativo = await db.ativos.find_one({"id": i.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
+        result.append({
+            "ativo_tag": ativo.get('tag') if ativo else '', "ativo_nome": ativo.get('nome') if ativo else '',
+            "tipo": i.get('tipo'), "frequencia": i.get('frequencia'), "status": i.get('status'),
+            "resultado": i.get('resultado'), "data_programada": i.get('data_programada'),
+            "data_inicio": i.get('data_inicio'), "data_conclusao": i.get('data_conclusao'),
+            "duracao_minutos": i.get('duracao_minutos'), "tipo_lubrificante": i.get('tipo_lubrificante'),
+            "created_at": i.get('created_at')
+        })
+    return result
+
+@api_router.get("/powerbi/kpis-historico")
+async def powerbi_kpis(user: Dict = Depends(get_current_user)):
+    """KPIs snapshot for Power BI dashboard"""
+    org_id = user.get('organization_id', '')
+    query = {"organization_id": org_id, "deleted_at": None} if org_id else {"deleted_at": None}
+    
+    ativos_total = await db.ativos.count_documents(query)
+    ativos_op = await db.ativos.count_documents({**query, "status": "operacional"})
+    ativos_parados = await db.ativos.count_documents({**query, "status": {"$in": ["parado", "manutencao"]}})
+    
+    os_concluidas = await db.ordens_servico.find({**query, "status": "concluida", "tempo_execucao_minutos": {"$exists": True, "$ne": None}}, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1}).to_list(5000)
+    tempos = [o['tempo_execucao_minutos'] for o in os_concluidas if o.get('tempo_execucao_minutos')]
+    
+    backlog = await db.ordens_servico.count_documents({**query, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}})
+    total_insp = await db.inspecoes.count_documents(query)
+    insp_conformes = await db.inspecoes.count_documents({**query, "resultado": "conforme"})
+    
+    return {
+        "data_snapshot": datetime.now(timezone.utc).isoformat(),
+        "ativos_total": ativos_total, "ativos_operacionais": ativos_op, "ativos_parados": ativos_parados,
+        "disponibilidade_pct": round((ativos_op / ativos_total * 100) if ativos_total > 0 else 100, 1),
+        "mttr_horas": round((sum(tempos) / len(tempos) / 60) if tempos else 0, 2),
+        "mtbf_horas": round(((ativos_total - ativos_parados) / ativos_total * 720) if ativos_total > 0 else 720, 1),
+        "backlog_total": backlog,
+        "taxa_conformidade_pct": round((insp_conformes / total_insp * 100) if total_insp > 0 else 100, 1),
+        "os_concluidas_total": len(os_concluidas),
+        "preventivas": len([o for o in os_concluidas if o.get('tipo') == 'preventiva']),
+        "corretivas": len([o for o in os_concluidas if o.get('tipo') == 'corretiva']),
+    }
+
 # ============== ROOT ==============
 
 @api_router.get("/")
