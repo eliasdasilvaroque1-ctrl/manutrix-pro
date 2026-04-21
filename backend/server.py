@@ -355,11 +355,18 @@ class MovimentacaoEstoque(BaseModel):
 
 # ============== HELPER FUNCTIONS ==============
 
+import bcrypt
+
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 def verify_password(password: str, hashed: str) -> bool:
-    return hash_password(password) == hashed
+    # Support both bcrypt and legacy SHA-256
+    if hashed.startswith('$2b$') or hashed.startswith('$2a$'):
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    # Legacy SHA-256 fallback
+    return hashlib.sha256(password.encode()).hexdigest() == hashed
 
 def create_token(user_id: str, role: str, org_id: str) -> str:
     payload = {
@@ -490,9 +497,13 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
-    user = await db.users.find_one({"email": credentials.email, "deleted_at": None}, {"_id": 0})
+    user = await db.users.find_one({"email": credentials.email.lower().strip(), "deleted_at": None}, {"_id": 0})
     if not user or not verify_password(credentials.password, user.get('password_hash', '')):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
+    
+    # Migrate legacy SHA-256 hash to bcrypt on successful login
+    if not user.get('password_hash', '').startswith('$2b$'):
+        await db.users.update_one({"id": user['id']}, {"$set": {"password_hash": hash_password(credentials.password)}})
     
     token = create_token(user['id'], user['role'], user.get('organization_id', ''))
     return TokenResponse(
@@ -500,13 +511,137 @@ async def login(credentials: UserLogin):
         user={
             "id": user['id'], "email": user['email'], "nome": user['nome'],
             "role": user['role'], "organization_id": user.get('organization_id'),
-            "telefone": user.get('telefone')
+            "telefone": user.get('telefone'),
+            "force_password_change": user.get('force_password_change', False)
         }
     )
 
 @api_router.get("/auth/me")
 async def get_me(user: Dict = Depends(get_current_user)):
-    return {k: v for k, v in user.items() if k != 'password_hash'}
+    return {k: v for k, v in user.items() if k not in ['password_hash']}
+
+# ============== PASSWORD RESET ==============
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: Optional[str] = None
+    new_password: str
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest):
+    """Generate password reset token and log the link"""
+    user = await db.users.find_one({"email": data.email.lower().strip(), "deleted_at": None}, {"_id": 0})
+    # Always return success to not leak user existence
+    if not user:
+        return {"success": True, "message": "Se o email existir, um link de redefinição será gerado"}
+    
+    token = secrets.token_urlsafe(32)
+    await db.password_reset_tokens.insert_one({
+        "token": token,
+        "user_id": user['id'],
+        "email": data.email.lower().strip(),
+        "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+        "used": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    # Log reset link (in production, send email)
+    logger.info(f"PASSWORD RESET TOKEN for {data.email}: {token}")
+    
+    return {"success": True, "message": "Link de redefinição gerado. Verifique o console do sistema.", "token": token}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordRequest):
+    """Reset password using token"""
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="A senha deve ter pelo menos 6 caracteres")
+    
+    reset_doc = await db.password_reset_tokens.find_one({
+        "token": data.token,
+        "used": False,
+        "expires_at": {"$gt": datetime.now(timezone.utc)}
+    })
+    
+    if not reset_doc:
+        raise HTTPException(status_code=400, detail="Token inválido ou expirado")
+    
+    new_hash = hash_password(data.new_password)
+    await db.users.update_one(
+        {"id": reset_doc['user_id']},
+        {"$set": {"password_hash": new_hash, "force_password_change": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    await db.password_reset_tokens.update_one({"token": data.token}, {"$set": {"used": True}})
+    
+    return {"success": True, "message": "Senha redefinida com sucesso"}
+
+@api_router.post("/auth/change-password")
+async def change_password(data: ChangePasswordRequest, user: Dict = Depends(get_current_user)):
+    """Change own password (for forced change on first login)"""
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="A senha deve ter pelo menos 6 caracteres")
+    
+    # If user has force_password_change, skip current password check
+    if not user.get('force_password_change'):
+        if not data.current_password:
+            raise HTTPException(status_code=400, detail="Senha atual é obrigatória")
+        full_user = await db.users.find_one({"id": user['id']}, {"_id": 0})
+        if not verify_password(data.current_password, full_user.get('password_hash', '')):
+            raise HTTPException(status_code=400, detail="Senha atual incorreta")
+    
+    new_hash = hash_password(data.new_password)
+    await db.users.update_one(
+        {"id": user['id']},
+        {"$set": {"password_hash": new_hash, "force_password_change": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"success": True, "message": "Senha alterada com sucesso"}
+
+@api_router.post("/admin/users/{user_id}/reset-password")
+async def admin_reset_password(user_id: str, user: Dict = Depends(get_current_user)):
+    """Admin resets user password - generates temporary password"""
+    check_admin_only(user)
+    
+    target = await db.users.find_one({"id": user_id, "deleted_at": None}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    # Generate temporary password
+    temp_password = secrets.token_urlsafe(8)
+    new_hash = hash_password(temp_password)
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "password_hash": new_hash,
+            "force_password_change": True,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"success": True, "temp_password": temp_password, "message": f"Senha temporária gerada. O usuário será obrigado a trocar no próximo login."}
+
+@api_router.put("/admin/users/{user_id}")
+async def admin_update_user(user_id: str, data: dict, user: Dict = Depends(get_current_user)):
+    """Admin edits user (name, email, role, phone, active status)"""
+    check_admin_only(user)
+    
+    target = await db.users.find_one({"id": user_id, "deleted_at": None}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    allowed_fields = {'nome', 'email', 'role', 'telefone', 'active'}
+    update_data = {k: v for k, v in data.items() if k in allowed_fields and v is not None}
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.users.update_one({"id": user_id}, {"$set": update_data})
+    updated = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return updated
 
 # ============== UPLOAD ==============
 
@@ -2863,14 +2998,15 @@ async def admin_list_users(user: Dict = Depends(get_current_user)):
 @api_router.post("/admin/users")
 async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
-    existing = await db.users.find_one({"email": data.email, "deleted_at": None})
+    email_normalized = data.email.lower().strip()
+    existing = await db.users.find_one({"email": email_normalized, "deleted_at": None})
     if existing:
         raise HTTPException(status_code=400, detail="Email já cadastrado")
     
     user_id = str(uuid.uuid4())
     user_doc = {
         "id": user_id,
-        "email": data.email,
+        "email": email_normalized,
         "nome": data.nome,
         "role": data.role.value,
         "organization_id": data.organization_id or user.get('organization_id', ''),
@@ -3025,8 +3161,13 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def migrate_checklist_tipo():
-    """Migration: ensure all checklist items have 'tipo' field"""
+    """Migration: ensure all checklist items have 'tipo' field + create indexes"""
     try:
+        # Create indexes
+        await db.users.create_index("email")
+        await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+        await db.password_reset_tokens.create_index("token")
+        
         inspecoes = await db.inspecoes.find({"deleted_at": None, "checklist": {"$exists": True}}).to_list(1000)
         for insp in inspecoes:
             updated = False

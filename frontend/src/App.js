@@ -14,7 +14,7 @@ import {
   Zap, Target, Layers, Filter, MoreVertical, Eye, Edit, Trash2, Save,
   Phone, Mail, Building, Hash, Thermometer, Volume2, Droplet, Cog,
   DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
-  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download
+  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -1656,22 +1656,81 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState('login'); // login, forgot, reset, forceChange
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [tempToken, setTempToken] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
   
-  const handleSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const response = await axios.post(`${API}/auth/login`, { email, password });
-      login(response.data);
-      toast.success('Login realizado!');
-      navigate('/');
+      // Check if force password change
+      if (response.data.user?.force_password_change) {
+        setTempToken(response.data.access_token);
+        setView('forceChange');
+        toast.info('Você precisa trocar sua senha');
+      } else {
+        login(response.data);
+        toast.success('Login realizado!');
+        navigate('/');
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Erro no login');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!email) { toast.error('Informe seu email'); return; }
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API}/auth/forgot-password`, { email });
+      setResetToken(res.data.token || '');
+      setView('reset');
+      toast.success('Token de redefinição gerado!');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Erro ao solicitar reset');
+    } finally { setLoading(false); }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (newPassword.length < 6) { toast.error('Senha deve ter pelo menos 6 caracteres'); return; }
+    if (newPassword !== confirmPassword) { toast.error('As senhas não coincidem'); return; }
+    setLoading(true);
+    try {
+      await axios.post(`${API}/auth/reset-password`, { token: resetToken, new_password: newPassword });
+      toast.success('Senha redefinida com sucesso! Faça login.');
+      setView('login');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Erro ao redefinir senha');
+    } finally { setLoading(false); }
+  };
+
+  const handleForceChange = async (e) => {
+    e.preventDefault();
+    if (newPassword.length < 6) { toast.error('Senha deve ter pelo menos 6 caracteres'); return; }
+    if (newPassword !== confirmPassword) { toast.error('As senhas não coincidem'); return; }
+    setLoading(true);
+    try {
+      await axios.post(`${API}/auth/change-password`, { new_password: newPassword }, { headers: { Authorization: `Bearer ${tempToken}` } });
+      toast.success('Senha alterada! Faça login com a nova senha.');
+      setView('login');
+      setPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Erro ao alterar senha');
+    } finally { setLoading(false); }
   };
   
   const handleSeed = async () => {
@@ -1694,31 +1753,89 @@ const LoginPage = () => {
           <p className="text-slate-500 mt-1 text-sm">Enterprise CMMS Platform</p>
         </div>
         
-        <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4">
-          <FormInput label="Email">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input-industrial w-full px-4"
-              placeholder="seu@email.com"
-              required
-            />
-          </FormInput>
-          <FormInput label="Senha">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input-industrial w-full px-4"
-              placeholder="••••••••"
-              required
-            />
-          </FormInput>
-          <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? 'Entrando...' : 'Entrar'}
-          </button>
-        </form>
+        {/* LOGIN */}
+        {view === 'login' && (
+          <form onSubmit={handleLogin} className="glass-card p-6 space-y-4" data-testid="login-form">
+            <FormInput label="Email">
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-industrial w-full px-4" placeholder="seu@email.com" required data-testid="login-email" />
+            </FormInput>
+            <FormInput label="Senha">
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="••••••••" required data-testid="login-password" />
+            </FormInput>
+            <button type="submit" disabled={loading} className="btn-primary w-full" data-testid="login-submit">
+              {loading ? 'Entrando...' : 'Entrar'}
+            </button>
+            <button type="button" onClick={() => setView('forgot')} className="w-full text-sm text-slate-400 hover:text-emerald-400 transition-colors py-2" data-testid="forgot-password-link">
+              Esqueci minha senha
+            </button>
+          </form>
+        )}
+
+        {/* FORGOT PASSWORD */}
+        {view === 'forgot' && (
+          <form onSubmit={handleForgotPassword} className="glass-card p-6 space-y-4" data-testid="forgot-form">
+            <div className="text-center mb-2">
+              <Lock size={32} className="mx-auto text-amber-400 mb-2" />
+              <h2 className="text-lg font-semibold text-slate-200">Redefinir Senha</h2>
+              <p className="text-xs text-slate-500">Informe seu email para receber o token de redefinição</p>
+            </div>
+            <FormInput label="Email cadastrado">
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-industrial w-full px-4" placeholder="seu@email.com" required data-testid="forgot-email" />
+            </FormInput>
+            <button type="submit" disabled={loading} className="btn-primary w-full">
+              {loading ? 'Enviando...' : 'Solicitar Redefinição'}
+            </button>
+            <button type="button" onClick={() => setView('login')} className="w-full text-sm text-slate-400 hover:text-slate-200 py-2">
+              Voltar ao login
+            </button>
+          </form>
+        )}
+
+        {/* RESET PASSWORD */}
+        {view === 'reset' && (
+          <form onSubmit={handleResetPassword} className="glass-card p-6 space-y-4" data-testid="reset-form">
+            <div className="text-center mb-2">
+              <Shield size={32} className="mx-auto text-emerald-400 mb-2" />
+              <h2 className="text-lg font-semibold text-slate-200">Nova Senha</h2>
+              <p className="text-xs text-slate-500">Crie sua nova senha de acesso</p>
+            </div>
+            <FormInput label="Token de Redefinição">
+              <input type="text" value={resetToken} onChange={(e) => setResetToken(e.target.value)} className="input-industrial w-full px-4 font-mono text-sm" placeholder="Cole o token aqui" required data-testid="reset-token" />
+            </FormInput>
+            <FormInput label="Nova Senha">
+              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Mínimo 6 caracteres" required data-testid="reset-new-password" />
+            </FormInput>
+            <FormInput label="Confirmar Nova Senha">
+              <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Repita a senha" required />
+            </FormInput>
+            <button type="submit" disabled={loading} className="btn-primary w-full">
+              {loading ? 'Redefinindo...' : 'Redefinir Senha'}
+            </button>
+            <button type="button" onClick={() => setView('login')} className="w-full text-sm text-slate-400 hover:text-slate-200 py-2">
+              Voltar ao login
+            </button>
+          </form>
+        )}
+
+        {/* FORCE PASSWORD CHANGE */}
+        {view === 'forceChange' && (
+          <form onSubmit={handleForceChange} className="glass-card p-6 space-y-4" data-testid="force-change-form">
+            <div className="text-center mb-2">
+              <AlertTriangle size={32} className="mx-auto text-amber-400 mb-2" />
+              <h2 className="text-lg font-semibold text-slate-200">Troca de Senha Obrigatória</h2>
+              <p className="text-xs text-slate-500">Sua senha temporária precisa ser alterada</p>
+            </div>
+            <FormInput label="Nova Senha">
+              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Mínimo 6 caracteres" required />
+            </FormInput>
+            <FormInput label="Confirmar Nova Senha">
+              <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Repita a senha" required />
+            </FormInput>
+            <button type="submit" disabled={loading} className="btn-primary w-full">
+              {loading ? 'Alterando...' : 'Alterar Senha e Entrar'}
+            </button>
+          </form>
+        )}
         
         <div className="mt-4 text-center">
           <button onClick={handleSeed} className="text-slate-500 hover:text-slate-300 text-sm underline">
@@ -3770,8 +3887,10 @@ const AdminUsuariosPage = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editUser, setEditUser] = useState(null);
   const [form, setForm] = useState({ nome: '', email: '', password: '', role: 'tecnico', telefone: '' });
   const [saving, setSaving] = useState(false);
+  const [resetResult, setResetResult] = useState(null);
   const { user } = useAuth();
 
   const fetchUsers = async () => {
@@ -3800,6 +3919,32 @@ const AdminUsuariosPage = () => {
     try { await api.delete(`/admin/users/${uid}`); toast.success('Removido'); fetchUsers(); } catch { toast.error('Erro'); }
   };
 
+  const handleResetPassword = async (uid, nome) => {
+    try {
+      const res = await api.post(`/admin/users/${uid}/reset-password`);
+      setResetResult({ nome, temp_password: res.data.temp_password });
+      toast.success('Senha temporária gerada!');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+  };
+
+  const handleEditUser = (u) => {
+    setEditUser(u);
+    setForm({ nome: u.nome, email: u.email, password: '', role: u.role, telefone: u.telefone || '' });
+    setShowModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/admin/users/${editUser.id}`, { nome: form.nome, email: form.email, role: form.role, telefone: form.telefone });
+      toast.success('Usuário atualizado!');
+      setShowModal(false);
+      setEditUser(null);
+      fetchUsers();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    finally { setSaving(false); }
+  };
+
   const roleLabels = { admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tecnico: 'Técnico', inspetor: 'Inspetor', viewer: 'Visualizador' };
   const roleColors = { admin: 'text-red-400 bg-red-500/10', gerente: 'text-purple-400 bg-purple-500/10', pcm: 'text-blue-400 bg-blue-500/10', supervisor: 'text-amber-400 bg-amber-500/10', tecnico: 'text-emerald-400 bg-emerald-500/10', inspetor: 'text-cyan-400 bg-cyan-500/10', viewer: 'text-slate-400 bg-slate-500/10' };
 
@@ -3820,12 +3965,17 @@ const AdminUsuariosPage = () => {
                 <div>
                   <p className="text-slate-100 font-medium">{u.nome}</p>
                   <p className="text-xs text-slate-500">{u.email}</p>
+                  {u.force_password_change && <span className="text-[10px] text-amber-400">Troca de senha pendente</span>}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <span className={`text-xs px-3 py-1 rounded-full font-medium ${roleColors[u.role] || ''}`}>{roleLabels[u.role] || u.role}</span>
                 {u.id !== user?.id && (
-                  <button onClick={() => handleDelete(u.id)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} className="text-red-400" /></button>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleEditUser(u)} className="p-2 hover:bg-blue-500/10 rounded-lg" title="Editar"><Edit3 size={15} className="text-blue-400" /></button>
+                    <button onClick={() => handleResetPassword(u.id, u.nome)} className="p-2 hover:bg-amber-500/10 rounded-lg" title="Redefinir senha"><Lock size={15} className="text-amber-400" /></button>
+                    <button onClick={() => handleDelete(u.id)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir"><Trash2 size={15} className="text-red-400" /></button>
+                  </div>
                 )}
               </div>
             </div>
@@ -3833,12 +3983,13 @@ const AdminUsuariosPage = () => {
         </div>
       )}
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Novo Usuário" size="md">
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditUser(null); }} title={editUser ? "Editar Usuário" : "Novo Usuário"} size="md">
+        <form onSubmit={editUser ? (e) => { e.preventDefault(); handleSaveEdit(); } : handleSubmit} className="space-y-4">
           <FormInput label="Nome Completo" required><input value={form.nome} onChange={(e) => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-4" required /></FormInput>
           <div className="grid grid-cols-2 gap-4">
             <FormInput label="Email" required><input type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="input-industrial w-full px-4" required /></FormInput>
-            <FormInput label="Senha" required><input type="password" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="input-industrial w-full px-4" required /></FormInput>
+            {!editUser && <FormInput label="Senha" required><input type="password" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="input-industrial w-full px-4" required /></FormInput>}
+            {editUser && <FormInput label="Senha"><p className="text-xs text-slate-500 pt-3">Use "Redefinir senha" para alterar</p></FormInput>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormInput label="Perfil" required>
@@ -3858,9 +4009,25 @@ const AdminUsuariosPage = () => {
           </div>
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
             <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
-            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Criando...' : 'Criar Usuário'}</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Salvando...' : editUser ? 'Salvar Alterações' : 'Criar Usuário'}</button>
           </div>
         </form>
+      </Modal>
+
+      {/* Reset Password Result Modal */}
+      <Modal isOpen={!!resetResult} onClose={() => setResetResult(null)} title="Senha Temporária Gerada" size="sm">
+        <div className="space-y-4 text-center">
+          <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center">
+            <Lock size={32} className="text-amber-400" />
+          </div>
+          <p className="text-slate-300">Senha temporária para <strong className="text-slate-100">{resetResult?.nome}</strong>:</p>
+          <div className="bg-slate-800 rounded-lg p-4 font-mono text-xl text-emerald-400 tracking-widest select-all" data-testid="temp-password">
+            {resetResult?.temp_password}
+          </div>
+          <p className="text-xs text-amber-400">O usuário será obrigado a trocar a senha no próximo login.</p>
+          <p className="text-xs text-slate-500">Copie e envie ao usuário de forma segura. Esta senha não será exibida novamente.</p>
+          <button onClick={() => setResetResult(null)} className="btn-primary w-full">Entendido</button>
+        </div>
       </Modal>
     </div>
   );
