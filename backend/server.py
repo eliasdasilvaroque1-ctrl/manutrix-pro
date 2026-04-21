@@ -1803,6 +1803,65 @@ async def get_dashboard_stats(user: Dict = Depends(get_current_user)):
         "estoque": estoque
     }
 
+@api_router.get("/dashboard/trend")
+async def get_dashboard_trend(user: Dict = Depends(get_current_user)):
+    """Monthly trend data for charts (last 6 months)"""
+    org_id = user.get('organization_id', '')
+    query = {"deleted_at": None}
+    if org_id:
+        query['organization_id'] = org_id
+    
+    now = datetime.now(timezone.utc)
+    months_data = []
+    
+    for i in range(5, -1, -1):
+        month = now.month - i
+        year = now.year
+        while month <= 0:
+            month += 12
+            year -= 1
+        
+        month_start = datetime(year, month, 1, tzinfo=timezone.utc).isoformat()
+        if month == 12:
+            month_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc).isoformat()
+        else:
+            month_end = datetime(year, month + 1, 1, tzinfo=timezone.utc).isoformat()
+        
+        month_query = {**query, "data_conclusao": {"$gte": month_start, "$lt": month_end}, "status": "concluida"}
+        os_mes = await db.ordens_servico.find(month_query, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1, "custo_total": 1}).to_list(1000)
+        
+        tempos = [o['tempo_execucao_minutos'] for o in os_mes if o.get('tempo_execucao_minutos')]
+        mttr = round(sum(tempos) / len(tempos) / 60, 2) if tempos else 0
+        
+        preventivas = len([o for o in os_mes if o.get('tipo') == 'preventiva'])
+        corretivas = len([o for o in os_mes if o.get('tipo') == 'corretiva'])
+        preditivas = len([o for o in os_mes if o.get('tipo') == 'preditiva'])
+        emergencias = len([o for o in os_mes if o.get('tipo') == 'emergencia'])
+        total = len(os_mes)
+        
+        ativos_total = await db.ativos.count_documents({**query})
+        ativos_parados_mes = max(1, await db.ativos.count_documents({**query, "status": {"$in": ["parado", "manutencao"]}}))
+        mtbf = round(((ativos_total - ativos_parados_mes) / ativos_total * 720) if ativos_total > 0 else 720, 1)
+        
+        custo = sum(o.get('custo_total', 0) or 0 for o in os_mes)
+        
+        labels = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+        months_data.append({
+            "mes": labels[month - 1],
+            "mes_num": month,
+            "ano": year,
+            "mttr": mttr,
+            "mtbf": mtbf,
+            "total_os": total,
+            "preventivas": preventivas,
+            "corretivas": corretivas,
+            "preditivas": preditivas,
+            "emergencias": emergencias,
+            "custo": round(custo, 2)
+        })
+    
+    return months_data
+
 # ============== SEED ==============
 
 @api_router.post("/seed")

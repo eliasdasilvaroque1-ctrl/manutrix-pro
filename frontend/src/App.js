@@ -1735,167 +1735,308 @@ const LoginPage = () => {
 const DashboardPage = () => {
   const [kpis, setKpis] = useState(null);
   const [stats, setStats] = useState(null);
+  const [trend, setTrend] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [drillModal, setDrillModal] = useState({ open: false, type: '', title: '', data: [] });
+  const [drillLoading, setDrillLoading] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [kpisRes, statsRes] = await Promise.all([
+        const [kpisRes, statsRes, trendRes] = await Promise.all([
           api.get('/kpis'),
-          api.get('/dashboard/stats')
+          api.get('/dashboard/stats'),
+          api.get('/dashboard/trend')
         ]);
         setKpis(kpisRes.data);
         setStats(statsRes.data);
+        setTrend(trendRes.data);
       } catch (error) {
-        toast.error('Erro ao carregar dados');
+        toast.error('Erro ao carregar dashboard');
       } finally {
         setLoading(false);
       }
     };
     fetchData();
   }, []);
+
+  const drillDown = async (type, title) => {
+    setDrillLoading(true);
+    setDrillModal({ open: true, type, title, data: [] });
+    try {
+      let data = [];
+      if (type === 'backlog' || type === 'os_abertas') {
+        const res = await api.get('/ordens-servico');
+        data = res.data.filter(o => ['aberta','planejada','em_execucao','pausada'].includes(o.status));
+      } else if (type === 'os_criticas') {
+        const res = await api.get('/ordens-servico');
+        data = res.data.filter(o => o.prioridade === 'critica' && !['concluida','cancelada'].includes(o.status));
+      } else if (type === 'corretiva' || type === 'preventiva' || type === 'preditiva' || type === 'emergencia') {
+        const res = await api.get('/ordens-servico');
+        data = res.data.filter(o => o.tipo === type);
+      } else if (type === 'mttr') {
+        const res = await api.get('/ordens-servico');
+        data = res.data.filter(o => o.status === 'concluida' && o.tempo_execucao_minutos);
+      } else if (type === 'estoque_critico') {
+        const res = await api.get('/estoque');
+        data = res.data.filter(i => i.quantidade <= i.estoque_minimo);
+      } else if (type === 'insp_pendentes') {
+        const res = await api.get('/inspecoes');
+        data = res.data.filter(i => i.status === 'pendente');
+      } else if (type === 'nao_conformes') {
+        const res = await api.get('/inspecoes');
+        data = res.data.filter(i => i.resultado === 'nao_conforme');
+      }
+      setDrillModal(prev => ({ ...prev, data }));
+    } catch { toast.error('Erro ao carregar detalhes'); }
+    finally { setDrillLoading(false); }
+  };
+
+  const handleExport = async (entity, format) => {
+    try {
+      const res = await api.get(`/export/${entity}?format=${format}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${entity}_manutrix.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success(`${entity} exportado com sucesso`);
+    } catch { toast.error('Erro ao exportar'); }
+  };
+
+  const getColor = (value, thresholds) => {
+    if (value >= thresholds[0]) return 'text-emerald-400';
+    if (value >= thresholds[1]) return 'text-amber-400';
+    return 'text-red-400';
+  };
+  const getBg = (value, thresholds) => {
+    if (value >= thresholds[0]) return 'border-emerald-500/30 bg-emerald-500/5';
+    if (value >= thresholds[1]) return 'border-amber-500/30 bg-amber-500/5';
+    return 'border-red-500/30 bg-red-500/5';
+  };
+  const getInverseColor = (value, thresholds) => {
+    if (value <= thresholds[0]) return 'text-emerald-400';
+    if (value <= thresholds[1]) return 'text-amber-400';
+    return 'text-red-400';
+  };
+  const getInverseBg = (value, thresholds) => {
+    if (value <= thresholds[0]) return 'border-emerald-500/30 bg-emerald-500/5';
+    if (value <= thresholds[1]) return 'border-amber-500/30 bg-amber-500/5';
+    return 'border-red-500/30 bg-red-500/5';
+  };
   
-  if (loading) return <Loading rows={6} />;
+  if (loading) return <Loading rows={8} />;
+  if (!kpis || !stats) return null;
   
-  const totalOSAbertas = (stats?.ordens_servico?.abertas || 0) + (stats?.ordens_servico?.planejadas || 0) + 
-                         (stats?.ordens_servico?.em_execucao || 0) + (stats?.ordens_servico?.pausadas || 0);
+  const backlog = kpis.backlog_total || 0;
+  const osAbertas = (stats?.ordens_servico?.abertas || 0) + (stats?.ordens_servico?.em_execucao || 0) + (stats?.ordens_servico?.pausadas || 0);
+  const osCriticas = stats?.ordens_servico?.por_prioridade?.critica || 0;
+  const estoqueCritico = stats?.estoque?.criticos || 0;
+  const inspPendentes = stats?.inspecoes?.pendentes || 0;
+  const naoConformes = stats?.inspecoes?.nao_conformes_mes || 0;
   
+  const osTypes = [
+    { name: 'Corretiva', value: stats?.ordens_servico?.por_tipo?.corretiva || 0, fill: '#ef4444', key: 'corretiva' },
+    { name: 'Preventiva', value: stats?.ordens_servico?.por_tipo?.preventiva || 0, fill: '#10b981', key: 'preventiva' },
+    { name: 'Preditiva', value: stats?.ordens_servico?.por_tipo?.preditiva || 0, fill: '#3b82f6', key: 'preditiva' },
+    { name: 'Emergência', value: stats?.ordens_servico?.por_tipo?.emergencia || 0, fill: '#f59e0b', key: 'emergencia' },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
-          <p className="text-slate-500">Olá, {user?.nome?.split(' ')[0]}</p>
+          <h1 className="text-2xl font-bold text-slate-100" data-testid="dashboard-title">Dashboard Operacional</h1>
+          <p className="text-sm text-slate-500">Indicadores operacionais e de confiabilidade da planta</p>
         </div>
-        <NotificationBell />
-      </div>
-      
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <button onClick={() => navigate('/scanner')} className="btn-primary py-3 flex items-center justify-center gap-2">
-          <QrCode size={20} /> Escanear
-        </button>
-        <button onClick={() => navigate('/ronda')} className="btn-secondary py-3 flex items-center justify-center gap-2">
-          <Target size={20} /> Ronda
-        </button>
-        <button onClick={() => navigate('/os?new=true')} className="btn-secondary py-3 flex items-center justify-center gap-2">
-          <Plus size={20} /> Nova OS
-        </button>
-        <button onClick={() => navigate('/inspecoes?new=true')} className="btn-secondary py-3 flex items-center justify-center gap-2">
-          <ClipboardCheck size={20} /> Inspeção
-        </button>
-      </div>
-      
-      {/* Alerts */}
-      {(stats?.ordens_servico?.atrasadas > 0 || stats?.ativos?.parados > 0 || stats?.estoque?.criticos > 0) && (
-        <div className="space-y-2">
-          {stats?.ordens_servico?.atrasadas > 0 && (
-            <div className="glass-card p-3 border-red-500/50 flex items-center gap-3 cursor-pointer hover:bg-red-500/5" onClick={() => navigate('/os?atrasadas=true')}>
-              <AlertTriangle className="text-red-400" size={20} />
-              <span className="text-red-400 font-medium">{stats.ordens_servico.atrasadas} OS Atrasada(s)</span>
+        <div className="flex gap-2">
+          <div className="relative group">
+            <button className="btn-secondary flex items-center gap-2 text-sm" data-testid="export-data-btn">
+              <Download size={16} /> Exportar Dados
+            </button>
+            <div className="absolute right-0 top-full mt-1 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 py-2">
+              {[{label:'OS - Excel', e:'ordens-servico', f:'excel'}, {label:'OS - CSV', e:'ordens-servico', f:'excel'}, {label:'Ativos - Excel', e:'ativos', f:'excel'}, {label:'Inspeções - Excel', e:'inspecoes', f:'excel'}, {label:'Estoque - Excel', e:'estoque', f:'excel'}].map(item => (
+                <button key={item.label} onClick={() => handleExport(item.e, item.f)} className="w-full px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 text-left flex items-center gap-2">
+                  <FileText size={14} /> {item.label}
+                </button>
+              ))}
             </div>
-          )}
-          {stats?.ativos?.parados > 0 && (
-            <div className="glass-card p-3 border-amber-500/50 flex items-center gap-3 cursor-pointer hover:bg-amber-500/5" onClick={() => navigate('/ativos?status=parado')}>
-              <XCircle className="text-amber-400" size={20} />
-              <span className="text-amber-400 font-medium">{stats.ativos.parados + (stats.ativos.manutencao || 0)} Ativo(s) Parado(s)</span>
-            </div>
-          )}
-          {stats?.estoque?.criticos > 0 && (
-            <div className="glass-card p-3 border-amber-500/50 flex items-center gap-3 cursor-pointer hover:bg-amber-500/5" onClick={() => navigate('/estoque?critico=true')}>
-              <Package className="text-amber-400" size={20} />
-              <span className="text-amber-400 font-medium">{stats.estoque.criticos} Item(ns) Estoque Crítico</span>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KPICard value={`${kpis?.disponibilidade_percent?.toFixed(1)}%`} label="Disponibilidade" icon={Gauge} color="emerald" />
-        <KPICard value={`${kpis?.confiabilidade_percent?.toFixed(1)}%`} label="Confiabilidade" icon={Shield} color="blue" />
-        <KPICard value={`${kpis?.mttr_horas?.toFixed(1)}h`} label="MTTR" icon={Clock} color="amber" subtitle="Tempo médio reparo" />
-        <KPICard value={`${kpis?.mtbf_horas?.toFixed(0)}h`} label="MTBF" icon={Activity} color="purple" subtitle="Tempo entre falhas" />
-      </div>
-      
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KPICard value={kpis?.backlog_total || 0} label="Backlog" icon={Layers} color={kpis?.backlog_total > 10 ? 'red' : 'emerald'} />
-        <KPICard value={`${kpis?.taxa_conformidade_percent?.toFixed(1)}%`} label="Conformidade" icon={CheckCircle} color={kpis?.taxa_conformidade_percent >= 90 ? 'emerald' : 'amber'} />
-        <KPICard value={`R$ ${(kpis?.custo_manutencao_mes || 0).toLocaleString('pt-BR')}`} label="Custo Mês" icon={DollarSign} color="purple" />
-        <KPICard value={`${kpis?.preventivas_percent?.toFixed(0)}%`} label="Preventiva" icon={PieChart} color="blue" subtitle={`vs ${kpis?.corretivas_percent?.toFixed(0)}% corretiva`} />
-      </div>
-      
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Ativos */}
-        <div className="glass-card p-4 cursor-pointer hover:border-slate-600" onClick={() => navigate('/ativos')}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-emerald-500/10 rounded-lg"><Box size={20} className="text-emerald-400" /></div>
-            <div>
-              <p className="text-lg font-bold text-slate-100">{stats?.ativos?.total || 0}</p>
-              <p className="text-xs text-slate-500">Ativos Cadastrados</p>
-            </div>
-          </div>
-          <div className="flex gap-2 text-xs">
-            <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded">{stats?.ativos?.operacionais || 0} operacionais</span>
-            {stats?.ativos?.manutencao > 0 && <span className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded">{stats.ativos.manutencao} manutenção</span>}
-          </div>
-        </div>
-        
-        {/* OS */}
-        <div className="glass-card p-4 cursor-pointer hover:border-slate-600" onClick={() => navigate('/os')}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-blue-500/10 rounded-lg"><Wrench size={20} className="text-blue-400" /></div>
-            <div>
-              <p className="text-lg font-bold text-slate-100">{totalOSAbertas}</p>
-              <p className="text-xs text-slate-500">OS Pendentes</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 gap-1 text-xs text-center">
-            <div className="p-1 bg-red-500/10 rounded"><span className="text-red-400 font-bold">{stats?.ordens_servico?.por_prioridade?.critica || 0}</span><br/><span className="text-slate-500">Crít</span></div>
-            <div className="p-1 bg-amber-500/10 rounded"><span className="text-amber-400 font-bold">{stats?.ordens_servico?.por_prioridade?.alta || 0}</span><br/><span className="text-slate-500">Alta</span></div>
-            <div className="p-1 bg-emerald-500/10 rounded"><span className="text-emerald-400 font-bold">{stats?.ordens_servico?.por_prioridade?.media || 0}</span><br/><span className="text-slate-500">Méd</span></div>
-            <div className="p-1 bg-slate-500/10 rounded"><span className="text-slate-400 font-bold">{stats?.ordens_servico?.por_prioridade?.baixa || 0}</span><br/><span className="text-slate-500">Bxa</span></div>
-          </div>
-        </div>
-        
-        {/* Inspeções */}
-        <div className="glass-card p-4 cursor-pointer hover:border-slate-600" onClick={() => navigate('/inspecoes')}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-purple-500/10 rounded-lg"><ClipboardCheck size={20} className="text-purple-400" /></div>
-            <div>
-              <p className="text-lg font-bold text-slate-100">{stats?.inspecoes?.pendentes || 0}</p>
-              <p className="text-xs text-slate-500">Inspeções Pendentes</p>
-            </div>
-          </div>
-          <div className="flex gap-2 text-xs">
-            <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded">{stats?.inspecoes?.concluidas_hoje || 0} hoje</span>
-            {stats?.inspecoes?.nao_conformes_mes > 0 && <span className="px-2 py-1 bg-red-500/10 text-red-400 rounded">{stats.inspecoes.nao_conformes_mes} não conformes</span>}
           </div>
         </div>
       </div>
-      
-      {/* OS por Tipo */}
-      <div className="glass-card p-4">
-        <h3 className="text-sm font-semibold text-slate-400 mb-3">OS Abertas por Tipo</h3>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { key: 'preventiva', label: 'Preventiva', color: 'emerald' },
-            { key: 'corretiva', label: 'Corretiva', color: 'red' },
-            { key: 'preditiva', label: 'Preditiva', color: 'blue' },
-            { key: 'emergencia', label: 'Emergência', color: 'amber' },
-          ].map(t => (
-            <div key={t.key} className={`p-3 rounded-lg bg-${t.color}-500/10 text-center`}>
-              <p className={`text-2xl font-bold text-${t.color}-400`}>{stats?.ordens_servico?.por_tipo?.[t.key] || 0}</p>
-              <p className="text-xs text-slate-500">{t.label}</p>
-            </div>
-          ))}
+
+      {/* BLOCO 1 - VISÃO EXECUTIVA */}
+      <div>
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Visão Executiva</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getBg(kpis.disponibilidade_percent, [90, 75])}`} onClick={() => navigate('/ativos')} data-testid="kpi-disponibilidade">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Disponibilidade</p>
+            <p className={`text-4xl font-black tabular-nums ${getColor(kpis.disponibilidade_percent, [90, 75])}`}>{kpis.disponibilidade_percent}<span className="text-lg">%</span></p>
+            <p className="text-xs text-slate-600 mt-1">{kpis.ativos_operacionais} de {kpis.ativos_total} ativos</p>
+          </div>
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getInverseBg(backlog, [5, 15])}`} onClick={() => drillDown('backlog', 'Backlog de OS')} data-testid="kpi-backlog">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Backlog</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(backlog, [5, 15])}`}>{backlog}</p>
+            <p className="text-xs text-slate-600 mt-1">ordens em aberto</p>
+          </div>
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getInverseBg(osAbertas, [5, 15])}`} onClick={() => drillDown('os_abertas', 'OS Abertas')} data-testid="kpi-os-abertas">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">OS Abertas</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(osAbertas, [5, 15])}`}>{osAbertas}</p>
+            <p className="text-xs text-slate-600 mt-1">aguardando execução</p>
+          </div>
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getInverseBg(osCriticas, [0, 3])}`} onClick={() => drillDown('os_criticas', 'Ordens Críticas')} data-testid="kpi-os-criticas">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Ordens Críticas</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(osCriticas, [0, 3])}`}>{osCriticas}</p>
+            <p className="text-xs text-slate-600 mt-1">prioridade máxima</p>
+          </div>
         </div>
       </div>
+
+      {/* BLOCO 2 - PERFORMANCE */}
+      <div>
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Performance</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getBg(kpis.mtbf_horas, [500, 200])}`} onClick={() => drillDown('mttr', 'Histórico MTBF/MTTR')} data-testid="kpi-mtbf">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">MTBF</p>
+            <p className={`text-4xl font-black tabular-nums ${getColor(kpis.mtbf_horas, [500, 200])}`}>{kpis.mtbf_horas}<span className="text-lg">h</span></p>
+            <p className="text-xs text-slate-600 mt-1">tempo médio entre falhas</p>
+          </div>
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getInverseBg(kpis.mttr_horas, [2, 8])}`} onClick={() => drillDown('mttr', 'Histórico MTTR')} data-testid="kpi-mttr">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">MTTR</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(kpis.mttr_horas, [2, 8])}`}>{kpis.mttr_horas}<span className="text-lg">h</span></p>
+            <p className="text-xs text-slate-600 mt-1">tempo médio de reparo</p>
+          </div>
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getBg(kpis.preventivas_percent, [60, 40])}`} onClick={() => drillDown('preventiva', 'OS Preventivas')} data-testid="kpi-prev-corr">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Preventiva vs Corretiva</p>
+            <div className="flex items-end gap-3 mt-1">
+              <div>
+                <p className="text-3xl font-black text-emerald-400 tabular-nums">{kpis.preventivas_percent}<span className="text-sm">%</span></p>
+                <p className="text-[10px] text-emerald-600">preventiva</p>
+              </div>
+              <div>
+                <p className="text-3xl font-black text-red-400 tabular-nums">{kpis.corretivas_percent}<span className="text-sm">%</span></p>
+                <p className="text-[10px] text-red-600">corretiva</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BLOCO 3 - RISCO OPERACIONAL */}
+      <div>
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Risco Operacional</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getInverseBg(estoqueCritico, [0, 3])}`} onClick={() => drillDown('estoque_critico', 'Estoque Crítico')} data-testid="kpi-estoque-critico">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Estoque Crítico</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(estoqueCritico, [0, 3])}`}>{estoqueCritico}</p>
+            <p className="text-xs text-slate-600 mt-1">itens abaixo do mínimo</p>
+          </div>
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getInverseBg(inspPendentes, [2, 8])}`} onClick={() => drillDown('insp_pendentes', 'Inspeções Pendentes')} data-testid="kpi-insp-pendentes">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Inspeções Pendentes</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(inspPendentes, [2, 8])}`}>{inspPendentes}</p>
+            <p className="text-xs text-slate-600 mt-1">aguardando execução</p>
+          </div>
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getInverseBg(naoConformes, [0, 3])}`} onClick={() => drillDown('nao_conformes', 'Não Conformidades')} data-testid="kpi-nao-conformes">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Não Conformidades</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(naoConformes, [0, 3])}`}>{naoConformes}</p>
+            <p className="text-xs text-slate-600 mt-1">inspeções com falha</p>
+          </div>
+        </div>
+      </div>
+
+      {/* GRÁFICOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Gráfico 1 - Tendência MTBF/MTTR */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+          <h3 className="text-sm font-bold text-slate-300 mb-4">Tendência MTBF / MTTR</h3>
+          <div className="h-64" data-testid="chart-trend">
+            <TrendChart data={trend} />
+          </div>
+        </div>
+
+        {/* Gráfico 2 - Distribuição OS */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+          <h3 className="text-sm font-bold text-slate-300 mb-4">Distribuição de OS por Tipo</h3>
+          <div className="h-64" data-testid="chart-os-dist">
+            <OSDistChart data={osTypes} onBarClick={(key) => drillDown(key, `OS ${key.charAt(0).toUpperCase() + key.slice(1)}`)} />
+          </div>
+        </div>
+      </div>
+
+      {/* Drill-Down Modal */}
+      <Modal isOpen={drillModal.open} onClose={() => setDrillModal({open:false,type:'',title:'',data:[]})} title={drillModal.title} size="lg">
+        {drillLoading ? <Loading rows={5} /> : (
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            {drillModal.data.length === 0 ? (
+              <p className="text-center text-slate-500 py-8">Nenhum registro encontrado</p>
+            ) : drillModal.data.map((item, idx) => (
+              <div key={item.id || idx} className="p-3 bg-slate-800/50 rounded-lg flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    {item.numero && <span className="font-mono text-xs text-blue-400">{item.numero}</span>}
+                    {item.ativo && <span className="font-mono text-xs text-emerald-400">{item.ativo.tag}</span>}
+                    {item.tag && <span className="font-mono text-xs text-emerald-400">{item.tag}</span>}
+                    {item.sku && <span className="font-mono text-xs text-purple-400">{item.sku}</span>}
+                    {item.prioridade && <PriorityBadge priority={item.prioridade} />}
+                    {item.severidade && <PriorityBadge priority={item.severidade} />}
+                  </div>
+                  <p className="text-sm text-slate-200">{item.titulo || item.nome || item.descricao || item.ativo?.nome || '—'}</p>
+                  <p className="text-xs text-slate-500">
+                    {item.tipo && <span className="capitalize mr-2">{item.tipo}</span>}
+                    {item.status && <span className="capitalize mr-2">{item.status}</span>}
+                    {item.tempo_execucao_minutos && <span>{item.tempo_execucao_minutos} min</span>}
+                    {item.quantidade !== undefined && <span>Qtd: {item.quantidade} (min: {item.estoque_minimo})</span>}
+                    {item.frequencia && <span className="capitalize">{item.frequencia}</span>}
+                  </p>
+                </div>
+                <StatusBadge status={item.status || 'pendente'} size="sm" />
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
+  );
+};
+
+// Chart Components
+const TrendChart = ({ data }) => {
+  const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = require('recharts');
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+        <XAxis dataKey="mes" tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#475569" />
+        <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#475569" />
+        <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }} />
+        <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
+        <Line type="monotone" dataKey="mtbf" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} name="MTBF (h)" />
+        <Line type="monotone" dataKey="mttr" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} name="MTTR (h)" />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+};
+
+const OSDistChart = ({ data, onBarClick }) => {
+  const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } = require('recharts');
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+        <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#475569" />
+        <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#475569" allowDecimals={false} />
+        <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }} />
+        <Bar dataKey="value" radius={[6, 6, 0, 0]} cursor="pointer" onClick={(d) => onBarClick(d.key)}>
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={entry.fill} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   );
 };
 
