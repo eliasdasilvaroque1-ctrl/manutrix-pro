@@ -69,6 +69,16 @@ CMMS/EAM enterprise para mineração e indústria pesada. Rastreabilidade comple
 - QR Code real (qrcode.react) por ativo
 - Scanner com câmera + busca por TAG
 
+### Dashboard Executivo (v5.0)
+- 3 blocos: Visao Executiva, Performance, Risco Operacional
+- 10 KPIs com numeros grandes, legendas claras, cores por criticidade
+- Grafico de tendencia MTBF/MTTR (linha, 6 meses) com recharts
+- Grafico de distribuicao OS por tipo (barras clicaveis)
+- Drill-down: clique em qualquer KPI abre modal com dados detalhados
+- Botao "Exportar Dados" com dropdown (Excel/CSV para OS, Ativos, Inspecoes, Estoque)
+- Subtitulo: "Indicadores operacionais e de confiabilidade da planta"
+- Tema dark industrial, layout limpo, foco executivo
+
 ### Dashboard + KPIs (v2.0)
 - MTTR, MTBF, Disponibilidade, Confiabilidade
 - Backlog, Conformidade, Custo mensal
