@@ -8,6 +8,19 @@ CMMS/EAM enterprise para mineração e indústria pesada. Rastreabilidade comple
 
 ## Implementado
 
+### Login Seguro (v5.2)
+- Credenciais removidas da interface (nenhuma exposição)
+- Botão "Acessar ambiente de demonstração" substitui texto de credenciais
+- Tela limpa e profissional para apresentação executiva
+
+### Registro Fotografico (v5.2)
+- Componente PhotoUploader reutilizavel (camera/arquivo, grid, fullscreen, delete)
+- OS: Foto Antes + Foto Depois (lado a lado) - corretiva exige foto antes
+- Inspecoes: Registro Fotografico - obrigatorio quando nao conforme
+- Anomalias: Fotos do Problema em cada card
+- Suporte camera mobile (capture=environment)
+- Visualizacao fullscreen ao clicar na foto
+
 ### Autenticacao Profissional (v5.1)
 - bcrypt para hashing de senhas (migracao automatica de SHA-256)
 - "Esqueci minha senha" na tela de login com token de redefinicao
