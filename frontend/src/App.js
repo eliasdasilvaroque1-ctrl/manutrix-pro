@@ -1838,10 +1838,9 @@ const LoginPage = () => {
         )}
         
         <div className="mt-4 text-center">
-          <button onClick={handleSeed} className="text-slate-500 hover:text-slate-300 text-sm underline">
-            Criar dados de demonstração
+          <button onClick={handleSeed} className="text-slate-600 hover:text-emerald-400 text-sm transition-colors flex items-center justify-center gap-2 mx-auto">
+            <Zap size={14} /> Acessar ambiente de demonstração
           </button>
-          <p className="text-slate-600 text-xs mt-2">admin@manutrix.com / admin123</p>
         </div>
       </div>
     </div>
@@ -2783,6 +2782,28 @@ const OSDetailPage = () => {
         </div>
       )}
       
+      {/* Registro Fotográfico */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="glass-card p-4">
+          <PhotoUploader
+            entityType="work_order"
+            entityId={os.id}
+            categoria="foto_antes"
+            label="Foto Antes"
+            required={['corretiva', 'falha'].includes(os.tipo)}
+          />
+        </div>
+        <div className="glass-card p-4">
+          <PhotoUploader
+            entityType="work_order"
+            entityId={os.id}
+            categoria="foto_depois"
+            label="Foto Depois"
+            required={os.status === 'em_execucao'}
+          />
+        </div>
+      </div>
+      
       {/* Actions */}
       {!['concluida', 'cancelada'].includes(os.status) && (
         <div className="space-y-2">
@@ -3346,6 +3367,18 @@ const InspecaoDetailPage = () => {
         </div>
       )}
       
+      {/* Registro Fotográfico */}
+      {inspecao.id && (
+        <div className="glass-card p-4">
+          <PhotoUploader
+            entityType="inspection"
+            entityId={inspecao.id}
+            label="Registro Fotográfico"
+            required={checklist.some(i => i.conforme === false)}
+          />
+        </div>
+      )}
+      
       {/* Action */}
       {inspecao.status === 'em_andamento' && (
         <div className="fixed bottom-16 left-0 right-0 p-4 bg-slate-950/95 backdrop-blur-sm border-t border-slate-800 md:bottom-0">
@@ -3567,6 +3600,129 @@ const ScannerPage = () => {
 };
 
 
+// ============== PHOTO UPLOADER COMPONENT ==============
+
+const PhotoUploader = ({ entityType, entityId, categoria = 'foto', label = 'Fotos', required = false, onPhotoCountChange }) => {
+  const [photos, setPhotos] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [fullscreenImg, setFullscreenImg] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const fetchPhotos = async () => {
+    if (!entityId) return;
+    try {
+      const res = await api.get(`/attachments/${entityType}/${entityId}`);
+      const filtered = categoria ? res.data.filter(a => a.categoria === categoria) : res.data;
+      setPhotos(filtered);
+      onPhotoCountChange?.(filtered.length);
+    } catch {}
+  };
+
+  useEffect(() => { fetchPhotos(); }, [entityId, entityType]);
+
+  const handleUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('entity_type', entityType);
+        formData.append('entity_id', entityId);
+        formData.append('categoria', categoria);
+        await api.post('/attachments', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
+      toast.success(`${files.length} foto(s) enviada(s)`);
+      fetchPhotos();
+    } catch (e) {
+      toast.error('Erro ao enviar foto');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`/attachments/${id}`);
+      fetchPhotos();
+    } catch { toast.error('Erro ao remover'); }
+  };
+
+  return (
+    <>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-slate-400 flex items-center gap-2">
+            <Camera size={16} /> {label} {required && <span className="text-red-400">*</span>}
+            {photos.length > 0 && <span className="text-xs text-slate-600">({photos.length})</span>}
+          </h4>
+        </div>
+
+        {/* Photo Grid */}
+        {photos.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {photos.map((p) => (
+              <div key={p.id} className="relative group aspect-square rounded-lg overflow-hidden bg-slate-800 border border-slate-700">
+                <img
+                  src={`${BACKEND_URL}${p.file_url}`}
+                  alt={p.filename}
+                  className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => setFullscreenImg(`${BACKEND_URL}${p.file_url}`)}
+                />
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  className="absolute top-1 right-1 p-1 bg-red-500/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X size={12} className="text-white" />
+                </button>
+                <p className="absolute bottom-0 left-0 right-0 bg-black/60 text-[10px] text-slate-300 px-1 py-0.5 truncate">
+                  {new Date(p.created_at).toLocaleDateString('pt-BR')}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Upload Button */}
+        <label className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
+          required && photos.length === 0 ? 'border-red-500/50 hover:border-red-400 bg-red-500/5' : 'border-slate-700 hover:border-emerald-500/50 hover:bg-emerald-500/5'
+        }`}>
+          {uploading ? (
+            <><RefreshCw size={18} className="animate-spin text-slate-400" /> <span className="text-sm text-slate-400">Enviando...</span></>
+          ) : (
+            <><Camera size={18} className="text-slate-500" /> <span className="text-sm text-slate-400">Tirar foto ou selecionar arquivo</span></>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            onChange={handleUpload}
+            className="hidden"
+            disabled={uploading}
+          />
+        </label>
+        {required && photos.length === 0 && (
+          <p className="text-xs text-red-400">Foto obrigatória</p>
+        )}
+      </div>
+
+      {/* Fullscreen Viewer */}
+      {fullscreenImg && (
+        <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4" onClick={() => setFullscreenImg(null)}>
+          <button className="absolute top-4 right-4 p-2 bg-slate-800 rounded-full" onClick={() => setFullscreenImg(null)}>
+            <X size={24} className="text-white" />
+          </button>
+          <img src={fullscreenImg} alt="Fullscreen" className="max-w-full max-h-full object-contain rounded-lg" />
+        </div>
+      )}
+    </>
+  );
+};
+
 // ============== SOBRESSALENTES PAGE ==============
 
 const SobressalentesPage = () => {
@@ -3713,7 +3869,7 @@ const AnomaliasPage = () => {
       {loading ? <Loading rows={5} /> : anomalias.length > 0 ? (
         <div className="space-y-2">
           {anomalias.map((a) => (
-            <div key={a.id} className="glass-card p-4">
+            <div key={a.id} className="glass-card p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -3729,6 +3885,7 @@ const AnomaliasPage = () => {
                   {a.os_gerada_id && <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded">OS Gerada</span>}
                 </div>
               </div>
+              <PhotoUploader entityType="anomaly" entityId={a.id} label="Fotos do Problema" />
             </div>
           ))}
         </div>
