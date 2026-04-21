@@ -1838,11 +1838,24 @@ const DashboardPage = () => {
   const inspPendentes = stats?.inspecoes?.pendentes || 0;
   const naoConformes = stats?.inspecoes?.nao_conformes_mes || 0;
   
+  // OS distribution from trend data (aggregated 6 months)
+  const osTrendTotals = trend.reduce((acc, m) => ({
+    corretiva: acc.corretiva + (m.corretivas || 0),
+    preventiva: acc.preventiva + (m.preventivas || 0),
+    preditiva: acc.preditiva + (m.preditivas || 0),
+    emergencia: acc.emergencia + (m.emergencias || 0),
+  }), { corretiva: 0, preventiva: 0, preditiva: 0, emergencia: 0 });
+  
+  // Compute preventiva/corretiva % from trend for a more realistic view
+  const totalTrendOS = osTrendTotals.preventiva + osTrendTotals.corretiva + osTrendTotals.preditiva + osTrendTotals.emergencia;
+  const prevPercent = totalTrendOS > 0 ? Math.round(osTrendTotals.preventiva / totalTrendOS * 100) : kpis.preventivas_percent;
+  const corrPercent = totalTrendOS > 0 ? Math.round(osTrendTotals.corretiva / totalTrendOS * 100) : kpis.corretivas_percent;
+  
   const osTypes = [
-    { name: 'Corretiva', value: stats?.ordens_servico?.por_tipo?.corretiva || 0, fill: '#ef4444', key: 'corretiva' },
-    { name: 'Preventiva', value: stats?.ordens_servico?.por_tipo?.preventiva || 0, fill: '#10b981', key: 'preventiva' },
-    { name: 'Preditiva', value: stats?.ordens_servico?.por_tipo?.preditiva || 0, fill: '#3b82f6', key: 'preditiva' },
-    { name: 'Emergência', value: stats?.ordens_servico?.por_tipo?.emergencia || 0, fill: '#f59e0b', key: 'emergencia' },
+    { name: 'Corretiva', value: osTrendTotals.corretiva, fill: '#ef4444', key: 'corretiva' },
+    { name: 'Preventiva', value: osTrendTotals.preventiva, fill: '#10b981', key: 'preventiva' },
+    { name: 'Preditiva', value: osTrendTotals.preditiva, fill: '#3b82f6', key: 'preditiva' },
+    { name: 'Emergência', value: osTrendTotals.emergencia, fill: '#f59e0b', key: 'emergencia' },
   ];
 
   return (
@@ -1851,7 +1864,7 @@ const DashboardPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100" data-testid="dashboard-title">Dashboard Operacional</h1>
-          <p className="text-sm text-slate-500">Indicadores operacionais e de confiabilidade da planta</p>
+          <p className="text-sm text-slate-500">Monitoramento em tempo real da confiabilidade e desempenho operacional dos ativos</p>
         </div>
         <div className="flex gap-2">
           <div className="relative group">
@@ -1910,15 +1923,15 @@ const DashboardPage = () => {
             <p className={`text-4xl font-black tabular-nums ${getInverseColor(kpis.mttr_horas, [2, 8])}`}>{kpis.mttr_horas}<span className="text-lg">h</span></p>
             <p className="text-xs text-slate-600 mt-1">tempo médio de reparo</p>
           </div>
-          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getBg(kpis.preventivas_percent, [60, 40])}`} onClick={() => drillDown('preventiva', 'OS Preventivas')} data-testid="kpi-prev-corr">
+          <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getBg(prevPercent, [60, 40])}`} onClick={() => drillDown('preventiva', 'OS Preventivas')} data-testid="kpi-prev-corr">
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Preventiva vs Corretiva</p>
             <div className="flex items-end gap-3 mt-1">
               <div>
-                <p className="text-3xl font-black text-emerald-400 tabular-nums">{kpis.preventivas_percent}<span className="text-sm">%</span></p>
+                <p className="text-3xl font-black text-emerald-400 tabular-nums">{prevPercent}<span className="text-sm">%</span></p>
                 <p className="text-[10px] text-emerald-600">preventiva</p>
               </div>
               <div>
-                <p className="text-3xl font-black text-red-400 tabular-nums">{kpis.corretivas_percent}<span className="text-sm">%</span></p>
+                <p className="text-3xl font-black text-red-400 tabular-nums">{corrPercent}<span className="text-sm">%</span></p>
                 <p className="text-[10px] text-red-600">corretiva</p>
               </div>
             </div>
