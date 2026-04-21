@@ -8,16 +8,24 @@
 | Tecnico | tecnico@manutrix.com | tecnico123 |
 | Tecnico 2 | pedro@manutrix.com | pedro123 |
 
-## Seed Data
-- POST /api/seed - Cria dados de demonstração
+## Auth Endpoints
+- POST /api/auth/login
+- POST /api/auth/register
+- GET /api/auth/me
+- POST /api/auth/forgot-password
+- POST /api/auth/reset-password
+- POST /api/auth/change-password
+- POST /api/admin/users/{id}/reset-password
+- PUT /api/admin/users/{id}
+- GET /api/admin/users
+- POST /api/admin/users
+- DELETE /api/admin/users/{id}
 
-## Permissões RBAC Industrial
-| Perfil | Permissões |
-|--------|------------|
-| Admin | Controle total: CRUD completo, gestão de usuários, ativos, empresas |
-| Gerente | Dashboard e relatórios (somente leitura), exporta dados |
-| PCM | Gerencia OS, estoque, sobressalentes, relatórios, exporta |
-| Supervisor | Gerencia OS, inspeções, rondas |
-| Técnico | Preenche inspeções, abre anomalias, cria OS. NÃO edita/exclui |
-| Inspetor | Executa inspeções |
-| Viewer | Somente leitura |
+## Password Security
+- bcrypt hashing (auto-migrates from SHA-256)
+- Token-based reset (1h expiry)
+- Force password change after admin reset
+- Min 6 characters for new passwords
+
+## Seed
+- POST /api/seed - Creates demo data

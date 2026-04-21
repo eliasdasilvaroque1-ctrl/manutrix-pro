@@ -8,6 +8,15 @@ CMMS/EAM enterprise para mineração e indústria pesada. Rastreabilidade comple
 
 ## Implementado
 
+### Autenticacao Profissional (v5.1)
+- bcrypt para hashing de senhas (migracao automatica de SHA-256)
+- "Esqueci minha senha" na tela de login com token de redefinicao
+- Reset via token com validacao (minimo 6 caracteres, expiracao 1h)
+- Admin pode gerar senha temporaria para qualquer usuario
+- Troca de senha obrigatoria no primeiro login apos reset
+- Gestao de usuarios: criar, editar (nome/email/role), desativar, redefinir senha
+- Senhas nunca exibidas no sistema, hash bcrypt seguro
+
 ### RBAC Industrial (v4.0)
 - Admin: controle total (CRUD + usuários + ativos + empresas)
 - Gerente: dashboard e relatórios (somente leitura)
