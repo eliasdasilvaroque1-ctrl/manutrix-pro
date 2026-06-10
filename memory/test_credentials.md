@@ -1,31 +1,23 @@
 # MANUTRIX - Credenciais de Teste
 
 ## Contas de Usuário
-| Role | Email | Senha |
-|------|-------|-------|
-| Admin | admin@manutrix.com | admin123 |
-| Supervisor | supervisor@manutrix.com | supervisor123 |
-| Tecnico | tecnico@manutrix.com | tecnico123 |
-| Tecnico 2 | pedro@manutrix.com | pedro123 |
+| Role | Email | Senha | Supabase Synced |
+|------|-------|-------|-----------------|
+| Admin | admin@manutrix.com | admin123 | Yes |
+| Supervisor | supervisor@manutrix.com | supervisor123 | Auto on login |
+| Tecnico | tecnico@manutrix.com | tecnico123 | Auto on login |
+| Tecnico 2 | pedro@manutrix.com | pedro123 | Auto on login |
 
-## Auth Endpoints
-- POST /api/auth/login
-- POST /api/auth/register
-- GET /api/auth/me
-- POST /api/auth/forgot-password
-- POST /api/auth/reset-password
-- POST /api/auth/change-password
-- POST /api/admin/users/{id}/reset-password
-- PUT /api/admin/users/{id}
-- GET /api/admin/users
-- POST /api/admin/users
-- DELETE /api/admin/users/{id}
+## Supabase
+- URL: https://qyzahffbzobetohxdkrp.supabase.co
+- Auth: Email/password via Supabase Auth
+- Fallback: MongoDB bcrypt auth if Supabase is down
 
-## Password Security
-- bcrypt hashing (auto-migrates from SHA-256)
-- Token-based reset (1h expiry)
-- Force password change after admin reset
-- Min 6 characters for new passwords
+## Auth Flow
+1. Login tries Supabase first (sign_in_with_password)
+2. If Supabase fails, falls back to MongoDB auth
+3. On first MongoDB login, auto-creates Supabase user
+4. Forgot password sends real email via Supabase
 
 ## Seed
 - POST /api/seed - Creates demo data

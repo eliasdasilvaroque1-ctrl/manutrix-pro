@@ -21,6 +21,14 @@ CMMS/EAM enterprise para mineração e indústria pesada. Rastreabilidade comple
 - Suporte camera mobile (capture=environment)
 - Visualizacao fullscreen ao clicar na foto
 
+### Supabase Integration (v6.0)
+- Supabase Auth para login/registro/reset de senha
+- Auto-sync: usuarios MongoDB sao criados automaticamente no Supabase no primeiro login
+- Fallback: se Supabase falhar, usa autenticacao local (MongoDB + bcrypt)
+- Forgot password via Supabase (envia email real de redefinicao)
+- Admin create user tambem cria no Supabase Auth
+- supabase_id linkado no perfil MongoDB
+
 ### Autenticacao Profissional (v5.1)
 - bcrypt para hashing de senhas (migracao automatica de SHA-256)
 - "Esqueci minha senha" na tela de login com token de redefinicao

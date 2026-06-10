@@ -2564,8 +2564,10 @@ const OSPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   
   useEffect(() => {
     if (searchParams.get('new') === 'true') setShowModal(true);
@@ -2652,14 +2654,16 @@ const OSPage = () => {
                   {os.responsavel && <p className="text-xs text-slate-500"><User size={12} className="inline mr-1" />{os.responsavel.nome}</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="hidden group-hover:flex items-center gap-1">
-                    <button onClick={() => { setEditItem(os); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg">
-                      <Edit size={16} className="text-slate-400" />
-                    </button>
-                    <button onClick={() => setDeleteItem(os)} className="p-2 hover:bg-red-500/10 rounded-lg">
-                      <Trash2 size={16} className="text-red-400" />
-                    </button>
-                  </div>
+                  {user?.role === 'admin' && (
+                    <div className="hidden group-hover:flex items-center gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); setEditItem(os); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar">
+                        <Edit3 size={15} className="text-blue-400" />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteItem(os); }} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir">
+                        <Trash2 size={15} className="text-red-400" />
+                      </button>
+                    </div>
+                  )}
                   <PriorityBadge priority={os.prioridade} />
                   <ChevronRight className="text-slate-600" />
                 </div>
@@ -3599,6 +3603,31 @@ const ScannerPage = () => {
   );
 };
 
+
+// ============== CONFIRM DELETE MODAL ==============
+
+const ConfirmDeleteModal = ({ isOpen, onClose, onConfirm, title, message, loading }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-slate-900 border border-red-500/30 rounded-xl p-6 w-full max-w-sm space-y-4">
+        <div className="text-center">
+          <div className="w-14 h-14 mx-auto rounded-full bg-red-500/10 flex items-center justify-center mb-3">
+            <AlertTriangle size={28} className="text-red-400" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-100">{title || 'Confirmar Exclusão'}</h3>
+          <p className="text-sm text-slate-400 mt-2">{message || 'Tem certeza que deseja excluir? Esta ação não pode ser desfeita.'}</p>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="btn-secondary flex-1" disabled={loading}>Cancelar</button>
+          <button onClick={onConfirm} className="flex-1 py-2.5 px-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition-colors" disabled={loading} data-testid="confirm-delete-btn">
+            {loading ? 'Excluindo...' : 'Excluir'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ============== PHOTO UPLOADER COMPONENT ==============
 

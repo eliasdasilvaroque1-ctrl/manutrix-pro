@@ -24,15 +24,28 @@ import json
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+logger = logging.getLogger(__name__)
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# JWT Configuration
+# JWT Configuration (kept for backward compat, Supabase is primary)
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+
+# Supabase
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
+
+supabase_client = None
+if SUPABASE_URL and SUPABASE_SERVICE_KEY:
+    from supabase import create_client
+    supabase_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    logger.info("Supabase client initialized")
 
 # Upload directory
 UPLOAD_DIR = ROOT_DIR / 'uploads'
@@ -43,7 +56,6 @@ api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 # ============== ENUMS ==============
 
@@ -430,6 +442,20 @@ def can_view_dashboard(user: Dict) -> bool:
     """Gerente, PCM, Admin can view dashboard"""
     return user.get('role') in ['admin', 'pcm', 'gerente', 'supervisor']
 
+async def audit_log(action: str, entity_type: str, entity_id: str, user: Dict, details: str = ""):
+    """Simple audit log for critical actions"""
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": action,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "user_id": user.get('id'),
+        "user_nome": user.get('nome'),
+        "user_role": user.get('role'),
+        "details": details,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
 async def criar_notificacao(usuario_id: str, org_id: str, tipo: NotificacaoTipo, titulo: str, mensagem: str, link: str = None):
     notif = Notificacao(
         usuario_id=usuario_id,
@@ -497,23 +523,64 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
-    user = await db.users.find_one({"email": credentials.email.lower().strip(), "deleted_at": None}, {"_id": 0})
+    email = credentials.email.lower().strip()
+    
+    # Try Supabase Auth first
+    if supabase_client:
+        try:
+            auth_response = supabase_client.auth.sign_in_with_password({
+                "email": email,
+                "password": credentials.password,
+            })
+            if auth_response.session and auth_response.user:
+                user = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0})
+                if not user:
+                    user_id = str(uuid.uuid4())
+                    user = {
+                        "id": user_id, "email": email,
+                        "nome": auth_response.user.user_metadata.get('nome', email.split('@')[0]),
+                        "role": "tecnico", "organization_id": "",
+                        "supabase_id": auth_response.user.id,
+                        "created_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None
+                    }
+                    await db.users.insert_one(user)
+                    user.pop('_id', None)
+                elif not user.get('supabase_id'):
+                    await db.users.update_one({"id": user['id']}, {"$set": {"supabase_id": auth_response.user.id}})
+                
+                token = create_token(user['id'], user.get('role', 'tecnico'), user.get('organization_id', ''))
+                return TokenResponse(
+                    access_token=token,
+                    user={"id": user['id'], "email": user['email'], "nome": user.get('nome', ''),
+                          "role": user.get('role', 'tecnico'), "organization_id": user.get('organization_id'),
+                          "telefone": user.get('telefone'), "force_password_change": user.get('force_password_change', False)}
+                )
+        except Exception as e:
+            logger.debug(f"Supabase auth failed: {e}")
+    
+    # Fallback to MongoDB auth
+    user = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0})
     if not user or not verify_password(credentials.password, user.get('password_hash', '')):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
     
-    # Migrate legacy SHA-256 hash to bcrypt on successful login
-    if not user.get('password_hash', '').startswith('$2b$'):
-        await db.users.update_one({"id": user['id']}, {"$set": {"password_hash": hash_password(credentials.password)}})
+    # Auto-sync user to Supabase
+    if supabase_client and not user.get('supabase_id'):
+        try:
+            sb_resp = supabase_client.auth.admin.create_user({
+                "email": email, "password": credentials.password,
+                "email_confirm": True, "user_metadata": {"nome": user.get('nome', ''), "role": user.get('role', '')}
+            })
+            if sb_resp.user:
+                await db.users.update_one({"id": user['id']}, {"$set": {"supabase_id": sb_resp.user.id}})
+        except Exception as e:
+            logger.warning(f"Supabase sync: {e}")
     
     token = create_token(user['id'], user['role'], user.get('organization_id', ''))
     return TokenResponse(
         access_token=token,
-        user={
-            "id": user['id'], "email": user['email'], "nome": user['nome'],
-            "role": user['role'], "organization_id": user.get('organization_id'),
-            "telefone": user.get('telefone'),
-            "force_password_change": user.get('force_password_change', False)
-        }
+        user={"id": user['id'], "email": user['email'], "nome": user['nome'],
+              "role": user['role'], "organization_id": user.get('organization_id'),
+              "telefone": user.get('telefone'), "force_password_change": user.get('force_password_change', False)}
     )
 
 @api_router.get("/auth/me")
@@ -535,26 +602,29 @@ class ChangePasswordRequest(BaseModel):
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest):
-    """Generate password reset token and log the link"""
-    user = await db.users.find_one({"email": data.email.lower().strip(), "deleted_at": None}, {"_id": 0})
-    # Always return success to not leak user existence
+    """Send password reset - via Supabase or local token"""
+    email = data.email.lower().strip()
+    
+    if supabase_client:
+        try:
+            supabase_client.auth.reset_password_for_email(email)
+            return {"success": True, "message": "Link de redefinição enviado para seu email", "method": "supabase"}
+        except Exception as e:
+            logger.warning(f"Supabase reset failed: {e}")
+    
+    # Fallback: local token
+    user = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0})
     if not user:
         return {"success": True, "message": "Se o email existir, um link de redefinição será gerado"}
     
     token = secrets.token_urlsafe(32)
     await db.password_reset_tokens.insert_one({
-        "token": token,
-        "user_id": user['id'],
-        "email": data.email.lower().strip(),
+        "token": token, "user_id": user['id'], "email": email,
         "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-        "used": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "used": False, "created_at": datetime.now(timezone.utc).isoformat()
     })
-    
-    # Log reset link (in production, send email)
-    logger.info(f"PASSWORD RESET TOKEN for {data.email}: {token}")
-    
-    return {"success": True, "message": "Link de redefinição gerado. Verifique o console do sistema.", "token": token}
+    logger.info(f"PASSWORD RESET TOKEN for {email}: {token}")
+    return {"success": True, "message": "Token de redefinição gerado. Verifique o console.", "token": token}
 
 @api_router.post("/auth/reset-password")
 async def reset_password(data: ResetPasswordRequest):
@@ -855,6 +925,7 @@ async def delete_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
         {"id": ativo_id},
         {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}}
     )
+    await audit_log("delete", "ativos", ativo_id, user, f"Ativo {existing.get('tag','')} - {existing.get('nome','')} excluído")
     return {"success": True, "message": "Ativo excluído com sucesso"}
 
 # ============== ESTOQUE - CRUD COMPLETO ==============
@@ -979,6 +1050,7 @@ async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_u
 
 @api_router.put("/estoque/{item_id}")
 async def update_estoque(item_id: str, data: EstoqueUpdate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
     existing = await db.itens_estoque.find_one({"id": item_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Item não encontrado")
@@ -1001,8 +1073,8 @@ async def update_estoque(item_id: str, data: EstoqueUpdate, user: Dict = Depends
 
 @api_router.delete("/estoque/{item_id}")
 async def delete_estoque(item_id: str, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin'])
-    existing = await db.itens_estoque.find_one({"id": item_id, "deleted_at": None})
+    check_admin_only(user)
+    existing = await db.itens_estoque.find_one({"id": item_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Item não encontrado")
     
@@ -1010,6 +1082,7 @@ async def delete_estoque(item_id: str, user: Dict = Depends(get_current_user)):
         {"id": item_id},
         {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}}
     )
+    await audit_log("delete", "estoque", item_id, user, f"Item {existing.get('sku')} - {existing.get('nome')} excluído")
     return {"success": True, "message": "Item excluído com sucesso"}
 
 class MovimentacaoCreateBody(BaseModel):
@@ -1266,6 +1339,7 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
 
 @api_router.put("/ordens-servico/{os_id}")
 async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
     existing = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="OS não encontrada")
@@ -1295,8 +1369,8 @@ async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current
 
 @api_router.delete("/ordens-servico/{os_id}")
 async def delete_os(os_id: str, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin'])
-    existing = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None})
+    check_admin_only(user)
+    existing = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="OS não encontrada")
     
@@ -1304,6 +1378,7 @@ async def delete_os(os_id: str, user: Dict = Depends(get_current_user)):
         {"id": os_id},
         {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}}
     )
+    await audit_log("delete", "ordens_servico", os_id, user, f"OS #{existing.get('numero')} excluída")
     return {"success": True, "message": "OS excluída com sucesso"}
 
 @api_router.post("/ordens-servico/{os_id}/iniciar")
@@ -2798,7 +2873,7 @@ async def create_spare(data: SpareAssetCreate, user: Dict = Depends(get_current_
 
 @api_router.put("/sobressalentes/{spare_id}")
 async def update_spare(spare_id: str, data: SpareAssetUpdate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'pcm'])
+    check_admin_only(user)
     existing = await db.spare_assets.find_one({"id": spare_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Sobressalente não encontrado")
@@ -2811,7 +2886,9 @@ async def update_spare(spare_id: str, data: SpareAssetUpdate, user: Dict = Depen
 @api_router.delete("/sobressalentes/{spare_id}")
 async def delete_spare(spare_id: str, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
+    existing = await db.spare_assets.find_one({"id": spare_id, "deleted_at": None}, {"_id": 0})
     await db.spare_assets.update_one({"id": spare_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    await audit_log("delete", "sobressalentes", spare_id, user, f"Sobressalente {(existing or {}).get('tag','')} excluído")
     return {"success": True}
 
 @api_router.post("/sobressalentes/movimentacao")
@@ -3015,6 +3092,19 @@ async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_u
         "created_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None
     }
+    
+    # Sync to Supabase Auth
+    if supabase_client:
+        try:
+            sb_resp = supabase_client.auth.admin.create_user({
+                "email": email_normalized, "password": data.password,
+                "email_confirm": True, "user_metadata": {"nome": data.nome, "role": data.role.value}
+            })
+            if sb_resp.user:
+                user_doc['supabase_id'] = sb_resp.user.id
+        except Exception as e:
+            logger.warning(f"Supabase user create: {e}")
+    
     await db.users.insert_one(user_doc)
     return {k: v for k, v in user_doc.items() if k not in ['password_hash', '_id']}
 
@@ -3142,6 +3232,12 @@ async def powerbi_kpis(user: Dict = Depends(get_current_user)):
         "preventivas": len([o for o in os_concluidas if o.get('tipo') == 'preventiva']),
         "corretivas": len([o for o in os_concluidas if o.get('tipo') == 'corretiva']),
     }
+
+@api_router.get("/admin/audit-logs")
+async def get_audit_logs(user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    logs = await db.audit_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return logs
 
 # ============== ROOT ==============
 
