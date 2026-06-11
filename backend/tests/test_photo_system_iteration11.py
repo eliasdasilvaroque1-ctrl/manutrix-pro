@@ -21,7 +21,7 @@ class TestAuthAndLogin:
         """Admin login should work with correct credentials"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@manutrix.com",
-            "password": "admin123"
+            "password": os.getenv("TEST_ADMIN_PASSWORD", "admin123")
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
         data = response.json()
@@ -35,7 +35,7 @@ class TestAuthAndLogin:
         """Tecnico login should work"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "tecnico@manutrix.com",
-            "password": "tecnico123"
+            "password": os.getenv("TEST_TECNICO_PASSWORD", "tecnico123")
         })
         assert response.status_code == 200, f"Tecnico login failed: {response.text}"
         print(f"✓ Tecnico login successful")
@@ -58,7 +58,7 @@ class TestAttachmentsAPI:
         """Get auth headers for admin"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@manutrix.com",
-            "password": "admin123"
+            "password": os.getenv("TEST_ADMIN_PASSWORD", "admin123")
         })
         token = response.json()["access_token"]
         return {"Authorization": f"Bearer {token}"}
@@ -264,7 +264,7 @@ class TestOSPhotoRequirements:
     def auth_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@manutrix.com",
-            "password": "admin123"
+            "password": os.getenv("TEST_ADMIN_PASSWORD", "admin123")
         })
         token = response.json()["access_token"]
         return {"Authorization": f"Bearer {token}"}
@@ -310,7 +310,7 @@ class TestDashboardRegression:
     def auth_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@manutrix.com",
-            "password": "admin123"
+            "password": os.getenv("TEST_ADMIN_PASSWORD", "admin123")
         })
         token = response.json()["access_token"]
         return {"Authorization": f"Bearer {token}"}

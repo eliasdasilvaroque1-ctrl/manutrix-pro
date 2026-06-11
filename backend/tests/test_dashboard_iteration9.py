@@ -16,7 +16,7 @@ class TestDashboardBackend:
         """Login and get token"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@manutrix.com",
-            "password": "admin123"
+            "password": os.getenv("TEST_ADMIN_PASSWORD", "admin123")
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
         self.token = response.json()["access_token"]
@@ -217,7 +217,7 @@ class TestRegressionSidebarNavigation:
         """Login and get token"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@manutrix.com",
-            "password": "admin123"
+            "password": os.getenv("TEST_ADMIN_PASSWORD", "admin123")
         })
         assert response.status_code == 200
         self.token = response.json()["access_token"]

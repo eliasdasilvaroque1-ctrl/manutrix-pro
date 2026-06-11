@@ -27,7 +27,7 @@ export const useAuth = () => useContext(AuthContext);
 // API Client
 const api = axios.create({ baseURL: API });
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('manutrix_token');
+  const token = sessionStorage.getItem('manutrix_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -35,8 +35,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('manutrix_token');
-      localStorage.removeItem('manutrix_user');
+      sessionStorage.removeItem('manutrix_token');
+      sessionStorage.removeItem('manutrix_user');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -646,7 +646,7 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
           {pdfFiles.length > 0 && (
             <div className="space-y-2">
               {pdfFiles.map((f, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                <div key={`pdf-${idx}-${f.name}`} className="flex items-center justify-between p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
                   <div className="flex items-center gap-2">
                     <Upload size={16} className="text-emerald-400" />
                     <span className="text-sm text-slate-300">{f.name}</span>
@@ -3473,12 +3473,12 @@ const ScannerPage = () => {
       const response = await api.get(`/ativos/qr/${value}`);
       navigate(`/ativos/${response.data.id}`);
       return;
-    } catch {}
+    } catch (err) { console.error(err); }
     try {
       const response = await api.get(`/ativos/tag/${value.toUpperCase()}`);
       navigate(`/ativos/${response.data.id}`);
       return;
-    } catch {}
+    } catch (err) { console.error(err); }
     toast.error('Ativo não encontrado');
   };
 
@@ -3518,7 +3518,7 @@ const ScannerPage = () => {
               await resolveScannedValue(value);
               return;
             }
-          } catch {}
+          } catch (err) { console.error(err); }
           if (streamRef.current) requestAnimationFrame(scanLoop);
         };
         // Wait for video to be ready
@@ -3644,7 +3644,7 @@ const PhotoUploader = ({ entityType, entityId, categoria = 'foto', label = 'Foto
       const filtered = categoria ? res.data.filter(a => a.categoria === categoria) : res.data;
       setPhotos(filtered);
       onPhotoCountChange?.(filtered.length);
-    } catch {}
+    } catch (err) { console.error(err); }
   };
 
   useEffect(() => { fetchPhotos(); }, [entityId, entityType]);
@@ -3786,7 +3786,7 @@ const SobressalentesPage = () => {
     finally { setSaving(false); }
   };
 
-  const handleExport = (fmt) => { window.open(`${API}/export/sobressalentes?format=${fmt}&token=${localStorage.getItem('manutrix_token')}`, '_blank'); };
+  const handleExport = (fmt) => { window.open(`${API}/export/sobressalentes?format=${fmt}&token=${sessionStorage.getItem('manutrix_token')}`, '_blank'); };
 
   const filtered = search ? spares.filter(s => s.descricao?.toLowerCase().includes(search.toLowerCase()) || s.tag?.toLowerCase().includes(search.toLowerCase())) : spares;
 
@@ -3970,7 +3970,7 @@ const AssistentePage = () => {
           m.data.forEach(manual => allManuais.push({ ...manual, ativo_tag: res.data[idx].tag, ativo_nome: res.data[idx].nome }));
         });
         setManuaisDisponiveis(allManuais);
-      } catch {}
+      } catch (err) { console.error(err); }
     };
     fetchData();
   }, []);
@@ -4277,20 +4277,20 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    const storedUser = localStorage.getItem('manutrix_user');
+    const storedUser = sessionStorage.getItem('manutrix_user');
     if (storedUser) setUser(JSON.parse(storedUser));
     setLoading(false);
   }, []);
   
   const login = (data) => {
-    localStorage.setItem('manutrix_token', data.access_token);
-    localStorage.setItem('manutrix_user', JSON.stringify(data.user));
+    sessionStorage.setItem('manutrix_token', data.access_token);
+    sessionStorage.setItem('manutrix_user', JSON.stringify(data.user));
     setUser(data.user);
   };
   
   const logout = () => {
-    localStorage.removeItem('manutrix_token');
-    localStorage.removeItem('manutrix_user');
+    sessionStorage.removeItem('manutrix_token');
+    sessionStorage.removeItem('manutrix_user');
     setUser(null);
   };
   

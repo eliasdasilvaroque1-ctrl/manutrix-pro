@@ -16,7 +16,7 @@ class TestAuth:
         """Get admin auth token"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@manutrix.com",
-            "password": "admin123"
+            "password": os.getenv("TEST_ADMIN_PASSWORD", "admin123")
         })
         assert response.status_code == 200, f"Admin login failed: {response.text}"
         return response.json()['access_token']
@@ -26,7 +26,7 @@ class TestAuth:
         """Get tecnico auth token"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "tecnico@manutrix.com",
-            "password": "tecnico123"
+            "password": os.getenv("TEST_TECNICO_PASSWORD", "tecnico123")
         })
         assert response.status_code == 200, f"Tecnico login failed: {response.text}"
         return response.json()['access_token']

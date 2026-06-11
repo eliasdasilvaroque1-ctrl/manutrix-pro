@@ -10,9 +10,9 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
 ADMIN_EMAIL = "admin@manutrix.com"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD", "admin123")
 TECNICO_EMAIL = "tecnico@manutrix.com"
-TECNICO_PASSWORD = "tecnico123"
+TECNICO_PASSWORD = os.getenv("TEST_TECNICO_PASSWORD", "tecnico123")
 
 
 class TestAuthBasics:

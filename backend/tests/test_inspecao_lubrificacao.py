@@ -23,7 +23,7 @@ class TestInspecaoLubrificacao:
         # Login as admin
         login_response = self.session.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@manutrix.com",
-            "password": "admin123"
+            "password": os.getenv("TEST_ADMIN_PASSWORD", "admin123")
         })
         assert login_response.status_code == 200, f"Login failed: {login_response.text}"
         

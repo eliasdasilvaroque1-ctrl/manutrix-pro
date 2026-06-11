@@ -403,12 +403,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 def generate_tag(prefix: str = "EQP") -> str:
     """Generate unique TAG like EQP-001"""
-    suffix = ''.join(random.choices(string.digits, k=3))
+    suffix = ''.join(secrets.choice(string.digits) for _ in range(3))
     return f"{prefix}-{suffix}"
 
 def generate_sku(prefix: str = "SKU") -> str:
     """Generate unique SKU like SKU-A1B2C3"""
-    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    suffix = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
     return f"{prefix}-{suffix}"
 
 async def generate_os_numero(org_id: str) -> str:
@@ -1107,6 +1107,7 @@ async def criar_movimentacao(
         raise HTTPException(status_code=404, detail="Item não encontrado")
     
     current_qty = item.get('quantidade', 0)
+    new_qty = current_qty  # default
     
     if tipo == "entrada":
         new_qty = current_qty + quantidade
@@ -2960,6 +2961,7 @@ async def create_anomalia(data: AnomaliaCreate, user: Dict = Depends(get_current
     criticidade_peso = {'baixa': 1, 'media': 2, 'alta': 3, 'critica': 4}
     score = severidade_peso.get(data.severidade, 2) * criticidade_peso.get(ativo.get('criticidade', 'media'), 2)
     
+    prioridade_os = 'media'  # default
     if score >= 12:
         prioridade_os = 'critica'
     elif score >= 6:
