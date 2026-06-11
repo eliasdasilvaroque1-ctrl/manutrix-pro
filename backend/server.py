@@ -1897,17 +1897,19 @@ async def get_kpis(user: Dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
     
-    # OS Stats
+    # OS Stats - MTTR from completed OS with time
     os_concluidas = await db.ordens_servico.find({**query, "status": "concluida", "tempo_execucao_minutos": {"$exists": True, "$ne": None}}, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1}).to_list(1000)
     
     tempos = [os['tempo_execucao_minutos'] for os in os_concluidas if os.get('tempo_execucao_minutos')]
-    mttr_minutos = sum(tempos) / len(tempos) if tempos else 126  # 2.1h baseline
+    mttr_minutos = sum(tempos) / len(tempos) if tempos else 126  # 2.1h baseline when no data
     mttr_horas = mttr_minutos / 60
     
-    # Preventiva vs Corretiva
-    total_os = len(os_concluidas)
-    preventivas = len([os for os in os_concluidas if os.get('tipo') == 'preventiva'])
-    corretivas = len([os for os in os_concluidas if os.get('tipo') == 'corretiva'])
+    # FIX #1: Preventiva vs Corretiva — uses ALL OS (not just completed)
+    # Formula: count(tipo=preventiva) / count(all OS) * 100
+    all_os = await db.ordens_servico.find(query, {"_id": 0, "tipo": 1}).to_list(5000)
+    total_os_all = len(all_os)
+    preventivas = len([o for o in all_os if o.get('tipo') == 'preventiva'])
+    corretivas = len([o for o in all_os if o.get('tipo') == 'corretiva'])
     
     # Assets
     ativos_total = await db.ativos.count_documents(query)
@@ -1918,13 +1920,14 @@ async def get_kpis(user: Dict = Depends(get_current_user)):
     disponibilidade = (ativos_operacionais / ativos_total * 100) if ativos_total > 0 else 100
     mtbf_horas = ((ativos_total - ativos_parados) / ativos_total * 720) if ativos_total > 0 else 720
     
-    # Confiabilidade (simplified)
-    confiabilidade = (1 - (corretivas / total_os)) * 100 if total_os > 0 else 100
+    # Confiabilidade
+    confiabilidade = (1 - (corretivas / total_os_all)) * 100 if total_os_all > 0 else 100
     
-    # Inspections
-    total_insp = await db.inspecoes.count_documents(query)
+    # FIX #2: Conformidade — only completed inspections (exclude pending)
+    # Formula: count(resultado=conforme) / count(status in [concluida, com_pendencias]) * 100
+    insp_finalizadas = await db.inspecoes.count_documents({**query, "status": {"$in": ["concluida", "com_pendencias"]}})
     insp_conformes = await db.inspecoes.count_documents({**query, "resultado": "conforme"})
-    taxa_conformidade = (insp_conformes / total_insp * 100) if total_insp > 0 else 100
+    taxa_conformidade = (insp_conformes / insp_finalizadas * 100) if insp_finalizadas > 0 else 100
     
     # Backlog
     backlog = await db.ordens_servico.count_documents({**query, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}})
@@ -1937,7 +1940,7 @@ async def get_kpis(user: Dict = Depends(get_current_user)):
     
     # Monthly cost
     os_mes = await db.ordens_servico.find({**query, "status": "concluida", "data_conclusao": {"$gte": month_start}}, {"_id": 0, "custo_total": 1}).to_list(1000)
-    custo_mes = sum(os.get('custo_total', 0) for os in os_mes)
+    custo_mes = sum(os.get('custo_total', 0) or 0 for os in os_mes)
     
     return {
         "disponibilidade_percent": round(disponibilidade, 1),
@@ -1947,8 +1950,8 @@ async def get_kpis(user: Dict = Depends(get_current_user)):
         "taxa_conformidade_percent": round(taxa_conformidade, 1),
         "backlog_total": backlog,
         "os_atrasadas": os_atrasadas,
-        "preventivas_percent": round((preventivas / total_os * 100) if total_os > 0 else 0, 1),
-        "corretivas_percent": round((corretivas / total_os * 100) if total_os > 0 else 0, 1),
+        "preventivas_percent": round((preventivas / total_os_all * 100) if total_os_all > 0 else 0, 1),
+        "corretivas_percent": round((corretivas / total_os_all * 100) if total_os_all > 0 else 0, 1),
         "custo_manutencao_mes": round(custo_mes, 2),
         "ativos_total": ativos_total,
         "ativos_operacionais": ativos_operacionais,
@@ -2075,7 +2078,8 @@ async def get_dashboard_trend(user: Dict = Depends(get_current_user)):
             "corretivas": corretivas,
             "preditivas": preditivas,
             "emergencias": emergencias,
-            "custo": round(custo, 2)
+            "custo": round(custo, 2),
+            "is_estimated": total == 0
         })
     
     # If no real historical data, generate realistic industrial baseline

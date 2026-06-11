@@ -1962,10 +1962,9 @@ const DashboardPage = () => {
     emergencia: acc.emergencia + (m.emergencias || 0),
   }), { corretiva: 0, preventiva: 0, preditiva: 0, emergencia: 0 });
   
-  // Compute preventiva/corretiva % from trend for a more realistic view
-  const totalTrendOS = osTrendTotals.preventiva + osTrendTotals.corretiva + osTrendTotals.preditiva + osTrendTotals.emergencia;
-  const prevPercent = totalTrendOS > 0 ? Math.round(osTrendTotals.preventiva / totalTrendOS * 100) : kpis.preventivas_percent;
-  const corrPercent = totalTrendOS > 0 ? Math.round(osTrendTotals.corretiva / totalTrendOS * 100) : kpis.corretivas_percent;
+  // Use KPI API values for Prev/Corr (calculated over ALL OS)
+  const prevPercent = kpis.preventivas_percent;
+  const corrPercent = kpis.corretivas_percent;
   
   const osTypes = [
     { name: 'Corretiva', value: osTrendTotals.corretiva, fill: '#ef4444', key: 'corretiva' },
@@ -2081,7 +2080,12 @@ const DashboardPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico 1 - Tendência MTBF/MTTR */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
-          <h3 className="text-sm font-bold text-slate-300 mb-4">Tendência MTBF / MTTR</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-slate-300">Tendência MTBF / MTTR</h3>
+            {trend.some(m => m.is_estimated) && (
+              <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded" data-testid="estimated-label">Dados estimados nos meses sem histórico</span>
+            )}
+          </div>
           <div className="h-64" data-testid="chart-trend">
             <TrendChart data={trend} />
           </div>
@@ -2089,7 +2093,12 @@ const DashboardPage = () => {
 
         {/* Gráfico 2 - Distribuição OS */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
-          <h3 className="text-sm font-bold text-slate-300 mb-4">Distribuição de OS por Tipo</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-slate-300">Distribuição de OS por Tipo</h3>
+            {trend.some(m => m.is_estimated) && (
+              <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded">Inclui estimativas</span>
+            )}
+          </div>
           <div className="h-64" data-testid="chart-os-dist">
             <OSDistChart data={osTypes} onBarClick={(key) => drillDown(key, `OS ${key.charAt(0).toUpperCase() + key.slice(1)}`)} />
           </div>
@@ -2134,14 +2143,15 @@ const DashboardPage = () => {
 
 // Chart Components
 const TrendChart = ({ data }) => {
-  const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = require('recharts');
+  const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } = require('recharts');
+  const enriched = data.map(d => ({ ...d, mes_label: d.is_estimated ? `${d.mes}*` : d.mes }));
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+      <LineChart data={enriched} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-        <XAxis dataKey="mes" tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#475569" />
+        <XAxis dataKey="mes_label" tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#475569" />
         <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#475569" />
-        <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }} />
+        <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }} formatter={(value, name, props) => [value, `${name}${props.payload.is_estimated ? ' (estimado)' : ''}`]} />
         <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
         <Line type="monotone" dataKey="mtbf" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} name="MTBF (h)" />
         <Line type="monotone" dataKey="mttr" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} name="MTTR (h)" />
@@ -2847,6 +2857,7 @@ const EstoquePage = () => {
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   
   useEffect(() => {
     if (searchParams.get('critico') === 'true') setShowCritico(true);
@@ -2930,14 +2941,16 @@ const EstoquePage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="hidden group-hover:flex items-center gap-1">
-                    <button onClick={() => { setEditItem(item); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg">
-                      <Edit size={16} className="text-slate-400" />
-                    </button>
-                    <button onClick={() => setDeleteItem(item)} className="p-2 hover:bg-red-500/10 rounded-lg">
-                      <Trash2 size={16} className="text-red-400" />
-                    </button>
-                  </div>
+                  {user?.role === 'admin' && (
+                    <div className="hidden group-hover:flex items-center gap-1">
+                      <button onClick={() => { setEditItem(item); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar">
+                        <Edit3 size={15} className="text-blue-400" />
+                      </button>
+                      <button onClick={() => setDeleteItem(item)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir">
+                        <Trash2 size={15} className="text-red-400" />
+                      </button>
+                    </div>
+                  )}
                   <div className="text-right">
                     <p className={`text-xl font-bold ${item.is_critico ? 'text-red-400' : 'text-slate-200'}`}>{item.quantidade}</p>
                     <p className="text-xs text-slate-500">{item.unidade}</p>
@@ -3604,31 +3617,6 @@ const ScannerPage = () => {
 };
 
 
-// ============== CONFIRM DELETE MODAL ==============
-
-const ConfirmDeleteModal = ({ isOpen, onClose, onConfirm, title, message, loading }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-red-500/30 rounded-xl p-6 w-full max-w-sm space-y-4">
-        <div className="text-center">
-          <div className="w-14 h-14 mx-auto rounded-full bg-red-500/10 flex items-center justify-center mb-3">
-            <AlertTriangle size={28} className="text-red-400" />
-          </div>
-          <h3 className="text-lg font-bold text-slate-100">{title || 'Confirmar Exclusão'}</h3>
-          <p className="text-sm text-slate-400 mt-2">{message || 'Tem certeza que deseja excluir? Esta ação não pode ser desfeita.'}</p>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={onClose} className="btn-secondary flex-1" disabled={loading}>Cancelar</button>
-          <button onClick={onConfirm} className="flex-1 py-2.5 px-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition-colors" disabled={loading} data-testid="confirm-delete-btn">
-            {loading ? 'Excluindo...' : 'Excluir'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ============== PHOTO UPLOADER COMPONENT ==============
 
 const PhotoUploader = ({ entityType, entityId, categoria = 'foto', label = 'Fotos', required = false, onPhotoCountChange }) => {
@@ -3759,6 +3747,8 @@ const SobressalentesPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [deleteItem, setDeleteItem] = useState(null);
   const [form, setForm] = useState({ descricao: '', modelo: '', fabricante: '', status: 'estoque', localizacao: '', custo: '' });
   const [saving, setSaving] = useState(false);
   const { user } = useAuth();
@@ -3777,9 +3767,15 @@ const SobressalentesPage = () => {
     if (!form.descricao) { toast.error('Descrição é obrigatória'); return; }
     setSaving(true);
     try {
-      await api.post('/sobressalentes', { ...form, custo: form.custo ? parseFloat(form.custo) : null });
-      toast.success('Sobressalente criado!');
+      if (editItem) {
+        await api.put(`/sobressalentes/${editItem.id}`, { ...form, custo: form.custo ? parseFloat(form.custo) : null });
+        toast.success('Sobressalente atualizado!');
+      } else {
+        await api.post('/sobressalentes', { ...form, custo: form.custo ? parseFloat(form.custo) : null });
+        toast.success('Sobressalente criado!');
+      }
       setShowModal(false);
+      setEditItem(null);
       setForm({ descricao: '', modelo: '', fabricante: '', status: 'estoque', localizacao: '', custo: '' });
       fetchData();
     } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
@@ -3787,6 +3783,21 @@ const SobressalentesPage = () => {
   };
 
   const handleExport = (fmt) => { window.open(`${API}/export/sobressalentes?format=${fmt}&token=${sessionStorage.getItem('manutrix_token')}`, '_blank'); };
+
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/sobressalentes/${deleteItem.id}`);
+      toast.success('Sobressalente excluído!');
+      setDeleteItem(null);
+      fetchData();
+    } catch (error) { toast.error(error.response?.data?.detail || 'Erro ao excluir'); }
+  };
+
+  const handleEdit = (sp) => {
+    setEditItem(sp);
+    setForm({ descricao: sp.descricao, modelo: sp.modelo || '', fabricante: sp.fabricante || '', status: sp.status, localizacao: sp.localizacao || '', custo: sp.custo ? String(sp.custo) : '' });
+    setShowModal(true);
+  };
 
   const filtered = search ? spares.filter(s => s.descricao?.toLowerCase().includes(search.toLowerCase()) || s.tag?.toLowerCase().includes(search.toLowerCase())) : spares;
 
@@ -3826,13 +3837,19 @@ const SobressalentesPage = () => {
                   {sp.ativo_vinculado && <p className="text-xs text-blue-400 mt-1">Ativo: {sp.ativo_vinculado.tag} - {sp.ativo_vinculado.nome}</p>}
                 </div>
                 {sp.custo && <p className="text-lg font-bold text-slate-200">R$ {sp.custo.toFixed(2)}</p>}
+                {user?.role === 'admin' && (
+                  <div className="hidden group-hover:flex items-center gap-1">
+                    <button onClick={() => handleEdit(sp)} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar"><Edit3 size={15} className="text-blue-400" /></button>
+                    <button onClick={() => setDeleteItem(sp)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir"><Trash2 size={15} className="text-red-400" /></button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </div>
       ) : <EmptyState icon={Cog} title="Nenhum sobressalente" description="Cadastre sobressalentes." />}
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Novo Sobressalente" size="md">
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? "Editar Sobressalente" : "Novo Sobressalente"} size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
           <FormInput label="Descrição" required>
             <input value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Rolamento 6205-2RS" required />
@@ -3852,6 +3869,17 @@ const SobressalentesPage = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteItem}
+        onClose={() => setDeleteItem(null)}
+        onConfirm={handleDelete}
+        title="Excluir Sobressalente"
+        message={`Tem certeza que deseja excluir "${deleteItem?.tag} - ${deleteItem?.descricao}"?`}
+        confirmText="Excluir"
+        danger
+      />
+
     </div>
   );
 };

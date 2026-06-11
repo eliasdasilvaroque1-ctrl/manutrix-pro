@@ -1,0 +1,135 @@
+{
+  "summary": "MANUTRIX Iteration 12 - Audit Remediation Testing Complete. All 6 fixes verified: (1) KPI Prev/Corr% now uses ALL OS showing 20%/60% (not 100%/0%), (2) Conformidade% excludes pending inspections, (3) Trend data has is_estimated flag with visible 'Dados estimados nos meses sem histórico' label, (4) Edit/Delete buttons admin-only on OS/Estoque/Sobressalentes with confirmation dialog, (5) Supervisor password restored (supervisor123 works), (6) OS list 500 error fixed. Backend: 22/22 tests passed. Frontend: All features verified.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "passed_tests": [
+    "Backend: Admin login (admin@manutrix.com / admin123)",
+    "Backend: Supervisor login (supervisor@manutrix.com / supervisor123) - PASSWORD RESTORED",
+    "Backend: Tecnico login (tecnico@manutrix.com / tecnico123)",
+    "Backend: Invalid credentials rejected (401)",
+    "Backend: GET /api/kpis returns all required fields",
+    "Backend: preventivas_percent = 20%, corretivas_percent = 60% (realistic, not 100%/0%)",
+    "Backend: taxa_conformidade_percent excludes pending inspections",
+    "Backend: GET /api/dashboard/trend returns 6 months of data",
+    "Backend: Each month has is_estimated boolean flag",
+    "Backend: Trend data has correct structure",
+    "Backend: GET /api/ordens-servico returns 200 (no 500 error)",
+    "Backend: OS list with filters works",
+    "Backend: Tecnico cannot delete OS (403)",
+    "Backend: Tecnico cannot delete estoque (403)",
+    "Backend: Tecnico cannot update OS (403)",
+    "Backend: Admin has access to OS operations",
+    "Backend: GET /api/dashboard/stats returns correct structure",
+    "Backend: GET /api/ativos works",
+    "Backend: GET /api/inspecoes works",
+    "Backend: GET /api/anomalias works",
+    "Backend: GET /api/estoque works",
+    "Backend: GET /api/sobressalentes works",
+    "Frontend: Dashboard loads with all KPI cards",
+    "Frontend: 'Dados estimados nos meses sem histórico' label visible on trend chart",
+    "Frontend: 'Inclui estimativas' label visible on bar chart",
+    "Frontend: Preventiva vs Corretiva shows 20%/60% (realistic values)",
+    "Frontend: Backlog drill-down modal works",
+    "Frontend: Export button present",
+    "Frontend: Admin sees Edit/Delete buttons on OS page (hover)",
+    "Frontend: Admin sees Edit/Delete buttons on Estoque page (hover)",
+    "Frontend: Admin sees Edit/Delete buttons on Sobressalentes page",
+    "Frontend: Tecnico does NOT see Edit/Delete buttons on OS page",
+    "Frontend: Tecnico does NOT see Edit/Delete buttons on Estoque page",
+    "Frontend: Tecnico does NOT see Edit/Delete buttons on Sobressalentes page",
+    "Frontend: Tecnico cannot see Admin menu (Usuários)",
+    "Frontend: Ativos page loads with 8 items",
+    "Frontend: Inspeções page loads",
+    "Frontend: Anomalias page loads with photo upload sections",
+    "Frontend: Ronda page loads",
+    "Frontend: Assistente IA page loads"
+  ],
+  
+  "audit_fixes_verified": [
+    {
+      "fix": "KPI Prev/Corr% uses ALL OS",
+      "before": "100% preventiva / 0% corretiva (only counted completed OS)",
+      "after": "20% preventiva / 60% corretiva (counts ALL OS)",
+      "status": "VERIFIED WORKING"
+    },
+    {
+      "fix": "Conformidade% excludes pending inspections",
+      "before": "22.7% (included pending inspections in denominator)",
+      "after": "Only counts concluida/com_pendencias inspections",
+      "status": "VERIFIED WORKING"
+    },
+    {
+      "fix": "Trend data has is_estimated flag",
+      "description": "Each month in /api/dashboard/trend has is_estimated boolean",
+      "frontend_label": "'Dados estimados nos meses sem histórico' visible on trend chart",
+      "status": "VERIFIED WORKING"
+    },
+    {
+      "fix": "Edit/Delete buttons admin-only",
+      "pages": ["OS", "Estoque", "Sobressalentes"],
+      "admin_behavior": "Edit/Delete buttons visible on hover",
+      "tecnico_behavior": "No Edit/Delete buttons visible",
+      "confirmation_dialog": "ConfirmDialog appears on delete",
+      "status": "VERIFIED WORKING"
+    },
+    {
+      "fix": "Supervisor password restored",
+      "credentials": "supervisor@manutrix.com / supervisor123",
+      "status": "VERIFIED WORKING"
+    },
+    {
+      "fix": "OS list 500 error fixed",
+      "description": "GET /api/ordens-servico no longer returns 500 (date parsing fixed)",
+      "status": "VERIFIED WORKING"
+    }
+  ],
+  
+  "test_report_links": [
+    "/app/backend/tests/test_iteration12_audit_fixes.py",
+    "/app/test_reports/pytest/pytest_results_iteration12.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [],
+  
+  "updated_files": [
+    "/app/backend/tests/test_iteration12_audit_fixes.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% (22/22 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  
+  "test_credentials": {
+    "admin": "admin@manutrix.com / admin123",
+    "supervisor": "supervisor@manutrix.com / supervisor123",
+    "tecnico": "tecnico@manutrix.com / tecnico123"
+  },
+  
+  "seed_data_creation": "No new seed data created. Used existing data for testing.",
+  
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  
+  "context_for_next_testing_agent": "Iteration 12 verified all 6 audit remediation fixes. KPI calculations in server.py lines 1907-1954 now use all_os for prev/corr% and insp_finalizadas (excluding pending) for conformidade. Trend endpoint at line 2082 returns is_estimated flag. Frontend App.js lines 2085-2099 display estimated labels. RBAC for edit/delete is at lines 2667 (OS), 2944 (Estoque), 3840 (Sobressalentes) - all check user?.role === 'admin'. ConfirmDialog component at line 204. Supervisor password confirmed working via both backend test and curl.",
+  
+  "screenshots": {
+    "dashboard_kpis": ".screenshots/dashboard_kpis_iteration12.png",
+    "os_admin_edit_delete": ".screenshots/os_admin_edit_delete.png",
+    "os_tecnico_no_buttons": ".screenshots/os_tecnico_hover.png",
+    "sobressalentes_tecnico": ".screenshots/sobressalentes_tecnico.png",
+    "anomalias_page": ".screenshots/anomalias_page.png"
+  }
+}
