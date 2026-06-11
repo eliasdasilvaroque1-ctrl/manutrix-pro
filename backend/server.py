@@ -1186,10 +1186,13 @@ async def list_os(
     for os in os_list:
         os['ativo'] = ativo_map.get(os.get('ativo_id'))
         os['responsavel'] = resp_map.get(os.get('responsavel_id'))
-        if os.get('data_planejada') and os.get('status') not in ['concluida', 'cancelada']:
-            planned = datetime.fromisoformat(os['data_planejada'].replace('Z', '+00:00')) if isinstance(os['data_planejada'], str) else os['data_planejada']
-            os['atrasada'] = datetime.now(timezone.utc) > planned
-        else:
+        try:
+            if os.get('data_planejada') and os.get('status') not in ['concluida', 'cancelada']:
+                planned = datetime.fromisoformat(str(os['data_planejada']).replace('Z', '+00:00'))
+                os['atrasada'] = datetime.now(timezone.utc) > planned
+            else:
+                os['atrasada'] = False
+        except Exception:
             os['atrasada'] = False
     
     return os_list
