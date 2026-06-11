@@ -336,12 +336,21 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
   const [loading, setLoading] = useState(false);
   const [pdfFiles, setPdfFiles] = useState([]);
   const [existingManuais, setExistingManuais] = useState([]);
+  const [plants, setPlants] = useState([]);
+  const [sectors, setSectors] = useState([]);
   const [form, setForm] = useState({
     tag: '', nome: '', tipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
-    area_id: '', centro_custo: '', criticidade: 'media', status: 'operacional',
+    plant_id: '', sector_id: '', centro_custo: '', criticidade: 'media', status: 'operacional',
     mtbf_horas: '', mttr_horas: '', data_instalacao: '', garantia_ate: '',
     valor_aquisicao: '', depreciacao_anual: '', fornecedor: '', observacoes: ''
   });
+  
+  useEffect(() => {
+    if (isOpen) {
+      api.get('/plants').then(r => setPlants(r.data)).catch(() => {});
+      api.get('/sectors').then(r => setSectors(r.data)).catch(() => {});
+    }
+  }, [isOpen]);
   
   useEffect(() => {
     if (editData) {
@@ -352,7 +361,8 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
         fabricante: editData.fabricante || '',
         modelo: editData.modelo || '',
         numero_serie: editData.numero_serie || '',
-        area_id: editData.area_id || '',
+        plant_id: editData.plant_id || '',
+        sector_id: editData.sector_id || editData.area_id || '',
         centro_custo: editData.centro_custo || '',
         criticidade: editData.criticidade || 'media',
         status: editData.status || 'operacional',
@@ -368,13 +378,12 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
     } else {
       setForm({
         tag: '', nome: '', tipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
-        area_id: '', centro_custo: '', criticidade: 'media', status: 'operacional',
+        plant_id: '', sector_id: '', centro_custo: '', criticidade: 'media', status: 'operacional',
         mtbf_horas: '', mttr_horas: '', data_instalacao: '', garantia_ate: '',
         valor_aquisicao: '', depreciacao_anual: '', fornecedor: '', observacoes: ''
       });
     }
     setPdfFiles([]);
-    // Load existing manuals for edit mode
     if (editData?.id) {
       api.get(`/ativos/${editData.id}/manuais`).then(res => setExistingManuais(res.data)).catch(() => {});
     } else {
@@ -382,10 +391,14 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
     }
   }, [editData, isOpen]);
   
+  const filteredSectors = form.plant_id 
+    ? sectors.filter(s => s.plant_id === form.plant_id) 
+    : sectors;
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.nome || !form.area_id) {
-      toast.error('Preencha os campos obrigatórios');
+    if (!form.nome) {
+      toast.error('Preencha o nome do ativo');
       return;
     }
     
@@ -393,6 +406,7 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
     try {
       const payload = {
         ...form,
+        area_id: form.sector_id,
         mtbf_horas: form.mtbf_horas ? parseFloat(form.mtbf_horas) : null,
         mttr_horas: form.mttr_horas ? parseFloat(form.mttr_horas) : null,
         valor_aquisicao: form.valor_aquisicao ? parseFloat(form.valor_aquisicao) : null,
@@ -499,12 +513,20 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
             <Settings size={16} /> Operacional
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormInput label="Área" required>
+            <FormInput label="Planta" required>
               <Select
-                value={form.area_id}
-                onChange={(val) => setForm({...form, area_id: val})}
-                options={areas.map(a => ({ value: a.id, label: a.nome }))}
-                placeholder="Selecione a área..."
+                value={form.plant_id}
+                onChange={(val) => setForm({...form, plant_id: val, sector_id: ''})}
+                options={plants.map(p => ({ value: p.id, label: `${p.codigo} - ${p.nome}` }))}
+                placeholder="Selecione a planta..."
+              />
+            </FormInput>
+            <FormInput label="Setor" required>
+              <Select
+                value={form.sector_id}
+                onChange={(val) => setForm({...form, sector_id: val})}
+                options={filteredSectors.map(s => ({ value: s.id, label: s.nome }))}
+                placeholder={form.plant_id ? "Selecione o setor..." : "Selecione a planta primeiro"}
               />
             </FormInput>
             <FormInput label="Centro de Custo">
@@ -1516,6 +1538,13 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       ]
     },
     {
+      label: 'INFRAESTRUTURA',
+      items: [
+        { icon: Building, label: 'Plantas', path: '/plantas' },
+        { icon: Layers, label: 'Setores', path: '/setores' },
+      ]
+    },
+    {
       label: 'MATERIAIS',
       items: [
         { icon: Package, label: 'Estoque', path: '/estoque' },
@@ -1855,16 +1884,29 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [drillModal, setDrillModal] = useState({ open: false, type: '', title: '', data: [] });
   const [drillLoading, setDrillLoading] = useState(false);
+  const [plants, setPlants] = useState([]);
+  const [sectors, setSectors] = useState([]);
+  const [filterPlant, setFilterPlant] = useState('');
+  const [filterSector, setFilterSector] = useState('');
   const { user } = useAuth();
   const navigate = useNavigate();
   
   useEffect(() => {
+    api.get('/plants').then(r => setPlants(r.data)).catch(() => {});
+    api.get('/sectors').then(r => setSectors(r.data)).catch(() => {});
+  }, []);
+  
+  useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
+        const params = {};
+        if (filterPlant) params.plant_id = filterPlant;
+        if (filterSector) params.sector_id = filterSector;
         const [kpisRes, statsRes, trendRes] = await Promise.all([
-          api.get('/kpis'),
-          api.get('/dashboard/stats'),
-          api.get('/dashboard/trend')
+          api.get('/kpis', { params }),
+          api.get('/dashboard/stats', { params }),
+          api.get('/dashboard/trend', { params })
         ]);
         setKpis(kpisRes.data);
         setStats(statsRes.data);
@@ -1876,7 +1918,7 @@ const DashboardPage = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [filterPlant, filterSector]);
 
   const drillDown = async (type, title) => {
     setDrillLoading(true);
@@ -1976,12 +2018,40 @@ const DashboardPage = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-100" data-testid="dashboard-title">Dashboard Operacional</h1>
           <p className="text-sm text-slate-500">Monitoramento em tempo real da confiabilidade e desempenho operacional dos ativos</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-1.5" data-testid="dashboard-filters">
+            <Filter size={14} className="text-slate-500" />
+            <select
+              value={filterPlant}
+              onChange={(e) => { setFilterPlant(e.target.value); setFilterSector(''); }}
+              className="bg-transparent text-sm text-slate-300 border-none outline-none cursor-pointer"
+              data-testid="filter-plant"
+            >
+              <option value="">Todas as Plantas</option>
+              {plants.map(p => <option key={p.id} value={p.id}>{p.codigo} - {p.nome}</option>)}
+            </select>
+            {filterPlant && (
+              <select
+                value={filterSector}
+                onChange={(e) => setFilterSector(e.target.value)}
+                className="bg-transparent text-sm text-slate-300 border-none outline-none cursor-pointer border-l border-slate-600 pl-2"
+                data-testid="filter-sector"
+              >
+                <option value="">Todos os Setores</option>
+                {sectors.filter(s => s.plant_id === filterPlant).map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+              </select>
+            )}
+            {(filterPlant || filterSector) && (
+              <button onClick={() => { setFilterPlant(''); setFilterSector(''); }} className="text-xs text-red-400 hover:text-red-300 ml-1" data-testid="clear-filters">
+                <X size={14} />
+              </button>
+            )}
+          </div>
           <div className="relative group">
             <button className="btn-secondary flex items-center gap-2 text-sm" data-testid="export-data-btn">
               <Download size={16} /> Exportar Dados
@@ -2183,10 +2253,14 @@ const OSDistChart = ({ data, onBarClick }) => {
 const AtivosPage = () => {
   const [ativos, setAtivos] = useState([]);
   const [areas, setAreas] = useState([]);
+  const [plants, setPlants] = useState([]);
+  const [sectors, setSectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCriticidade, setFilterCriticidade] = useState('');
+  const [filterPlant, setFilterPlant] = useState('');
+  const [filterSector, setFilterSector] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
@@ -2201,12 +2275,19 @@ const AtivosPage = () => {
   
   const fetchData = async () => {
     try {
-      const [ativosRes, areasRes] = await Promise.all([
-        api.get('/ativos'),
-        api.get('/areas')
+      const params = {};
+      if (filterPlant) params.plant_id = filterPlant;
+      if (filterSector) params.sector_id = filterSector;
+      const [ativosRes, areasRes, plantsRes, sectorsRes] = await Promise.all([
+        api.get('/ativos', { params }),
+        api.get('/areas'),
+        api.get('/plants'),
+        api.get('/sectors')
       ]);
       setAtivos(ativosRes.data);
       setAreas(areasRes.data);
+      setPlants(plantsRes.data);
+      setSectors(sectorsRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
     } finally {
@@ -2214,7 +2295,7 @@ const AtivosPage = () => {
     }
   };
   
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [filterPlant, filterSector]);
   
   const handleDelete = async () => {
     try {
@@ -2286,6 +2367,20 @@ const AtivosPage = () => {
           placeholder="Criticidade"
           className="w-40"
         />
+        <Select
+          value={filterPlant}
+          onChange={(val) => { setFilterPlant(val); setFilterSector(''); }}
+          options={plants.map(p => ({ value: p.id, label: p.nome }))}
+          placeholder="Planta"
+          className="w-40"
+        />
+        <Select
+          value={filterSector}
+          onChange={setFilterSector}
+          options={(filterPlant ? sectors.filter(s => s.plant_id === filterPlant) : sectors).map(s => ({ value: s.id, label: s.nome }))}
+          placeholder="Setor"
+          className="w-40"
+        />
       </div>
       
       {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
@@ -2306,7 +2401,7 @@ const AtivosPage = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-emerald-400 text-sm">{ativo.tag}</span>
-                      {ativo.area && <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-800 rounded">{ativo.area.nome}</span>}
+                      {ativo.location_path && <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-800 rounded">{ativo.location_path}</span>}
                     </div>
                     <p className="text-slate-100">{ativo.nome}</p>
                     {ativo.fabricante && <p className="text-xs text-slate-500">{ativo.fabricante} {ativo.modelo}</p>}
@@ -4393,6 +4488,283 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+// ============== PLANTAS PAGE ==============
+const PlantasPage = () => {
+  const [plants, setPlants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [form, setForm] = useState({ codigo: '', nome: '', descricao: '' });
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+
+  const fetchPlants = async () => {
+    try {
+      const res = await api.get('/plants');
+      setPlants(res.data);
+    } catch { toast.error('Erro ao carregar plantas'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchPlants(); }, []);
+
+  const openModal = (item = null) => {
+    setEditItem(item);
+    setForm(item ? { codigo: item.codigo || '', nome: item.nome || '', descricao: item.descricao || '' } : { codigo: '', nome: '', descricao: '' });
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.codigo || !form.nome) { toast.error('Código e nome são obrigatórios'); return; }
+    setSaving(true);
+    try {
+      if (editItem) {
+        await api.put(`/plants/${editItem.id}`, { nome: form.nome, descricao: form.descricao });
+        toast.success('Planta atualizada!');
+      } else {
+        await api.post('/plants', form);
+        toast.success('Planta criada!');
+      }
+      setShowModal(false);
+      fetchPlants();
+    } catch (err) { toast.error(err.response?.data?.detail || 'Erro ao salvar'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/plants/${deleteItem.id}`);
+      toast.success('Planta excluída!');
+      setDeleteItem(null);
+      fetchPlants();
+    } catch (err) { toast.error(err.response?.data?.detail || 'Erro ao excluir'); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100" data-testid="plantas-title">Plantas</h1>
+          <p className="text-sm text-slate-500">Gerencie as plantas industriais da organização</p>
+        </div>
+        {user?.role === 'admin' && (
+          <button onClick={() => openModal()} className="btn-primary flex items-center gap-2" data-testid="add-plant-btn">
+            <Plus size={20} /> Nova Planta
+          </button>
+        )}
+      </div>
+
+      {loading ? <Loading rows={3} /> : plants.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {plants.map(p => (
+            <div key={p.id} className="glass-card p-5 hover:border-emerald-500/30 transition-all group" data-testid={`plant-card-${p.codigo}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-emerald-500/10">
+                    <Building size={20} className="text-emerald-400" />
+                  </div>
+                  <div>
+                    <span className="font-mono text-emerald-400 text-sm">{p.codigo}</span>
+                    <p className="text-slate-100 font-medium">{p.nome}</p>
+                  </div>
+                </div>
+                {user?.role === 'admin' && (
+                  <div className="hidden group-hover:flex items-center gap-1">
+                    <button onClick={() => openModal(p)} className="p-2 hover:bg-slate-700 rounded-lg"><Edit size={16} className="text-slate-400" /></button>
+                    <button onClick={() => setDeleteItem(p)} className="p-2 hover:bg-red-500/10 rounded-lg"><Trash2 size={16} className="text-red-400" /></button>
+                  </div>
+                )}
+              </div>
+              {p.descricao && <p className="text-xs text-slate-500 mb-3">{p.descricao}</p>}
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <Layers size={14} /> <span>{p.sector_count || 0} setores</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <Box size={14} /> <span>{p.asset_count || 0} ativos</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={Building} title="Nenhuma planta cadastrada" description="Crie a primeira planta da organização" action={() => openModal()} actionLabel="Nova Planta" />
+      )}
+
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? "Editar Planta" : "Nova Planta"} size="sm">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormInput label="Código" required>
+            <input type="text" value={form.codigo} onChange={e => setForm({...form, codigo: e.target.value.toUpperCase()})} placeholder="Ex: PP, FAB2" className="input-industrial w-full px-4 font-mono" required disabled={!!editItem} data-testid="plant-codigo-input" />
+          </FormInput>
+          <FormInput label="Nome" required>
+            <input type="text" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} placeholder="Ex: Planta Principal" className="input-industrial w-full px-4" required data-testid="plant-nome-input" />
+          </FormInput>
+          <FormInput label="Descrição">
+            <textarea value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} placeholder="Endereço ou descrição..." className="input-industrial w-full px-4 min-h-[80px]" data-testid="plant-desc-input" />
+          </FormInput>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary" data-testid="plant-save-btn">{saving ? 'Salvando...' : 'Salvar'}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Planta" message={`Excluir a planta "${deleteItem?.nome}"? Todos os setores precisam ser removidos antes.`} confirmText="Excluir" danger />
+    </div>
+  );
+};
+
+// ============== SETORES PAGE ==============
+const SetoresPage = () => {
+  const [sectors, setSectors] = useState([]);
+  const [plants, setPlants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterPlant, setFilterPlant] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [form, setForm] = useState({ plant_id: '', codigo: '', nome: '', descricao: '', cor: '#10b981' });
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+
+  const fetchData = async () => {
+    try {
+      const [sRes, pRes] = await Promise.all([
+        api.get('/sectors', { params: filterPlant ? { plant_id: filterPlant } : {} }),
+        api.get('/plants')
+      ]);
+      setSectors(sRes.data);
+      setPlants(pRes.data);
+    } catch { toast.error('Erro ao carregar setores'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchData(); }, [filterPlant]);
+
+  const openModal = (item = null) => {
+    setEditItem(item);
+    setForm(item 
+      ? { plant_id: item.plant_id || '', codigo: item.codigo || '', nome: item.nome || '', descricao: item.descricao || '', cor: item.cor || '#10b981' }
+      : { plant_id: filterPlant || (plants.length === 1 ? plants[0].id : ''), codigo: '', nome: '', descricao: '', cor: '#10b981' }
+    );
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.plant_id || !form.codigo || !form.nome) { toast.error('Planta, código e nome são obrigatórios'); return; }
+    setSaving(true);
+    try {
+      if (editItem) {
+        await api.put(`/sectors/${editItem.id}`, { nome: form.nome, descricao: form.descricao, cor: form.cor });
+        toast.success('Setor atualizado!');
+      } else {
+        await api.post('/sectors', form);
+        toast.success('Setor criado!');
+      }
+      setShowModal(false);
+      fetchData();
+    } catch (err) { toast.error(err.response?.data?.detail || 'Erro ao salvar'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/sectors/${deleteItem.id}`);
+      toast.success('Setor excluído!');
+      setDeleteItem(null);
+      fetchData();
+    } catch (err) { toast.error(err.response?.data?.detail || 'Erro ao excluir'); }
+  };
+
+  const colors = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ef4444','#ec4899','#06b6d4','#f97316'];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100" data-testid="setores-title">Setores</h1>
+          <p className="text-sm text-slate-500">Gerencie os setores dentro de cada planta</p>
+        </div>
+        {user?.role === 'admin' && (
+          <button onClick={() => openModal()} className="btn-primary flex items-center gap-2" data-testid="add-sector-btn">
+            <Plus size={20} /> Novo Setor
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Select value={filterPlant} onChange={setFilterPlant} options={plants.map(p => ({ value: p.id, label: `${p.codigo} - ${p.nome}` }))} placeholder="Todas as Plantas" className="w-56" />
+      </div>
+
+      {loading ? <Loading rows={3} /> : sectors.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sectors.map(s => (
+            <div key={s.id} className="glass-card p-5 hover:border-slate-600 transition-all group" data-testid={`sector-card-${s.codigo}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.cor || '#10b981' }} />
+                  <div>
+                    <span className="font-mono text-sm" style={{ color: s.cor || '#10b981' }}>{s.codigo}</span>
+                    <p className="text-slate-100 font-medium">{s.nome}</p>
+                  </div>
+                </div>
+                {user?.role === 'admin' && (
+                  <div className="hidden group-hover:flex items-center gap-1">
+                    <button onClick={() => openModal(s)} className="p-2 hover:bg-slate-700 rounded-lg"><Edit size={16} className="text-slate-400" /></button>
+                    <button onClick={() => setDeleteItem(s)} className="p-2 hover:bg-red-500/10 rounded-lg"><Trash2 size={16} className="text-red-400" /></button>
+                  </div>
+                )}
+              </div>
+              {s.plant && <p className="text-xs text-slate-500 mb-2"><Building size={12} className="inline mr-1" />{s.plant.nome}</p>}
+              {s.descricao && <p className="text-xs text-slate-500 mb-2">{s.descricao}</p>}
+              <div className="flex items-center gap-1.5 text-sm text-slate-400">
+                <Box size={14} /> <span>{s.asset_count || 0} ativos</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={Layers} title="Nenhum setor encontrado" description="Crie setores dentro das plantas" action={() => openModal()} actionLabel="Novo Setor" />
+      )}
+
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? "Editar Setor" : "Novo Setor"} size="sm">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormInput label="Planta" required>
+            <Select value={form.plant_id} onChange={val => setForm({...form, plant_id: val})} options={plants.map(p => ({ value: p.id, label: `${p.codigo} - ${p.nome}` }))} placeholder="Selecione a planta" disabled={!!editItem} />
+          </FormInput>
+          <FormInput label="Código" required>
+            <input type="text" value={form.codigo} onChange={e => setForm({...form, codigo: e.target.value.toUpperCase()})} placeholder="Ex: UTIL, PROD" className="input-industrial w-full px-4 font-mono" required disabled={!!editItem} data-testid="sector-codigo-input" />
+          </FormInput>
+          <FormInput label="Nome" required>
+            <input type="text" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} placeholder="Ex: Utilidades" className="input-industrial w-full px-4" required data-testid="sector-nome-input" />
+          </FormInput>
+          <FormInput label="Descrição">
+            <textarea value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4 min-h-[60px]" data-testid="sector-desc-input" />
+          </FormInput>
+          <FormInput label="Cor">
+            <div className="flex items-center gap-2">
+              {colors.map(c => (
+                <button key={c} type="button" onClick={() => setForm({...form, cor: c})} className={`w-7 h-7 rounded-full border-2 transition-all ${form.cor === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+              ))}
+            </div>
+          </FormInput>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary" data-testid="sector-save-btn">{saving ? 'Salvando...' : 'Salvar'}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Setor" message={`Excluir o setor "${deleteItem?.nome}"? Todos os ativos precisam ser movidos antes.`} confirmText="Excluir" danger />
+    </div>
+  );
+};
+
+
+
 const AppLayout = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
@@ -4456,6 +4828,8 @@ function App() {
           <Route path="/anomalias" element={<ProtectedRoute><AppLayout><AnomaliasPage /></AppLayout></ProtectedRoute>} />
           <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
           <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/plantas" element={<ProtectedRoute><AppLayout><PlantasPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster position="top-center" richColors />

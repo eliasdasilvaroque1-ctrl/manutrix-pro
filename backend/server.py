@@ -173,15 +173,34 @@ class Organization(BaseModel):
     cnpj: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-# Planta
-class Planta(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+# Planta (Multi-Plant Hierarchy)
+class PlantCreate(BaseModel):
+    codigo: str  # Unique per org: P1, P2, FAB
     nome: str
-    endereco: Optional[str] = None
-    organization_id: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    descricao: Optional[str] = None
+    is_active: bool = True
 
-# Area
+class PlantUpdate(BaseModel):
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    is_active: Optional[bool] = None
+
+# Sector (belongs to Plant)
+class SectorCreate(BaseModel):
+    plant_id: str
+    codigo: str  # Unique per plant: BRIT, MOAG, EXP
+    nome: str
+    descricao: Optional[str] = None
+    cor: str = "#10b981"
+    is_active: bool = True
+
+class SectorUpdate(BaseModel):
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    cor: Optional[str] = None
+    is_active: Optional[bool] = None
+
+# Area (legacy compatibility — mapped to sectors)
 class Area(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     nome: str
@@ -192,13 +211,15 @@ class Area(BaseModel):
 
 # Ativo - CRUD Completo
 class AtivoCreate(BaseModel):
-    tag: Optional[str] = None  # Auto-generate if not provided
+    tag: Optional[str] = None
     nome: str
     tipo_equipamento: Optional[str] = None
     fabricante: Optional[str] = None
     modelo: Optional[str] = None
     numero_serie: Optional[str] = None
-    area_id: str
+    plant_id: Optional[str] = None
+    sector_id: Optional[str] = None
+    area_id: Optional[str] = None  # Legacy compat
     centro_custo: Optional[str] = None
     criticidade: Criticidade = Criticidade.MEDIA
     status: AssetStatus = AssetStatus.OPERACIONAL
@@ -219,6 +240,8 @@ class AtivoUpdate(BaseModel):
     fabricante: Optional[str] = None
     modelo: Optional[str] = None
     numero_serie: Optional[str] = None
+    plant_id: Optional[str] = None
+    sector_id: Optional[str] = None
     area_id: Optional[str] = None
     centro_custo: Optional[str] = None
     criticidade: Optional[Criticidade] = None
@@ -485,6 +508,22 @@ async def verificar_estoque_critico(item_id: str, org_id: str):
                 "/estoque"
             )
 
+
+async def get_scoped_asset_ids(org_id: str, plant_id: str = None, sector_id: str = None) -> list:
+    """Get asset IDs scoped by plant/sector. Returns None if no scope (= all assets)."""
+    if not plant_id and not sector_id:
+        return None
+    q = {"deleted_at": None}
+    if org_id:
+        q['organization_id'] = org_id
+    if plant_id:
+        q['plant_id'] = plant_id
+    if sector_id:
+        q['sector_id'] = sector_id
+    matching = await db.ativos.find(q, {"_id": 0, "id": 1}).to_list(5000)
+    return [a['id'] for a in matching]
+
+
 # ============== AUTH ROUTES ==============
 
 @api_router.post("/auth/register", response_model=TokenResponse)
@@ -737,7 +776,134 @@ async def get_upload(filename: str):
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     return FileResponse(filepath)
 
-# ============== AREAS ==============
+# ============== PLANTS ==============
+
+@api_router.get("/plants")
+async def list_plants(user: Dict = Depends(get_current_user)):
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    plants = await db.plants.find(query, {"_id": 0}).sort("codigo", 1).to_list(100)
+    for p in plants:
+        p['sector_count'] = await db.sectors.count_documents({"plant_id": p['id'], "deleted_at": None})
+        p['asset_count'] = await db.ativos.count_documents({"plant_id": p['id'], "deleted_at": None})
+    return plants
+
+@api_router.get("/plants/{plant_id}")
+async def get_plant(plant_id: str, user: Dict = Depends(get_current_user)):
+    p = await db.plants.find_one({"id": plant_id, "deleted_at": None}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Planta não encontrada")
+    p['sectors'] = await db.sectors.find({"plant_id": plant_id, "deleted_at": None}, {"_id": 0}).to_list(100)
+    return p
+
+@api_router.post("/plants")
+async def create_plant(data: PlantCreate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+    
+    existing = await db.plants.find_one({"codigo": data.codigo.upper(), "organization_id": org_id, "deleted_at": None})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Código '{data.codigo}' já existe nesta organização")
+    
+    plant_id = str(uuid.uuid4())
+    doc = {
+        "id": plant_id, "organization_id": org_id,
+        "codigo": data.codigo.upper(), "nome": data.nome, "descricao": data.descricao,
+        "is_active": data.is_active,
+        "created_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None
+    }
+    await db.plants.insert_one(doc)
+    doc.pop('_id', None)
+    return doc
+
+@api_router.put("/plants/{plant_id}")
+async def update_plant(plant_id: str, data: PlantUpdate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    update['updated_at'] = datetime.now(timezone.utc).isoformat()
+    await db.plants.update_one({"id": plant_id}, {"$set": update})
+    return await db.plants.find_one({"id": plant_id}, {"_id": 0})
+
+@api_router.delete("/plants/{plant_id}")
+async def delete_plant(plant_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    asset_count = await db.ativos.count_documents({"plant_id": plant_id, "deleted_at": None})
+    if asset_count > 0:
+        raise HTTPException(status_code=400, detail=f"Planta possui {asset_count} ativos. Mova-os antes de excluir.")
+    await db.plants.update_one({"id": plant_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    await audit_log("delete", "plants", plant_id, user, "Planta excluída")
+    return {"success": True}
+
+# ============== SECTORS ==============
+
+@api_router.get("/sectors")
+async def list_sectors(plant_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    if plant_id:
+        query['plant_id'] = plant_id
+    sectors = await db.sectors.find(query, {"_id": 0}).sort("codigo", 1).to_list(500)
+    # Enrich with plant name
+    plant_ids = list(set(s.get('plant_id') for s in sectors if s.get('plant_id')))
+    plants = await db.plants.find({"id": {"$in": plant_ids}}, {"_id": 0, "id": 1, "nome": 1, "codigo": 1}).to_list(len(plant_ids)) if plant_ids else []
+    plant_map = {p['id']: p for p in plants}
+    for s in sectors:
+        s['plant'] = plant_map.get(s.get('plant_id'))
+        s['asset_count'] = await db.ativos.count_documents({"sector_id": s['id'], "deleted_at": None})
+    return sectors
+
+@api_router.get("/sectors/{sector_id}")
+async def get_sector(sector_id: str, user: Dict = Depends(get_current_user)):
+    s = await db.sectors.find_one({"id": sector_id, "deleted_at": None}, {"_id": 0})
+    if not s:
+        raise HTTPException(status_code=404, detail="Setor não encontrado")
+    return s
+
+@api_router.post("/sectors")
+async def create_sector(data: SectorCreate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+    
+    plant = await db.plants.find_one({"id": data.plant_id, "deleted_at": None})
+    if not plant:
+        raise HTTPException(status_code=404, detail="Planta não encontrada")
+    
+    existing = await db.sectors.find_one({"codigo": data.codigo.upper(), "plant_id": data.plant_id, "deleted_at": None})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Código '{data.codigo}' já existe nesta planta")
+    
+    sector_id = str(uuid.uuid4())
+    doc = {
+        "id": sector_id, "organization_id": org_id, "plant_id": data.plant_id,
+        "codigo": data.codigo.upper(), "nome": data.nome, "descricao": data.descricao,
+        "cor": data.cor, "is_active": data.is_active,
+        "created_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None
+    }
+    await db.sectors.insert_one(doc)
+    doc.pop('_id', None)
+    return doc
+
+@api_router.put("/sectors/{sector_id}")
+async def update_sector(sector_id: str, data: SectorUpdate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    update['updated_at'] = datetime.now(timezone.utc).isoformat()
+    await db.sectors.update_one({"id": sector_id}, {"$set": update})
+    return await db.sectors.find_one({"id": sector_id}, {"_id": 0})
+
+@api_router.delete("/sectors/{sector_id}")
+async def delete_sector(sector_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    asset_count = await db.ativos.count_documents({"sector_id": sector_id, "deleted_at": None})
+    if asset_count > 0:
+        raise HTTPException(status_code=400, detail=f"Setor possui {asset_count} ativos. Mova-os antes de excluir.")
+    await db.sectors.update_one({"id": sector_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    await audit_log("delete", "sectors", sector_id, user, "Setor excluído")
+    return {"success": True}
+
+# ============== AREAS (legacy compat — redirects to sectors) ==============
 
 @api_router.get("/areas")
 async def list_areas(planta_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
@@ -761,13 +927,19 @@ async def list_ativos(
     status: Optional[AssetStatus] = None,
     criticidade: Optional[Criticidade] = None,
     search: Optional[str] = None,
+    plant_id: Optional[str] = None,
+    sector_id: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
     query = {"deleted_at": None}
     if user.get('organization_id'):
         query['organization_id'] = user['organization_id']
     if area_id:
-        query['area_id'] = area_id
+        query['$or'] = [{"area_id": area_id}, {"sector_id": area_id}]
+    if plant_id:
+        query['plant_id'] = plant_id
+    if sector_id:
+        query['sector_id'] = sector_id
     if status:
         query['status'] = status.value
     if criticidade:
@@ -779,12 +951,28 @@ async def list_ativos(
         search_lower = search.lower()
         ativos = [a for a in ativos if search_lower in a.get('tag', '').lower() or search_lower in a.get('nome', '').lower()]
     
-    # Batch fetch areas (fix N+1)
-    area_ids = list(set(a.get('area_id') for a in ativos if a.get('area_id')))
-    areas = await db.areas.find({"id": {"$in": area_ids}}, {"_id": 0}).to_list(len(area_ids)) if area_ids else []
-    area_map = {a['id']: a for a in areas}
+    # Batch fetch sectors and plants
+    sid_list = list(set(a.get('sector_id') or a.get('area_id') for a in ativos if a.get('sector_id') or a.get('area_id')))
+    pid_list = list(set(a.get('plant_id') for a in ativos if a.get('plant_id')))
+    
+    sectors = await db.sectors.find({"id": {"$in": sid_list}}, {"_id": 0}).to_list(len(sid_list)) if sid_list else []
+    sector_map = {s['id']: s for s in sectors}
+    if sid_list:
+        legacy = await db.areas.find({"id": {"$in": sid_list}}, {"_id": 0}).to_list(len(sid_list))
+        for la in legacy:
+            if la['id'] not in sector_map:
+                sector_map[la['id']] = la
+    
+    plants = await db.plants.find({"id": {"$in": pid_list}}, {"_id": 0, "id": 1, "nome": 1, "codigo": 1}).to_list(len(pid_list)) if pid_list else []
+    plant_map = {p['id']: p for p in plants}
+    
     for ativo in ativos:
-        ativo['area'] = area_map.get(ativo.get('area_id'))
+        sid = ativo.get('sector_id') or ativo.get('area_id')
+        ativo['area'] = sector_map.get(sid)
+        ativo['sector'] = sector_map.get(sid)
+        ativo['plant'] = plant_map.get(ativo.get('plant_id'))
+        parts = [ativo.get('plant', {}).get('nome', ''), (ativo.get('sector') or {}).get('nome', ''), ativo.get('tag', '')]
+        ativo['location_path'] = ' > '.join(p for p in parts if p)
     
     return ativos
 
@@ -837,17 +1025,30 @@ async def get_ativo_by_tag(tag: str, user: Dict = Depends(get_current_user)):
 @api_router.post("/ativos")
 async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
-    area = await db.areas.find_one({"id": data.area_id}, {"_id": 0})
-    if not area:
-        raise HTTPException(status_code=404, detail="Área não encontrada")
     
-    planta = await db.plantas.find_one({"id": area.get('planta_id')}, {"_id": 0})
-    org_id = planta.get('organization_id') if planta else user.get('organization_id', '')
+    org_id = user.get('organization_id', '')
     
-    # Generate TAG if not provided
+    # Resolve plant_id and sector_id
+    plant_id = data.plant_id
+    sector_id = data.sector_id or data.area_id
+    
+    if sector_id:
+        sector = await db.sectors.find_one({"id": sector_id, "deleted_at": None}, {"_id": 0})
+        if sector:
+            plant_id = plant_id or sector.get('plant_id')
+        else:
+            # Legacy: check areas collection
+            area = await db.areas.find_one({"id": sector_id}, {"_id": 0})
+            if area:
+                plant_id = plant_id or area.get('planta_id') or area.get('plant_id')
+    
+    if not plant_id:
+        # Assign to default plant
+        default_plant = await db.plants.find_one({"codigo": "PP", "deleted_at": None}, {"_id": 0})
+        if default_plant:
+            plant_id = default_plant['id']
+    
     tag = data.tag.upper() if data.tag else generate_tag()
-    
-    # Check TAG uniqueness
     existing = await db.ativos.find_one({"tag": tag, "organization_id": org_id, "deleted_at": None})
     if existing:
         raise HTTPException(status_code=400, detail="TAG já existe nesta organização")
@@ -862,7 +1063,9 @@ async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)
         "fabricante": data.fabricante,
         "modelo": data.modelo,
         "numero_serie": data.numero_serie,
-        "area_id": data.area_id,
+        "plant_id": plant_id,
+        "sector_id": sector_id,
+        "area_id": sector_id,  # Legacy compat
         "organization_id": org_id,
         "centro_custo": data.centro_custo,
         "criticidade": data.criticidade.value,
@@ -1157,6 +1360,8 @@ async def list_os(
     prioridade: Optional[Criticidade] = None,
     responsavel_id: Optional[str] = None,
     ativo_id: Optional[str] = None,
+    plant_id: Optional[str] = None,
+    sector_id: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
     query = {"deleted_at": None}
@@ -1172,6 +1377,12 @@ async def list_os(
         query['responsavel_id'] = responsavel_id
     if ativo_id:
         query['ativo_id'] = ativo_id
+    
+    # Scope by plant/sector
+    if plant_id or sector_id:
+        asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), plant_id, sector_id)
+        if asset_ids is not None:
+            query['ativo_id'] = {"$in": asset_ids}
     
     os_list = await db.ordens_servico.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
@@ -1493,6 +1704,8 @@ async def list_inspecoes(
     status: Optional[InspecaoStatus] = None,
     ativo_id: Optional[str] = None,
     responsavel_id: Optional[str] = None,
+    plant_id: Optional[str] = None,
+    sector_id: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
     query = {"deleted_at": None}
@@ -1504,6 +1717,12 @@ async def list_inspecoes(
         query['ativo_id'] = ativo_id
     if responsavel_id:
         query['responsavel_id'] = responsavel_id
+    
+    # Scope by plant/sector
+    if plant_id or sector_id:
+        asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), plant_id, sector_id)
+        if asset_ids is not None:
+            query['ativo_id'] = {"$in": asset_ids}
     
     inspecoes = await db.inspecoes.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
@@ -1917,31 +2136,44 @@ async def list_tecnicos(user: Dict = Depends(get_current_user)):
 # ============== KPIs & DASHBOARD ==============
 
 @api_router.get("/kpis")
-async def get_kpis(user: Dict = Depends(get_current_user)):
+async def get_kpis(plant_id: Optional[str] = None, sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
     org_id = user.get('organization_id', '')
     query = {"organization_id": org_id, "deleted_at": None} if org_id else {"deleted_at": None}
     
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
     
-    # OS Stats - MTTR from completed OS with time
-    os_concluidas = await db.ordens_servico.find({**query, "status": "concluida", "tempo_execucao_minutos": {"$exists": True, "$ne": None}}, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1}).to_list(1000)
+    # Scope by plant/sector: get matching asset IDs
+    asset_query = dict(query)
+    if plant_id:
+        asset_query['plant_id'] = plant_id
+    if sector_id:
+        asset_query['sector_id'] = sector_id
+    
+    os_query = dict(query)
+    ativos_query = dict(asset_query)
+    
+    if plant_id or sector_id:
+        matching = await db.ativos.find(asset_query, {"_id": 0, "id": 1}).to_list(5000)
+        asset_ids = [a['id'] for a in matching]
+        os_query['ativo_id'] = {"$in": asset_ids}
+    
+    # OS Stats
+    os_concluidas = await db.ordens_servico.find({**os_query, "status": "concluida", "tempo_execucao_minutos": {"$exists": True, "$ne": None}}, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1}).to_list(1000)
     
     tempos = [os['tempo_execucao_minutos'] for os in os_concluidas if os.get('tempo_execucao_minutos')]
-    mttr_minutos = sum(tempos) / len(tempos) if tempos else 126  # 2.1h baseline when no data
+    mttr_minutos = sum(tempos) / len(tempos) if tempos else 126
     mttr_horas = mttr_minutos / 60
     
-    # FIX #1: Preventiva vs Corretiva — uses ALL OS (not just completed)
-    # Formula: count(tipo=preventiva) / count(all OS) * 100
-    all_os = await db.ordens_servico.find(query, {"_id": 0, "tipo": 1}).to_list(5000)
+    all_os = await db.ordens_servico.find(os_query, {"_id": 0, "tipo": 1}).to_list(5000)
     total_os_all = len(all_os)
     preventivas = len([o for o in all_os if o.get('tipo') == 'preventiva'])
     corretivas = len([o for o in all_os if o.get('tipo') == 'corretiva'])
     
-    # Assets
-    ativos_total = await db.ativos.count_documents(query)
-    ativos_operacionais = await db.ativos.count_documents({**query, "status": "operacional"})
-    ativos_parados = await db.ativos.count_documents({**query, "status": {"$in": ["parado", "manutencao"]}})
+    # Assets (scoped)
+    ativos_total = await db.ativos.count_documents(ativos_query)
+    ativos_operacionais = await db.ativos.count_documents({**ativos_query, "status": "operacional"})
+    ativos_parados = await db.ativos.count_documents({**ativos_query, "status": {"$in": ["parado", "manutencao"]}})
     
     # Disponibilidade e MTBF
     disponibilidade = (ativos_operacionais / ativos_total * 100) if ativos_total > 0 else 100
@@ -1950,23 +2182,23 @@ async def get_kpis(user: Dict = Depends(get_current_user)):
     # Confiabilidade
     confiabilidade = (1 - (corretivas / total_os_all)) * 100 if total_os_all > 0 else 100
     
-    # FIX #2: Conformidade — only completed inspections (exclude pending)
-    # Formula: count(resultado=conforme) / count(status in [concluida, com_pendencias]) * 100
-    insp_finalizadas = await db.inspecoes.count_documents({**query, "status": {"$in": ["concluida", "com_pendencias"]}})
-    insp_conformes = await db.inspecoes.count_documents({**query, "resultado": "conforme"})
+    # Conformidade — scoped by plant/sector via ativo_id
+    insp_query = dict(os_query)  # uses ativo_id scope if plant/sector set
+    insp_finalizadas = await db.inspecoes.count_documents({**insp_query, "status": {"$in": ["concluida", "com_pendencias"]}})
+    insp_conformes = await db.inspecoes.count_documents({**insp_query, "resultado": "conforme"})
     taxa_conformidade = (insp_conformes / insp_finalizadas * 100) if insp_finalizadas > 0 else 100
     
-    # Backlog
-    backlog = await db.ordens_servico.count_documents({**query, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}})
+    # Backlog (scoped)
+    backlog = await db.ordens_servico.count_documents({**os_query, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}})
     
-    # Overdue OS
+    # Overdue OS (scoped)
     os_atrasadas = await db.ordens_servico.count_documents({
-        **query, "status": {"$nin": ["concluida", "cancelada"]},
+        **os_query, "status": {"$nin": ["concluida", "cancelada"]},
         "data_planejada": {"$lt": now.isoformat()}
     })
     
-    # Monthly cost
-    os_mes = await db.ordens_servico.find({**query, "status": "concluida", "data_conclusao": {"$gte": month_start}}, {"_id": 0, "custo_total": 1}).to_list(1000)
+    # Monthly cost (scoped)
+    os_mes = await db.ordens_servico.find({**os_query, "status": "concluida", "data_conclusao": {"$gte": month_start}}, {"_id": 0, "custo_total": 1}).to_list(1000)
     custo_mes = sum(os.get('custo_total', 0) or 0 for os in os_mes)
     
     return {
@@ -1986,50 +2218,65 @@ async def get_kpis(user: Dict = Depends(get_current_user)):
     }
 
 @api_router.get("/dashboard/stats")
-async def get_dashboard_stats(user: Dict = Depends(get_current_user)):
+async def get_dashboard_stats(plant_id: Optional[str] = None, sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
     org_id = user.get('organization_id', '')
     query = {"organization_id": org_id, "deleted_at": None} if org_id else {"deleted_at": None}
     
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     
-    # Assets
+    # Scope by plant/sector
+    asset_query = dict(query)
+    if plant_id:
+        asset_query['plant_id'] = plant_id
+    if sector_id:
+        asset_query['sector_id'] = sector_id
+    
+    os_query = dict(query)
+    insp_query = dict(query)
+    if plant_id or sector_id:
+        asset_ids = await get_scoped_asset_ids(org_id, plant_id, sector_id)
+        if asset_ids is not None:
+            os_query['ativo_id'] = {"$in": asset_ids}
+            insp_query['ativo_id'] = {"$in": asset_ids}
+    
+    # Assets (scoped)
     ativos = {
-        "total": await db.ativos.count_documents(query),
-        "operacionais": await db.ativos.count_documents({**query, "status": "operacional"}),
-        "parados": await db.ativos.count_documents({**query, "status": "parado"}),
-        "manutencao": await db.ativos.count_documents({**query, "status": "manutencao"}),
-        "desativados": await db.ativos.count_documents({**query, "status": "desativado"})
+        "total": await db.ativos.count_documents(asset_query),
+        "operacionais": await db.ativos.count_documents({**asset_query, "status": "operacional"}),
+        "parados": await db.ativos.count_documents({**asset_query, "status": "parado"}),
+        "manutencao": await db.ativos.count_documents({**asset_query, "status": "manutencao"}),
+        "desativados": await db.ativos.count_documents({**asset_query, "status": "desativado"})
     }
     
-    # OS
+    # OS (scoped)
     os_stats = {
-        "abertas": await db.ordens_servico.count_documents({**query, "status": "aberta"}),
-        "planejadas": await db.ordens_servico.count_documents({**query, "status": "planejada"}),
-        "em_execucao": await db.ordens_servico.count_documents({**query, "status": "em_execucao"}),
-        "pausadas": await db.ordens_servico.count_documents({**query, "status": "pausada"}),
-        "concluidas_hoje": await db.ordens_servico.count_documents({**query, "status": "concluida", "data_conclusao": {"$gte": today_start}}),
-        "atrasadas": await db.ordens_servico.count_documents({**query, "status": {"$nin": ["concluida", "cancelada"]}, "data_planejada": {"$lt": now.isoformat()}}),
+        "abertas": await db.ordens_servico.count_documents({**os_query, "status": "aberta"}),
+        "planejadas": await db.ordens_servico.count_documents({**os_query, "status": "planejada"}),
+        "em_execucao": await db.ordens_servico.count_documents({**os_query, "status": "em_execucao"}),
+        "pausadas": await db.ordens_servico.count_documents({**os_query, "status": "pausada"}),
+        "concluidas_hoje": await db.ordens_servico.count_documents({**os_query, "status": "concluida", "data_conclusao": {"$gte": today_start}}),
+        "atrasadas": await db.ordens_servico.count_documents({**os_query, "status": {"$nin": ["concluida", "cancelada"]}, "data_planejada": {"$lt": now.isoformat()}}),
         "por_tipo": {
-            "preventiva": await db.ordens_servico.count_documents({**query, "tipo": "preventiva", "status": {"$nin": ["concluida", "cancelada"]}}),
-            "corretiva": await db.ordens_servico.count_documents({**query, "tipo": "corretiva", "status": {"$nin": ["concluida", "cancelada"]}}),
-            "preditiva": await db.ordens_servico.count_documents({**query, "tipo": "preditiva", "status": {"$nin": ["concluida", "cancelada"]}}),
-            "emergencia": await db.ordens_servico.count_documents({**query, "tipo": "emergencia", "status": {"$nin": ["concluida", "cancelada"]}})
+            "preventiva": await db.ordens_servico.count_documents({**os_query, "tipo": "preventiva", "status": {"$nin": ["concluida", "cancelada"]}}),
+            "corretiva": await db.ordens_servico.count_documents({**os_query, "tipo": "corretiva", "status": {"$nin": ["concluida", "cancelada"]}}),
+            "preditiva": await db.ordens_servico.count_documents({**os_query, "tipo": "preditiva", "status": {"$nin": ["concluida", "cancelada"]}}),
+            "emergencia": await db.ordens_servico.count_documents({**os_query, "tipo": "emergencia", "status": {"$nin": ["concluida", "cancelada"]}})
         },
         "por_prioridade": {
-            "critica": await db.ordens_servico.count_documents({**query, "prioridade": "critica", "status": {"$nin": ["concluida", "cancelada"]}}),
-            "alta": await db.ordens_servico.count_documents({**query, "prioridade": "alta", "status": {"$nin": ["concluida", "cancelada"]}}),
-            "media": await db.ordens_servico.count_documents({**query, "prioridade": "media", "status": {"$nin": ["concluida", "cancelada"]}}),
-            "baixa": await db.ordens_servico.count_documents({**query, "prioridade": "baixa", "status": {"$nin": ["concluida", "cancelada"]}})
+            "critica": await db.ordens_servico.count_documents({**os_query, "prioridade": "critica", "status": {"$nin": ["concluida", "cancelada"]}}),
+            "alta": await db.ordens_servico.count_documents({**os_query, "prioridade": "alta", "status": {"$nin": ["concluida", "cancelada"]}}),
+            "media": await db.ordens_servico.count_documents({**os_query, "prioridade": "media", "status": {"$nin": ["concluida", "cancelada"]}}),
+            "baixa": await db.ordens_servico.count_documents({**os_query, "prioridade": "baixa", "status": {"$nin": ["concluida", "cancelada"]}})
         }
     }
     
-    # Inspections
+    # Inspections (scoped)
     inspecoes = {
-        "pendentes": await db.inspecoes.count_documents({**query, "status": "pendente"}),
-        "em_andamento": await db.inspecoes.count_documents({**query, "status": "em_andamento"}),
-        "concluidas_hoje": await db.inspecoes.count_documents({**query, "status": "concluida", "data_conclusao": {"$gte": today_start}}),
-        "nao_conformes_mes": await db.inspecoes.count_documents({**query, "resultado": "nao_conforme"})
+        "pendentes": await db.inspecoes.count_documents({**insp_query, "status": "pendente"}),
+        "em_andamento": await db.inspecoes.count_documents({**insp_query, "status": "em_andamento"}),
+        "concluidas_hoje": await db.inspecoes.count_documents({**insp_query, "status": "concluida", "data_conclusao": {"$gte": today_start}}),
+        "nao_conformes_mes": await db.inspecoes.count_documents({**insp_query, "resultado": "nao_conforme"})
     }
     
     # Stock
@@ -2048,12 +2295,24 @@ async def get_dashboard_stats(user: Dict = Depends(get_current_user)):
     }
 
 @api_router.get("/dashboard/trend")
-async def get_dashboard_trend(user: Dict = Depends(get_current_user)):
+async def get_dashboard_trend(plant_id: Optional[str] = None, sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
     """Monthly trend data for charts (last 6 months) - realistic industrial data"""
     org_id = user.get('organization_id', '')
     query = {"deleted_at": None}
     if org_id:
         query['organization_id'] = org_id
+    
+    # Scope by plant/sector
+    os_query = dict(query)
+    asset_query = dict(query)
+    if plant_id:
+        asset_query['plant_id'] = plant_id
+    if sector_id:
+        asset_query['sector_id'] = sector_id
+    if plant_id or sector_id:
+        asset_ids = await get_scoped_asset_ids(org_id, plant_id, sector_id)
+        if asset_ids is not None:
+            os_query['ativo_id'] = {"$in": asset_ids}
     
     now = datetime.now(timezone.utc)
     months_data = []
@@ -2072,7 +2331,7 @@ async def get_dashboard_trend(user: Dict = Depends(get_current_user)):
         else:
             month_end = datetime(year, month + 1, 1, tzinfo=timezone.utc).isoformat()
         
-        month_query = {**query, "data_conclusao": {"$gte": month_start, "$lt": month_end}, "status": "concluida"}
+        month_query = {**os_query, "data_conclusao": {"$gte": month_start, "$lt": month_end}, "status": "concluida"}
         os_mes = await db.ordens_servico.find(month_query, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1, "custo_total": 1}).to_list(1000)
         
         tempos = [o['tempo_execucao_minutos'] for o in os_mes if o.get('tempo_execucao_minutos')]
@@ -2087,8 +2346,8 @@ async def get_dashboard_trend(user: Dict = Depends(get_current_user)):
         if total > 0:
             has_real_data = True
         
-        ativos_total = await db.ativos.count_documents(query)
-        ativos_parados_mes = await db.ativos.count_documents({**query, "status": {"$in": ["parado", "manutencao"]}})
+        ativos_total = await db.ativos.count_documents(asset_query)
+        ativos_parados_mes = await db.ativos.count_documents({**asset_query, "status": {"$in": ["parado", "manutencao"]}})
         mtbf = round(((ativos_total - ativos_parados_mes) / ativos_total * 720) if ativos_total > 0 else 720, 1)
         
         custo = sum(o.get('custo_total', 0) or 0 for o in os_mes)
@@ -2167,40 +2426,64 @@ async def seed_data():
         await db.users.insert_one(user_doc)
         users.append(user_doc)
     
-    # Planta
+    # Plant (new hierarchy)
     planta_id = str(uuid.uuid4())
-    planta_doc = {
+    plant_doc = {
+        "id": planta_id,
+        "organization_id": org.id,
+        "codigo": "PP",
+        "nome": "Planta Principal",
+        "descricao": "Rua Industrial, 1000 - São Paulo, SP",
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.plants.insert_one(plant_doc)
+    # Also insert into legacy collection for compat
+    await db.plantas.insert_one({
         "id": planta_id,
         "nome": "Planta Principal",
         "endereco": "Rua Industrial, 1000 - São Paulo, SP",
         "organization_id": org.id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None
-    }
-    await db.plantas.insert_one(planta_doc)
+    })
     
-    # Areas
-    areas_data = [
-        {"nome": "Utilidades", "cor": "#10b981", "descricao": "Sistemas de água, ar comprimido e energia"},
-        {"nome": "Produção", "cor": "#3b82f6", "descricao": "Linha de produção principal"},
-        {"nome": "Embalagem", "cor": "#f59e0b", "descricao": "Área de embalagem e expedição"},
-        {"nome": "Manutenção", "cor": "#8b5cf6", "descricao": "Oficina de manutenção"}
+    # Sectors (new hierarchy) + Areas (legacy compat)
+    sectors_data = [
+        {"nome": "Utilidades", "codigo": "UTIL", "cor": "#10b981", "descricao": "Sistemas de água, ar comprimido e energia"},
+        {"nome": "Produção", "codigo": "PROD", "cor": "#3b82f6", "descricao": "Linha de produção principal"},
+        {"nome": "Embalagem", "codigo": "EMBA", "cor": "#f59e0b", "descricao": "Área de embalagem e expedição"},
+        {"nome": "Manutenção", "codigo": "MANU", "cor": "#8b5cf6", "descricao": "Oficina de manutenção"}
     ]
     
-    areas = []
-    for ad in areas_data:
-        area_id = str(uuid.uuid4())
-        area_doc = {
-            "id": area_id,
-            "nome": ad['nome'],
-            "planta_id": planta_id,
-            "cor": ad['cor'],
-            "descricao": ad['descricao'],
+    sectors = []
+    for sd in sectors_data:
+        sector_id = str(uuid.uuid4())
+        sector_doc = {
+            "id": sector_id,
+            "organization_id": org.id,
+            "plant_id": planta_id,
+            "codigo": sd['codigo'],
+            "nome": sd['nome'],
+            "descricao": sd['descricao'],
+            "cor": sd['cor'],
+            "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "deleted_at": None
         }
-        await db.areas.insert_one(area_doc)
-        areas.append(area_doc)
+        await db.sectors.insert_one(sector_doc)
+        # Also insert into legacy areas collection
+        await db.areas.insert_one({
+            "id": sector_id,
+            "nome": sd['nome'],
+            "planta_id": planta_id,
+            "cor": sd['cor'],
+            "descricao": sd['descricao'],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "deleted_at": None
+        })
+        sectors.append(sector_doc)
     
     # Ativos
     ativos_data = [
@@ -2219,6 +2502,7 @@ async def seed_data():
     ativos = []
     for ad in ativos_data:
         ativo_id = str(uuid.uuid4())
+        sector = sectors[ad['area_idx']]
         ativo_doc = {
             "id": ativo_id,
             "tag": ad['tag'],
@@ -2229,7 +2513,9 @@ async def seed_data():
             "modelo": ad['modelo'],
             "criticidade": ad['criticidade'],
             "status": "operacional",
-            "area_id": areas[ad['area_idx']]['id'],
+            "plant_id": planta_id,
+            "sector_id": sector['id'],
+            "area_id": sector['id'],
             "organization_id": org.id,
             "valor_aquisicao": ad['valor'],
             "data_instalacao": "2023-01-15",
@@ -2373,6 +2659,70 @@ async def seed_data():
             "tecnico": {"email": "tecnico@manutrix.com", "password": "tecnico123"}
         }
     }
+
+
+@api_router.get("/migration/report")
+async def migration_report(user: Dict = Depends(get_current_user)):
+    """Generate migration report showing hierarchy status"""
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+    q = {"deleted_at": None}
+    if org_id:
+        q['organization_id'] = org_id
+
+    plants = await db.plants.find({**q}, {"_id": 0}).to_list(100)
+    sectors = await db.sectors.find({**q}, {"_id": 0}).to_list(500)
+    
+    total_ativos = await db.ativos.count_documents(q)
+    ativos_with_plant = await db.ativos.count_documents({**q, "plant_id": {"$exists": True, "$ne": None}})
+    ativos_with_sector = await db.ativos.count_documents({**q, "sector_id": {"$exists": True, "$ne": None}})
+    ativos_orphan = total_ativos - ativos_with_plant
+    
+    total_os = await db.ordens_servico.count_documents(q)
+    total_insp = await db.inspecoes.count_documents(q)
+    total_anomalias = await db.anomalias.count_documents(q)
+    
+    legacy_plantas = await db.plantas.count_documents({})
+    legacy_areas = await db.areas.count_documents({})
+    
+    plant_details = []
+    for p in plants:
+        sector_count = await db.sectors.count_documents({"plant_id": p['id'], "deleted_at": None})
+        asset_count = await db.ativos.count_documents({"plant_id": p['id'], "deleted_at": None})
+        plant_details.append({
+            "id": p['id'], "codigo": p.get('codigo', ''), "nome": p['nome'],
+            "sectors": sector_count, "assets": asset_count
+        })
+    
+    return {
+        "status": "complete" if ativos_orphan == 0 else "partial",
+        "summary": {
+            "plants_total": len(plants),
+            "sectors_total": len(sectors),
+            "ativos_total": total_ativos,
+            "ativos_with_plant": ativos_with_plant,
+            "ativos_with_sector": ativos_with_sector,
+            "ativos_orphan": ativos_orphan,
+            "os_total": total_os,
+            "inspecoes_total": total_insp,
+            "anomalias_total": total_anomalias
+        },
+        "legacy": {
+            "plantas_collection": legacy_plantas,
+            "areas_collection": legacy_areas
+        },
+        "plants": plant_details
+    }
+
+@api_router.post("/migration/run")
+async def run_migration_manual(user: Dict = Depends(get_current_user)):
+    """Manually trigger hierarchy migration"""
+    check_admin_only(user)
+    await migrate_hierarchy()
+    # Re-run backfill
+    await _backfill_ativo_hierarchy()
+    return {"message": "Migração executada com sucesso"}
+
 
 # ============== MANUAL PDF UPLOAD ==============
 
@@ -2971,10 +3321,17 @@ class AnomaliaCreate(BaseModel):
     gerar_os: bool = True
 
 @api_router.get("/anomalias")
-async def list_anomalias(user: Dict = Depends(get_current_user)):
+async def list_anomalias(plant_id: Optional[str] = None, sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
     query = {"deleted_at": None}
     if user.get('organization_id'):
         query['organization_id'] = user['organization_id']
+    
+    # Scope by plant/sector
+    if plant_id or sector_id:
+        asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), plant_id, sector_id)
+        if asset_ids is not None:
+            query['ativo_id'] = {"$in": asset_ids}
+    
     anomalias = await db.anomalias.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     for a in anomalias:
         ativo = await db.ativos.find_one({"id": a.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "criticidade": 1})
@@ -3292,14 +3649,18 @@ app.add_middleware(
 )
 
 @app.on_event("startup")
-async def migrate_checklist_tipo():
-    """Migration: ensure all checklist items have 'tipo' field + create indexes"""
+async def run_migrations():
+    """Run all startup migrations"""
     try:
         # Create indexes
         await db.users.create_index("email")
         await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
         await db.password_reset_tokens.create_index("token")
+        await db.plants.create_index("organization_id")
+        await db.sectors.create_index("plant_id")
+        await db.ativos.create_index([("plant_id", 1), ("sector_id", 1)])
         
+        # Migration 1: checklist tipo field
         inspecoes = await db.inspecoes.find({"deleted_at": None, "checklist": {"$exists": True}}).to_list(1000)
         for insp in inspecoes:
             updated = False
@@ -3325,8 +3686,157 @@ async def migrate_checklist_tipo():
             if updated:
                 await db.rotas_inspecao.update_one({"_id": rota["_id"]}, {"$set": {"itens": itens}})
         logger.info("Migration: checklist tipo field verified")
+        
+        # Migration 2: Multi-Plant Hierarchy
+        await migrate_hierarchy()
+        
     except Exception as e:
         logger.error(f"Migration error: {e}")
+
+
+async def migrate_hierarchy():
+    """Migrate legacy plantas/areas to plants/sectors and update ativos"""
+    plants_count = await db.plants.count_documents({})
+    plantas_count = await db.plantas.count_documents({})
+    
+    if plants_count > 0:
+        logger.info("Migration: plants collection already populated, skipping hierarchy migration")
+        # Still ensure all ativos have plant_id/sector_id
+        await _backfill_ativo_hierarchy()
+        return
+    
+    if plantas_count == 0:
+        logger.info("Migration: no legacy plantas found, skipping")
+        return
+    
+    report = {"plants_created": 0, "sectors_created": 0, "ativos_updated": 0}
+    
+    # Step 1: Migrate plantas -> plants
+    plantas = await db.plantas.find({}).to_list(100)
+    plant_id_map = {}  # old planta_id -> new plant_id
+    
+    for planta in plantas:
+        old_id = planta.get('id', str(planta.get('_id', '')))
+        new_plant = {
+            "id": old_id,
+            "organization_id": planta.get('organization_id', ''),
+            "codigo": "PP",
+            "nome": planta.get('nome', 'Planta Principal'),
+            "descricao": planta.get('endereco', ''),
+            "is_active": True,
+            "created_at": planta.get('created_at', datetime.now(timezone.utc).isoformat()),
+            "deleted_at": None
+        }
+        await db.plants.insert_one(new_plant)
+        plant_id_map[old_id] = old_id
+        report['plants_created'] += 1
+    
+    logger.info(f"Migration: {report['plants_created']} plants created")
+    
+    # Step 2: Migrate areas -> sectors
+    areas = await db.areas.find({}).to_list(500)
+    area_to_sector = {}  # area_id -> {sector_id, plant_id}
+    
+    for area in areas:
+        area_id = area.get('id', str(area.get('_id', '')))
+        planta_id = area.get('planta_id', '')
+        plant_id = plant_id_map.get(planta_id, planta_id)
+        
+        # Derive org_id from area or from plant
+        area_org = area.get('organization_id', '')
+        if not area_org:
+            p = await db.plants.find_one({"id": plant_id}, {"_id": 0, "organization_id": 1})
+            area_org = p.get('organization_id', '') if p else ''
+        
+        # Use area name as sector code (first 4 chars uppercase)
+        codigo = area.get('nome', 'SEC')[:4].upper().replace(' ', '')
+        
+        new_sector = {
+            "id": area_id,
+            "organization_id": area_org,
+            "plant_id": plant_id,
+            "codigo": codigo,
+            "nome": area.get('nome', ''),
+            "descricao": area.get('descricao', ''),
+            "cor": area.get('cor', '#10b981'),
+            "is_active": True,
+            "created_at": area.get('created_at', datetime.now(timezone.utc).isoformat()),
+            "deleted_at": area.get('deleted_at')
+        }
+        await db.sectors.insert_one(new_sector)
+        area_to_sector[area_id] = {"sector_id": area_id, "plant_id": plant_id}
+        report['sectors_created'] += 1
+    
+    logger.info(f"Migration: {report['sectors_created']} sectors created")
+    
+    # Step 3: Update all ativos with plant_id and sector_id
+    ativos = await db.ativos.find({"plant_id": {"$exists": False}}).to_list(5000)
+    if not ativos:
+        ativos = await db.ativos.find({"plant_id": None}).to_list(5000)
+    
+    for ativo in ativos:
+        area_id = ativo.get('area_id', '')
+        mapping = area_to_sector.get(area_id, {})
+        plant_id = mapping.get('plant_id')
+        sector_id = mapping.get('sector_id')
+        
+        if not plant_id and plantas:
+            plant_id = plantas[0].get('id', '')
+        
+        update_fields = {}
+        if plant_id:
+            update_fields['plant_id'] = plant_id
+        if sector_id:
+            update_fields['sector_id'] = sector_id
+        elif area_id:
+            update_fields['sector_id'] = area_id
+        
+        if update_fields:
+            await db.ativos.update_one({"_id": ativo["_id"]}, {"$set": update_fields})
+            report['ativos_updated'] += 1
+    
+    logger.info(f"Migration: {report['ativos_updated']} ativos updated with plant/sector IDs")
+    logger.info(f"Migration complete: {json.dumps(report)}")
+
+
+async def _backfill_ativo_hierarchy():
+    """Ensure all ativos have plant_id and sector_id from existing data"""
+    ativos_without = await db.ativos.count_documents({
+        "$or": [
+            {"plant_id": {"$exists": False}},
+            {"plant_id": None}
+        ],
+        "deleted_at": None
+    })
+    if ativos_without == 0:
+        return
+    
+    # Get first plant as default
+    default_plant = await db.plants.find_one({"deleted_at": None}, {"_id": 0, "id": 1})
+    if not default_plant:
+        return
+    
+    ativos = await db.ativos.find({
+        "$or": [{"plant_id": {"$exists": False}}, {"plant_id": None}],
+        "deleted_at": None
+    }).to_list(5000)
+    
+    for ativo in ativos:
+        area_id = ativo.get('area_id', '')
+        sector = await db.sectors.find_one({"id": area_id}, {"_id": 0, "id": 1, "plant_id": 1})
+        
+        update = {}
+        if sector:
+            update['plant_id'] = sector.get('plant_id', default_plant['id'])
+            update['sector_id'] = sector['id']
+        else:
+            update['plant_id'] = default_plant['id']
+            if area_id:
+                update['sector_id'] = area_id
+        
+        await db.ativos.update_one({"_id": ativo["_id"]}, {"$set": update})
+    
+    logger.info(f"Backfill: {len(ativos)} ativos updated")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
