@@ -1,150 +1,63 @@
-# MANUTRIX OMNI v4.0 - Sistema Industrial de Gestão de Manutenção
+# MANUTRIX OMNI - Product Requirements Document
 
-## Visão Geral
-CMMS/EAM enterprise para mineração e indústria pesada. Rastreabilidade completa, operação em campo, confiabilidade industrial.
+## Original Problem Statement
+Enterprise-grade industrial maintenance management system (CMMS/EAM) with hierarchical asset management, work orders, inspections (with lubrication module), inventory/spare parts, photo attachments, AI assistant for PDF manuals, and executive dashboard.
 
-## Stack: React 18 + FastAPI + MongoDB + Gemini AI
-## URL: https://procure-manutrix.preview.emergentagent.com
+## Architecture
+- **Backend**: FastAPI + MongoDB (single server.py ~3800 lines)
+- **Frontend**: React (single App.js ~4800 lines) + Tailwind + Shadcn UI
+- **Auth**: Supabase Auth (primary) with MongoDB bcrypt fallback
+- **AI**: Emergent LLM Key for PDF manual assistant
+- **DB Hierarchy**: Organization -> Plant -> Sector -> Asset
 
-## Implementado
+## What's Been Implemented
 
-### Login Seguro (v5.2)
-- Credenciais removidas da interface (nenhuma exposição)
-- Botão "Acessar ambiente de demonstração" substitui texto de credenciais
-- Tela limpa e profissional para apresentação executiva
+### Core Features (DONE)
+- Secure Auth (Supabase + MongoDB fallback, forgot password)
+- Asset CRUD with QR codes, tags, photos, PDF manuals
+- Work Orders CRUD (OS) with lifecycle management
+- Inspections + Lubrication module with checklist system
+- Inventory/Spare Parts management
+- Anomalias with intelligent prioritization
+- AI Assistant reading PDF manuals
+- Executive Dashboard with drill-down, trend charts
+- Power BI / Excel export endpoints
+- Photo Registration System (OS, Anomalies, Inspections)
+- Notifications system
+- Audit logging
 
-### Registro Fotografico (v5.2)
-- Componente PhotoUploader reutilizavel (camera/arquivo, grid, fullscreen, delete)
-- OS: Foto Antes + Foto Depois (lado a lado) - corretiva exige foto antes
-- Inspecoes: Registro Fotografico - obrigatorio quando nao conforme
-- Anomalias: Fotos do Problema em cada card
-- Suporte camera mobile (capture=environment)
-- Visualizacao fullscreen ao clicar na foto
+### Multi-Plant Hierarchy (DONE - June 2026)
+- Plant CRUD endpoints (`/api/plants`)
+- Sector CRUD endpoints (`/api/sectors`)
+- Migration function: legacy `plantas`/`areas` -> `plants`/`sectors`
+- All ativos migrated with `plant_id` and `sector_id`
+- Migration report endpoint (`/api/migration/report`)
+- Plant/Sector filtering on: KPIs, Dashboard Stats, Dashboard Trend, Work Orders, Inspections, Anomalias, Ativos
+- Frontend: Plantas management page, Setores management page
+- Frontend: Cascading Plant->Sector dropdowns in Asset creation modal
+- Frontend: Dashboard global filter (All Plants / Specific Plant / Specific Sector)
+- Frontend: Sidebar INFRAESTRUTURA section with Plants/Sectors links
+- Frontend: Asset list with plant/sector filter dropdowns
+- **Testing**: 100% pass rate (iteration 13) - backend 14/14, frontend all flows verified
 
-### Audit Remediation (v6.1)
-- KPI Prev/Corr%: calcula sobre TODAS as OS (antes: 100%/0%, depois: 20%/60%)
-- Conformidade%: exclui inspecoes pendentes (antes: 22.7%, depois: 55.6%)
-- Trend data: flag is_estimated por mes + label "Dados estimados" nos graficos
-- Edit/Delete: admin-only em OS, Estoque, Sobressalentes com ConfirmDialog
-- Supervisor password restaurada
-- OS list 500 error corrigido (date parsing)
+## Prioritized Backlog
 
-### Supabase Integration (v6.0)
-- Supabase Auth para login/registro/reset de senha
-- Auto-sync: usuarios MongoDB sao criados automaticamente no Supabase no primeiro login
-- Fallback: se Supabase falhar, usa autenticacao local (MongoDB + bcrypt)
-- Forgot password via Supabase (envia email real de redefinicao)
-- Admin create user tambem cria no Supabase Auth
-- supabase_id linkado no perfil MongoDB
+### P0.5 - Architecture Hardening (NEXT)
+- Split `server.py` into: dashboard services, asset services, work order services
+- Extract frontend components: Dashboard, Asset, Work Order into separate files
+- Goal: Reduce risk and file size before Kanban implementation
 
-### Autenticacao Profissional (v5.1)
-- bcrypt para hashing de senhas (migracao automatica de SHA-256)
-- "Esqueci minha senha" na tela de login com token de redefinicao
-- Reset via token com validacao (minimo 6 caracteres, expiracao 1h)
-- Admin pode gerar senha temporaria para qualquer usuario
-- Troca de senha obrigatoria no primeiro login apos reset
-- Gestao de usuarios: criar, editar (nome/email/role), desativar, redefinir senha
-- Senhas nunca exibidas no sistema, hash bcrypt seguro
+### P1 - Kanban Work Orders
+- Drag and drop between statuses using @dnd-kit (already installed)
+- Status update persistence via PATCH /api/ordens-servico/{id}/status
+- Permission validation (role-based)
+- Mobile responsive
+- Regression tests
 
-### RBAC Industrial (v4.0)
-- Admin: controle total (CRUD + usuários + ativos + empresas)
-- Gerente: dashboard e relatórios (somente leitura)
-- PCM: gerencia OS, estoque, sobressalentes, relatórios, exporta
-- Técnico: preenche inspeções, abre anomalias, cria OS (NÃO edita/exclui)
-- Restrições no frontend (botões ocultos) e backend (403)
+### P2 - PWA Offline-first
+- Service worker, offline data sync, cache strategies
 
-### Sobressalentes (v4.0)
-- CRUD completo (tag, descrição, modelo, fabricante, status, localização)
-- Status: estoque, em_uso, em_reforma, descartado
-- Movimentações: entrada, saída, reforma, retorno
-- Vinculação com ativo + anexo de nota fiscal
+### P3 - Firebase Push Notifications
+- In-app notifications + Firebase push
 
-### Anomalias com Priorização Inteligente (v4.0)
-- Report de anomalias por técnicos
-- Priorização automática: score = severidade × criticidade do ativo
-- Score >= 12: crítica | >= 6: alta | >= 3: média | < 3: baixa
-- Geração automática de OS corretiva
-
-### Attachments (Fotos/Documentos) (v4.0)
-- Upload para qualquer entidade (inspection, work_order, anomaly, spare_asset)
-- Inspeção não conforme exige foto
-- OS corretiva exige foto para fechar
-
-### Regras Operacionais (v4.0)
-- OS não fecha sem: descrição do serviço + tempo gasto
-- OS corretiva/falha exige foto/evidência anexada
-- Inspeção não conclui se incompleta
-
-### Knowledge Base (v4.0 - estrutura)
-- CRUD: tipo_equipamento, problema, solução, tags
-- Preparado para integração futura com IA
-
-### Exportação de Dados (v4.0)
-- Excel e PDF para: Ativos, OS, Estoque, Inspeções, Sobressalentes
-- Botões de export em todas as páginas de listagem
-- Dados prontos para Power BI
-
-### Gestão de Usuários (v4.0)
-- Admin: criar, listar, excluir usuários
-- Badges coloridos por perfil
-- Descrição de permissões no modal
-
-### Assistente Técnico IA (v3.0)
-- Chat com Gemini (Emergent LLM Key)
-- Contexto dos manuais PDF dos ativos
-- Upload de manuais por ativo
-- Sugestões de perguntas rápidas
-
-### Inspeções + Lubrificação (v3.0)
-- Modal com abas: Inspeção | Lubrificação
-- Frequências: Diária (5 itens), Quinzenal (7), Mensal (9)
-- Lubrificação: tipo, quantidade, ponto, método, data/hora
-- Checklist auto-gerado por frequência
-
-### CRUD Completo (v3.0)
-- Ativos, Estoque, OS, Inspeções: CRUD com modais enterprise
-- Enum FALHA em OSTipo e OSOrigem
-- QR Code real (qrcode.react) por ativo
-- Scanner com câmera + busca por TAG
-
-### Dashboard Executivo (v5.0)
-- 3 blocos: Visao Executiva, Performance, Risco Operacional
-- 10 KPIs com numeros grandes, legendas claras, cores por criticidade
-- Grafico de tendencia MTBF/MTTR (linha, 6 meses) com recharts
-- Grafico de distribuicao OS por tipo (barras clicaveis)
-- Drill-down: clique em qualquer KPI abre modal com dados detalhados
-- Botao "Exportar Dados" com dropdown (Excel/CSV para OS, Ativos, Inspecoes, Estoque)
-- Subtitulo: "Indicadores operacionais e de confiabilidade da planta"
-- Tema dark industrial, layout limpo, foco executivo
-
-### Dashboard + KPIs (v2.0)
-- MTTR, MTBF, Disponibilidade, Confiabilidade
-- Backlog, Conformidade, Custo mensal
-- Alertas: OS atrasadas, estoque crítico, ativos parados
-
-## Credenciais
-- Admin: admin@manutrix.com / admin123
-- Tecnico: tecnico@manutrix.com / tecnico123
-
-### Manuais PDF por Ativo (v4.2)
-- Upload de PDFs no modal de criação/edição de ativos (seção "Manuais Técnicos PDF")
-- Visualização, download e remoção na página de detalhe do ativo
-- Extração automática de texto para contexto da IA
-- Apenas Admin pode enviar/remover, todos podem visualizar
-- Manuais listados no Assistente IA com contagem e badges por ativo
-
-### Integração Power BI (v4.2)
-- 4 endpoints REST JSON otimizados para Power BI:
-  - GET /api/powerbi/ativos (dados flat de ativos)
-  - GET /api/powerbi/ordens-servico (OS com dados do ativo)
-  - GET /api/powerbi/inspecoes (inspeções com frequência e lubrificação)
-  - GET /api/powerbi/kpis-historico (snapshot de KPIs)
-- Dados prontos para importação direta no Power BI Desktop
-- Autenticação via Bearer Token
-
-## Backlog
-- P1: Gráficos históricos (MTTR/MTBF trend)
-- P1: Kanban visual de OS
-- P2: PWA offline + Service Workers
-- P2: Notificações push (FCM)
-- P3: Digital Twin, IoT, ERP integration
+### P3 - Digital Twin, IoT, ERP Integration
