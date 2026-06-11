@@ -21,6 +21,14 @@ CMMS/EAM enterprise para mineração e indústria pesada. Rastreabilidade comple
 - Suporte camera mobile (capture=environment)
 - Visualizacao fullscreen ao clicar na foto
 
+### Audit Remediation (v6.1)
+- KPI Prev/Corr%: calcula sobre TODAS as OS (antes: 100%/0%, depois: 20%/60%)
+- Conformidade%: exclui inspecoes pendentes (antes: 22.7%, depois: 55.6%)
+- Trend data: flag is_estimated por mes + label "Dados estimados" nos graficos
+- Edit/Delete: admin-only em OS, Estoque, Sobressalentes com ConfirmDialog
+- Supervisor password restaurada
+- OS list 500 error corrigido (date parsing)
+
 ### Supabase Integration (v6.0)
 - Supabase Auth para login/registro/reset de senha
 - Auto-sync: usuarios MongoDB sao criados automaticamente no Supabase no primeiro login
