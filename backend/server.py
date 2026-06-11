@@ -1409,6 +1409,33 @@ async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
     )
     return {"success": True, "message": "OS pausada"}
 
+class KanbanMoveBody(BaseModel):
+    new_status: str  # aberta, planejada, em_execucao, pausada
+
+@api_router.patch("/ordens-servico/{os_id}/status")
+async def update_os_status(os_id: str, body: KanbanMoveBody, user: Dict = Depends(get_current_user)):
+    """Kanban drag-and-drop status update"""
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
+    
+    valid = ['aberta', 'planejada', 'em_execucao', 'pausada']
+    if body.new_status not in valid:
+        raise HTTPException(status_code=400, detail=f"Status inválido. Use: {', '.join(valid)}. Para concluir, use /concluir.")
+    
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+    
+    if os_doc.get('status') == 'concluida':
+        raise HTTPException(status_code=400, detail="OS concluída não pode ser reaberta via Kanban")
+    
+    update = {"status": body.new_status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.new_status == 'em_execucao' and not os_doc.get('data_inicio'):
+        update['data_inicio'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.ordens_servico.update_one({"id": os_id}, {"$set": update})
+    await audit_log("kanban_move", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → {body.new_status}")
+    return {"success": True, "new_status": body.new_status}
+
 class ConcluirOSBody(BaseModel):
     observacoes: Optional[str] = None
     descricao_servico: Optional[str] = None

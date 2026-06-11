@@ -2564,6 +2564,102 @@ const AtivoDetailPage = () => {
   );
 };
 
+// ============== KANBAN BOARD ==============
+
+const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete }) => {
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dragOverCol, setDragOverCol] = useState(null);
+
+  const handleDragStart = (e, os) => {
+    if (os.status === 'concluida') { e.preventDefault(); return; }
+    setDraggedItem(os);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', os.id);
+  };
+
+  const handleDragOver = (e, colId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverCol(colId);
+  };
+
+  const handleDragLeave = () => { setDragOverCol(null); };
+
+  const handleDrop = (e, colId) => {
+    e.preventDefault();
+    setDragOverCol(null);
+    if (draggedItem && draggedItem.status !== colId && colId !== 'concluida') {
+      onMove(draggedItem.id, colId);
+    }
+    setDraggedItem(null);
+  };
+
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar" data-testid="kanban-board">
+      {columns.map(col => {
+        const colItems = items.filter(os => os.status === col.id);
+        const isDragOver = dragOverCol === col.id && col.id !== 'concluida';
+        return (
+          <div
+            key={col.id}
+            className={`flex-shrink-0 w-64 rounded-xl border ${col.color} ${col.bg} flex flex-col ${isDragOver ? 'ring-2 ring-emerald-400/50' : ''}`}
+            onDragOver={(e) => handleDragOver(e, col.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, col.id)}
+            data-testid={`kanban-col-${col.id}`}
+          >
+            <div className="p-3 border-b border-slate-800/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-2.5 h-2.5 rounded-full ${col.badge}`} />
+                <span className="text-sm font-semibold text-slate-300">{col.title}</span>
+              </div>
+              <span className="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{colItems.length}</span>
+            </div>
+            <div className="p-2 flex-1 space-y-2 min-h-[120px] max-h-[60vh] overflow-y-auto custom-scrollbar">
+              {colItems.map(os => (
+                <div
+                  key={os.id}
+                  draggable={col.id !== 'concluida'}
+                  onDragStart={(e) => handleDragStart(e, os)}
+                  className={`p-3 rounded-lg bg-slate-900/80 border border-slate-700/50 hover:border-slate-600 cursor-grab active:cursor-grabbing transition-all group/card ${
+                    draggedItem?.id === os.id ? 'opacity-40' : ''
+                  } ${col.id === 'concluida' ? 'cursor-default opacity-70' : ''}`}
+                  data-testid={`kanban-card-${os.id}`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-mono text-xs text-emerald-400 cursor-pointer hover:underline" onClick={() => onCardClick(os)}>#{os.numero}</span>
+                    <PriorityBadge priority={os.prioridade} />
+                  </div>
+                  <p className="text-sm text-slate-200 leading-tight cursor-pointer hover:text-white" onClick={() => onCardClick(os)}>{os.titulo}</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      {os.ativo && <span className="text-[10px] text-slate-500">{os.ativo.tag}</span>}
+                      <span className="text-[10px] text-slate-600 capitalize">{os.tipo}</span>
+                    </div>
+                    {(onEdit || onDelete) && (
+                      <div className="hidden group-hover/card:flex gap-0.5">
+                        {onEdit && <button onClick={(e) => { e.stopPropagation(); onEdit(os); }} className="p-1 hover:bg-blue-500/10 rounded" title="Editar"><Edit3 size={12} className="text-blue-400" /></button>}
+                        {onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(os); }} className="p-1 hover:bg-red-500/10 rounded" title="Excluir"><Trash2 size={12} className="text-red-400" /></button>}
+                      </div>
+                    )}
+                  </div>
+                  {os.responsavel && <p className="text-[10px] text-slate-600 mt-1"><User size={10} className="inline mr-0.5" />{os.responsavel.nome}</p>}
+                  {os.atrasada && <div className="mt-1 text-[10px] text-red-400 font-medium">ATRASADA</div>}
+                </div>
+              ))}
+              {colItems.length === 0 && (
+                <div className="flex items-center justify-center h-20 text-slate-700 text-xs border border-dashed border-slate-800 rounded-lg">
+                  {col.id === 'concluida' ? 'Concluídas' : 'Arraste OS aqui'}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // OS Page
 const OSPage = () => {
   const [osList, setOsList] = useState([]);
@@ -2574,7 +2670,7 @@ const OSPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
-  const [deleting, setDeleting] = useState(false);
+  const [viewMode, setViewMode] = useState('kanban');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
@@ -2612,8 +2708,27 @@ const OSPage = () => {
       toast.error('Erro ao excluir');
     }
   };
+
+  const handleKanbanMove = async (osId, newStatus) => {
+    try {
+      await api.patch(`/ordens-servico/${osId}/status`, { new_status: newStatus });
+      setOsList(prev => prev.map(os => os.id === osId ? { ...os, status: newStatus } : os));
+      toast.success(`OS movida para ${kanbanColumns.find(c => c.id === newStatus)?.title || newStatus}`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Erro ao mover OS');
+      fetchData();
+    }
+  };
   
   const filtered = filter ? osList.filter(os => os.status === filter) : osList;
+
+  const kanbanColumns = [
+    { id: 'aberta', title: 'Abertas', color: 'border-blue-500/40', bg: 'bg-blue-500/5', badge: 'bg-blue-500' },
+    { id: 'planejada', title: 'Planejadas', color: 'border-purple-500/40', bg: 'bg-purple-500/5', badge: 'bg-purple-500' },
+    { id: 'em_execucao', title: 'Em Execução', color: 'border-amber-500/40', bg: 'bg-amber-500/5', badge: 'bg-amber-500' },
+    { id: 'pausada', title: 'Pausadas', color: 'border-slate-500/40', bg: 'bg-slate-500/5', badge: 'bg-slate-500' },
+    { id: 'concluida', title: 'Concluídas', color: 'border-emerald-500/40', bg: 'bg-emerald-500/5', badge: 'bg-emerald-500' },
+  ];
   
   return (
     <div className="space-y-4">
@@ -2622,91 +2737,86 @@ const OSPage = () => {
           <h1 className="text-2xl font-bold text-slate-100">Ordens de Serviço</h1>
           <ExportButtons entity="ordens-servico" />
         </div>
-        <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-os-btn">
-          <Plus size={20} /> Nova OS
-        </button>
-      </div>
-      
-      {/* Filters */}
-      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
-        {[
-          { value: '', label: 'Todas' },
-          { value: 'aberta', label: 'Abertas' },
-          { value: 'planejada', label: 'Planejadas' },
-          { value: 'em_execucao', label: 'Em Execução' },
-          { value: 'pausada', label: 'Pausadas' },
-          { value: 'concluida', label: 'Concluídas' },
-        ].map(f => (
-          <button
-            key={f.value}
-            onClick={() => setFilter(f.value)}
-            className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all ${
-              filter === f.value ? 'bg-emerald-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            }`}
-          >
-            {f.label}
+        <div className="flex items-center gap-2">
+          <div className="flex bg-slate-800 rounded-lg p-0.5">
+            <button onClick={() => setViewMode('kanban')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'kanban' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400'}`} data-testid="view-kanban">
+              <LayoutDashboard size={14} className="inline mr-1" />Kanban
+            </button>
+            <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400'}`} data-testid="view-list">
+              <List size={14} className="inline mr-1" />Lista
+            </button>
+          </div>
+          <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-os-btn">
+            <Plus size={20} /> Nova OS
           </button>
-        ))}
+        </div>
       </div>
       
-      {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
-        <div className="space-y-2">
-          {filtered.map((os) => (
-            <div key={os.id} className="glass-card p-4 hover:border-slate-600 transition-all group">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 cursor-pointer" onClick={() => navigate(`/os/${os.id}`)}>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-emerald-400">#{os.numero}</span>
-                    {os.ativo && <span className="text-xs text-slate-500">{os.ativo.tag}</span>}
-                    {os.atrasada && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded">ATRASADA</span>}
-                  </div>
-                  <p className="text-slate-100">{os.titulo}</p>
-                  {os.responsavel && <p className="text-xs text-slate-500"><User size={12} className="inline mr-1" />{os.responsavel.nome}</p>}
-                </div>
-                <div className="flex items-center gap-2">
-                  {user?.role === 'admin' && (
-                    <div className="hidden group-hover:flex items-center gap-1">
-                      <button onClick={(e) => { e.stopPropagation(); setEditItem(os); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar">
-                        <Edit3 size={15} className="text-blue-400" />
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); setDeleteItem(os); }} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir">
-                        <Trash2 size={15} className="text-red-400" />
-                      </button>
-                    </div>
-                  )}
-                  <PriorityBadge priority={os.prioridade} />
-                  <ChevronRight className="text-slate-600" />
-                </div>
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <StatusBadge status={os.status} size="sm" />
-                <span className="text-xs text-slate-500 capitalize">{os.tipo}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+      {loading ? <Loading rows={5} /> : viewMode === 'kanban' ? (
+        <KanbanBoard
+          columns={kanbanColumns}
+          items={osList}
+          onMove={handleKanbanMove}
+          onCardClick={(os) => navigate(`/os/${os.id}`)}
+          onEdit={user?.role === 'admin' ? (os) => { setEditItem(os); setShowModal(true); } : null}
+          onDelete={user?.role === 'admin' ? (os) => setDeleteItem(os) : null}
+        />
       ) : (
-        <EmptyState icon={Wrench} title="Nenhuma OS encontrada" description="Crie uma nova ordem de serviço." action={() => setShowModal(true)} actionLabel="Nova OS" />
+        <>
+          <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
+            {[
+              { value: '', label: 'Todas' },
+              { value: 'aberta', label: 'Abertas' },
+              { value: 'planejada', label: 'Planejadas' },
+              { value: 'em_execucao', label: 'Em Execução' },
+              { value: 'pausada', label: 'Pausadas' },
+              { value: 'concluida', label: 'Concluídas' },
+            ].map(f => (
+              <button key={f.value} onClick={() => setFilter(f.value)} className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all ${filter === f.value ? 'bg-emerald-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {filtered.length > 0 ? (
+            <div className="space-y-2">
+              {filtered.map((os) => (
+                <div key={os.id} className="glass-card p-4 hover:border-slate-600 transition-all group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 cursor-pointer" onClick={() => navigate(`/os/${os.id}`)}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-emerald-400">#{os.numero}</span>
+                        {os.ativo && <span className="text-xs text-slate-500">{os.ativo.tag}</span>}
+                        {os.atrasada && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded">ATRASADA</span>}
+                      </div>
+                      <p className="text-slate-100">{os.titulo}</p>
+                      {os.responsavel && <p className="text-xs text-slate-500"><User size={12} className="inline mr-1" />{os.responsavel.nome}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {user?.role === 'admin' && (
+                        <div className="hidden group-hover:flex items-center gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); setEditItem(os); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar"><Edit3 size={15} className="text-blue-400" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); setDeleteItem(os); }} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir"><Trash2 size={15} className="text-red-400" /></button>
+                        </div>
+                      )}
+                      <PriorityBadge priority={os.prioridade} />
+                      <ChevronRight className="text-slate-600" />
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <StatusBadge status={os.status} size="sm" />
+                    <span className="text-xs text-slate-500 capitalize">{os.tipo}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={Wrench} title="Nenhuma OS encontrada" description="Crie uma nova ordem de serviço." action={() => setShowModal(true)} actionLabel="Nova OS" />
+          )}
+        </>
       )}
       
-      <ModalNovaOS
-        isOpen={showModal}
-        onClose={() => { setShowModal(false); setEditItem(null); }}
-        onSuccess={fetchData}
-        ativos={ativos}
-        tecnicos={tecnicos}
-        editData={editItem}
-      />
-      
-      <ConfirmDialog
-        isOpen={!!deleteItem}
-        onClose={() => setDeleteItem(null)}
-        onConfirm={handleDelete}
-        title="Excluir OS"
-        message={`Tem certeza que deseja excluir a OS #${deleteItem?.numero}?`}
-        confirmText="Excluir"
-        danger
-      />
+      <ModalNovaOS isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} onSuccess={fetchData} ativos={ativos} tecnicos={tecnicos} editData={editItem} />
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir OS" message={`Tem certeza que deseja excluir a OS #${deleteItem?.numero}?`} confirmText="Excluir" danger />
     </div>
   );
 };
