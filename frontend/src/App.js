@@ -1,7 +1,6 @@
 import { useState, useEffect, createContext, useContext, useRef, Fragment } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
-import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
@@ -16,32 +15,8 @@ import {
   DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
   Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3
 } from "lucide-react";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-// Auth Context
-const AuthContext = createContext(null);
-export const useAuth = () => useContext(AuthContext);
-
-// API Client
-const api = axios.create({ baseURL: API });
-api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('manutrix_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      sessionStorage.removeItem('manutrix_token');
-      sessionStorage.removeItem('manutrix_user');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
+import axios from "axios";
 
 // ============== COMPONENTS ==============
 
@@ -2664,6 +2639,7 @@ const AtivoDetailPage = () => {
 const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete }) => {
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
+  const touchRef = useRef(null);
 
   const handleDragStart = (e, os) => {
     if (os.status === 'concluida') { e.preventDefault(); return; }
@@ -2689,15 +2665,31 @@ const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete }) 
     setDraggedItem(null);
   };
 
+  // Mobile touch support
+  const handleTouchStart = (os) => {
+    if (os.status === 'concluida') return;
+    touchRef.current = os;
+    setDraggedItem(os);
+  };
+
+  const handleTouchEnd = (colId) => {
+    if (touchRef.current && touchRef.current.status !== colId && colId !== 'concluida') {
+      onMove(touchRef.current.id, colId);
+    }
+    touchRef.current = null;
+    setDraggedItem(null);
+    setDragOverCol(null);
+  };
+
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar" data-testid="kanban-board">
+    <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar snap-x snap-mandatory" data-testid="kanban-board">
       {columns.map(col => {
         const colItems = items.filter(os => os.status === col.id);
         const isDragOver = dragOverCol === col.id && col.id !== 'concluida';
         return (
           <div
             key={col.id}
-            className={`flex-shrink-0 w-64 rounded-xl border ${col.color} ${col.bg} flex flex-col ${isDragOver ? 'ring-2 ring-emerald-400/50' : ''}`}
+            className={`flex-shrink-0 w-56 md:w-64 rounded-xl border ${col.color} ${col.bg} flex flex-col snap-start ${isDragOver ? 'ring-2 ring-emerald-400/50' : ''}`}
             onDragOver={(e) => handleDragOver(e, col.id)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, col.id)}
@@ -2740,6 +2732,16 @@ const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete }) 
                   </div>
                   {os.responsavel && <p className="text-[10px] text-slate-600 mt-1"><User size={10} className="inline mr-0.5" />{os.responsavel.nome}</p>}
                   {os.atrasada && <div className="mt-1 text-[10px] text-red-400 font-medium">ATRASADA</div>}
+                  {/* Mobile quick-move buttons */}
+                  {col.id !== 'concluida' && (
+                    <div className="mt-2 flex gap-1 md:hidden" data-testid={`mobile-move-${os.id}`}>
+                      {columns.filter(c => c.id !== col.id && c.id !== 'concluida').map(c => (
+                        <button key={c.id} onClick={(e) => { e.stopPropagation(); onMove(os.id, c.id); }} className={`text-[9px] px-1.5 py-0.5 rounded ${c.bg} ${c.color} border`}>
+                          {c.title.slice(0, 3)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               {colItems.length === 0 && (
@@ -2922,12 +2924,17 @@ const OSDetailPage = () => {
   const [os, setOs] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [historico, setHistorico] = useState([]);
   const navigate = useNavigate();
   
   const fetchOS = async () => {
     try {
-      const response = await api.get(`/ordens-servico/${id}`);
-      setOs(response.data);
+      const [osRes, histRes] = await Promise.all([
+        api.get(`/ordens-servico/${id}`),
+        api.get(`/ordens-servico/${id}/historico`).catch(() => ({ data: [] }))
+      ]);
+      setOs(osRes.data);
+      setHistorico(histRes.data);
     } catch (error) {
       toast.error('OS não encontrada');
       navigate('/os');
@@ -3023,7 +3030,26 @@ const OSDetailPage = () => {
         </div>
       </div>
       
-      {/* Actions */}
+      {/* Histórico de Transições */}
+      {historico.length > 0 && (
+        <div className="glass-card p-4" data-testid="os-historico">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Activity size={16} /> Histórico de Transições
+          </h3>
+          <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+            {historico.map((h, idx) => (
+              <div key={idx} className="flex items-start gap-3 text-sm border-l-2 border-slate-700 pl-3 py-1">
+                <div className="flex-1">
+                  <p className="text-slate-300">{h.details}</p>
+                  <p className="text-xs text-slate-600">{h.user_nome} ({h.user_role}) &middot; {new Date(h.created_at).toLocaleString('pt-BR')}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Actions — OS Detail */}
       {!['concluida', 'cancelada'].includes(os.status) && (
         <div className="space-y-2">
           {os.status === 'aberta' && (

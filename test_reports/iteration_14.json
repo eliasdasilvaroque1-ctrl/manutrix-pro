@@ -1,0 +1,87 @@
+{
+  "summary": "Iteration 14 - P0.5 Architecture Hardening (server.py module split into deps.py, models.py, routes/dashboard.py, routes/assets.py, routes/work_orders.py) regression + P1 Kanban OS testing complete. Backend: 14/14 pytest tests passed including all regression endpoints (plants, sectors, kpis, dashboard/stats, dashboard/trend, ativos, ordens-servico, inspecoes) and new Kanban endpoints (PATCH /api/ordens-servico/{id}/status, GET /api/ordens-servico/{id}/historico). Permission enforcement verified: tecnico role gets 403 on PATCH status. Frontend: login -> dashboard works, /plantas shows PP card with sector/asset counts, /setores shows 4 sectors (EMBA, MANU, PROD, UTIL), /os defaults to Kanban view with all 5 columns (Abertas 4, Planejadas, Em Execução, Pausadas, Concluídas) and 5 OS cards. View toggle Kanban<->Lista works via data-testid='view-kanban'/'view-list'. OS detail page navigation works via kanban-card click. After a Kanban status change, OS detail page correctly shows 'HISTÓRICO DE TRANSIÇÕES' section listing the transition (OS #2026-00043 -> planejada with admin attribution and timestamp). No business logic regressions detected after module split.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["[Pre-existing - reported in iter_13] Console hydration warning: <span> cannot be a child of <option> on dashboard plant filter select. Caused by Emergent visual editor (data-ve-dynamic) instrumentation wrapping option text. Cosmetic dev-only warning; functional behavior unaffected. App.js ~line 2011."]},
+      {"screen": "Dashboard", "issues": ["[Pre-existing - reported in iter_13] Recharts warning 'width(-1) height(-1)' on initial render before ResizeObserver fires. Cosmetic, charts render correctly afterwards."]}
+    ]
+  },
+
+  "passed_tests": [
+    "Backend: GET /api/plants returns >=1 plant (PP) with sector_count/asset_count (post-refactor regression)",
+    "Backend: GET /api/sectors returns 4 sectors EMBA/MANU/PROD/UTIL (post-refactor regression)",
+    "Backend: GET /api/kpis returns valid KPI dict (disponibilidade, mtbf, mttr, backlog, ativos_total)",
+    "Backend: GET /api/dashboard/stats returns ativos + ordens_servico (abertas/planejadas/...)",
+    "Backend: GET /api/dashboard/trend returns 6 months of trend data",
+    "Backend: GET /api/ativos returns >=9 ativos",
+    "Backend: GET /api/ordens-servico returns list",
+    "Backend: GET /api/inspecoes returns list",
+    "Backend: POST /api/ordens-servico creates OS (status=aberta) for kanban test",
+    "Backend: PATCH /api/ordens-servico/{id}/status with new_status=planejada returns {success:true,new_status:planejada} and persists status change",
+    "Backend: PATCH /api/ordens-servico/{id}/status with new_status=em_execucao sets data_inicio automatically",
+    "Backend: PATCH /api/ordens-servico/{id}/status with new_status=concluida returns 400 (kanban does not allow conclude)",
+    "Backend: PATCH /api/ordens-servico/{invalid_uuid}/status returns 404",
+    "Backend: PATCH /api/ordens-servico/{id}/status with tecnico token returns 403 (permission enforcement)",
+    "Backend: GET /api/ordens-servico/{id}/historico returns audit logs including action=kanban_move",
+    "Frontend: Login admin@manutrix.com/admin123 -> dashboard loads",
+    "Frontend: /plantas shows PP - Planta Principal card with setor/ativo counts",
+    "Frontend: /setores shows 4 sectors EMBA/MANU/PROD/UTIL",
+    "Frontend: /os defaults to Kanban view with 5 columns (data-testid='kanban-col-*')",
+    "Frontend: Kanban shows 5 OS cards (data-testid='kanban-card-*')",
+    "Frontend: View toggle Kanban<->Lista works via data-testid='view-kanban' / 'view-list'",
+    "Frontend: Clicking a kanban card navigates to /os/{id} detail page",
+    "Frontend: After Kanban PATCH status change, OS detail page shows 'HISTÓRICO DE TRANSIÇÕES' section with transition entry 'OS #2026-00043 -> planejada' + admin attribution + timestamp",
+    "Frontend: OS detail shows updated status badge (Planejada) after status change"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_iteration14_kanban.py",
+    "/app/test_reports/pytest/pytest_results_iteration14.xml"
+  ],
+
+  "action_items": [
+    "OPTIONAL: Suppress the pre-existing <span> inside <option> hydration warning on dashboard plant filter (caused by Emergent visual editor dynamic instrumentation; cosmetic only).",
+    "OPTIONAL: Consider data-testid='os-card-*' alias OR document that kanban cards use data-testid='kanban-card-{id}' for future testing agents."
+  ],
+
+  "critical_code_review_comments": [
+    "GOOD: P0.5 module split is clean - routes/work_orders.py, routes/dashboard.py, routes/assets.py all use APIRouter and import shared deps/models. server.py still ~2291 lines; further extraction (inspecoes, anomalias, ronda, users, estoque) could be done in next P0.x.",
+    "MINOR: routes/dashboard.py POST /migration/run uses 'from server import migrate_hierarchy, _backfill_ativo_hierarchy' - this is a circular import risk if server.py later imports from dashboard router at module level. Consider moving these helpers into deps.py.",
+    "GOOD: PATCH /api/ordens-servico/{id}/status correctly enforces role-based access (admin/pcm/supervisor) via check_write_permission helper. Tecnico correctly blocked.",
+    "GOOD: Kanban PATCH explicitly forbids 'concluida' status; conclusion must go through /concluir which enforces stricter business rules (photo evidence, time tracking).",
+    "GOOD: Status transition to 'em_execucao' auto-sets data_inicio if not already set - prevents data inconsistency.",
+    "GOOD: audit_log records kanban_move actions; GET /historico endpoint correctly returns them sorted by created_at desc.",
+    "App.js remains >4800 lines (per iter_13 review) - splitting into per-route files still pending."
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_iteration14_kanban.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (all flows verified end-to-end including Histórico section render after Kanban move)"
+  },
+
+  "test_credentials": {
+    "admin": "admin@manutrix.com / admin123",
+    "tecnico": "tecnico@manutrix.com / tecnico123"
+  },
+
+  "seed_data_creation": "Test-created OS (titulo='TEST_Kanban OS') is created and deleted in the fixture (yield then DELETE). The OS #2026-00043 was moved aberta->planejada via API during UI verification (this audit log persists in DB but is harmless test data).",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "P0.5 architecture hardening is verified - all routes still work after splitting server.py into deps.py/models.py/routes/*. P1 Kanban is fully working: drag handlers exist (data-testid='kanban-card-{id}'), PATCH endpoint enforces role + valid status transitions, audit_log writes kanban_move entries, GET /historico exposes them, OS detail page renders 'HISTÓRICO DE TRANSIÇÕES' section conditionally. Two pre-existing cosmetic console warnings persist (span-in-option hydration from Emergent VE, recharts initial dimensions). Test data: OS #2026-00043 has been moved to planejada status during testing - if next iteration needs that OS in 'aberta' status, reset it via PATCH or seed.",
+
+  "rca of the issue": "No bugs found. P0.5 refactor preserved all behavior; P1 Kanban features work end-to-end."
+}
