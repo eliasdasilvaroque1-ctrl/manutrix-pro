@@ -311,18 +311,14 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
   const [loading, setLoading] = useState(false);
   const [pdfFiles, setPdfFiles] = useState([]);
   const [existingManuais, setExistingManuais] = useState([]);
-  const [plants, setPlants] = useState([]);
   const [sectors, setSectors] = useState([]);
   const [form, setForm] = useState({
-    tag: '', nome: '', tipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
-    plant_id: '', sector_id: '', centro_custo: '', criticidade: 'media', status: 'operacional',
-    mtbf_horas: '', mttr_horas: '', data_instalacao: '', garantia_ate: '',
-    valor_aquisicao: '', depreciacao_anual: '', fornecedor: '', observacoes: ''
+    tag: '', nome: '', tipo_equipamento: '', subtipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
+    sector_id: '', criticidade: 'media', status: 'operacional', observacoes: ''
   });
   
   useEffect(() => {
     if (isOpen) {
-      api.get('/plants').then(r => setPlants(r.data)).catch(() => {});
       api.get('/sectors').then(r => setSectors(r.data)).catch(() => {});
     }
   }, [isOpen]);
@@ -488,20 +484,12 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
             <Settings size={16} /> Operacional
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormInput label="Planta" required>
-              <Select
-                value={form.plant_id}
-                onChange={(val) => setForm({...form, plant_id: val, sector_id: ''})}
-                options={plants.map(p => ({ value: p.id, label: `${p.codigo} - ${p.nome}` }))}
-                placeholder="Selecione a planta..."
-              />
-            </FormInput>
             <FormInput label="Setor" required>
               <Select
                 value={form.sector_id}
                 onChange={(val) => setForm({...form, sector_id: val})}
-                options={filteredSectors.map(s => ({ value: s.id, label: s.nome }))}
-                placeholder={form.plant_id ? "Selecione o setor..." : "Selecione a planta primeiro"}
+                options={sectors.map(s => ({ value: s.id, label: s.nome }))}
+                placeholder="Selecione o setor..."
               />
             </FormInput>
             <FormInput label="Centro de Custo">
@@ -997,7 +985,7 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
 const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], editData = null }) => {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    ativo_id: '', tipo: 'corretiva', prioridade: 'media',
+    ativo_id: '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
     titulo: '', descricao: '', responsavel_id: '',
     data_planejada: '', custo_pecas: 0, custo_mao_obra: 0
   });
@@ -1007,6 +995,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
       setForm({
         ativo_id: editData.ativo_id || '',
         tipo: editData.tipo || 'corretiva',
+        disciplina: editData.disciplina || 'mecanica',
         prioridade: editData.prioridade || 'media',
         titulo: editData.titulo || '',
         descricao: editData.descricao || '',
@@ -1017,7 +1006,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
       });
     } else {
       setForm({
-        ativo_id: '', tipo: 'corretiva', prioridade: 'media',
+        ativo_id: '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
         titulo: '', descricao: '', responsavel_id: '',
         data_planejada: '', custo_pecas: 0, custo_mao_obra: 0
       });
@@ -1026,8 +1015,8 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
   
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.ativo_id || !form.titulo) {
-      toast.error('Preencha os campos obrigatórios');
+    if (!form.ativo_id || !form.titulo || !form.disciplina) {
+      toast.error('Preencha Ativo, Título e Disciplina');
       return;
     }
     
@@ -1089,11 +1078,25 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                 value={form.tipo}
                 onChange={(val) => setForm({...form, tipo: val})}
                 options={[
+                  { value: 'lubrificacao', label: 'Lubrificação' },
+                  { value: 'limpeza_organizacao', label: 'Limpeza e Organização' },
                   { value: 'preventiva', label: 'Preventiva' },
                   { value: 'corretiva', label: 'Corretiva' },
-                  { value: 'preditiva', label: 'Preditiva' },
-                  { value: 'emergencia', label: 'Emergência' },
-                  { value: 'falha', label: 'Falha' },
+                  { value: 'preparacao_material', label: 'Preparação de Material' },
+                  { value: 'fabricacao_melhorias', label: 'Fabricação / Melhorias' },
+                ]}
+              />
+            </FormInput>
+            <FormInput label="Disciplina" required>
+              <Select
+                value={form.disciplina}
+                onChange={(val) => setForm({...form, disciplina: val})}
+                options={[
+                  { value: 'mecanica', label: 'Mecânica' },
+                  { value: 'eletrica', label: 'Elétrica' },
+                  { value: 'instrumentacao', label: 'Instrumentação' },
+                  { value: 'civil', label: 'Civil' },
+                  { value: 'producao', label: 'Produção' },
                 ]}
               />
             </FormInput>
@@ -1515,7 +1518,6 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     {
       label: 'INFRAESTRUTURA',
       items: [
-        { icon: Building, label: 'Plantas', path: '/plantas' },
         { icon: Layers, label: 'Setores', path: '/setores' },
       ]
     },
@@ -1859,15 +1861,12 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [drillModal, setDrillModal] = useState({ open: false, type: '', title: '', data: [] });
   const [drillLoading, setDrillLoading] = useState(false);
-  const [plants, setPlants] = useState([]);
   const [sectors, setSectors] = useState([]);
-  const [filterPlant, setFilterPlant] = useState('');
   const [filterSector, setFilterSector] = useState('');
   const { user } = useAuth();
   const navigate = useNavigate();
   
   useEffect(() => {
-    api.get('/plants').then(r => setPlants(r.data)).catch(() => {});
     api.get('/sectors').then(r => setSectors(r.data)).catch(() => {});
   }, []);
   
@@ -1876,7 +1875,6 @@ const DashboardPage = () => {
       setLoading(true);
       try {
         const params = {};
-        if (filterPlant) params.plant_id = filterPlant;
         if (filterSector) params.sector_id = filterSector;
         const [kpisRes, statsRes, trendRes] = await Promise.all([
           api.get('/kpis', { params }),
@@ -1893,7 +1891,7 @@ const DashboardPage = () => {
       }
     };
     fetchData();
-  }, [filterPlant, filterSector]);
+  }, [filterSector]);
 
   const drillDown = async (type, title) => {
     setDrillLoading(true);
@@ -2002,27 +2000,16 @@ const DashboardPage = () => {
           <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-1.5" data-testid="dashboard-filters">
             <Filter size={14} className="text-slate-500" />
             <select
-              value={filterPlant}
-              onChange={(e) => { setFilterPlant(e.target.value); setFilterSector(''); }}
+              value={filterSector}
+              onChange={(e) => setFilterSector(e.target.value)}
               className="bg-transparent text-sm text-slate-300 border-none outline-none cursor-pointer"
-              data-testid="filter-plant"
+              data-testid="filter-sector"
             >
-              <option value="">Todas as Plantas</option>
-              {plants.map(p => <option key={p.id} value={p.id}>{p.codigo} - {p.nome}</option>)}
+              <option value="">Todos os Setores</option>
+              {sectors.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
             </select>
-            {filterPlant && (
-              <select
-                value={filterSector}
-                onChange={(e) => setFilterSector(e.target.value)}
-                className="bg-transparent text-sm text-slate-300 border-none outline-none cursor-pointer border-l border-slate-600 pl-2"
-                data-testid="filter-sector"
-              >
-                <option value="">Todos os Setores</option>
-                {sectors.filter(s => s.plant_id === filterPlant).map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-              </select>
-            )}
-            {(filterPlant || filterSector) && (
-              <button onClick={() => { setFilterPlant(''); setFilterSector(''); }} className="text-xs text-red-400 hover:text-red-300 ml-1" data-testid="clear-filters">
+            {filterSector && (
+              <button onClick={() => setFilterSector('')} className="text-xs text-red-400 hover:text-red-300 ml-1" data-testid="clear-filters">
                 <X size={14} />
               </button>
             )}
@@ -2228,13 +2215,11 @@ const OSDistChart = ({ data, onBarClick }) => {
 const AtivosPage = () => {
   const [ativos, setAtivos] = useState([]);
   const [areas, setAreas] = useState([]);
-  const [plants, setPlants] = useState([]);
   const [sectors, setSectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCriticidade, setFilterCriticidade] = useState('');
-  const [filterPlant, setFilterPlant] = useState('');
   const [filterSector, setFilterSector] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -2251,17 +2236,14 @@ const AtivosPage = () => {
   const fetchData = async () => {
     try {
       const params = {};
-      if (filterPlant) params.plant_id = filterPlant;
       if (filterSector) params.sector_id = filterSector;
-      const [ativosRes, areasRes, plantsRes, sectorsRes] = await Promise.all([
+      const [ativosRes, areasRes, sectorsRes] = await Promise.all([
         api.get('/ativos', { params }),
         api.get('/areas'),
-        api.get('/plants'),
         api.get('/sectors')
       ]);
       setAtivos(ativosRes.data);
       setAreas(areasRes.data);
-      setPlants(plantsRes.data);
       setSectors(sectorsRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
@@ -2270,7 +2252,7 @@ const AtivosPage = () => {
     }
   };
   
-  useEffect(() => { fetchData(); }, [filterPlant, filterSector]);
+  useEffect(() => { fetchData(); }, [filterSector]);
   
   const handleDelete = async () => {
     try {
@@ -2343,16 +2325,9 @@ const AtivosPage = () => {
           className="w-40"
         />
         <Select
-          value={filterPlant}
-          onChange={(val) => { setFilterPlant(val); setFilterSector(''); }}
-          options={plants.map(p => ({ value: p.id, label: p.nome }))}
-          placeholder="Planta"
-          className="w-40"
-        />
-        <Select
           value={filterSector}
           onChange={setFilterSector}
-          options={(filterPlant ? sectors.filter(s => s.plant_id === filterPlant) : sectors).map(s => ({ value: s.id, label: s.nome }))}
+          options={sectors.map(s => ({ value: s.id, label: s.nome }))}
           placeholder="Setor"
           className="w-40"
         />
@@ -4645,42 +4620,36 @@ const PlantasPage = () => {
 // ============== SETORES PAGE ==============
 const SetoresPage = () => {
   const [sectors, setSectors] = useState([]);
-  const [plants, setPlants] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterPlant, setFilterPlant] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
-  const [form, setForm] = useState({ plant_id: '', codigo: '', nome: '', descricao: '', cor: '#10b981' });
+  const [form, setForm] = useState({ codigo: '', nome: '', descricao: '', cor: '#10b981' });
   const [saving, setSaving] = useState(false);
   const { user } = useAuth();
 
   const fetchData = async () => {
     try {
-      const [sRes, pRes] = await Promise.all([
-        api.get('/sectors', { params: filterPlant ? { plant_id: filterPlant } : {} }),
-        api.get('/plants')
-      ]);
+      const sRes = await api.get('/sectors');
       setSectors(sRes.data);
-      setPlants(pRes.data);
     } catch { toast.error('Erro ao carregar setores'); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); }, [filterPlant]);
+  useEffect(() => { fetchData(); }, []);
 
   const openModal = (item = null) => {
     setEditItem(item);
     setForm(item 
-      ? { plant_id: item.plant_id || '', codigo: item.codigo || '', nome: item.nome || '', descricao: item.descricao || '', cor: item.cor || '#10b981' }
-      : { plant_id: filterPlant || (plants.length === 1 ? plants[0].id : ''), codigo: '', nome: '', descricao: '', cor: '#10b981' }
+      ? { codigo: item.codigo || '', nome: item.nome || '', descricao: item.descricao || '', cor: item.cor || '#10b981' }
+      : { codigo: '', nome: '', descricao: '', cor: '#10b981' }
     );
     setShowModal(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.plant_id || !form.codigo || !form.nome) { toast.error('Planta, código e nome são obrigatórios'); return; }
+    if (!form.codigo || !form.nome) { toast.error('Código e nome são obrigatórios'); return; }
     setSaving(true);
     try {
       if (editItem) {
@@ -4705,6 +4674,14 @@ const SetoresPage = () => {
     } catch (err) { toast.error(err.response?.data?.detail || 'Erro ao excluir'); }
   };
 
+  const handleToggle = async (sector) => {
+    try {
+      await api.patch(`/sectors/${sector.id}/toggle`);
+      toast.success(sector.is_active ? 'Setor desabilitado' : 'Setor habilitado');
+      fetchData();
+    } catch (err) { toast.error('Erro ao alterar status'); }
+  };
+
   const colors = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ef4444','#ec4899','#06b6d4','#f97316'];
 
   return (
@@ -4722,7 +4699,7 @@ const SetoresPage = () => {
       </div>
 
       <div className="flex items-center gap-3">
-        <Select value={filterPlant} onChange={setFilterPlant} options={plants.map(p => ({ value: p.id, label: `${p.codigo} - ${p.nome}` }))} placeholder="Todas as Plantas" className="w-56" />
+        <p className="text-sm text-slate-500">{sectors.length} setores cadastrados</p>
       </div>
 
       {loading ? <Loading rows={3} /> : sectors.length > 0 ? (
@@ -4740,6 +4717,9 @@ const SetoresPage = () => {
                 {user?.role === 'admin' && (
                   <div className="hidden group-hover:flex items-center gap-1">
                     <button onClick={() => openModal(s)} className="p-2 hover:bg-slate-700 rounded-lg"><Edit size={16} className="text-slate-400" /></button>
+                    <button onClick={() => handleToggle(s)} className={`p-2 rounded-lg ${s.is_active !== false ? 'hover:bg-yellow-500/10' : 'hover:bg-green-500/10'}`} title={s.is_active !== false ? 'Desabilitar' : 'Habilitar'}>
+                      {s.is_active !== false ? <Pause size={16} className="text-yellow-400" /> : <Play size={16} className="text-green-400" />}
+                    </button>
                     <button onClick={() => setDeleteItem(s)} className="p-2 hover:bg-red-500/10 rounded-lg"><Trash2 size={16} className="text-red-400" /></button>
                   </div>
                 )}
@@ -4758,9 +4738,6 @@ const SetoresPage = () => {
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? "Editar Setor" : "Novo Setor"} size="sm">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <FormInput label="Planta" required>
-            <Select value={form.plant_id} onChange={val => setForm({...form, plant_id: val})} options={plants.map(p => ({ value: p.id, label: `${p.codigo} - ${p.nome}` }))} placeholder="Selecione a planta" disabled={!!editItem} />
-          </FormInput>
           <FormInput label="Código" required>
             <input type="text" value={form.codigo} onChange={e => setForm({...form, codigo: e.target.value.toUpperCase()})} placeholder="Ex: UTIL, PROD" className="input-industrial w-full px-4 font-mono" required disabled={!!editItem} data-testid="sector-codigo-input" />
           </FormInput>
@@ -4854,7 +4831,6 @@ function App() {
           <Route path="/anomalias" element={<ProtectedRoute><AppLayout><AnomaliasPage /></AppLayout></ProtectedRoute>} />
           <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
           <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/plantas" element={<ProtectedRoute><AppLayout><PlantasPage /></AppLayout></ProtectedRoute>} />
           <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

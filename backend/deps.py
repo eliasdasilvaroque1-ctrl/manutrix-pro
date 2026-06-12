@@ -164,14 +164,12 @@ async def verificar_estoque_critico(item_id: str, org_id: str):
                 "/estoque"
             )
 
-async def get_scoped_asset_ids(org_id: str, plant_id: str = None, sector_id: str = None) -> list:
-    if not plant_id and not sector_id:
+async def get_scoped_asset_ids(org_id: str, sector_id: str = None) -> list:
+    if not sector_id:
         return None
     q = {"deleted_at": None}
     if org_id:
         q['organization_id'] = org_id
-    if plant_id:
-        q['plant_id'] = plant_id
     if sector_id:
         q['sector_id'] = sector_id
     matching = await db.ativos.find(q, {"_id": 0, "id": 1}).to_list(5000)

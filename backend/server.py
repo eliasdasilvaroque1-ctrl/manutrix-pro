@@ -515,7 +515,6 @@ async def list_inspecoes(
     status: Optional[InspecaoStatus] = None,
     ativo_id: Optional[str] = None,
     responsavel_id: Optional[str] = None,
-    plant_id: Optional[str] = None,
     sector_id: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
@@ -529,9 +528,8 @@ async def list_inspecoes(
     if responsavel_id:
         query['responsavel_id'] = responsavel_id
     
-    # Scope by plant/sector
-    if plant_id or sector_id:
-        asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), plant_id, sector_id)
+    if sector_id:
+        asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), sector_id=sector_id)
         if asset_ids is not None:
             query['ativo_id'] = {"$in": asset_ids}
     
@@ -980,35 +978,12 @@ async def seed_data():
         await db.users.insert_one(user_doc)
         users.append(user_doc)
     
-    # Plant (new hierarchy)
-    planta_id = str(uuid.uuid4())
-    plant_doc = {
-        "id": planta_id,
-        "organization_id": org.id,
-        "codigo": "PP",
-        "nome": "Planta Principal",
-        "descricao": "Rua Industrial, 1000 - São Paulo, SP",
-        "is_active": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "deleted_at": None
-    }
-    await db.plants.insert_one(plant_doc)
-    # Also insert into legacy collection for compat
-    await db.plantas.insert_one({
-        "id": planta_id,
-        "nome": "Planta Principal",
-        "endereco": "Rua Industrial, 1000 - São Paulo, SP",
-        "organization_id": org.id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "deleted_at": None
-    })
-    
-    # Sectors (new hierarchy) + Areas (legacy compat)
+    # Sectors (top-level, no Plants)
     sectors_data = [
-        {"nome": "Utilidades", "codigo": "UTIL", "cor": "#10b981", "descricao": "Sistemas de água, ar comprimido e energia"},
-        {"nome": "Produção", "codigo": "PROD", "cor": "#3b82f6", "descricao": "Linha de produção principal"},
-        {"nome": "Embalagem", "codigo": "EMBA", "cor": "#f59e0b", "descricao": "Área de embalagem e expedição"},
-        {"nome": "Manutenção", "codigo": "MANU", "cor": "#8b5cf6", "descricao": "Oficina de manutenção"}
+        {"nome": "Britagem Primária", "codigo": "BRIT1", "cor": "#ef4444", "descricao": "Britagem primária de minério"},
+        {"nome": "Moagem", "codigo": "MOAG", "cor": "#3b82f6", "descricao": "Moagem e classificação"},
+        {"nome": "Oficina Mecânica", "codigo": "OFMEC", "cor": "#f59e0b", "descricao": "Oficina de manutenção mecânica"},
+        {"nome": "Utilidades", "codigo": "UTIL", "cor": "#10b981", "descricao": "Sistemas de água, ar e energia"},
     ]
     
     sectors = []
@@ -1017,7 +992,6 @@ async def seed_data():
         sector_doc = {
             "id": sector_id,
             "organization_id": org.id,
-            "plant_id": planta_id,
             "codigo": sd['codigo'],
             "nome": sd['nome'],
             "descricao": sd['descricao'],
@@ -1027,30 +1001,17 @@ async def seed_data():
             "deleted_at": None
         }
         await db.sectors.insert_one(sector_doc)
-        # Also insert into legacy areas collection
-        await db.areas.insert_one({
-            "id": sector_id,
-            "nome": sd['nome'],
-            "planta_id": planta_id,
-            "cor": sd['cor'],
-            "descricao": sd['descricao'],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "deleted_at": None
-        })
         sectors.append(sector_doc)
     
     # Ativos
     ativos_data = [
-        {"tag": "BOM-001", "nome": "Bomba Centrífuga 01", "tipo": "Bomba", "fabricante": "KSB", "modelo": "Meganorm 50-200", "criticidade": "critica", "area_idx": 0, "valor": 45000},
-        {"tag": "BOM-002", "nome": "Bomba Centrífuga 02", "tipo": "Bomba", "fabricante": "KSB", "modelo": "Meganorm 40-160", "criticidade": "alta", "area_idx": 0, "valor": 35000},
-        {"tag": "CMP-001", "nome": "Compressor de Ar", "tipo": "Compressor", "fabricante": "Atlas Copco", "modelo": "GA 30+", "criticidade": "critica", "area_idx": 0, "valor": 120000},
-        {"tag": "EST-001", "nome": "Esteira Transportadora 01", "tipo": "Esteira", "fabricante": "Rexnord", "modelo": "FlatTop 2010", "criticidade": "alta", "area_idx": 1, "valor": 28000},
-        {"tag": "EST-002", "nome": "Esteira Transportadora 02", "tipo": "Esteira", "fabricante": "Rexnord", "modelo": "FlatTop 2010", "criticidade": "media", "area_idx": 1, "valor": 28000},
-        {"tag": "MIS-001", "nome": "Misturador Industrial", "tipo": "Misturador", "fabricante": "Ekato", "modelo": "HWL", "criticidade": "critica", "area_idx": 1, "valor": 85000},
-        {"tag": "EMB-001", "nome": "Encaixotadora Automática", "tipo": "Embaladora", "fabricante": "Bosch", "modelo": "CUC 3001", "criticidade": "alta", "area_idx": 2, "valor": 150000},
-        {"tag": "EMB-002", "nome": "Paletizadora", "tipo": "Paletizador", "fabricante": "KUKA", "modelo": "KR 180 PA", "criticidade": "alta", "area_idx": 2, "valor": 280000},
-        {"tag": "TOR-001", "nome": "Torno Mecânico", "tipo": "Máquina Ferramenta", "fabricante": "Romi", "modelo": "Tormax 30A", "criticidade": "media", "area_idx": 3, "valor": 95000},
-        {"tag": "FRE-001", "nome": "Fresadora CNC", "tipo": "Máquina Ferramenta", "fabricante": "Romi", "modelo": "D 800", "criticidade": "alta", "area_idx": 3, "valor": 320000},
+        {"tag": "BOM-001", "nome": "Bomba Centrífuga 01", "tipo": "Bomba", "fabricante": "KSB", "modelo": "Meganorm 50-200", "criticidade": "critica", "area_idx": 0},
+        {"tag": "BOM-002", "nome": "Bomba Centrífuga 02", "tipo": "Bomba", "fabricante": "KSB", "modelo": "Meganorm 40-160", "criticidade": "alta", "area_idx": 0},
+        {"tag": "CMP-001", "nome": "Compressor de Ar", "tipo": "Compressor", "fabricante": "Atlas Copco", "modelo": "GA 30+", "criticidade": "critica", "area_idx": 3},
+        {"tag": "EST-001", "nome": "Esteira Transportadora 01", "tipo": "Esteira", "fabricante": "Rexnord", "modelo": "FlatTop 2010", "criticidade": "alta", "area_idx": 1},
+        {"tag": "MIS-001", "nome": "Misturador Industrial", "tipo": "Misturador", "fabricante": "Ekato", "modelo": "HWL", "criticidade": "critica", "area_idx": 1},
+        {"tag": "TOR-001", "nome": "Torno Mecânico", "tipo": "Máquina Ferramenta", "fabricante": "Romi", "modelo": "Tormax 30A", "criticidade": "media", "area_idx": 2},
+        {"tag": "FRE-001", "nome": "Fresadora CNC", "tipo": "Máquina Ferramenta", "fabricante": "Romi", "modelo": "D 800", "criticidade": "alta", "area_idx": 2},
     ]
     
     ativos = []
@@ -1063,16 +1024,12 @@ async def seed_data():
             "qr_code": str(uuid.uuid4()),
             "nome": ad['nome'],
             "tipo_equipamento": ad['tipo'],
-            "fabricante": ad['fabricante'],
-            "modelo": ad['modelo'],
+            "fabricante": ad.get('fabricante'),
+            "modelo": ad.get('modelo'),
             "criticidade": ad['criticidade'],
             "status": "operacional",
-            "plant_id": planta_id,
             "sector_id": sector['id'],
-            "area_id": sector['id'],
             "organization_id": org.id,
-            "valor_aquisicao": ad['valor'],
-            "data_instalacao": "2023-01-15",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "deleted_at": None
@@ -1174,11 +1131,11 @@ async def seed_data():
         }
         await db.itens_estoque.insert_one(item_doc)
     
-    # Sample OS
+    # Sample OS (with new types and disciplina)
     os_data = [
-        {"ativo_idx": 0, "titulo": "Troca de rolamento", "tipo": "preventiva", "prioridade": "alta", "status": "aberta"},
-        {"ativo_idx": 2, "titulo": "Vazamento de óleo", "tipo": "corretiva", "prioridade": "critica", "status": "em_execucao"},
-        {"ativo_idx": 5, "titulo": "Calibração de sensores", "tipo": "preventiva", "prioridade": "media", "status": "planejada"},
+        {"ativo_idx": 0, "titulo": "Troca de rolamento", "tipo": "preventiva", "disciplina": "mecanica", "prioridade": "alta", "status": "aberta"},
+        {"ativo_idx": 2, "titulo": "Lubrificação geral", "tipo": "lubrificacao", "disciplina": "mecanica", "prioridade": "media", "status": "planejada"},
+        {"ativo_idx": 4, "titulo": "Reparo motor elétrico", "tipo": "corretiva", "disciplina": "eletrica", "prioridade": "critica", "status": "em_execucao"},
     ]
     
     for idx, od in enumerate(os_data):
@@ -1190,6 +1147,7 @@ async def seed_data():
             "ativo_id": ativos[od['ativo_idx']]['id'],
             "organization_id": org.id,
             "tipo": od['tipo'],
+            "disciplina": od['disciplina'],
             "prioridade": od['prioridade'],
             "titulo": od['titulo'],
             "status": od['status'],
@@ -1774,14 +1732,14 @@ async def create_spare_movement(data: SpareMovementCreate, user: Dict = Depends(
 
 
 @api_router.get("/anomalias")
-async def list_anomalias(plant_id: Optional[str] = None, sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
+async def list_anomalias(sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
     query = {"deleted_at": None}
     if user.get('organization_id'):
         query['organization_id'] = user['organization_id']
     
-    # Scope by plant/sector
-    if plant_id or sector_id:
-        asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), plant_id, sector_id)
+    # Scope by sector
+    if sector_id:
+        asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), sector_id=sector_id)
         if asset_ids is not None:
             query['ativo_id'] = {"$in": asset_ids}
     
@@ -2104,9 +2062,8 @@ async def run_migrations():
         await db.users.create_index("email")
         await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
         await db.password_reset_tokens.create_index("token")
-        await db.plants.create_index("organization_id")
-        await db.sectors.create_index("plant_id")
-        await db.ativos.create_index([("plant_id", 1), ("sector_id", 1)])
+        await db.sectors.create_index("organization_id")
+        await db.ativos.create_index("sector_id")
         
         # Migration 1: checklist tipo field
         inspecoes = await db.inspecoes.find({"deleted_at": None, "checklist": {"$exists": True}}).to_list(1000)
@@ -2135,156 +2092,13 @@ async def run_migrations():
                 await db.rotas_inspecao.update_one({"_id": rota["_id"]}, {"$set": {"itens": itens}})
         logger.info("Migration: checklist tipo field verified")
         
-        # Migration 2: Multi-Plant Hierarchy
-        await migrate_hierarchy()
+        # Migration 2: Remove plant_id from sectors and ativos (Sector is now top-level)
+        await db.sectors.update_many({}, {"$unset": {"plant_id": ""}})
+        await db.ativos.update_many({}, {"$unset": {"plant_id": "", "area_id": ""}})
+        logger.info("Migration: plant_id removed from sectors and ativos")
         
     except Exception as e:
         logger.error(f"Migration error: {e}")
-
-
-async def migrate_hierarchy():
-    """Migrate legacy plantas/areas to plants/sectors and update ativos"""
-    plants_count = await db.plants.count_documents({})
-    plantas_count = await db.plantas.count_documents({})
-    
-    if plants_count > 0:
-        logger.info("Migration: plants collection already populated, skipping hierarchy migration")
-        # Still ensure all ativos have plant_id/sector_id
-        await _backfill_ativo_hierarchy()
-        return
-    
-    if plantas_count == 0:
-        logger.info("Migration: no legacy plantas found, skipping")
-        return
-    
-    report = {"plants_created": 0, "sectors_created": 0, "ativos_updated": 0}
-    
-    # Step 1: Migrate plantas -> plants
-    plantas = await db.plantas.find({}).to_list(100)
-    plant_id_map = {}  # old planta_id -> new plant_id
-    
-    for planta in plantas:
-        old_id = planta.get('id', str(planta.get('_id', '')))
-        new_plant = {
-            "id": old_id,
-            "organization_id": planta.get('organization_id', ''),
-            "codigo": "PP",
-            "nome": planta.get('nome', 'Planta Principal'),
-            "descricao": planta.get('endereco', ''),
-            "is_active": True,
-            "created_at": planta.get('created_at', datetime.now(timezone.utc).isoformat()),
-            "deleted_at": None
-        }
-        await db.plants.insert_one(new_plant)
-        plant_id_map[old_id] = old_id
-        report['plants_created'] += 1
-    
-    logger.info(f"Migration: {report['plants_created']} plants created")
-    
-    # Step 2: Migrate areas -> sectors
-    areas = await db.areas.find({}).to_list(500)
-    area_to_sector = {}  # area_id -> {sector_id, plant_id}
-    
-    for area in areas:
-        area_id = area.get('id', str(area.get('_id', '')))
-        planta_id = area.get('planta_id', '')
-        plant_id = plant_id_map.get(planta_id, planta_id)
-        
-        # Derive org_id from area or from plant
-        area_org = area.get('organization_id', '')
-        if not area_org:
-            p = await db.plants.find_one({"id": plant_id}, {"_id": 0, "organization_id": 1})
-            area_org = p.get('organization_id', '') if p else ''
-        
-        # Use area name as sector code (first 4 chars uppercase)
-        codigo = area.get('nome', 'SEC')[:4].upper().replace(' ', '')
-        
-        new_sector = {
-            "id": area_id,
-            "organization_id": area_org,
-            "plant_id": plant_id,
-            "codigo": codigo,
-            "nome": area.get('nome', ''),
-            "descricao": area.get('descricao', ''),
-            "cor": area.get('cor', '#10b981'),
-            "is_active": True,
-            "created_at": area.get('created_at', datetime.now(timezone.utc).isoformat()),
-            "deleted_at": area.get('deleted_at')
-        }
-        await db.sectors.insert_one(new_sector)
-        area_to_sector[area_id] = {"sector_id": area_id, "plant_id": plant_id}
-        report['sectors_created'] += 1
-    
-    logger.info(f"Migration: {report['sectors_created']} sectors created")
-    
-    # Step 3: Update all ativos with plant_id and sector_id
-    ativos = await db.ativos.find({"plant_id": {"$exists": False}}).to_list(5000)
-    if not ativos:
-        ativos = await db.ativos.find({"plant_id": None}).to_list(5000)
-    
-    for ativo in ativos:
-        area_id = ativo.get('area_id', '')
-        mapping = area_to_sector.get(area_id, {})
-        plant_id = mapping.get('plant_id')
-        sector_id = mapping.get('sector_id')
-        
-        if not plant_id and plantas:
-            plant_id = plantas[0].get('id', '')
-        
-        update_fields = {}
-        if plant_id:
-            update_fields['plant_id'] = plant_id
-        if sector_id:
-            update_fields['sector_id'] = sector_id
-        elif area_id:
-            update_fields['sector_id'] = area_id
-        
-        if update_fields:
-            await db.ativos.update_one({"_id": ativo["_id"]}, {"$set": update_fields})
-            report['ativos_updated'] += 1
-    
-    logger.info(f"Migration: {report['ativos_updated']} ativos updated with plant/sector IDs")
-    logger.info(f"Migration complete: {json.dumps(report)}")
-
-
-async def _backfill_ativo_hierarchy():
-    """Ensure all ativos have plant_id and sector_id from existing data"""
-    ativos_without = await db.ativos.count_documents({
-        "$or": [
-            {"plant_id": {"$exists": False}},
-            {"plant_id": None}
-        ],
-        "deleted_at": None
-    })
-    if ativos_without == 0:
-        return
-    
-    # Get first plant as default
-    default_plant = await db.plants.find_one({"deleted_at": None}, {"_id": 0, "id": 1})
-    if not default_plant:
-        return
-    
-    ativos = await db.ativos.find({
-        "$or": [{"plant_id": {"$exists": False}}, {"plant_id": None}],
-        "deleted_at": None
-    }).to_list(5000)
-    
-    for ativo in ativos:
-        area_id = ativo.get('area_id', '')
-        sector = await db.sectors.find_one({"id": area_id}, {"_id": 0, "id": 1, "plant_id": 1})
-        
-        update = {}
-        if sector:
-            update['plant_id'] = sector.get('plant_id', default_plant['id'])
-            update['sector_id'] = sector['id']
-        else:
-            update['plant_id'] = default_plant['id']
-            if area_id:
-                update['sector_id'] = area_id
-        
-        await db.ativos.update_one({"_id": ativo["_id"]}, {"$set": update})
-    
-    logger.info(f"Backfill: {len(ativos)} ativos updated")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

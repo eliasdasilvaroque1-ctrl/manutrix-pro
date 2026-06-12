@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 15 - Restructure validation. 12/12 backend tests PASSED. Frontend login, sidebar (no Plantas), /plantas redirect, /setores, /ativos, Novo Ativo modal (no Planta dropdown), /os Kanban, and Nova OS modal (6 new tipos + Disciplina field with 5 options) all work as expected. Two dashboard issues found: (1) new charts os-por-setor/os-por-disciplina/ativos-mais-falhas are NOT rendered on Dashboard despite backend endpoints existing; (2) old 'Distribuição de OS por Tipo' chart still shows legacy tipo names.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "DashboardPage",
+        "issue": "Missing 3 new charts required by problem statement: 'OS por Setor', 'OS por Disciplina', 'Ativos com Mais Falhas'. Backend endpoints /api/dashboard/os-por-setor, /os-por-disciplina, /ativos-mais-falhas exist and return data, but the Dashboard UI does not render them.",
+        "selector": "DashboardPage in App.js",
+        "priority": "HIGH"
+      },
+      {
+        "component": "DashboardPage - Distribuição de OS por Tipo chart",
+        "issue": "Bar chart still uses LEGACY tipos (Corretiva, Preventiva, Preditiva, Emergência) instead of the new 6 OSTipo values (lubrificacao, limpeza_organizacao, preventiva, corretiva, preparacao_material, fabricacao_melhorias). 'Preditiva' and 'Emergência' are no longer valid tipos.",
+        "selector": "Distribuição de OS por Tipo BarChart",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard",
+        "issues": [
+          "Recharts console warnings: 'The width(-1) and height(-1) of chart should be greater than 0' on initial load — chart container sizing race on first paint."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration15_restructure.py",
+    "/app/test_reports/pytest/pytest_results_iteration15.xml"
+  ],
+  "action_items": [
+    "Add the 3 new dashboard charts in DashboardPage (App.js): OS por Setor (bar/pie), OS por Disciplina (5 disciplines), Ativos com Mais Falhas (ranked list/table). Backend already serves the data.",
+    "Update 'Distribuição de OS por Tipo' chart to use the new 6 OSTipo values (Lubrificação, Limpeza e Organização, Preventiva, Corretiva, Preparação de Material, Fabricação / Melhorias). Currently hardcoded to old enum values.",
+    "Optional: fix Recharts ResponsiveContainer initial size warning (set explicit min-width/min-height)."
+  ],
+  "critical_code_review_comments": [
+    "Backend dashboard.py: /dashboard/os-por-setor uses 'if os_count > 0 or True' (always true) — dead conditional, simplify.",
+    "Backend dashboard.py: /dashboard/ativos-mais-falhas does sector lookup per asset (N+1) — batch fetch sectors instead.",
+    "frontend App.js is reported ~985 lines for ModalNovaOS alone — file likely exceeds 700 lines limit. Consider splitting into per-page components.",
+    "deps.get_scoped_asset_ids return semantics (None vs []) used inconsistently — document or normalize."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration15_restructure.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12)",
+    "frontend": "85% — all listed flows work; 2 dashboard gaps vs problem statement"
+  },
+  "test_credentials": "admin@manutrix.com / admin123 (works via Supabase or MongoDB fallback)",
+  "seed_data_creation": "Used existing seeded data; tests create TEST_-prefixed sectors/OS and clean up.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend restructure (no plant_id, sector top-level, disciplina mandatory, 6 new OS tipos) is fully functional and validated by test_iteration15_restructure.py. Remaining work is frontend Dashboard: add 3 new charts and update the legacy OS por Tipo chart to use new enum values. /setores, /ativos, Novo Ativo modal, /os Kanban, and Nova OS modal are all correct.",
+  "rca of the issue": "Dashboard charts gap: Frontend Dashboard component was not updated when backend added /dashboard/os-por-setor, /os-por-disciplina, /ativos-mais-falhas endpoints. The existing 'Distribuição de OS por Tipo' bar chart is hardcoded with the legacy 4-value tipo list (Corretiva/Preventiva/Preditiva/Emergência) instead of querying /api/ordens-servico/estatisticas (which returns por_tipo with the new 6 keys)."
+}
