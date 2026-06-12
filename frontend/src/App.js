@@ -1863,6 +1863,9 @@ const DashboardPage = () => {
   const [drillLoading, setDrillLoading] = useState(false);
   const [sectors, setSectors] = useState([]);
   const [filterSector, setFilterSector] = useState('');
+  const [osPorSetor, setOsPorSetor] = useState([]);
+  const [osPorDisciplina, setOsPorDisciplina] = useState([]);
+  const [ativosMaisFalhas, setAtivosMaisFalhas] = useState([]);
   const { user } = useAuth();
   const navigate = useNavigate();
   
@@ -1876,14 +1879,20 @@ const DashboardPage = () => {
       try {
         const params = {};
         if (filterSector) params.sector_id = filterSector;
-        const [kpisRes, statsRes, trendRes] = await Promise.all([
+        const [kpisRes, statsRes, trendRes, setorRes, discRes, falhasRes] = await Promise.all([
           api.get('/kpis', { params }),
           api.get('/dashboard/stats', { params }),
-          api.get('/dashboard/trend', { params })
+          api.get('/dashboard/trend', { params }),
+          api.get('/dashboard/os-por-setor'),
+          api.get('/dashboard/os-por-disciplina'),
+          api.get('/dashboard/ativos-mais-falhas')
         ]);
         setKpis(kpisRes.data);
         setStats(statsRes.data);
         setTrend(trendRes.data);
+        setOsPorSetor(setorRes.data);
+        setOsPorDisciplina(discRes.data);
+        setAtivosMaisFalhas(falhasRes.data);
       } catch (error) {
         toast.error('Erro ao carregar dashboard');
       } finally {
@@ -1973,20 +1982,19 @@ const DashboardPage = () => {
   const osTrendTotals = trend.reduce((acc, m) => ({
     corretiva: acc.corretiva + (m.corretivas || 0),
     preventiva: acc.preventiva + (m.preventivas || 0),
-    preditiva: acc.preditiva + (m.preditivas || 0),
-    emergencia: acc.emergencia + (m.emergencias || 0),
-  }), { corretiva: 0, preventiva: 0, preditiva: 0, emergencia: 0 });
+  }), { corretiva: 0, preventiva: 0 });
   
-  // Use KPI API values for Prev/Corr (calculated over ALL OS)
   const prevPercent = kpis.preventivas_percent;
   const corrPercent = kpis.corretivas_percent;
   
   const osTypes = [
-    { name: 'Corretiva', value: osTrendTotals.corretiva, fill: '#ef4444', key: 'corretiva' },
-    { name: 'Preventiva', value: osTrendTotals.preventiva, fill: '#10b981', key: 'preventiva' },
-    { name: 'Preditiva', value: osTrendTotals.preditiva, fill: '#3b82f6', key: 'preditiva' },
-    { name: 'Emergência', value: osTrendTotals.emergencia, fill: '#f59e0b', key: 'emergencia' },
-  ];
+    { name: 'Lubrificação', fill: '#06b6d4', key: 'lubrificacao' },
+    { name: 'Limpeza', fill: '#8b5cf6', key: 'limpeza_organizacao' },
+    { name: 'Preventiva', fill: '#10b981', key: 'preventiva' },
+    { name: 'Corretiva', fill: '#ef4444', key: 'corretiva' },
+    { name: 'Prep. Material', fill: '#f59e0b', key: 'preparacao_material' },
+    { name: 'Fabricação', fill: '#3b82f6', key: 'fabricacao_melhorias' },
+  ].map(t => ({ ...t, value: stats?.ordens_servico?.por_tipo?.[t.key] || osTrendTotals[t.key] || 0 }));
 
   return (
     <div className="space-y-6">
@@ -2133,6 +2141,54 @@ const DashboardPage = () => {
           </div>
           <div className="h-64" data-testid="chart-os-dist">
             <OSDistChart data={osTypes} onBarClick={(key) => drillDown(key, `OS ${key.charAt(0).toUpperCase() + key.slice(1)}`)} />
+          </div>
+        </div>
+      </div>
+      
+      {/* Row 3 — New Dashboard Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* OS por Setor */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5" data-testid="chart-os-setor">
+          <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Layers size={16} className="text-emerald-400" /> OS por Setor</h3>
+          <div className="space-y-2">
+            {osPorSetor.length === 0 ? <p className="text-xs text-slate-600 text-center py-4">Sem dados</p> :
+            osPorSetor.map((s, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.cor }} />
+                <span className="text-xs text-slate-400 flex-1 truncate">{s.sector}</span>
+                <span className="text-sm font-mono font-bold text-slate-200">{s.os_abertas}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* OS por Disciplina */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5" data-testid="chart-os-disciplina">
+          <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Wrench size={16} className="text-blue-400" /> OS por Disciplina</h3>
+          <div className="space-y-2">
+            {osPorDisciplina.map((d, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: d.cor }} />
+                <span className="text-xs text-slate-400 flex-1">{d.disciplina}</span>
+                <span className="text-sm font-mono font-bold text-slate-200">{d.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Ativos com Mais Falhas */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5" data-testid="chart-ativos-falhas">
+          <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><AlertTriangle size={16} className="text-red-400" /> Ativos com Mais Falhas</h3>
+          <div className="space-y-2">
+            {ativosMaisFalhas.length === 0 ? <p className="text-xs text-slate-600 text-center py-4">Nenhuma falha registrada</p> :
+            ativosMaisFalhas.slice(0, 5).map((a, i) => (
+              <div key={i} className="flex items-center gap-2 p-2 bg-slate-800/30 rounded-lg">
+                <span className="text-xs font-mono text-emerald-400 w-16">{a.tag}</span>
+                <span className="text-xs text-slate-400 flex-1 truncate">{a.nome}</span>
+                <span className="text-xs text-slate-600">{a.sector}</span>
+                <span className="text-sm font-mono font-bold text-red-400">{a.falhas}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
