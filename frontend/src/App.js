@@ -4930,7 +4930,7 @@ const SetoresPage = () => {
     try {
       const sRes = await api.get('/sectors');
       setSectors(sRes.data);
-    } catch { toast.error('Erro ao carregar setores'); }
+    } catch { toast.error('Erro ao carregar áreas'); }
     finally { setLoading(false); }
   };
 
@@ -4986,12 +4986,12 @@ const SetoresPage = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100" data-testid="setores-title">Setores</h1>
+          <h1 className="text-2xl font-bold text-slate-100" data-testid="setores-title">Áreas</h1>
           <p className="text-sm text-slate-500">Gerencie as áreas industriais</p>
         </div>
         {user?.role === 'admin' && (
           <button onClick={() => openModal()} className="btn-primary flex items-center gap-2" data-testid="add-sector-btn">
-            <Plus size={20} /> Novo Setor
+            <Plus size={20} /> Nova Área
           </button>
         )}
       </div>
@@ -5059,7 +5059,7 @@ const SetoresPage = () => {
         </form>
       </Modal>
 
-      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Área" message={`Excluir o setor "${deleteItem?.nome}"? Todos os ativos precisam ser movidos antes.`} confirmText="Excluir" danger />
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Área" message={`Excluir a área "${deleteItem?.nome}"? Todos os ativos precisam ser movidos antes.`} confirmText="Excluir" danger />
     </div>
   );
 };
