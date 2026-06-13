@@ -191,6 +191,9 @@ class OSCreate(BaseModel):
     data_planejada: Optional[str] = None
     custo_pecas: float = 0
     custo_mao_obra: float = 0
+    causa_falha: Optional[str] = None
+    equipamento_parado: bool = False
+    horas_parada: Optional[float] = None
 
 class OSUpdate(BaseModel):
     tipo: Optional[OSTipo] = None
@@ -204,6 +207,9 @@ class OSUpdate(BaseModel):
     custo_pecas: Optional[float] = None
     custo_mao_obra: Optional[float] = None
     servicos_realizados: Optional[str] = None
+    causa_falha: Optional[str] = None
+    equipamento_parado: Optional[bool] = None
+    horas_parada: Optional[float] = None
 
 class KanbanMoveBody(BaseModel):
     new_status: str

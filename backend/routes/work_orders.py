@@ -155,6 +155,9 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "data_planejada": data.data_planejada, "data_inicio": None, "data_conclusao": None,
         "custo_pecas": data.custo_pecas, "custo_mao_obra": data.custo_mao_obra,
         "custo_total": data.custo_pecas + data.custo_mao_obra,
+        "causa_falha": data.causa_falha,
+        "equipamento_parado": data.equipamento_parado,
+        "horas_parada": data.horas_parada,
         "tempo_execucao_minutos": None, "observacoes": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None

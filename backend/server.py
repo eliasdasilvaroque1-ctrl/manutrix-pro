@@ -508,6 +508,85 @@ async def criar_movimentacao(
     
     return {"success": True, "new_quantity": new_qty}
 
+
+# Default checklist templates
+DEFAULT_CHECKLISTS = {
+    "mecanica": {
+        "nome": "Inspeção Mecânica",
+        "itens": [
+            {"descricao": "Verificar vibração anormal", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Temperatura do equipamento (°C)", "tipo": "numerico", "unidade": "°C", "tolerancia_min": 20, "tolerancia_max": 80, "obrigatorio": True},
+            {"descricao": "Verificar ruídos anormais", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Verificar folgas mecânicas", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Estado das correias/correntes", "tipo": "opcao", "obrigatorio": True},
+            {"descricao": "Verificar alinhamento", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Verificar vazamentos", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Estado dos rolamentos", "tipo": "opcao", "obrigatorio": True},
+            {"descricao": "Verificar fixação/parafusos", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Observações gerais", "tipo": "texto", "obrigatorio": False},
+        ]
+    },
+    "eletrica": {
+        "nome": "Inspeção Elétrica",
+        "itens": [
+            {"descricao": "Tensão de alimentação (V)", "tipo": "numerico", "unidade": "V", "tolerancia_min": 380, "tolerancia_max": 440, "obrigatorio": True},
+            {"descricao": "Corrente de operação (A)", "tipo": "numerico", "unidade": "A", "obrigatorio": True},
+            {"descricao": "Verificar aquecimento de cabos", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Estado das conexões elétricas", "tipo": "opcao", "obrigatorio": True},
+            {"descricao": "Verificar isolamento", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Estado do quadro elétrico", "tipo": "opcao", "obrigatorio": True},
+            {"descricao": "Verificar aterramento", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Testar dispositivos de proteção", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Verificar sinalização", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Observações gerais", "tipo": "texto", "obrigatorio": False},
+        ]
+    },
+    "lubrificacao": {
+        "nome": "Inspeção de Lubrificação",
+        "itens": [
+            {"descricao": "Nível de óleo/graxa", "tipo": "opcao", "obrigatorio": True},
+            {"descricao": "Verificar contaminação do lubrificante", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Temperatura do óleo (°C)", "tipo": "numerico", "unidade": "°C", "tolerancia_min": 30, "tolerancia_max": 70, "obrigatorio": True},
+            {"descricao": "Ponto de lubrificação acessível", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Tipo de lubrificante correto", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Verificar vazamento de lubrificante", "tipo": "boolean", "obrigatorio": True},
+            {"descricao": "Quantidade aplicada (ml/g)", "tipo": "numerico", "unidade": "ml", "obrigatorio": False},
+            {"descricao": "Estado dos pontos de graxa (graxeiras)", "tipo": "opcao", "obrigatorio": True},
+            {"descricao": "Observações gerais", "tipo": "texto", "obrigatorio": False},
+        ]
+    }
+}
+
+@api_router.get("/checklists/templates")
+async def get_checklist_templates(user: Dict = Depends(get_current_user)):
+    """Get default editable checklist templates"""
+    org_id = user.get('organization_id', '')
+    # Check for custom templates first
+    custom = await db.checklist_templates.find({"organization_id": org_id, "deleted_at": None}, {"_id": 0}).to_list(10)
+    if custom:
+        return {t['tipo']: t for t in custom}
+    # Return defaults with IDs
+    result = {}
+    for tipo, template in DEFAULT_CHECKLISTS.items():
+        itens = []
+        for item in template['itens']:
+            itens.append({"id": str(uuid.uuid4()), **item, "valor": None, "conforme": None, "observacao": None})
+        result[tipo] = {"tipo": tipo, "nome": template['nome'], "itens": itens}
+    return result
+
+@api_router.put("/checklists/templates/{tipo}")
+async def update_checklist_template(tipo: str, body: dict, user: Dict = Depends(get_current_user)):
+    """Save custom checklist template"""
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+    await db.checklist_templates.update_one(
+        {"organization_id": org_id, "tipo": tipo},
+        {"$set": {"organization_id": org_id, "tipo": tipo, "nome": body.get('nome', ''), "itens": body.get('itens', []), "updated_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None}},
+        upsert=True
+    )
+    return {"success": True}
+
+
 # ============== INSPEÇÕES - CRUD COMPLETO ==============
 
 @api_router.get("/inspecoes")

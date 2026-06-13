@@ -16,7 +16,11 @@ import {
   Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
+import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData } from "@/lib/offlineQueue";
 import axios from "axios";
+
+// Register PWA Service Worker
+registerServiceWorker();
 
 // ============== COMPONENTS ==============
 
@@ -195,6 +199,123 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText
     </div>
   );
 };
+
+
+// ============== NETWORK STATUS + SYNC ==============
+const NetworkStatus = () => {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    const updateOnline = () => setIsOnline(true);
+    const updateOffline = () => setIsOnline(false);
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOffline);
+    return () => { window.removeEventListener('online', updateOnline); window.removeEventListener('offline', updateOffline); };
+  }, []);
+
+  useEffect(() => {
+    const checkPending = async () => {
+      try { const c = await getPendingCount(); setPendingCount(c); } catch {}
+    };
+    checkPending();
+    const interval = setInterval(checkPending, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Auto-sync when coming back online
+  useEffect(() => {
+    if (isOnline && pendingCount > 0) {
+      const doSync = async () => {
+        setSyncing(true);
+        try {
+          const result = await syncPendingOperations(api);
+          if (result.synced > 0) toast.success(`${result.synced} operação(ões) sincronizada(s)`);
+          if (result.failed > 0) toast.error(`${result.failed} operação(ões) falharam`);
+          const c = await getPendingCount();
+          setPendingCount(c);
+        } catch {}
+        setSyncing(false);
+      };
+      doSync();
+    }
+  }, [isOnline, pendingCount]);
+
+  if (isOnline && pendingCount === 0) return null;
+
+  return (
+    <div className={`fixed top-0 left-0 right-0 z-[60] px-4 py-1.5 text-center text-xs font-medium ${isOnline ? 'bg-amber-500/90 text-black' : 'bg-red-600/90 text-white'}`} data-testid="network-status">
+      {!isOnline && <><WifiOff size={12} className="inline mr-1" /> Offline — operações serão sincronizadas ao reconectar</>}
+      {isOnline && syncing && <><RefreshCw size={12} className="inline mr-1 animate-spin" /> Sincronizando {pendingCount} operação(ões)...</>}
+      {isOnline && !syncing && pendingCount > 0 && <><Clock size={12} className="inline mr-1" /> {pendingCount} operação(ões) pendente(s)</>}
+    </div>
+  );
+};
+
+// ============== CAMERA CAPTURE ==============
+const CameraCapture = ({ onCapture, onClose }) => {
+  const videoRef = useRef(null);
+  const [stream, setStream] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const startCamera = async () => {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        setStream(mediaStream);
+        if (videoRef.current) videoRef.current.srcObject = mediaStream;
+      } catch (err) {
+        setError('Não foi possível acessar a câmera. Verifique as permissões.');
+      }
+    };
+    startCamera();
+    return () => { if (stream) stream.getTracks().forEach(t => t.stop()); };
+  }, []);
+
+  const takePhoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `foto_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        onCapture(file);
+      }
+    }, 'image/jpeg', 0.85);
+    if (stream) stream.getTracks().forEach(t => t.stop());
+  };
+
+  if (error) {
+    return (
+      <div className="fixed inset-0 z-[70] bg-black flex items-center justify-center">
+        <div className="text-center p-6">
+          <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
+          <p className="text-white mb-4">{error}</p>
+          <button onClick={onClose} className="btn-secondary">Fechar</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black flex flex-col" data-testid="camera-capture">
+      <video ref={videoRef} autoPlay playsInline className="flex-1 object-cover" />
+      <div className="absolute bottom-0 left-0 right-0 p-6 flex items-center justify-center gap-6 bg-gradient-to-t from-black/80">
+        <button onClick={onClose} className="p-3 rounded-full bg-white/20 text-white" data-testid="camera-close">
+          <X size={24} />
+        </button>
+        <button onClick={takePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-white/30 hover:bg-gray-200 transition-all" data-testid="camera-shutter" />
+        <div className="w-12" />
+      </div>
+    </div>
+  );
+};
+
 
 // Notification Bell
 const NotificationBell = () => {
@@ -987,7 +1108,8 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
   const [form, setForm] = useState({
     ativo_id: '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
     titulo: '', descricao: '', responsavel_id: '',
-    data_planejada: '', custo_pecas: 0, custo_mao_obra: 0
+    data_planejada: '', custo_pecas: 0, custo_mao_obra: 0,
+    causa_falha: '', equipamento_parado: false, horas_parada: null
   });
   
   useEffect(() => {
@@ -1002,13 +1124,17 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
         responsavel_id: editData.responsavel_id || '',
         data_planejada: editData.data_planejada?.split('T')[0] || '',
         custo_pecas: editData.custo_pecas || 0,
-        custo_mao_obra: editData.custo_mao_obra || 0
+        custo_mao_obra: editData.custo_mao_obra || 0,
+        causa_falha: editData.causa_falha || '',
+        equipamento_parado: editData.equipamento_parado || false,
+        horas_parada: editData.horas_parada || null
       });
     } else {
       setForm({
         ativo_id: '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
         titulo: '', descricao: '', responsavel_id: '',
-        data_planejada: '', custo_pecas: 0, custo_mao_obra: 0
+        data_planejada: '', custo_pecas: 0, custo_mao_obra: 0,
+        causa_falha: '', equipamento_parado: false, horas_parada: null
       });
     }
   }, [editData, isOpen]);
@@ -1026,19 +1152,32 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
         ...form,
         custo_pecas: parseFloat(form.custo_pecas) || 0,
         custo_mao_obra: parseFloat(form.custo_mao_obra) || 0,
+        horas_parada: form.horas_parada ? parseFloat(form.horas_parada) : null,
         data_planejada: form.data_planejada || null,
         responsavel_id: form.responsavel_id || null,
       };
       
-      if (editData) {
-        await api.put(`/ordens-servico/${editData.id}`, payload);
-        toast.success('OS atualizada com sucesso!');
+      if (!navigator.onLine) {
+        // Queue for offline sync
+        await queueOperation({
+          method: editData ? 'PUT' : 'POST',
+          url: editData ? `/ordens-servico/${editData.id}` : '/ordens-servico',
+          data: payload
+        });
+        toast.info('Sem conexão — OS salva localmente e será sincronizada');
+        onSuccess();
+        onClose();
       } else {
-        await api.post('/ordens-servico', payload);
-        toast.success('OS criada com sucesso!');
+        if (editData) {
+          await api.put(`/ordens-servico/${editData.id}`, payload);
+          toast.success('OS atualizada com sucesso!');
+        } else {
+          await api.post('/ordens-servico', payload);
+          toast.success('OS criada com sucesso!');
+        }
+        onSuccess();
+        onClose();
       }
-      onSuccess();
-      onClose();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Erro ao salvar OS');
     } finally {
@@ -1121,6 +1260,30 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
               placeholder="Descreva o problema ou serviço..."
             />
           </FormInput>
+          
+          {/* Campos de Falha */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormInput label={`Causa da Falha${form.tipo === 'corretiva' ? ' *' : ''}`}>
+              <input type="text" value={form.causa_falha || ''} onChange={(e) => setForm({...form, causa_falha: e.target.value})} placeholder="Ex: Desgaste natural" className="input-industrial w-full px-4" required={form.tipo === 'corretiva'} data-testid="os-causa-falha" />
+            </FormInput>
+            <FormInput label="Equipamento Parado">
+              <div className="flex items-center gap-4 h-10">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="eq_parado" checked={form.equipamento_parado === true} onChange={() => setForm({...form, equipamento_parado: true})} className="accent-red-500" data-testid="os-eq-parado-sim" />
+                  <span className="text-sm text-red-400">Sim</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="eq_parado" checked={form.equipamento_parado === false} onChange={() => setForm({...form, equipamento_parado: false})} className="accent-emerald-500" data-testid="os-eq-parado-nao" />
+                  <span className="text-sm text-emerald-400">Não</span>
+                </label>
+              </div>
+            </FormInput>
+            {form.equipamento_parado && (
+              <FormInput label="Horas de Parada">
+                <input type="number" step="0.5" min="0" value={form.horas_parada || ''} onChange={(e) => setForm({...form, horas_parada: parseFloat(e.target.value) || 0})} placeholder="Ex: 4.5" className="input-industrial w-full px-4" data-testid="os-horas-parada" />
+              </FormInput>
+            )}
+          </div>
         </div>
         
         {/* Execução */}
@@ -1201,64 +1364,61 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
 // Modal Nova Inspeção
 const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = [], tecnicos = [] }) => {
   const [loading, setLoading] = useState(false);
-  const [tipoTab, setTipoTab] = useState('checklist');
+  const [tipoTab, setTipoTab] = useState('mecanica');
+  const [templates, setTemplates] = useState({});
+  const [checklist, setChecklist] = useState([]);
   const [form, setForm] = useState({
-    ativo_id: '', responsavel_id: '', frequencia: 'diaria',
-    data_programada: '', hora_programada: '',
-    // Lubrificação
-    tipo_lubrificante: '', quantidade_lubrificante: '', ponto_lubrificacao: '',
-    metodo_aplicacao: '', observacoes_lubrificacao: ''
+    ativo_id: '', responsavel_id: '', data_planejada: '', observacoes: ''
   });
   const { user } = useAuth();
   
   useEffect(() => {
     if (isOpen) {
-      setTipoTab('checklist');
-      setForm({
-        ativo_id: '', responsavel_id: user?.id || '', frequencia: 'diaria',
-        data_programada: '', hora_programada: '',
-        tipo_lubrificante: '', quantidade_lubrificante: '', ponto_lubrificacao: '',
-        metodo_aplicacao: '', observacoes_lubrificacao: ''
-      });
+      setTipoTab('mecanica');
+      setForm({ ativo_id: '', responsavel_id: user?.id || '', data_planejada: '', observacoes: '' });
+      // Load checklist templates
+      api.get('/checklists/templates').then(r => {
+        setTemplates(r.data);
+        if (r.data.mecanica) setChecklist(r.data.mecanica.itens || []);
+      }).catch(() => {});
     }
   }, [isOpen, user]);
   
+  useEffect(() => {
+    if (templates[tipoTab]) {
+      setChecklist(templates[tipoTab].itens || []);
+    }
+  }, [tipoTab, templates]);
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.ativo_id || !form.responsavel_id) {
-      toast.error('Selecione ativo e responsável');
-      return;
-    }
-    if (tipoTab === 'lubrificacao' && !form.tipo_lubrificante) {
-      toast.error('Informe o tipo de lubrificante');
+    if (!form.ativo_id) {
+      toast.error('Selecione o ativo');
       return;
     }
     
     setLoading(true);
     try {
-      const dataProgramada = form.data_programada && form.hora_programada
-        ? `${form.data_programada}T${form.hora_programada}:00`
-        : form.data_programada || null;
-
       const payload = {
         ativo_id: form.ativo_id,
-        responsavel_id: form.responsavel_id,
         tipo: tipoTab,
-        frequencia: tipoTab === 'checklist' ? form.frequencia : null,
-        data_programada: dataProgramada,
-        tipo_lubrificante: tipoTab === 'lubrificacao' ? form.tipo_lubrificante : null,
-        quantidade_lubrificante: tipoTab === 'lubrificacao' ? form.quantidade_lubrificante : null,
-        ponto_lubrificacao: tipoTab === 'lubrificacao' ? form.ponto_lubrificacao : null,
-        metodo_aplicacao: tipoTab === 'lubrificacao' ? form.metodo_aplicacao : null,
-        observacoes_lubrificacao: tipoTab === 'lubrificacao' ? form.observacoes_lubrificacao : null,
+        responsavel_id: form.responsavel_id || null,
+        checklist: checklist,
+        data_planejada: form.data_planejada || null,
+        observacoes: form.observacoes || null,
       };
 
-      await api.post('/inspecoes', payload);
-      toast.success(tipoTab === 'lubrificacao' ? 'Lubrificação criada com sucesso!' : 'Inspeção criada com sucesso!');
+      if (!navigator.onLine) {
+        await queueOperation({ method: 'POST', url: '/inspecoes', data: payload });
+        toast.info('Sem conexão — inspeção salva localmente');
+      } else {
+        await api.post('/inspecoes', payload);
+        toast.success('Inspeção criada com sucesso!');
+      }
       onSuccess();
       onClose();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao criar');
+      toast.error(error.response?.data?.detail || 'Erro ao criar inspeção');
     } finally {
       setLoading(false);
     }
@@ -1267,228 +1427,69 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   const selectedAtivo = ativos.find(a => a.id === form.ativo_id);
   
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Nova Inspeção / Lubrificação" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Nova Inspeção" size="lg">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Tabs */}
+        {/* Tabs — Tipo de Inspeção */}
         <div className="flex bg-slate-800/50 rounded-lg p-1 gap-1">
-          <button
-            type="button"
-            onClick={() => setTipoTab('checklist')}
-            className={`flex-1 py-2.5 px-4 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-              tipoTab === 'checklist' 
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-            data-testid="tab-inspecao"
-          >
-            <ClipboardCheck size={18} /> Inspeção
-          </button>
-          <button
-            type="button"
-            onClick={() => setTipoTab('lubrificacao')}
-            className={`flex-1 py-2.5 px-4 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-              tipoTab === 'lubrificacao' 
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-            data-testid="tab-lubrificacao"
-          >
-            <Droplet size={18} /> Lubrificação
-          </button>
+          {[
+            { key: 'mecanica', label: 'Mecânica', icon: Cog, color: 'emerald' },
+            { key: 'eletrica', label: 'Elétrica', icon: Zap, color: 'blue' },
+            { key: 'lubrificacao', label: 'Lubrificação', icon: Droplet, color: 'amber' },
+          ].map(tab => (
+            <button key={tab.key} type="button" onClick={() => setTipoTab(tab.key)}
+              className={`flex-1 py-2.5 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                tipoTab === tab.key ? `bg-${tab.color}-500/20 text-${tab.color}-400 border border-${tab.color}-500/30` : 'text-slate-400 hover:text-slate-200'
+              }`} data-testid={`tab-${tab.key}`}
+            >
+              <tab.icon size={16} /> {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Equipamento + Responsável (comum) */}
+        {/* Equipamento + Responsável */}
         <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-            <Box size={16} /> Equipamento
-          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormInput label="Ativo / Equipamento" required>
-              <Select
-                value={form.ativo_id}
-                onChange={(val) => setForm({...form, ativo_id: val})}
-                options={ativos.map(a => ({ value: a.id, label: `${a.tag} - ${a.nome}` }))}
-                placeholder="Selecione o equipamento..."
-              />
+              <Select value={form.ativo_id} onChange={(val) => setForm({...form, ativo_id: val})}
+                options={ativos.map(a => ({ value: a.id, label: `${a.tag} - ${a.nome}` }))} placeholder="Selecione o equipamento..." />
             </FormInput>
-            <FormInput label="Responsável" required>
-              <Select
-                value={form.responsavel_id}
-                onChange={(val) => setForm({...form, responsavel_id: val})}
-                options={tecnicos.map(t => ({ value: t.id, label: t.nome }))}
-                placeholder="Selecione o responsável..."
-              />
+            <FormInput label="Responsável">
+              <Select value={form.responsavel_id} onChange={(val) => setForm({...form, responsavel_id: val})}
+                options={tecnicos.map(t => ({ value: t.id, label: t.nome }))} placeholder="Selecione..." />
+            </FormInput>
+            <FormInput label="Data Planejada">
+              <input type="date" value={form.data_planejada} onChange={(e) => setForm({...form, data_planejada: e.target.value})} className="input-industrial w-full px-4" />
             </FormInput>
           </div>
-          {selectedAtivo && (
-            <div className="flex items-center gap-3 p-2 bg-slate-800/50 rounded-lg">
-              <StatusBadge status={selectedAtivo.status} size="sm" />
-              <PriorityBadge priority={selectedAtivo.criticidade} />
-              {selectedAtivo.area && <span className="text-xs text-slate-500">{selectedAtivo.area.nome}</span>}
-            </div>
-          )}
         </div>
 
-        {/* === ABA INSPEÇÃO === */}
-        {tipoTab === 'checklist' && (
-          <div className="glass-card p-4 space-y-4">
-            <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2">
-              <Calendar size={16} /> Frequência e Programação
+        {/* Checklist Preview */}
+        {checklist.length > 0 && (
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+              Checklist — {templates[tipoTab]?.nome || tipoTab} ({checklist.length} itens)
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <FormInput label="Frequência" required>
-                <Select
-                  value={form.frequencia}
-                  onChange={(val) => setForm({...form, frequencia: val})}
-                  options={[
-                    { value: 'diaria', label: 'Diária' },
-                    { value: 'quinzenal', label: 'Quinzenal' },
-                    { value: 'mensal', label: 'Mensal' },
-                  ]}
-                />
-              </FormInput>
-              <FormInput label="Data Programada">
-                <input
-                  type="date"
-                  value={form.data_programada}
-                  onChange={(e) => setForm({...form, data_programada: e.target.value})}
-                  className="input-industrial w-full px-4"
-                />
-              </FormInput>
-              <FormInput label="Hora">
-                <input
-                  type="time"
-                  value={form.hora_programada}
-                  onChange={(e) => setForm({...form, hora_programada: e.target.value})}
-                  className="input-industrial w-full px-4"
-                />
-              </FormInput>
-            </div>
-            {/* Preview do checklist */}
-            <div className="mt-2 p-3 bg-slate-800/30 rounded-lg">
-              <p className="text-xs text-slate-500 mb-2">Checklist gerado automaticamente ({
-                form.frequencia === 'diaria' ? '5 itens' : form.frequencia === 'quinzenal' ? '7 itens' : '9 itens'
-              }):</p>
-              <div className="flex flex-wrap gap-2">
-                {form.frequencia === 'diaria' && ['Vibração', 'Temperatura', 'Ruído', 'Vazamentos', 'Observações'].map(i => (
-                  <span key={i} className="text-xs px-2 py-1 bg-slate-700 rounded text-slate-300">{i}</span>
-                ))}
-                {form.frequencia === 'quinzenal' && ['Vibração', 'Temperatura', 'Ruído', 'Vazamentos', 'Nível óleo', 'Fixações', 'Observações'].map(i => (
-                  <span key={i} className="text-xs px-2 py-1 bg-slate-700 rounded text-slate-300">{i}</span>
-                ))}
-                {form.frequencia === 'mensal' && ['Vibração (mm/s)', 'Temperatura (°C)', 'Ruído', 'Vazamentos', 'Nível óleo', 'Alinhamento', 'Fixações', 'Correias', 'Observações'].map(i => (
-                  <span key={i} className="text-xs px-2 py-1 bg-slate-700 rounded text-slate-300">{i}</span>
-                ))}
-              </div>
+            <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
+              {checklist.map((item, idx) => (
+                <div key={item.id || idx} className="flex items-center gap-2 text-xs text-slate-400 py-1 border-b border-slate-800/50">
+                  <span className="text-slate-600 w-5">{idx + 1}.</span>
+                  <span className="flex-1">{item.descricao}</span>
+                  <span className="text-slate-600 capitalize">{item.tipo}</span>
+                  {item.obrigatorio && <span className="text-red-400">*</span>}
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* === ABA LUBRIFICAÇÃO === */}
-        {tipoTab === 'lubrificacao' && (
-          <>
-            <div className="glass-card p-4 space-y-4">
-              <h3 className="text-sm font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-                <Droplet size={16} /> Dados da Lubrificação
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormInput label="Tipo de Lubrificante" required>
-                  <Select
-                    value={form.tipo_lubrificante}
-                    onChange={(val) => setForm({...form, tipo_lubrificante: val})}
-                    options={[
-                      { value: 'oleo_mineral', label: 'Óleo Mineral' },
-                      { value: 'oleo_sintetico', label: 'Óleo Sintético' },
-                      { value: 'graxa_base_litio', label: 'Graxa Base Lítio' },
-                      { value: 'graxa_base_calcio', label: 'Graxa Base Cálcio' },
-                      { value: 'graxa_poliureia', label: 'Graxa Poliureia' },
-                      { value: 'oleo_hidraulico', label: 'Óleo Hidráulico' },
-                      { value: 'oleo_engrenagem', label: 'Óleo de Engrenagem' },
-                      { value: 'fluido_corte', label: 'Fluido de Corte' },
-                      { value: 'outro', label: 'Outro' },
-                    ]}
-                    placeholder="Selecione o lubrificante..."
-                  />
-                </FormInput>
-                <FormInput label="Quantidade">
-                  <input
-                    type="text"
-                    value={form.quantidade_lubrificante}
-                    onChange={(e) => setForm({...form, quantidade_lubrificante: e.target.value})}
-                    placeholder="Ex: 200ml, 50g"
-                    className="input-industrial w-full px-4"
-                  />
-                </FormInput>
-                <FormInput label="Ponto de Lubrificação">
-                  <input
-                    type="text"
-                    value={form.ponto_lubrificacao}
-                    onChange={(e) => setForm({...form, ponto_lubrificacao: e.target.value})}
-                    placeholder="Ex: Rolamento lado acoplamento"
-                    className="input-industrial w-full px-4"
-                  />
-                </FormInput>
-                <FormInput label="Método de Aplicação">
-                  <Select
-                    value={form.metodo_aplicacao}
-                    onChange={(val) => setForm({...form, metodo_aplicacao: val})}
-                    options={[
-                      { value: 'manual', label: 'Manual (engraxadeira)' },
-                      { value: 'bomba', label: 'Bomba de lubrificação' },
-                      { value: 'banho', label: 'Banho de óleo' },
-                      { value: 'spray', label: 'Spray' },
-                      { value: 'gotejamento', label: 'Gotejamento' },
-                      { value: 'automatico', label: 'Sistema automático' },
-                    ]}
-                    placeholder="Método..."
-                  />
-                </FormInput>
-              </div>
-            </div>
+        <FormInput label="Observações">
+          <textarea value={form.observacoes} onChange={(e) => setForm({...form, observacoes: e.target.value})} className="input-industrial w-full px-4 py-3 min-h-[60px]" placeholder="Observações adicionais..." />
+        </FormInput>
 
-            <div className="glass-card p-4 space-y-4">
-              <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2">
-                <Calendar size={16} /> Programação
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormInput label="Data Programada" required>
-                  <input
-                    type="date"
-                    value={form.data_programada}
-                    onChange={(e) => setForm({...form, data_programada: e.target.value})}
-                    className="input-industrial w-full px-4"
-                  />
-                </FormInput>
-                <FormInput label="Hora Programada">
-                  <input
-                    type="time"
-                    value={form.hora_programada}
-                    onChange={(e) => setForm({...form, hora_programada: e.target.value})}
-                    className="input-industrial w-full px-4"
-                  />
-                </FormInput>
-              </div>
-            </div>
-
-            <div className="glass-card p-4 space-y-4">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                <FileText size={16} /> Observações
-              </h3>
-              <textarea
-                value={form.observacoes_lubrificacao}
-                onChange={(e) => setForm({...form, observacoes_lubrificacao: e.target.value})}
-                className="input-industrial w-full px-4 py-3 min-h-[80px]"
-                placeholder="Informações adicionais sobre a lubrificação..."
-              />
-            </div>
-          </>
-        )}
-        
-        <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
+        <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button type="submit" disabled={loading} className="btn-primary flex items-center gap-2" data-testid="submit-inspecao-btn">
-            {loading ? <RefreshCw size={18} className="animate-spin" /> : tipoTab === 'lubrificacao' ? <Droplet size={18} /> : <ClipboardCheck size={18} />}
-            {loading ? 'Criando...' : tipoTab === 'lubrificacao' ? 'Criar Lubrificação' : 'Criar Inspeção'}
+          <button type="submit" disabled={loading} className="btn-primary" data-testid="submit-inspecao">
+            {loading ? 'Salvando...' : `Criar Inspeção ${templates[tipoTab]?.nome || ''}`}
           </button>
         </div>
       </form>
@@ -4829,6 +4830,7 @@ const AppLayout = ({ children }) => {
   
   return (
     <div className="min-h-screen bg-slate-950 flex">
+      <NetworkStatus />
       <Sidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
       <div className="flex-1 flex flex-col min-h-screen">
         <main className="flex-1 pb-20 md:pb-4 px-4 pt-4 max-w-6xl mx-auto w-full">
