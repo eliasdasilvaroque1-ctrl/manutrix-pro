@@ -122,6 +122,23 @@ async def list_ativos(
 
     return ativos
 
+@router.get("/ativos/qr/{qr_code}")
+async def get_ativo_by_qr(qr_code: str, user: Dict = Depends(get_current_user)):
+    ativo = await db.ativos.find_one({"qr_code": qr_code, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    return ativo
+
+@router.get("/ativos/tag/{tag}")
+async def get_ativo_by_tag(tag: str, user: Dict = Depends(get_current_user)):
+    query = {"tag": tag.upper(), "deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    ativo = await db.ativos.find_one(query, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    return ativo
+
 @router.get("/ativos/{ativo_id}")
 async def get_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
     ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
@@ -156,23 +173,6 @@ async def get_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
         "total_falhas": num_falhas
     }
 
-    return ativo
-
-@router.get("/ativos/qr/{qr_code}")
-async def get_ativo_by_qr(qr_code: str, user: Dict = Depends(get_current_user)):
-    ativo = await db.ativos.find_one({"qr_code": qr_code, "deleted_at": None}, {"_id": 0})
-    if not ativo:
-        raise HTTPException(status_code=404, detail="Ativo não encontrado")
-    return ativo
-
-@router.get("/ativos/tag/{tag}")
-async def get_ativo_by_tag(tag: str, user: Dict = Depends(get_current_user)):
-    query = {"tag": tag.upper(), "deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
-    ativo = await db.ativos.find_one(query, {"_id": 0})
-    if not ativo:
-        raise HTTPException(status_code=404, detail="Ativo não encontrado")
     return ativo
 
 @router.post("/ativos")

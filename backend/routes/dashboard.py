@@ -166,10 +166,10 @@ async def dashboard_ativos_mais_falhas(user: Dict = Depends(get_current_user)):
     top = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:10]
     result = []
     for aid, count in top:
-        ativo = await db.ativos.find_one({"id": aid}, {"_id": 0, "tag": 1, "nome": 1, "criticidade": 1, "sector_id": 1})
+        ativo = await db.ativos.find_one({"id": aid}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
         if ativo:
             sector = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0, "nome": 1})
-            result.append({"tag": ativo.get('tag'), "nome": ativo.get('nome'), "criticidade": ativo.get('criticidade'), "sector": sector.get('nome') if sector else '', "falhas": count})
+            result.append({"tag": ativo.get('tag'), "nome": ativo.get('nome'), "sector": sector.get('nome') if sector else '', "falhas": count})
     return result
 
 

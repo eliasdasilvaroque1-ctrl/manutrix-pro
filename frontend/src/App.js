@@ -483,10 +483,7 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
     }
   }, [editData, isOpen]);
   
-  const filteredSectors = form.plant_id 
-    ? sectors.filter(s => s.plant_id === form.plant_id) 
-    : sectors;
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.nome) {
@@ -2252,21 +2249,10 @@ const AtivosPage = () => {
           />
         </div>
         <Select
-          value={filterStatus}
-          onChange={setFilterStatus}
-          options={[
-            { value: 'operacional', label: 'Operacional' },
-            { value: 'parado', label: 'Parado' },
-            { value: 'manutencao', label: 'Manutenção' },
-          ]}
-          placeholder="Status"
-          className="w-40"
-        />
-        <Select
           value={filterSector}
           onChange={setFilterSector}
           options={sectors.map(s => ({ value: s.id, label: s.nome }))}
-          placeholder="Setor"
+          placeholder="Área"
           className="w-40"
         />
       </div>
