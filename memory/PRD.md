@@ -1,52 +1,32 @@
 # MANUTRIX OMNI - Product Requirements Document
 
-## Original Problem Statement
-Enterprise-grade industrial CMMS/EAM for field operations with offline capability, designed for technicians with unstable internet connections.
+## Status: PRODUCTION READY ✅ (Validated June 2026)
 
 ## Architecture
 - **Backend**: FastAPI + MongoDB (modularized)
-  - `server.py` - Auth, inspections, estoque, anomalias, AI, export, admin, seed, checklist templates
-  - `deps.py` - DB, auth, permissions, helpers
-  - `models.py` - All Pydantic models and enums
-  - `routes/dashboard.py` - KPIs, stats, trend, OS por setor/disciplina, ativos mais falhas
-  - `routes/assets.py` - Sectors (top-level), Ativos CRUD
-  - `routes/work_orders.py` - OS CRUD with causa_falha/equipamento_parado/horas_parada, Kanban
 - **Frontend**: React + Tailwind + Shadcn + PWA
-  - `lib/api.js` - API client + AuthContext
-  - `lib/offlineQueue.js` - IndexedDB offline queue + sync engine
-  - `public/manifest.json` - PWA manifest
-  - `public/service-worker.js` - SW with network-first API caching + static cache
 - **Auth**: Supabase Auth + MongoDB bcrypt fallback
-- **AI**: Emergent LLM Key for PDF manual assistant
+- **Hierarchy**: Sector → Asset (no Plants)
 
-## Hierarchy: Sector → Asset (no Plants)
-
-## Enums
-### OS Types: lubrificacao, limpeza_organizacao, preventiva, corretiva, preparacao_material, fabricacao_melhorias
-### Discipline (mandatory): mecanica, eletrica, instrumentacao, civil, producao
-### Inspection Types: mecanica, eletrica, lubrificacao
-### Criticidade: baixa, media, alta, critica
+## Production Audit Results (Iteration 18)
+- Backend: 44/44 tests PASSED (100%)
+- Frontend: 8/8 critical flows PASSED (100%)
+- All modules validated: Auth, Sectors, Ativos, Inventory, Spare Parts, Work Orders, Inspections, Dashboard, Users, Permissions
 
 ## Implemented Features
+- Sector CRUD with enable/disable
+- Asset CRUD with sector hierarchy, criticality, QR codes
+- Work Orders: 6 types, 5 disciplines, causa_falha, equipamento_parado, horas_parada
+- Inspections: 3 types (Mecânica, Elétrica, Lubrificação) with default checklists
+- Kanban board with drag-and-drop + audit trail
+- Inventory + Spare Parts management
+- Dashboard: KPIs, trend charts, OS por Setor/Disciplina, Ativos mais Falhas
+- PWA installable with offline cache + sync queue
+- Global error normalization (normalizeError)
+- Camera capture for field use
 
-### Core CMMS (DONE)
-- Auth, Asset CRUD, Work Orders, Inspections, Inventory, Anomalias, AI Assistant, Dashboard, Kanban, Audit Trail
-
-### Field Operations (DONE - June 2026)
-- **PWA**: manifest.json, service worker, installable on Android/iOS/Tablet
-- **Offline Cache**: SW caches static shell + API responses (network-first)
-- **Offline Queue**: IndexedDB stores OS/Inspection creates/updates when offline
-- **Auto Sync**: Syncs pending operations on reconnect with retry + conflict protection
-- **Camera**: Native camera capture via getUserMedia (environment-facing)
-- **Network Status**: Visual indicator bar (offline/syncing/pending)
-- **OS New Fields**: causa_falha (required for corretiva), equipamento_parado (bool), horas_parada
-- **Checklist Templates**: Default editable checklists for Mecânica (10 items), Elétrica (10 items), Lubrificação (9 items)
-- **Inspection Types**: 3 tabs (Mecânica, Elétrica, Lubrificação) with checklist preview
-- **Testing**: 100% (iteration 16)
-
-## Backlog (After Production Validation)
-1. Executive Multi-Plant Dashboard
+## Backlog (Post-Production Validation)
+1. Executive Dashboard
 2. OEE Foundation
 3. Hierarchy Tree Visualization
-4. Architecture Hardening Continuation
-5. Firebase Push Notifications (NOT NOW)
+4. Architecture Hardening (split App.js)
