@@ -650,9 +650,10 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
     
     org_id = ativo.get('organization_id', user.get('organization_id', ''))
     
+    tipo_str = data.tipo.value if hasattr(data.tipo, 'value') else str(data.tipo)
     checklist = data.checklist or []
 
-    if data.tipo == "lubrificacao":
+    if tipo_str == "lubrificacao":
         # Build lubrificação checklist automatically
         checklist = [
             {"id": str(uuid.uuid4()), "descricao": "Ponto de lubrificação acessível", "tipo": "boolean", "obrigatorio": True},
@@ -715,12 +716,12 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         "rota_id": data.rota_id,
         "responsavel_id": data.responsavel_id,
         "organization_id": org_id,
-        "tipo": data.tipo,
+        "tipo": tipo_str,
         "frequencia": data.frequencia,
         "status": "pendente",
         "resultado": "pendente",
         "checklist": checklist,
-        "data_programada": data.data_programada or datetime.now(timezone.utc).isoformat(),
+        "data_programada": data.data_planejada or datetime.now(timezone.utc).isoformat(),
         "data_inicio": None,
         "data_conclusao": None,
         "duracao_minutos": None,
@@ -740,13 +741,14 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
     
     await db.inspecoes.insert_one(insp_doc)
     
-    # Notify responsible
-    await criar_notificacao(
-        data.responsavel_id, org_id, NotificacaoTipo.INSPECAO_PENDENTE,
-        f"Nova inspeção: {ativo.get('tag', '')}",
-        f"Inspeção programada para {ativo.get('nome', '')}",
-        f"/inspecoes/{insp_id}"
-    )
+    # Notify responsible (only if assigned)
+    if data.responsavel_id:
+        await criar_notificacao(
+            data.responsavel_id, org_id, NotificacaoTipo.INSPECAO_PENDENTE,
+            f"Nova inspeção: {ativo.get('tag', '')}",
+            f"Inspeção programada para {ativo.get('nome', '')}",
+            f"/inspecoes/{insp_id}"
+        )
     
     insp_doc.pop('_id', None)
     return insp_doc
@@ -921,7 +923,7 @@ async def create_rota(data: RotaInspecaoCreate, user: Dict = Depends(get_current
         "tipo_ativo": data.tipo_ativo,
         "frequencia": data.frequencia,
         "tempo_estimado_minutos": data.tempo_estimado_minutos,
-        "itens": [item.model_dump() for item in data.itens],
+        "itens": [item if isinstance(item, dict) else item for item in data.itens],
         "ativa": data.ativa,
         "organization_id": org_id,
         "created_at": datetime.now(timezone.utc).isoformat(),

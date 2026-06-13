@@ -237,11 +237,17 @@ class ChecklistItem(BaseModel):
 class InspecaoCreate(BaseModel):
     ativo_id: str
     tipo: InspecaoTipo = InspecaoTipo.MECANICA
+    frequencia: Optional[str] = "diaria"
     responsavel_id: Optional[str] = None
     rota_id: Optional[str] = None
     checklist: List[ChecklistItem] = []
     observacoes: Optional[str] = None
     data_planejada: Optional[str] = None
+    tipo_lubrificante: Optional[str] = None
+    quantidade_lubrificante: Optional[str] = None
+    ponto_lubrificacao: Optional[str] = None
+    metodo_aplicacao: Optional[str] = None
+    observacoes_lubrificacao: Optional[str] = None
 
 class InspecaoUpdate(BaseModel):
     responsavel_id: Optional[str] = None
@@ -255,8 +261,10 @@ class ConcluirInspecaoBody(BaseModel):
 
 class RotaInspecaoCreate(BaseModel):
     nome: str
+    descricao: Optional[str] = None
     tipo: InspecaoTipo = InspecaoTipo.MECANICA
     tipo_ativo: str
+    frequencia: Optional[str] = "diaria"
     itens: List[dict] = []
     tempo_estimado_minutos: int = 15
     ativa: bool = True
@@ -339,16 +347,22 @@ class ChatMessage(BaseModel):
     session_id: Optional[str] = None
 
 class SpareAssetCreate(BaseModel):
+    tag: Optional[str] = None
     sku: Optional[str] = None
-    nome: str
+    nome: Optional[str] = None
     descricao: Optional[str] = None
     tipo_equipamento: Optional[str] = None
     fabricante: Optional[str] = None
     modelo: Optional[str] = None
+    numero_serie: Optional[str] = None
     quantidade: int = 0
     estoque_minimo: int = 0
     custo_unitario: float = 0
+    custo: Optional[float] = None
     localizacao: Optional[str] = None
+    status: Optional[str] = "disponivel"
+    ativo_vinculado_id: Optional[str] = None
+    observacoes: Optional[str] = None
 
 class SpareAssetUpdate(BaseModel):
     nome: Optional[str] = None
@@ -356,10 +370,15 @@ class SpareAssetUpdate(BaseModel):
     tipo_equipamento: Optional[str] = None
     fabricante: Optional[str] = None
     modelo: Optional[str] = None
+    numero_serie: Optional[str] = None
     quantidade: Optional[int] = None
     estoque_minimo: Optional[int] = None
     custo_unitario: Optional[float] = None
+    custo: Optional[float] = None
     localizacao: Optional[str] = None
+    status: Optional[str] = None
+    ativo_vinculado_id: Optional[str] = None
+    observacoes: Optional[str] = None
 
 class SpareMovementCreate(BaseModel):
     spare_id: str
