@@ -287,9 +287,11 @@ class EstoqueUpdate(BaseModel):
     quantidade: Optional[float] = None
     unidade: Optional[UnidadeEstoque] = None
     estoque_minimo: Optional[float] = None
+    estoque_maximo: Optional[float] = None
     custo_unitario: Optional[float] = None
     almoxarifado: Optional[str] = None
     prateleira: Optional[str] = None
+    posicao: Optional[str] = None
     fornecedor: Optional[str] = None
     item_critico: Optional[bool] = None
     alertar_minimo: Optional[bool] = None
