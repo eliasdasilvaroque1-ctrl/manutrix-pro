@@ -652,9 +652,15 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
     
     tipo_str = data.tipo.value if hasattr(data.tipo, 'value') else str(data.tipo)
     checklist = data.checklist or []
+    
+    # Check if checklist has user responses (from Ronda mode)
+    has_responses = any(
+        item.get('conforme') is not None or item.get('valor') is not None
+        for item in (c.model_dump() if hasattr(c, 'model_dump') else c for c in checklist)
+    ) if checklist else False
 
-    if tipo_str == "lubrificacao":
-        # Build lubrificação checklist automatically
+    if tipo_str == "lubrificacao" and not has_responses:
+        # Only build default lubrificação checklist if no user responses
         checklist = [
             {"id": str(uuid.uuid4()), "descricao": "Ponto de lubrificação acessível", "tipo": "boolean", "obrigatorio": True},
             {"id": str(uuid.uuid4()), "descricao": "Área limpa antes da aplicação", "tipo": "boolean", "obrigatorio": True},
@@ -709,6 +715,28 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
                 {"id": str(uuid.uuid4()), "descricao": "Observações", "tipo": "texto", "obrigatorio": False},
             ]
     
+    # Serialize checklist items to dicts
+    checklist_dicts = []
+    for item in checklist:
+        if hasattr(item, 'model_dump'):
+            checklist_dicts.append(item.model_dump())
+        elif isinstance(item, dict):
+            checklist_dicts.append(item)
+        else:
+            checklist_dicts.append(dict(item))
+    checklist = checklist_dicts
+    
+    # Auto-conclude if checklist has user responses (Ronda mode)
+    nao_conformes = [item for item in checklist if item.get('conforme') is False]
+    if has_responses:
+        resultado = "nao_conforme" if nao_conformes else "conforme"
+        status = "com_pendencias" if nao_conformes else "concluida"
+        data_conclusao = datetime.now(timezone.utc).isoformat()
+    else:
+        resultado = "pendente"
+        status = "pendente"
+        data_conclusao = None
+    
     insp_id = str(uuid.uuid4())
     insp_doc = {
         "id": insp_id,
@@ -718,17 +746,16 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         "organization_id": org_id,
         "tipo": tipo_str,
         "frequencia": data.frequencia,
-        "status": "pendente",
-        "resultado": "pendente",
+        "status": status,
+        "resultado": resultado,
         "checklist": checklist,
         "data_programada": data.data_planejada or datetime.now(timezone.utc).isoformat(),
-        "data_inicio": None,
-        "data_conclusao": None,
+        "data_inicio": datetime.now(timezone.utc).isoformat() if has_responses else None,
+        "data_conclusao": data_conclusao,
         "duracao_minutos": None,
-        "observacoes": None,
+        "observacoes": data.observacoes,
         "fotos": [],
         "os_gerada_id": None,
-        # Lubrificação specific
         "tipo_lubrificante": data.tipo_lubrificante,
         "quantidade_lubrificante": data.quantidade_lubrificante,
         "ponto_lubrificacao": data.ponto_lubrificacao,
@@ -741,8 +768,28 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
     
     await db.inspecoes.insert_one(insp_doc)
     
-    # Notify responsible (only if assigned)
-    if data.responsavel_id:
+    # Auto-generate OS for non-conformities in Ronda mode
+    if has_responses and nao_conformes:
+        numero = await generate_os_numero(org_id)
+        descricao_itens = "\n".join([f"- {item.get('descricao', '')}: {item.get('observacao', 'Não conforme')}" for item in nao_conformes])
+        os_id = str(uuid.uuid4())
+        os_doc = {
+            "id": os_id, "numero": numero, "ativo_id": data.ativo_id,
+            "organization_id": org_id, "tipo": "corretiva", "prioridade": "media",
+            "titulo": f"Correção - Inspeção {ativo.get('tag', '')}",
+            "descricao": f"OS gerada automaticamente por inspeção não conforme.\n\nItens não conformes:\n{descricao_itens}",
+            "status": "aberta", "responsavel_id": None, "inspecao_origem_id": insp_id,
+            "data_abertura": datetime.now(timezone.utc).isoformat(),
+            "custo_pecas": 0, "custo_mao_obra": 0, "custo_total": 0,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None
+        }
+        await db.ordens_servico.insert_one(os_doc)
+        await db.inspecoes.update_one({"id": insp_id}, {"$set": {"os_gerada_id": os_id}})
+        insp_doc['os_gerada_id'] = os_id
+    
+    # Notify responsible (only if assigned and not auto-concluded)
+    if data.responsavel_id and not has_responses:
         await criar_notificacao(
             data.responsavel_id, org_id, NotificacaoTipo.INSPECAO_PENDENTE,
             f"Nova inspeção: {ativo.get('tag', '')}",
@@ -938,43 +985,54 @@ async def create_rota(data: RotaInspecaoCreate, user: Dict = Depends(get_current
 
 @api_router.get("/rondas")
 async def list_rondas(user: Dict = Depends(get_current_user)):
-    areas = await db.areas.find({"deleted_at": None}, {"_id": 0}).to_list(100)
+    query = {"deleted_at": None, "is_active": {"$ne": False}}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    sectors = await db.sectors.find(query, {"_id": 0}).sort("nome", 1).to_list(100)
     
     result = []
-    for area in areas:
-        ativos_count = await db.ativos.count_documents({"area_id": area['id'], "deleted_at": None})
-        insp_pendentes = await db.inspecoes.count_documents({
-            "status": {"$in": ["pendente", "em_andamento"]},
-            "deleted_at": None
-        })
-        result.append({"area": area, "total_ativos": ativos_count, "inspecoes_pendentes": insp_pendentes})
+    for sector in sectors:
+        ativos_count = await db.ativos.count_documents({"sector_id": sector['id'], "deleted_at": None})
+        # Count pending inspections for assets in this sector
+        asset_ids = [a['id'] for a in await db.ativos.find({"sector_id": sector['id'], "deleted_at": None}, {"_id": 0, "id": 1}).to_list(500)]
+        insp_pendentes = 0
+        if asset_ids:
+            insp_pendentes = await db.inspecoes.count_documents({
+                "ativo_id": {"$in": asset_ids},
+                "status": {"$in": ["pendente", "em_andamento"]},
+                "deleted_at": None
+            })
+        result.append({"area": sector, "total_ativos": ativos_count, "inspecoes_pendentes": insp_pendentes})
     
     return result
 
 @api_router.get("/ronda/{area_id}")
 async def get_ronda(area_id: str, user: Dict = Depends(get_current_user)):
-    area = await db.areas.find_one({"id": area_id, "deleted_at": None}, {"_id": 0})
+    area = await db.sectors.find_one({"id": area_id, "deleted_at": None}, {"_id": 0})
     if not area:
         raise HTTPException(status_code=404, detail="Área não encontrada")
     
-    ativos = await db.ativos.find({"area_id": area_id, "deleted_at": None}, {"_id": 0}).to_list(500)
-    rotas = await db.rotas_inspecao.find({"deleted_at": None, "ativa": True}, {"_id": 0}).to_list(100)
+    ativos = await db.ativos.find({"sector_id": area_id, "deleted_at": None}, {"_id": 0}).sort("tag", 1).to_list(500)
     
     ronda_ativos = []
     for idx, ativo in enumerate(ativos):
-        rota = rotas[0] if rotas else None
         ultima_insp = await db.inspecoes.find_one(
-            {"ativo_id": ativo['id'], "status": {"$nin": ["pendente", "em_andamento"]}, "deleted_at": None},
-            {"_id": 0}
+            {"ativo_id": ativo['id'], "deleted_at": None},
+            {"_id": 0, "tipo": 1, "status": 1, "resultado": 1, "created_at": 1},
+            sort=[("created_at", -1)]
+        )
+        insp_pendente = await db.inspecoes.find_one(
+            {"ativo_id": ativo['id'], "status": {"$in": ["pendente", "em_andamento"]}, "deleted_at": None}
         )
         ronda_ativos.append({
             "ativo": ativo,
-            "rota": rota,
-            "inspecao_pendente": ultima_insp is None,
+            "ultima_inspecao": ultima_insp,
+            "tem_pendente": insp_pendente is not None,
             "ordem": idx + 1
         })
     
-    ronda_ativos.sort(key=lambda x: (0 if x['inspecao_pendente'] else 1))
+    # Sort: pending first, then by tag
+    ronda_ativos.sort(key=lambda x: (0 if x['tem_pendente'] else 1, x['ativo'].get('tag', '')))
     
     return {"area_id": area_id, "area_nome": area['nome'], "total_ativos": len(ronda_ativos), "ativos": ronda_ativos}
 
@@ -2143,6 +2201,12 @@ async def run_migrations():
         await db.password_reset_tokens.create_index("token")
         await db.sectors.create_index("organization_id")
         await db.ativos.create_index("sector_id")
+        await db.ativos.create_index(
+            [("tag", 1), ("sector_id", 1)],
+            unique=True,
+            partialFilterExpression={"deleted_at": None},
+            name="unique_tag_per_area"
+        )
         
         # Migration 1: checklist tipo field
         inspecoes = await db.inspecoes.find({"deleted_at": None, "checklist": {"$exists": True}}).to_list(1000)

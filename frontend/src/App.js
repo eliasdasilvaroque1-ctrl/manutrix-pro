@@ -486,8 +486,8 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.nome) {
-      toast.error('Preencha o nome do ativo');
+    if (!form.nome || !form.sector_id) {
+      toast.error(!form.sector_id ? 'Selecione a área' : 'Preencha o nome do ativo');
       return;
     }
     
@@ -495,11 +495,6 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
     try {
       const payload = {
         ...form,
-        area_id: form.sector_id,
-        mtbf_horas: form.mtbf_horas ? parseFloat(form.mtbf_horas) : null,
-        mttr_horas: form.mttr_horas ? parseFloat(form.mttr_horas) : null,
-        valor_aquisicao: form.valor_aquisicao ? parseFloat(form.valor_aquisicao) : null,
-        depreciacao_anual: form.depreciacao_anual ? parseFloat(form.depreciacao_anual) : null,
       };
       
       if (editData) {
@@ -603,18 +598,6 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
               />
             </FormInput>
           </div>
-        </div>
-        
-        {/* Observações */}
-        <div className="glass-card p-4 space-y-4">
-          <FormInput label="Observações">
-            <textarea
-              value={form.observacoes}
-              onChange={(e) => setForm({...form, observacoes: e.target.value})}
-              className="input-industrial w-full px-4 py-3 min-h-[80px]"
-              placeholder="Informações adicionais..."
-            />
-          </FormInput>
         </div>
         
         {/* Manuais PDF */}
@@ -3587,12 +3570,25 @@ const InspecaoDetailPage = () => {
   );
 };
 
-// Ronda Page
+// Ronda Page — Full inspection workflow: Área → Equipamento → Inspeção
 const RondaPage = () => {
   const [areas, setAreas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedArea, setSelectedArea] = useState(null);
+  const [areaDetail, setAreaDetail] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [selectedAtivo, setSelectedAtivo] = useState(null);
+  const [tipoInspecao, setTipoInspecao] = useState(null);
+  const [templates, setTemplates] = useState({});
+  const [checklist, setChecklist] = useState([]);
+  const [executing, setExecuting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [photos, setPhotos] = useState([]);
   const navigate = useNavigate();
+  const { user } = useAuth();
   
+  // Step 1: Load areas
   useEffect(() => {
     const fetchAreas = async () => {
       try {
@@ -3605,35 +3601,344 @@ const RondaPage = () => {
       }
     };
     fetchAreas();
+    // Load checklist templates
+    api.get('/checklists/templates').then(r => setTemplates(r.data)).catch(() => {});
   }, []);
+  
+  // Step 2: Select area → load equipments
+  const selectArea = async (areaId) => {
+    setLoadingDetail(true);
+    setSelectedArea(areaId);
+    setSelectedAtivo(null);
+    setTipoInspecao(null);
+    setExecuting(false);
+    try {
+      const response = await api.get(`/ronda/${areaId}`);
+      setAreaDetail(response.data);
+    } catch (error) {
+      toast.error(normalizeError(error));
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+  
+  // Step 3: Select equipment
+  const selectAtivo = (ativo) => {
+    setSelectedAtivo(ativo);
+    setTipoInspecao(null);
+    setExecuting(false);
+    setChecklist([]);
+    setPhotos([]);
+  };
+  
+  // Step 4: Select inspection type → load checklist
+  const selectTipo = (tipo) => {
+    setTipoInspecao(tipo);
+    const template = templates[tipo];
+    if (template) {
+      setChecklist(template.itens.map(item => ({...item, id: item.id || String(Math.random()), valor: null, conforme: null, observacao: ''})));
+    }
+    setExecuting(true);
+  };
+  
+  // Update checklist item
+  const updateChecklistItem = (itemId, field, value) => {
+    setChecklist(prev => prev.map(item => 
+      item.id === itemId ? {...item, [field]: value} : item
+    ));
+  };
+  
+  // Step 5: Submit inspection
+  const submitInspecao = async () => {
+    const obrigatorios = checklist.filter(i => i.obrigatorio);
+    const incompletos = obrigatorios.filter(i => i.tipo === 'boolean' && i.conforme === null);
+    if (incompletos.length > 0) {
+      toast.error(`${incompletos.length} item(ns) obrigatório(s) não preenchido(s)`);
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      const payload = {
+        ativo_id: selectedAtivo.id,
+        tipo: tipoInspecao,
+        responsavel_id: user?.id,
+        checklist: checklist,
+        observacoes: null,
+      };
+      
+      if (!navigator.onLine) {
+        await queueOperation({ method: 'POST', url: '/inspecoes', data: payload });
+        toast.info('Sem conexão — inspeção salva para sincronizar');
+      } else {
+        const res = await api.post('/inspecoes', payload);
+        // Upload photos if any
+        for (const photo of photos) {
+          const formData = new FormData();
+          formData.append('file', photo);
+          formData.append('entity_type', 'inspection');
+          formData.append('entity_id', res.data.id);
+          await api.post('/attachments', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).catch(() => {});
+        }
+        toast.success('Inspeção concluída!');
+      }
+      
+      // Reset to equipment list
+      setExecuting(false);
+      setTipoInspecao(null);
+      setSelectedAtivo(null);
+      setChecklist([]);
+      setPhotos([]);
+      // Refresh area detail
+      if (selectedArea) selectArea(selectedArea);
+    } catch (error) {
+      toast.error(normalizeError(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  const handleCameraCapture = (file) => {
+    setPhotos(prev => [...prev, file]);
+    setShowCamera(false);
+    toast.success('Foto capturada!');
+  };
+  
+  // Back navigation
+  const goBack = () => {
+    if (executing) { setExecuting(false); setTipoInspecao(null); }
+    else if (selectedAtivo) { setSelectedAtivo(null); }
+    else if (selectedArea) { setSelectedArea(null); setAreaDetail(null); }
+  };
   
   if (loading) return <Loading rows={4} />;
   
+  // Camera overlay
+  if (showCamera) return <CameraCapture onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />;
+  
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-slate-100">Modo Ronda</h1>
-      <p className="text-slate-500">Selecione uma área para iniciar a ronda de inspeção</p>
+    <div className="space-y-4" data-testid="ronda-page">
+      {/* Header with breadcrumb */}
+      <div className="flex items-center gap-3">
+        {(selectedArea || selectedAtivo || executing) && (
+          <button onClick={goBack} className="p-2 rounded-lg hover:bg-slate-800 transition-all" data-testid="ronda-back-btn">
+            <ArrowLeft size={20} className="text-slate-400" />
+          </button>
+        )}
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+            <Target size={24} className="text-emerald-400" /> Modo Ronda
+          </h1>
+          <p className="text-sm text-slate-500">
+            {!selectedArea && 'Selecione uma área para iniciar'}
+            {selectedArea && !selectedAtivo && `${areaDetail?.area_nome || ''} — Selecione o equipamento`}
+            {selectedAtivo && !executing && `${selectedAtivo.tag} — Escolha o tipo de inspeção`}
+            {executing && `${selectedAtivo.tag} — ${tipoInspecao === 'mecanica' ? 'Mecânica' : tipoInspecao === 'eletrica' ? 'Elétrica' : 'Lubrificação'}`}
+          </p>
+        </div>
+      </div>
       
-      <div className="space-y-3">
-        {areas.map(({ area, total_ativos }) => (
-          <div
-            key={area.id}
-            className="glass-card p-4 cursor-pointer hover:border-emerald-500/50 transition-all"
-            onClick={() => navigate(`/ronda/${area.id}`)}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: area.cor || '#10b981' }}></div>
-                <div>
-                  <p className="text-slate-100 font-semibold">{area.nome}</p>
-                  <p className="text-sm text-slate-500">{total_ativos} ativos</p>
+      {/* STEP 1: Area list */}
+      {!selectedArea && (
+        <div className="space-y-3" data-testid="ronda-areas">
+          {areas.length === 0 ? (
+            <EmptyState icon={Target} title="Nenhuma área cadastrada" description="Cadastre áreas para iniciar rondas" />
+          ) : areas.map(({ area, total_ativos, inspecoes_pendentes }) => (
+            <div
+              key={area.id}
+              className="glass-card p-4 cursor-pointer hover:border-emerald-500/50 transition-all active:scale-[0.99]"
+              onClick={() => selectArea(area.id)}
+              data-testid={`ronda-area-${area.codigo || area.id}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: (area.cor || '#10b981') + '20' }}>
+                    <MapPin size={20} style={{ color: area.cor || '#10b981' }} />
+                  </div>
+                  <div>
+                    <p className="text-slate-100 font-semibold">{area.nome}</p>
+                    <p className="text-sm text-slate-500">{total_ativos} equipamentos</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {inspecoes_pendentes > 0 && (
+                    <span className="bg-amber-500/20 text-amber-400 text-xs font-medium px-2 py-1 rounded-full">{inspecoes_pendentes} pendente{inspecoes_pendentes > 1 ? 's' : ''}</span>
+                  )}
+                  <ChevronRight className="text-slate-600" />
                 </div>
               </div>
-              <ChevronRight className="text-slate-600" />
             </div>
+          ))}
+        </div>
+      )}
+      
+      {/* STEP 2: Equipment list */}
+      {selectedArea && !selectedAtivo && (
+        <div className="space-y-3" data-testid="ronda-equipamentos">
+          {loadingDetail ? <Loading rows={3} /> : (
+            areaDetail?.ativos?.length === 0 ? (
+              <EmptyState icon={Box} title="Nenhum equipamento nesta área" description="Cadastre ativos para esta área" />
+            ) : areaDetail?.ativos?.map(({ ativo, ultima_inspecao, tem_pendente, ordem }) => (
+              <div
+                key={ativo.id}
+                className="glass-card p-4 cursor-pointer hover:border-emerald-500/50 transition-all active:scale-[0.99]"
+                onClick={() => selectAtivo(ativo)}
+                data-testid={`ronda-ativo-${ativo.tag}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-600 font-mono w-6">{ordem}</span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-emerald-400 text-sm">{ativo.tag}</span>
+                        {tem_pendente && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />}
+                      </div>
+                      <p className="text-slate-200 text-sm">{ativo.nome}</p>
+                      <p className="text-xs text-slate-500">{ativo.tipo_equipamento}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {ultima_inspecao ? (
+                      <div className="text-xs text-slate-500">
+                        <p>Última: {ultima_inspecao.tipo}</p>
+                        <p>{new Date(ultima_inspecao.created_at).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-amber-400">Nunca inspecionado</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+      
+      {/* STEP 3: Inspection type selection */}
+      {selectedAtivo && !executing && (
+        <div className="space-y-4" data-testid="ronda-tipo-inspecao">
+          <div className="glass-card p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="font-mono text-emerald-400">{selectedAtivo.tag}</span>
+              <span className="text-slate-200">{selectedAtivo.nome}</span>
+            </div>
+            <p className="text-xs text-slate-500">{selectedAtivo.tipo_equipamento} {selectedAtivo.fabricante ? `• ${selectedAtivo.fabricante}` : ''}</p>
           </div>
-        ))}
-      </div>
+          
+          <p className="text-sm text-slate-400 font-medium">Selecione o tipo de inspeção:</p>
+          
+          <div className="grid grid-cols-1 gap-3">
+            {[
+              { key: 'mecanica', label: 'Inspeção Mecânica', icon: Cog, color: '#10b981', desc: 'Vibração, temperatura, folgas, rolamentos' },
+              { key: 'eletrica', label: 'Inspeção Elétrica', icon: Zap, color: '#3b82f6', desc: 'Tensão, corrente, isolamento, conexões' },
+              { key: 'lubrificacao', label: 'Inspeção de Lubrificação', icon: Droplet, color: '#f59e0b', desc: 'Nível, contaminação, pontos de graxa' },
+            ].map(tipo => (
+              <button
+                key={tipo.key}
+                onClick={() => selectTipo(tipo.key)}
+                className="glass-card p-5 text-left hover:border-emerald-500/50 transition-all active:scale-[0.99] flex items-center gap-4"
+                data-testid={`ronda-tipo-${tipo.key}`}
+              >
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: tipo.color + '20' }}>
+                  <tipo.icon size={24} style={{ color: tipo.color }} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-slate-100 font-semibold">{tipo.label}</p>
+                  <p className="text-xs text-slate-500">{tipo.desc}</p>
+                </div>
+                <ChevronRight className="text-slate-600" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* STEP 4: Execute checklist */}
+      {executing && (
+        <div className="space-y-4" data-testid="ronda-checklist">
+          <div className="glass-card p-3 flex items-center justify-between">
+            <div>
+              <span className="font-mono text-emerald-400 text-sm">{selectedAtivo.tag}</span>
+              <span className="text-slate-400 text-sm ml-2">{selectedAtivo.nome}</span>
+            </div>
+            <span className="text-xs bg-slate-800 px-2 py-1 rounded capitalize">{tipoInspecao}</span>
+          </div>
+          
+          {/* Checklist items */}
+          <div className="space-y-2">
+            {checklist.map((item, idx) => (
+              <div key={item.id} className="glass-card p-4 space-y-2" data-testid={`checklist-item-${idx}`}>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs text-slate-600 font-mono w-6 pt-0.5">{idx + 1}</span>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-200">{item.descricao} {item.obrigatorio && <span className="text-red-400">*</span>}</p>
+                    
+                    {/* Boolean type: OK / NOK */}
+                    {item.tipo === 'boolean' && (
+                      <div className="flex gap-2 mt-2">
+                        <button onClick={() => updateChecklistItem(item.id, 'conforme', true)} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${item.conforme === true ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-slate-800/50 text-slate-500 border border-slate-700'}`}>
+                          <CheckCircle size={16} className="inline mr-1" /> OK
+                        </button>
+                        <button onClick={() => updateChecklistItem(item.id, 'conforme', false)} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${item.conforme === false ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-slate-800/50 text-slate-500 border border-slate-700'}`}>
+                          <XCircle size={16} className="inline mr-1" /> NOK
+                        </button>
+                      </div>
+                    )}
+                    
+                    {/* Numeric type */}
+                    {item.tipo === 'numerico' && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <input type="number" step="0.1" value={item.valor || ''} onChange={(e) => updateChecklistItem(item.id, 'valor', e.target.value)} className="input-industrial flex-1 px-3 py-2 text-sm" placeholder={`${item.tolerancia_min || ''}${item.tolerancia_min ? ' - ' : ''}${item.tolerancia_max || ''} ${item.unidade || ''}`} />
+                        {item.unidade && <span className="text-xs text-slate-500">{item.unidade}</span>}
+                      </div>
+                    )}
+                    
+                    {/* Option type */}
+                    {item.tipo === 'opcao' && (
+                      <div className="flex gap-1 mt-2 flex-wrap">
+                        {['Bom', 'Regular', 'Ruim'].map(opt => (
+                          <button key={opt} onClick={() => updateChecklistItem(item.id, 'valor', opt)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${item.valor === opt ? (opt === 'Bom' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : opt === 'Regular' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50' : 'bg-red-500/20 text-red-400 border border-red-500/50') : 'bg-slate-800/50 text-slate-500 border border-slate-700'}`}>
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Text type */}
+                    {item.tipo === 'texto' && (
+                      <textarea value={item.valor || ''} onChange={(e) => updateChecklistItem(item.id, 'valor', e.target.value)} className="input-industrial w-full px-3 py-2 mt-2 text-sm min-h-[60px]" placeholder="Observações..." />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Photo capture */}
+          <div className="glass-card p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-slate-400"><Camera size={14} className="inline mr-1" /> Fotos ({photos.length})</p>
+              <button onClick={() => setShowCamera(true)} className="btn-secondary text-sm flex items-center gap-1" data-testid="ronda-camera-btn">
+                <Camera size={16} /> Tirar Foto
+              </button>
+            </div>
+            {photos.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {photos.map((p, i) => (
+                  <div key={i} className="w-16 h-16 rounded-lg overflow-hidden bg-slate-800">
+                    <img src={URL.createObjectURL(p)} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Submit */}
+          <button onClick={submitInspecao} disabled={submitting} className="btn-primary w-full py-4 text-lg font-semibold flex items-center justify-center gap-2" data-testid="ronda-submit-btn">
+            {submitting ? <><RefreshCw size={20} className="animate-spin" /> Salvando...</> : <><CheckCircle size={20} /> Concluir Inspeção</>}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

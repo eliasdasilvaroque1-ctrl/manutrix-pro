@@ -185,9 +185,9 @@ async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Área não encontrada")
 
     tag = data.tag.upper() if data.tag else generate_tag()
-    existing = await db.ativos.find_one({"tag": tag, "organization_id": org_id, "deleted_at": None})
+    existing = await db.ativos.find_one({"tag": tag, "sector_id": data.sector_id, "deleted_at": None})
     if existing:
-        raise HTTPException(status_code=400, detail="TAG já existe")
+        raise HTTPException(status_code=400, detail="TAG já existe nesta área")
 
     ativo_id = str(uuid.uuid4())
     ativo_doc = {

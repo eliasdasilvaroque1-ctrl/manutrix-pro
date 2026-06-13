@@ -1,0 +1,56 @@
+{
+  "summary": "Iteration 21 — MANUTRIX Ronda (Inspection Route) end-to-end testing. Backend 10/10 pytest PASS (checklist templates, rondas list w/ counts, ronda detail w/ pendentes, UNIQUE(area_id, tag) constraint same-area rejects + diff-area succeeds, inspecao auto-conclude conforme, auto-conclude com_pendencias + auto-OS, no-responses stays pendente, lubrificacao with user responses preserves checklist). Frontend Playwright PASS: Login → /ronda shows 7 areas with equipment counts + pendentes badges (Manutenção 3, Produção 3, TEST21 1) → clicking 'Produção' shows 7 ativos starting with MC-01 → clicking ativo shows 3 inspection types (mecanica/eletrica/lubrificacao) → mecânica shows 10 checklist items → OK clicks fill 6 items → Submit → returns to ronda-equipamentos list (NOT /dashboard, NOT /ronda root) → back button returns to areas. Novo Ativo modal has 'Área *' required select with 'Selecione a área...' placeholder. URL stays at /ronda throughout the flow (in-page state machine via setView).",
+  "pass_fail_matrix": {
+    "BACKEND GET /api/checklists/templates returns mecanica+eletrica+lubrificacao": "PASS",
+    "BACKEND GET /api/rondas returns areas with total_ativos + inspecoes_pendentes": "PASS",
+    "BACKEND GET /api/ronda/{area_id} returns ativos w/ ultima_inspecao + tem_pendente": "PASS",
+    "BACKEND GET /api/ronda/invalid → 404": "PASS",
+    "BACKEND POST /api/ativos duplicate tag SAME area → 400": "PASS",
+    "BACKEND POST /api/ativos same tag DIFFERENT area → 201": "PASS",
+    "BACKEND POST /api/inspecoes filled checklist → status=concluida, resultado=conforme, data_conclusao set": "PASS",
+    "BACKEND POST /api/inspecoes NOK item → status=com_pendencias, auto-OS corretiva linked": "PASS",
+    "BACKEND POST /api/inspecoes no responses → status=pendente, no auto-conclude": "PASS",
+    "BACKEND POST /api/inspecoes lubrificacao w/ user checklist (preserved, not overridden by default)": "PASS",
+    "FRONTEND /ronda loads with areas + equipment count + pendentes badges": "PASS",
+    "FRONTEND area click → equipment list (Produção shows 7 ativos)": "PASS",
+    "FRONTEND ativo click → 3 inspection types visible": "PASS",
+    "FRONTEND tipo click → checklist with 10 items + OK/NOK buttons": "PASS",
+    "FRONTEND filled checklist + submit → no Dashboard redirect": "PASS",
+    "FRONTEND post-submit returns to ronda-equipamentos (not areas, not checklist)": "PASS",
+    "FRONTEND back button navigates equipamentos → areas": "PASS",
+    "FRONTEND Novo Ativo modal has 'Área *' required select": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Ronda post-submit", "issues": ["Success toast wasn't visible in DOM at body.innerText capture (~5.5s after submit) — likely auto-dismisses quickly. State transition itself is correct (returned to equipamentos list). Consider increasing toast duration to 4-5s or asserting via aria-live region for testability."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration21_ronda.py",
+    "/app/test_reports/pytest/pytest_results_iteration21.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "App.js is 4838+ lines (per iter20 note); RondaPage spans 3580-3950 (~370 lines) — strong candidate for extraction into /components/RondaPage.jsx with separate sub-views (AreasView, EquipamentosView, TipoSelectView, ChecklistView).",
+    "server.py is 2249 lines; ronda endpoints (~50 lines) and inspecao create (~150 lines) could move to /routes/inspecoes.py and /routes/rondas.py to match existing /routes/assets.py pattern.",
+    "create_inspecao function does both default-checklist generation AND auto-conclude logic AND auto-OS generation — single function has too many responsibilities (~150 lines). Split into _build_checklist(), _autoconclude_inspecao(), _generate_os_from_nao_conformes() helpers.",
+    "The 'has_responses' check at line 657-660 builds a generator inside any(), then re-iterates checklist later — could pre-serialize to dicts once at top to avoid double-loop.",
+    "Database indexes: UNIQUE(sector_id, tag) constraint is enforced in code but not as a Mongo index. Race condition risk under concurrent POSTs. Add `db.ativos.create_index([('sector_id', 1), ('tag', 1)], unique=True, partialFilterExpression={'deleted_at': None})` on startup.",
+    "Back button navigation appears state-machine based via setView (not router) — works correctly but browser back button likely loses Ronda hierarchy state. Consider URL-based state (e.g., /ronda/:areaId/:ativoId/:tipo) for shareable links and proper back-button semantics."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration21_ronda.py",
+    "/app/test_reports/pytest/pytest_results_iteration21.xml",
+    "/app/test_reports/iteration_21.json"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (8/8 acceptance criteria)"},
+  "test_credentials": "admin@manutrix.com / admin123 — verified working",
+  "seed_data_creation": "Created sector 'TEST21 Ronda Area T21AA8AAA' (codigo T21AA8AAA) + ativo T21-XXXX motor + 4 inspections (2 conformes + 1 nao_conforme w/ auto-OS + 1 pendente + 1 lubrificacao). Sector visible in screenshots. Soft-deleted via fixture teardown where applicable; some test sectors persist in DB (visible in Ronda list) which is harmless.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Ronda flow uses in-page state machine (setView), not React Router — URL stays at /ronda throughout the Areas→Equip→Tipo→Checklist→Submit flow. To test 'no Dashboard redirect', just assert post-submit URL contains '/ronda' and ronda-equipamentos testid is visible. Produção area is reliable for testing (7 ativos including MC-01). 'Submit disabled' state is False once at least one checklist item is filled. Backend auto-OS generates linked inspecao_origem_id — verified via GET /api/ordens-servico/{id}. The default lubrificacao checklist is now ONLY applied when no user responses are present (prev bug fixed in this iter). Test_iteration21_ronda.py is the regression suite for Ronda — run before any changes to /backend/server.py inspecao create or /routes/assets.py constraint logic.",
+  "rca of the issue": "N/A — all iter21 acceptance criteria pass. RondaPage flow end-to-end works: areas show counts/pendentes badges, drilling into area shows ativos sorted by pending-first then tag, drilling into ativo shows 3 tipos (mec/elet/lub), each tipo loads its checklist template from /api/checklists/templates, OK buttons mark conforme=true, submit POSTs to /api/inspecoes which auto-concludes when conforme/valor fields populated, returns user to equipamentos list. Backend UNIQUE(area_id, tag) constraint at assets.py:188 correctly scopes by sector_id."
+}
