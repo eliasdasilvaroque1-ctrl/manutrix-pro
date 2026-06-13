@@ -2292,12 +2292,12 @@ const AtivosPage = () => {
                       </button>
                     </div>
                   )}
-                  <PriorityBadge priority={ativo.criticidade} />
                   <ChevronRight className="text-slate-600" />
                 </div>
               </div>
-              <div className="mt-2 flex items-center gap-2">
-                <StatusBadge status={ativo.status} size="sm" />
+              <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                {ativo.tipo_equipamento && <span className="bg-slate-800 px-2 py-0.5 rounded">{ativo.tipo_equipamento}</span>}
+                {ativo.fabricante && <span>{ativo.fabricante}</span>}
               </div>
             </div>
           ))}
@@ -2400,28 +2400,50 @@ const AtivoDetailPage = () => {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-emerald-400">{ativo.tag}</span>
-            <StatusBadge status={ativo.status} size="sm" />
-            <PriorityBadge priority={ativo.criticidade} />
+            <span className="font-mono text-emerald-400 text-lg">{ativo.tag}</span>
+            {ativo.sector && <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">{ativo.sector.nome}</span>}
           </div>
           <h1 className="text-xl font-bold text-slate-100">{ativo.nome}</h1>
+          {ativo.tipo_equipamento && <p className="text-sm text-slate-500">{ativo.tipo_equipamento}</p>}
         </div>
+        <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 text-sm print:hidden" data-testid="print-qr-btn">
+          <QrCode size={16} /> Imprimir QR
+        </button>
       </div>
       
-      {/* QR Code */}
-      <div className="glass-card p-4 flex items-center gap-4">
-        <div className="bg-white p-3 rounded-lg">
-          <QRCodeSVG 
-            value={`${window.location.origin}/ativos/${ativo.id}`} 
-            size={80} 
-            level="H"
-            includeMargin={false}
-          />
-        </div>
-        <div>
-          <p className="text-sm text-slate-400">QR Code</p>
-          <p className="font-mono text-xs text-slate-500">{ativo.tag}</p>
-          <p className="text-xs text-slate-600 mt-1">Escaneie para acessar este ativo</p>
+      {/* QR Code — printable */}
+      <div className="glass-card p-5 print:border print:border-black print:bg-white" data-testid="ativo-qr-section">
+        <div className="flex flex-col sm:flex-row items-center gap-5">
+          <div className="bg-white p-4 rounded-xl shadow-lg print:shadow-none">
+            <QRCodeSVG 
+              value={ativo.qr_code || `${window.location.origin}/ativos/${ativo.id}`} 
+              size={140} 
+              level="H"
+              includeMargin={false}
+            />
+          </div>
+          <div className="flex-1 text-center sm:text-left">
+            <p className="font-mono text-2xl font-bold text-emerald-400 print:text-black">{ativo.tag}</p>
+            <p className="text-lg text-slate-200 print:text-black">{ativo.nome}</p>
+            <p className="text-sm text-slate-500 print:text-gray-600">{ativo.tipo_equipamento} {ativo.fabricante ? `• ${ativo.fabricante}` : ''} {ativo.modelo ? `• ${ativo.modelo}` : ''}</p>
+            {ativo.sector && <p className="text-xs text-slate-600 mt-1 print:text-gray-500">Área: {ativo.sector.nome}</p>}
+          </div>
+          {ativo.kpis && (
+            <div className="grid grid-cols-3 gap-3 text-center print:hidden">
+              <div className="bg-slate-800/50 rounded-lg px-3 py-2">
+                <p className="text-lg font-bold text-emerald-400">{ativo.kpis.disponibilidade_percent}%</p>
+                <p className="text-[10px] text-slate-500 uppercase">Disponib.</p>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg px-3 py-2">
+                <p className="text-lg font-bold text-blue-400">{ativo.kpis.mtbf_horas}h</p>
+                <p className="text-[10px] text-slate-500 uppercase">MTBF</p>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg px-3 py-2">
+                <p className="text-lg font-bold text-amber-400">{ativo.kpis.mttr_horas}h</p>
+                <p className="text-[10px] text-slate-500 uppercase">MTTR</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
@@ -2436,11 +2458,33 @@ const AtivoDetailPage = () => {
         </div>
         
         <div className="glass-card p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-blue-400">Estatísticas</h3>
-          <div className="flex justify-between text-sm"><span className="text-slate-500">Total OS</span><span className="text-slate-200">{ativo.estatisticas?.total_os || 0}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-slate-500">Corretivas</span><span className="text-red-400">{ativo.estatisticas?.os_corretivas || 0}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-slate-500">Preventivas</span><span className="text-emerald-400">{ativo.estatisticas?.os_preventivas || 0}</span></div>
+          <h3 className="text-sm font-semibold text-blue-400">KPIs Automáticos</h3>
+          <div className="flex justify-between text-sm"><span className="text-slate-500">Total OS</span><span className="text-slate-200">{ativo.kpis?.total_os || 0}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-slate-500">Falhas (Corretivas)</span><span className="text-red-400">{ativo.kpis?.total_falhas || 0}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-slate-500">MTBF</span><span className="text-blue-400">{ativo.kpis?.mtbf_horas || 0}h</span></div>
+          <div className="flex justify-between text-sm"><span className="text-slate-500">MTTR</span><span className="text-amber-400">{ativo.kpis?.mttr_horas || 0}h</span></div>
+          <div className="flex justify-between text-sm"><span className="text-slate-500">Disponibilidade</span><span className="text-emerald-400">{ativo.kpis?.disponibilidade_percent || 100}%</span></div>
         </div>
+      </div>
+      
+      {/* Materiais Vinculados */}
+      <div className="glass-card p-4" data-testid="ativo-materiais">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2"><Package size={16} /> Materiais do Equipamento</h3>
+        </div>
+        {ativo.materiais?.length > 0 ? (
+          <div className="space-y-1">
+            {ativo.materiais.map((m, idx) => (
+              <div key={m.id || idx} className="flex items-center gap-3 text-sm py-1.5 border-b border-slate-800/50">
+                {m.codigo && <span className="font-mono text-xs text-slate-500 w-20">{m.codigo}</span>}
+                <span className="text-slate-300 flex-1">{m.nome}</span>
+                <span className="text-slate-500">{m.quantidade} {m.unidade}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-600 text-center py-3">Nenhum material vinculado a este equipamento</p>
+        )}
       </div>
       
       {/* Recent OS */}
@@ -3594,82 +3638,94 @@ const RondaPage = () => {
   );
 };
 
-// Scanner Page
+// Scanner Page — Mobile-first QR scanner with jsQR fallback
 const ScannerPage = () => {
   const [manualCode, setManualCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const scanningRef = useRef(false);
   const navigate = useNavigate();
   
   const resolveScannedValue = async (value) => {
-    // If scanned value is a URL containing /ativos/, extract the ID
     const ativoMatch = value.match(/\/ativos\/([a-f0-9-]+)/i);
-    if (ativoMatch) {
-      navigate(`/ativos/${ativoMatch[1]}`);
-      return;
-    }
-    // Otherwise try QR code field, then TAG
+    if (ativoMatch) { navigate(`/ativos/${ativoMatch[1]}`); return; }
     try {
-      const response = await api.get(`/ativos/qr/${value}`);
-      navigate(`/ativos/${response.data.id}`);
-      return;
-    } catch (err) { console.error(err); }
+      const r = await api.get(`/ativos/qr/${encodeURIComponent(value)}`);
+      navigate(`/ativos/${r.data.id}`); return;
+    } catch {}
     try {
-      const response = await api.get(`/ativos/tag/${value.toUpperCase()}`);
-      navigate(`/ativos/${response.data.id}`);
-      return;
-    } catch (err) { console.error(err); }
-    toast.error('Ativo não encontrado');
+      const r = await api.get(`/ativos/tag/${value.toUpperCase()}`);
+      navigate(`/ativos/${r.data.id}`); return;
+    } catch {}
+    toast.error('Ativo não encontrado para este código');
   };
 
   const handleSearch = async () => {
     if (!manualCode.trim()) return;
     setLoading(true);
-    try {
-      await resolveScannedValue(manualCode.trim());
-    } finally {
-      setLoading(false);
-    }
+    try { await resolveScannedValue(manualCode.trim()); }
+    finally { setLoading(false); }
   };
 
   const startCamera = async () => {
     setCameraError('');
     setScanning(true);
+    scanningRef.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
       }
-      // Use BarcodeDetector if available
+      
+      // Try native BarcodeDetector first
       if ('BarcodeDetector' in window) {
         const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-        const scanLoop = async () => {
-          if (!streamRef.current || !videoRef.current) return;
+        const scanNative = async () => {
+          if (!scanningRef.current || !videoRef.current) return;
           try {
             const barcodes = await detector.detect(videoRef.current);
             if (barcodes.length > 0) {
-              const value = barcodes[0].rawValue;
               stopCamera();
               toast.success('QR Code detectado!');
-              await resolveScannedValue(value);
+              await resolveScannedValue(barcodes[0].rawValue);
               return;
             }
-          } catch (err) { console.error(err); }
-          if (streamRef.current) requestAnimationFrame(scanLoop);
+          } catch {}
+          if (scanningRef.current) requestAnimationFrame(scanNative);
         };
-        // Wait for video to be ready
-        videoRef.current.onloadedmetadata = () => {
-          scanLoop();
-        };
+        videoRef.current.onloadedmetadata = () => scanNative();
       } else {
-        setCameraError('BarcodeDetector não suportado neste navegador. Use a busca manual por TAG.');
+        // Fallback: jsQR library
+        const jsQR = (await import('jsqr')).default;
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        const scanJsQR = () => {
+          if (!scanningRef.current || !videoRef.current || !ctx) return;
+          const video = videoRef.current;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+            if (code) {
+              stopCamera();
+              toast.success('QR Code detectado!');
+              resolveScannedValue(code.data);
+              return;
+            }
+          }
+          if (scanningRef.current) requestAnimationFrame(scanJsQR);
+        };
+        setTimeout(scanJsQR, 500);
       }
     } catch (err) {
       setCameraError('Não foi possível acessar a câmera. Verifique as permissões.');
@@ -3678,6 +3734,7 @@ const ScannerPage = () => {
   };
 
   const stopCamera = () => {
+    scanningRef.current = false;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -3685,56 +3742,68 @@ const ScannerPage = () => {
     setScanning(false);
   };
 
-  useEffect(() => {
-    return () => stopCamera();
-  }, []);
+  useEffect(() => { return () => { scanningRef.current = false; stopCamera(); }; }, []);
+
+  // Auto-start camera on mount for quick field use
+  useEffect(() => { startCamera(); }, []);
   
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-100">Identificar Ativo</h1>
+    <div className="space-y-4" data-testid="scanner-page">
+      <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
+        <QrCode size={28} className="text-emerald-400" /> Identificar Ativo
+      </h1>
       
       {scanning ? (
-        <div className="glass-card p-4 space-y-4">
-          <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
+        <div className="glass-card p-3 space-y-3">
+          <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3]">
             <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+            <canvas ref={canvasRef} className="hidden" />
+            {/* Scan overlay */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-48 h-48 border-2 border-emerald-400 rounded-lg animate-pulse opacity-60" />
+              <div className="w-52 h-52 relative">
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-3 border-l-3 border-emerald-400 rounded-tl-lg" />
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-3 border-r-3 border-emerald-400 rounded-tr-lg" />
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-3 border-l-3 border-emerald-400 rounded-bl-lg" />
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-3 border-r-3 border-emerald-400 rounded-br-lg" />
+                <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-emerald-400/60 animate-pulse" />
+              </div>
+            </div>
+            <div className="absolute bottom-3 left-3 right-3 text-center">
+              <p className="text-xs text-white/80 bg-black/50 rounded-full px-3 py-1 inline-block">Aponte para o QR Code do equipamento</p>
             </div>
           </div>
           {cameraError && <p className="text-sm text-amber-400 text-center">{cameraError}</p>}
-          <button onClick={stopCamera} className="btn-secondary w-full flex items-center justify-center gap-2">
+          <button onClick={stopCamera} className="btn-secondary w-full flex items-center justify-center gap-2" data-testid="stop-camera-btn">
             <X size={20} /> Fechar Câmera
           </button>
         </div>
       ) : (
         <div className="glass-card p-8 flex flex-col items-center justify-center gap-4">
-          <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center">
-            <Camera size={48} className="text-emerald-400" />
+          <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <Camera size={40} className="text-emerald-400" />
           </div>
-          <div className="text-center">
-            <p className="text-lg text-slate-200">Escanear QR Code</p>
-            <p className="text-sm text-slate-500">Use a câmera para ler o código do ativo</p>
-          </div>
-          <button onClick={startCamera} className="btn-primary" data-testid="open-camera-btn">Abrir Câmera</button>
+          <p className="text-sm text-slate-500">Câmera fechada</p>
+          <button onClick={startCamera} className="btn-primary flex items-center gap-2" data-testid="open-camera-btn">
+            <Camera size={20} /> Abrir Câmera
+          </button>
         </div>
       )}
       
       <div className="flex items-center gap-4">
-        <div className="flex-1 h-px bg-slate-800"></div>
-        <span className="text-slate-500 text-sm">ou</span>
-        <div className="flex-1 h-px bg-slate-800"></div>
+        <div className="flex-1 h-px bg-slate-800" />
+        <span className="text-slate-500 text-sm">ou buscar por TAG</span>
+        <div className="flex-1 h-px bg-slate-800" />
       </div>
       
-      <div className="glass-card p-4 space-y-4">
-        <p className="text-sm text-slate-400">Buscar por TAG do ativo</p>
+      <div className="glass-card p-4">
         <div className="flex gap-2">
           <input
             type="text"
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Ex: BOM-001"
-            className="input-industrial flex-1 px-4 font-mono"
+            className="input-industrial flex-1 px-4 font-mono text-lg"
             data-testid="manual-search-input"
           />
           <button onClick={handleSearch} disabled={loading} className="btn-primary px-6" data-testid="manual-search-btn">

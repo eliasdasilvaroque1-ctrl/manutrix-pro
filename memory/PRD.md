@@ -1,41 +1,43 @@
 # MANUTRIX OMNI - Product Requirements Document
 
-## Status: PRODUCTION READY ✅ (Simplified - June 2026)
+## Status: PRODUCTION READY ✅ (June 2026)
+
+## Hierarchy: Área → Ativo (maximum simplicity)
 
 ## Architecture
 - **Backend**: FastAPI + MongoDB (modularized)
 - **Frontend**: React + Tailwind + Shadcn + PWA
 - **Auth**: Supabase Auth + MongoDB bcrypt fallback
-- **Hierarchy**: Área → Ativo (maximum simplicity)
+- **Scanner**: jsQR + BarcodeDetector (dual fallback)
 
-## Data Model
+## Ativo (Simplified)
+- **Required**: Área, TAG, Nome, Tipo de Equipamento
+- **Optional**: Fabricante, Modelo, Número de Série, Observações
+- **Attachments**: Manual PDF, Fotos, Desenhos Técnicos
+- **Materiais**: Bill of materials per equipment
+- **KPIs**: Auto-calculated MTBF, MTTR, Disponibilidade
 
-### Área (collection: sectors)
-- codigo, nome, descricao, cor, is_active
+## QR Code System
+- QR code auto-generated per ativo
+- Scanner page with camera auto-start + jsQR fallback
+- Manual TAG search fallback
+- Print-friendly QR card with KPIs
+- Central "Scan" button in mobile bottom nav
 
-### Ativo (Required: Área, TAG, Nome, Tipo Equipamento)
-- Optional: Fabricante, Modelo, Número de Série, Observações
-- Attachments: Manual PDF, Fotos, Desenhos Técnicos
-- Auto-calculated KPIs: MTBF, MTTR, Disponibilidade (from OS data)
-- Materiais vinculados (bill of materials per asset)
-
-### Ordem de Serviço
-- Tipos: lubrificacao, limpeza_organizacao, preventiva, corretiva, preparacao_material, fabricacao_melhorias
-- Disciplina (obrigatório): mecanica, eletrica, instrumentacao, civil
-- Prioridade: baixa, media, alta, emergencia
-- Fields: causa_falha, equipamento_parado, horas_parada
-
-### Inspeção
-- Tipos: mecanica, eletrica, lubrificacao
-- Default editable checklists (10/10/9 items)
-
-### Removidos (simplificação)
-- ~~Criticidade~~, ~~Status do Ativo~~, ~~Centro de Custo~~
-- ~~MTBF/MTTR manual~~, ~~Valor Aquisição~~, ~~Depreciação~~, ~~Garantia~~
-- ~~Plantas~~, ~~Subsetores~~
+## Implemented
+- Área CRUD + enable/disable
+- Ativo CRUD simplified (no criticidade/status)
+- Materiais por Equipamento (bill of materials)
+- Work Orders: 6 types, 5 disciplines, causa_falha, equipamento_parado, horas_parada
+- Inspections: 3 types with default editable checklists (10/10/9 items)
+- Kanban board with audit trail
+- Dashboard: KPIs auto-calc, OS por Área/Disciplina, Ativos mais Falhas
+- PWA installable + offline queue + camera
+- QR Scanner (camera + manual TAG search)
+- Global error normalization
 
 ## Backlog
-1. Dashboard Executivo
+1. Executive Dashboard
 2. OEE Foundation
 3. Hierarchy Tree
-4. Architecture Hardening (split App.js)
+4. Architecture Hardening (split App.js ~4838 lines)
