@@ -127,6 +127,7 @@ const StatusBadge = ({ status, size = 'md' }) => {
 const PriorityBadge = ({ priority }) => {
   const config = {
     critica: { class: 'bg-red-500/20 border-red-500 text-red-400', label: 'Crítica' },
+    emergencia: { class: 'bg-red-500/20 border-red-500 text-red-400', label: 'Emergência' },
     alta: { class: 'bg-amber-500/20 border-amber-500 text-amber-400', label: 'Alta' },
     media: { class: 'bg-emerald-500/20 border-emerald-500 text-emerald-400', label: 'Média' },
     baixa: { class: 'bg-slate-500/20 border-slate-500 text-slate-400', label: 'Baixa' },
@@ -446,8 +447,8 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
   const [existingManuais, setExistingManuais] = useState([]);
   const [sectors, setSectors] = useState([]);
   const [form, setForm] = useState({
-    tag: '', nome: '', tipo_equipamento: '', subtipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
-    sector_id: '', criticidade: 'media', status: 'operacional', observacoes: ''
+    tag: '', nome: '', tipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
+    sector_id: '', observacoes: ''
   });
   
   useEffect(() => {
@@ -465,26 +466,13 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
         fabricante: editData.fabricante || '',
         modelo: editData.modelo || '',
         numero_serie: editData.numero_serie || '',
-        plant_id: editData.plant_id || '',
-        sector_id: editData.sector_id || editData.area_id || '',
-        centro_custo: editData.centro_custo || '',
-        criticidade: editData.criticidade || 'media',
-        status: editData.status || 'operacional',
-        mtbf_horas: editData.mtbf_horas || '',
-        mttr_horas: editData.mttr_horas || '',
-        data_instalacao: editData.data_instalacao || '',
-        garantia_ate: editData.garantia_ate || '',
-        valor_aquisicao: editData.valor_aquisicao || '',
-        depreciacao_anual: editData.depreciacao_anual || '',
-        fornecedor: editData.fornecedor || '',
+        sector_id: editData.sector_id || '',
         observacoes: editData.observacoes || ''
       });
     } else {
       setForm({
         tag: '', nome: '', tipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
-        plant_id: '', sector_id: '', centro_custo: '', criticidade: 'media', status: 'operacional',
-        mtbf_horas: '', mttr_horas: '', data_instalacao: '', garantia_ate: '',
-        valor_aquisicao: '', depreciacao_anual: '', fornecedor: '', observacoes: ''
+        sector_id: '', observacoes: ''
       });
     }
     setPdfFiles([]);
@@ -556,6 +544,14 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
             <Tag size={16} /> Identificação
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormInput label="Área" required>
+              <Select
+                value={form.sector_id}
+                onChange={(val) => setForm({...form, sector_id: val})}
+                options={sectors.map(s => ({ value: s.id, label: s.nome }))}
+                placeholder="Selecione a área..."
+              />
+            </FormInput>
             <FormInput label="TAG" required={false}>
               <input
                 type="text"
@@ -575,13 +571,14 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
                 required
               />
             </FormInput>
-            <FormInput label="Tipo de Equipamento">
+            <FormInput label="Tipo de Equipamento" required>
               <input
                 type="text"
                 value={form.tipo_equipamento}
                 onChange={(e) => setForm({...form, tipo_equipamento: e.target.value})}
                 placeholder="Ex: Bomba, Motor, Compressor"
                 className="input-industrial w-full px-4"
+                required
               />
             </FormInput>
             <FormInput label="Número de Série">
@@ -611,131 +608,16 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
           </div>
         </div>
         
-        {/* Operacional */}
+        {/* Observações */}
         <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2">
-            <Settings size={16} /> Operacional
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormInput label="Setor" required>
-              <Select
-                value={form.sector_id}
-                onChange={(val) => setForm({...form, sector_id: val})}
-                options={sectors.map(s => ({ value: s.id, label: s.nome }))}
-                placeholder="Selecione o setor..."
-              />
-            </FormInput>
-            <FormInput label="Centro de Custo">
-              <input
-                type="text"
-                value={form.centro_custo}
-                onChange={(e) => setForm({...form, centro_custo: e.target.value})}
-                className="input-industrial w-full px-4"
-              />
-            </FormInput>
-            <FormInput label="Criticidade">
-              <Select
-                value={form.criticidade}
-                onChange={(val) => setForm({...form, criticidade: val})}
-                options={[
-                  { value: 'baixa', label: 'Baixa' },
-                  { value: 'media', label: 'Média' },
-                  { value: 'alta', label: 'Alta' },
-                  { value: 'critica', label: 'Crítica' },
-                ]}
-              />
-            </FormInput>
-            <FormInput label="Status">
-              <Select
-                value={form.status}
-                onChange={(val) => setForm({...form, status: val})}
-                options={[
-                  { value: 'operacional', label: 'Operacional' },
-                  { value: 'parado', label: 'Parado' },
-                  { value: 'manutencao', label: 'Em Manutenção' },
-                  { value: 'desativado', label: 'Desativado' },
-                ]}
-              />
-            </FormInput>
-          </div>
-        </div>
-        
-        {/* Manutenção */}
-        <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-            <Wrench size={16} /> Manutenção
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormInput label="MTBF (horas)">
-              <input
-                type="number"
-                value={form.mtbf_horas}
-                onChange={(e) => setForm({...form, mtbf_horas: e.target.value})}
-                className="input-industrial w-full px-4"
-                placeholder="Tempo médio entre falhas"
-              />
-            </FormInput>
-            <FormInput label="MTTR (horas)">
-              <input
-                type="number"
-                value={form.mttr_horas}
-                onChange={(e) => setForm({...form, mttr_horas: e.target.value})}
-                className="input-industrial w-full px-4"
-                placeholder="Tempo médio de reparo"
-              />
-            </FormInput>
-            <FormInput label="Data de Instalação">
-              <input
-                type="date"
-                value={form.data_instalacao}
-                onChange={(e) => setForm({...form, data_instalacao: e.target.value})}
-                className="input-industrial w-full px-4"
-              />
-            </FormInput>
-            <FormInput label="Garantia até">
-              <input
-                type="date"
-                value={form.garantia_ate}
-                onChange={(e) => setForm({...form, garantia_ate: e.target.value})}
-                className="input-industrial w-full px-4"
-              />
-            </FormInput>
-          </div>
-        </div>
-        
-        {/* Financeiro */}
-        <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-purple-400 uppercase tracking-wider flex items-center gap-2">
-            <DollarSign size={16} /> Financeiro
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormInput label="Valor de Aquisição (R$)">
-              <input
-                type="number"
-                step="0.01"
-                value={form.valor_aquisicao}
-                onChange={(e) => setForm({...form, valor_aquisicao: e.target.value})}
-                className="input-industrial w-full px-4"
-              />
-            </FormInput>
-            <FormInput label="Depreciação Anual (%)">
-              <input
-                type="number"
-                step="0.01"
-                value={form.depreciacao_anual}
-                onChange={(e) => setForm({...form, depreciacao_anual: e.target.value})}
-                className="input-industrial w-full px-4"
-              />
-            </FormInput>
-            <FormInput label="Fornecedor">
-              <input
-                type="text"
-                value={form.fornecedor}
-                onChange={(e) => setForm({...form, fornecedor: e.target.value})}
-                className="input-industrial w-full px-4"
-              />
-            </FormInput>
-          </div>
+          <FormInput label="Observações">
+            <textarea
+              value={form.observacoes}
+              onChange={(e) => setForm({...form, observacoes: e.target.value})}
+              className="input-industrial w-full px-4 py-3 min-h-[80px]"
+              placeholder="Informações adicionais..."
+            />
+          </FormInput>
         </div>
         
         {/* Manuais PDF */}
@@ -1260,6 +1142,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                   { value: 'media', label: 'Média' },
                   { value: 'alta', label: 'Alta' },
                   { value: 'critica', label: 'Crítica' },
+                  { value: 'emergencia', label: 'Emergência' },
                 ]}
               />
             </FormInput>
@@ -1531,7 +1414,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     {
       label: 'INFRAESTRUTURA',
       items: [
-        { icon: Layers, label: 'Setores', path: '/setores' },
+        { icon: Layers, label: 'Áreas', path: '/setores' },
       ]
     },
     {
@@ -1997,8 +1880,8 @@ const DashboardPage = () => {
     preventiva: acc.preventiva + (m.preventivas || 0),
   }), { corretiva: 0, preventiva: 0 });
   
-  const prevPercent = kpis.preventivas_percent;
-  const corrPercent = kpis.corretivas_percent;
+  const prevPercent = 0;
+  const corrPercent = 0;
   
   const osTypes = [
     { name: 'Lubrificação', fill: '#06b6d4', key: 'lubrificacao' },
@@ -2026,7 +1909,7 @@ const DashboardPage = () => {
               className="bg-transparent text-sm text-slate-300 border-none outline-none cursor-pointer"
               data-testid="filter-sector"
             >
-              <option value="">Todos os Setores</option>
+              <option value="">Todas as Áreas</option>
               {sectors.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
             </select>
             {filterSector && (
@@ -2057,7 +1940,7 @@ const DashboardPage = () => {
           <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getBg(kpis.disponibilidade_percent, [90, 75])}`} onClick={() => navigate('/ativos')} data-testid="kpi-disponibilidade">
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Disponibilidade</p>
             <p className={`text-4xl font-black tabular-nums ${getColor(kpis.disponibilidade_percent, [90, 75])}`}>{kpis.disponibilidade_percent}<span className="text-lg">%</span></p>
-            <p className="text-xs text-slate-600 mt-1">{kpis.ativos_operacionais} de {kpis.ativos_total} ativos</p>
+            <p className="text-xs text-slate-600 mt-1">{kpis.ativos_total} ativos cadastrados</p>
           </div>
           <div className={`rounded-xl border p-5 cursor-pointer hover:scale-[1.02] transition-transform ${getInverseBg(backlog, [5, 15])}`} onClick={() => drillDown('backlog', 'Backlog de OS')} data-testid="kpi-backlog">
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Backlog</p>
@@ -2288,7 +2171,6 @@ const AtivosPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [filterCriticidade, setFilterCriticidade] = useState('');
   const [filterSector, setFilterSector] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -2336,7 +2218,6 @@ const AtivosPage = () => {
   
   const filtered = ativos.filter(a => {
     if (filterStatus && a.status !== filterStatus) return false;
-    if (filterCriticidade && a.criticidade !== filterCriticidade) return false;
     if (search) {
       const s = search.toLowerCase();
       return a.tag?.toLowerCase().includes(s) || a.nome?.toLowerCase().includes(s);
@@ -2379,18 +2260,6 @@ const AtivosPage = () => {
             { value: 'manutencao', label: 'Manutenção' },
           ]}
           placeholder="Status"
-          className="w-40"
-        />
-        <Select
-          value={filterCriticidade}
-          onChange={setFilterCriticidade}
-          options={[
-            { value: 'critica', label: 'Crítica' },
-            { value: 'alta', label: 'Alta' },
-            { value: 'media', label: 'Média' },
-            { value: 'baixa', label: 'Baixa' },
-          ]}
-          placeholder="Criticidade"
           className="w-40"
         />
         <Select
@@ -4723,10 +4592,10 @@ const SetoresPage = () => {
     try {
       if (editItem) {
         await api.put(`/sectors/${editItem.id}`, { nome: form.nome, descricao: form.descricao, cor: form.cor });
-        toast.success('Setor atualizado!');
+        toast.success('Área atualizada!');
       } else {
         await api.post('/sectors', form);
-        toast.success('Setor criado!');
+        toast.success('Área criada!');
       }
       setShowModal(false);
       fetchData();
@@ -4737,7 +4606,7 @@ const SetoresPage = () => {
   const handleDelete = async () => {
     try {
       await api.delete(`/sectors/${deleteItem.id}`);
-      toast.success('Setor excluído!');
+      toast.success('Área excluída!');
       setDeleteItem(null);
       fetchData();
     } catch (err) { toast.error(normalizeError(err)); }
@@ -4746,7 +4615,7 @@ const SetoresPage = () => {
   const handleToggle = async (sector) => {
     try {
       await api.patch(`/sectors/${sector.id}/toggle`);
-      toast.success(sector.is_active ? 'Setor desabilitado' : 'Setor habilitado');
+      toast.success(sector.is_active ? 'Área desabilitada' : 'Área habilitada');
       fetchData();
     } catch (err) { toast.error('Erro ao alterar status'); }
   };
@@ -4758,7 +4627,7 @@ const SetoresPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100" data-testid="setores-title">Setores</h1>
-          <p className="text-sm text-slate-500">Gerencie os setores dentro de cada planta</p>
+          <p className="text-sm text-slate-500">Gerencie as áreas industriais</p>
         </div>
         {user?.role === 'admin' && (
           <button onClick={() => openModal()} className="btn-primary flex items-center gap-2" data-testid="add-sector-btn">
@@ -4768,7 +4637,7 @@ const SetoresPage = () => {
       </div>
 
       <div className="flex items-center gap-3">
-        <p className="text-sm text-slate-500">{sectors.length} setores cadastrados</p>
+        <p className="text-sm text-slate-500">{sectors.length} áreas cadastradas</p>
       </div>
 
       {loading ? <Loading rows={3} /> : sectors.length > 0 ? (
@@ -4802,10 +4671,10 @@ const SetoresPage = () => {
           ))}
         </div>
       ) : (
-        <EmptyState icon={Layers} title="Nenhum setor encontrado" description="Crie setores dentro das plantas" action={() => openModal()} actionLabel="Novo Setor" />
+        <EmptyState icon={Layers} title="Nenhuma área encontrada" description="Crie áreas para organizar os ativos" action={() => openModal()} actionLabel="Nova Área" />
       )}
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? "Editar Setor" : "Novo Setor"} size="sm">
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? "Editar Área" : "Nova Área"} size="sm">
         <form onSubmit={handleSubmit} className="space-y-4">
           <FormInput label="Código" required>
             <input type="text" value={form.codigo} onChange={e => setForm({...form, codigo: e.target.value.toUpperCase()})} placeholder="Ex: UTIL, PROD" className="input-industrial w-full px-4 font-mono" required disabled={!!editItem} data-testid="sector-codigo-input" />
@@ -4830,7 +4699,7 @@ const SetoresPage = () => {
         </form>
       </Modal>
 
-      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Setor" message={`Excluir o setor "${deleteItem?.nome}"? Todos os ativos precisam ser movidos antes.`} confirmText="Excluir" danger />
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Área" message={`Excluir o setor "${deleteItem?.nome}"? Todos os ativos precisam ser movidos antes.`} confirmText="Excluir" danger />
     </div>
   );
 };

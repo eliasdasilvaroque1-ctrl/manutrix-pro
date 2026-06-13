@@ -1,0 +1,71 @@
+{
+  "summary": "Iteration 19 — Radical simplification audit. Backend 16/16 pytest passed. Frontend verified: sidebar shows 'Áreas' (not Setores/Plantas), dashboard filter says 'Todas as Áreas', Novo Ativo modal exposes ONLY simplified fields (Área*, TAG, Nome*, Tipo*, Fabricante, Modelo, N° Série, Observações) — NO criticidade/status/centro_custo/valor_aquisicao/depreciacao/garantia/MTBF manual. KPIs auto-calculated from OS data. Materiais por Equipamento endpoints working. OS prioridade='emergencia' accepted.",
+  "pass_fail_matrix": {
+    "AUTH (admin login)": "PASS",
+    "SECTORS as Áreas (list/create EXP19)": "PASS",
+    "ATIVO minimal create (sector_id+nome+tipo only)": "PASS",
+    "ATIVO with extra legacy fields (criticidade/status/valor) - ignored by Pydantic": "PASS",
+    "GET /api/ativos/{id} returns kpis object (mtbf/mttr/disp/total_os/total_falhas)": "PASS",
+    "GET /api/ativos/{id} returns materiais array": "PASS",
+    "POST /api/ativos/{id}/materiais {nome,quantidade}": "PASS",
+    "GET /api/ativos/{id}/materiais": "PASS",
+    "GET /api/kpis auto-calculated (no manual values)": "PASS",
+    "POST /api/ordens-servico prioridade='emergencia'": "PASS",
+    "GET /api/dashboard/os-por-setor regression": "PASS",
+    "GET /api/dashboard/stats regression": "PASS",
+    "GET /api/dashboard/ativos-mais-falhas": "PASS",
+    "GET /api/estoque regression": "PASS",
+    "GET /api/inspecoes regression": "PASS",
+    "FRONTEND sidebar Áreas (not Setores/Plantas)": "PASS",
+    "FRONTEND Dashboard filter 'Todas as Áreas'": "PASS",
+    "FRONTEND Novo Ativo modal — required: Área/Nome/Tipo, optional: TAG/Fabricante/Modelo/Série/Observações": "PASS",
+    "FRONTEND Novo Ativo modal — NO criticidade/status/centro_custo/valor/depreciacao/garantia/MTBF": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AtivosPage filters", "issue": "Filter dropdown still labeled 'Setor' on /ativos list (should be 'Área' per iter19 renaming)", "selector": "select on /ativos", "priority": "LOW"},
+      {"component": "AtivosPage filters", "issue": "Filter dropdown 'Status' still shown even though AssetStatus is removed from create/update flow", "selector": "select on /ativos", "priority": "LOW"},
+      {"component": "AtivosPage list cards", "issue": "Asset cards still render <PriorityBadge priority={ativo.criticidade}/> and status badge for legacy/seed assets — line ~2309 of App.js — even though criticidade is no longer collected", "selector": ".ativo-card", "priority": "LOW"},
+      {"component": "Dashboard OS por Setor chart", "issue": "Chart card title still 'OS por Setor' (consider renaming to 'OS por Área' for consistency)", "selector": "Dashboard chart card", "priority": "LOW"},
+      {"component": "ModalNovoAtivo handleSubmit (App.js ~line 499)", "issue": "Payload still serializes legacy fields: area_id, mtbf_horas, mttr_horas, valor_aquisicao, depreciacao_anual — all sent as null/undefined; harmless (Pydantic ignores) but dead code", "selector": "ModalNovoAtivo", "priority": "LOW"},
+      {"component": "ModalNovoAtivo (App.js ~line 486)", "issue": "Dead code: filteredSectors uses form.plant_id (plant_id no longer exists in form state). Always returns full sectors list.", "selector": "ModalNovoAtivo", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts width(-1)/height(-1) warnings persist on first paint (cosmetic ResponsiveContainer race — also flagged in iter18). Add explicit minHeight."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration19_simplification.py",
+    "/app/test_reports/pytest/pytest_results_iteration19.xml"
+  ],
+  "action_items": [
+    "Rename 'Setor' filter label to 'Área' on /ativos page for consistency with sidebar/dashboard",
+    "Remove 'Status' filter from /ativos page (AssetStatus is no longer collected in new flow)",
+    "Stop displaying criticidade/status badges on AtivosPage list cards (App.js ~2309, 2419) — or keep only if legacy",
+    "Rename 'OS por Setor' chart title to 'OS por Área' on Dashboard for consistency",
+    "Clean up ModalNovoAtivo handleSubmit (App.js ~499) — remove dead payload fields: mtbf_horas, mttr_horas, valor_aquisicao, depreciacao_anual, area_id duplicate",
+    "Remove dead `filteredSectors = ... form.plant_id` (line ~486) — plant_id is gone"
+  ],
+  "critical_code_review_comments": [
+    "Backend route ordering bug risk: /api/ativos/qr/{qr_code} and /api/ativos/tag/{tag} are registered AFTER /api/ativos/{ativo_id}. Since FastAPI matches in order, GET /api/ativos/qr/foo would actually hit /api/ativos/{ativo_id} with ativo_id='qr' and 404. Verify by reordering or use literal prefix match.",
+    "dashboard.py line 169: `ativo.get('criticidade')` is referenced in /dashboard/ativos-mais-falhas even though criticidade is no longer collected. Always returns None for new assets. Either remove from response or update model.",
+    "MTBF formula uses fixed 720h/month baseline regardless of how long the asset has been operating — leads to wildly optimistic MTBF for new assets with 1 failure (=720h MTBF). Consider basing on actual operational window.",
+    "Disponibilidade defaults to 100% when no corretiva OS exist — could be misleading. Consider 'N/A' or showing # of corretivas explicitly.",
+    "App.js is still ~4783 lines — repeated recommendation from iter18: split per-feature modal components.",
+    "Frontend ModalNovoAtivo still imports/references legacy mtbf_horas, mttr_horas, valor_aquisicao, depreciacao_anual in payload (dead code post-simplification)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration19_simplification.py",
+    "/app/test_reports/pytest/pytest_results_iteration19.xml",
+    "/app/test_reports/iteration_19.json"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% on iter19 core (sidebar Áreas label, dashboard filter, simplified Novo Ativo modal). 6 minor UI cleanup items remain (non-blocking)."},
+  "test_credentials": "admin@manutrix.com / admin123 — works",
+  "seed_data_creation": "Created sectors EXP19/TEST19, ativos 'TEST19 Bomba' + 'TEST19 Extra', material 'Rolamento 6205', one OS 'TEST19 OS Emergencia'. Soft-deleted in test_zzz_cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Use /app/backend/tests/test_iteration19_simplification.py as the iter19 regression. Key API conventions discovered: OS endpoint is /api/ordens-servico (NOT /api/os). Sectors at /api/sectors. Ativo create requires only sector_id+nome+tipo_equipamento. Extra legacy fields (criticidade/status/valor_aquisicao/mtbf_horas) are silently ignored by Pydantic. Frontend has 'Áreas' label in sidebar/dashboard but /ativos list page filter labels still say 'Setor' (UI inconsistency, not blocking).",
+  "rca of the issue": "N/A — all iter19 acceptance criteria pass. Identified minor frontend cleanup items (dead form payload fields, leftover 'Setor' filter label on Ativos page, criticidade badges still rendered for legacy data) that don't block functionality."
+}

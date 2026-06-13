@@ -841,7 +841,7 @@ async def concluir_inspecao(
             "ativo_id": insp.get('ativo_id'),
             "organization_id": org_id,
             "tipo": "corretiva",
-            "prioridade": ativo.get('criticidade', 'media'),
+            "prioridade": "media",
             "titulo": f"Correção - Inspeção #{inspecao_id[:8]}",
             "descricao": f"OS gerada automaticamente por inspeção não conforme.\n\nItens não conformes:\n{descricao_itens}",
             "status": "aberta",
@@ -974,7 +974,7 @@ async def get_ronda(area_id: str, user: Dict = Depends(get_current_user)):
             "ordem": idx + 1
         })
     
-    ronda_ativos.sort(key=lambda x: (0 if x['inspecao_pendente'] else 1, {'critica': 0, 'alta': 1, 'media': 2, 'baixa': 3}.get(x['ativo'].get('criticidade', 'media'), 2)))
+    ronda_ativos.sort(key=lambda x: (0 if x['inspecao_pendente'] else 1))
     
     return {"area_id": area_id, "area_nome": area['nome'], "total_ativos": len(ronda_ativos), "ativos": ronda_ativos}
 
@@ -1086,13 +1086,13 @@ async def seed_data():
     
     # Ativos
     ativos_data = [
-        {"tag": "BOM-001", "nome": "Bomba Centrífuga 01", "tipo": "Bomba", "fabricante": "KSB", "modelo": "Meganorm 50-200", "criticidade": "critica", "area_idx": 0},
-        {"tag": "BOM-002", "nome": "Bomba Centrífuga 02", "tipo": "Bomba", "fabricante": "KSB", "modelo": "Meganorm 40-160", "criticidade": "alta", "area_idx": 0},
-        {"tag": "CMP-001", "nome": "Compressor de Ar", "tipo": "Compressor", "fabricante": "Atlas Copco", "modelo": "GA 30+", "criticidade": "critica", "area_idx": 3},
-        {"tag": "EST-001", "nome": "Esteira Transportadora 01", "tipo": "Esteira", "fabricante": "Rexnord", "modelo": "FlatTop 2010", "criticidade": "alta", "area_idx": 1},
-        {"tag": "MIS-001", "nome": "Misturador Industrial", "tipo": "Misturador", "fabricante": "Ekato", "modelo": "HWL", "criticidade": "critica", "area_idx": 1},
-        {"tag": "TOR-001", "nome": "Torno Mecânico", "tipo": "Máquina Ferramenta", "fabricante": "Romi", "modelo": "Tormax 30A", "criticidade": "media", "area_idx": 2},
-        {"tag": "FRE-001", "nome": "Fresadora CNC", "tipo": "Máquina Ferramenta", "fabricante": "Romi", "modelo": "D 800", "criticidade": "alta", "area_idx": 2},
+        {"tag": "BOM-001", "nome": "Bomba Centrífuga 01", "tipo": "Bomba", "fabricante": "KSB", "modelo": "Meganorm 50-200", "area_idx": 0},
+        {"tag": "BOM-002", "nome": "Bomba Centrífuga 02", "tipo": "Bomba", "fabricante": "KSB", "modelo": "Meganorm 40-160", "area_idx": 0},
+        {"tag": "CMP-001", "nome": "Compressor de Ar", "tipo": "Compressor", "fabricante": "Atlas Copco", "modelo": "GA 30+", "area_idx": 3},
+        {"tag": "EST-001", "nome": "Esteira Transportadora 01", "tipo": "Esteira", "fabricante": "Rexnord", "modelo": "FlatTop 2010", "area_idx": 1},
+        {"tag": "MIS-001", "nome": "Misturador Industrial", "tipo": "Misturador", "fabricante": "Ekato", "modelo": "HWL", "area_idx": 1},
+        {"tag": "TOR-001", "nome": "Torno Mecânico", "tipo": "Máquina Ferramenta", "fabricante": "Romi", "modelo": "Tormax 30A", "area_idx": 2},
+        {"tag": "FRE-001", "nome": "Fresadora CNC", "tipo": "Máquina Ferramenta", "fabricante": "Romi", "modelo": "D 800", "area_idx": 2},
     ]
     
     ativos = []
@@ -1107,8 +1107,6 @@ async def seed_data():
             "tipo_equipamento": ad['tipo'],
             "fabricante": ad.get('fabricante'),
             "modelo": ad.get('modelo'),
-            "criticidade": ad['criticidade'],
-            "status": "operacional",
             "sector_id": sector['id'],
             "organization_id": org.id,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -1451,7 +1449,7 @@ async def export_ativos(format: str = "excel", user: Dict = Depends(get_current_
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Ativos"
-        headers = ["TAG", "Nome", "Tipo", "Fabricante", "Modelo", "Série", "Criticidade", "Status", "Centro Custo", "MTBF (h)", "MTTR (h)", "Valor Aquisição"]
+        headers = ["TAG", "Nome", "Tipo", "Fabricante", "Modelo", "Número de Série", "Área"]
         ws.append(headers)
         for a in ativos:
             ws.append([a.get('tag',''), a.get('nome',''), a.get('tipo_equipamento',''), a.get('fabricante',''), a.get('modelo',''), a.get('numero_serie',''), a.get('criticidade',''), a.get('status',''), a.get('centro_custo',''), a.get('mtbf_horas',''), a.get('mttr_horas',''), a.get('valor_aquisicao','')])
@@ -1826,7 +1824,7 @@ async def list_anomalias(sector_id: Optional[str] = None, user: Dict = Depends(g
     
     anomalias = await db.anomalias.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     for a in anomalias:
-        ativo = await db.ativos.find_one({"id": a.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "criticidade": 1})
+        ativo = await db.ativos.find_one({"id": a.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
         a['ativo'] = ativo
     return anomalias
 
@@ -2050,7 +2048,7 @@ async def powerbi_os(user: Dict = Depends(get_current_user)):
     os_list = await db.ordens_servico.find(query, {"_id": 0}).to_list(10000)
     result = []
     for o in os_list:
-        ativo = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "criticidade": 1})
+        ativo = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
         resp = await db.users.find_one({"id": o.get('responsavel_id')}, {"_id": 0, "nome": 1}) if o.get('responsavel_id') else None
         result.append({
             "numero": o.get('numero'), "ativo_tag": ativo.get('tag') if ativo else '', "ativo_nome": ativo.get('nome') if ativo else '',

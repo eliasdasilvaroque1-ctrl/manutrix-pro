@@ -23,11 +23,11 @@ class AssetStatus(str, Enum):
     MANUTENCAO = "manutencao"
     DESATIVADO = "desativado"
 
-class Criticidade(str, Enum):
+class Prioridade(str, Enum):
     BAIXA = "baixa"
     MEDIA = "media"
     ALTA = "alta"
-    CRITICA = "critica"
+    EMERGENCIA = "emergencia"
 
 class OSStatus(str, Enum):
     ABERTA = "aberta"
@@ -152,29 +152,32 @@ class SectorUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 # Ativo
+# Ativo (simplified for field use)
 class AtivoCreate(BaseModel):
     sector_id: str
     tag: Optional[str] = None
     nome: str
     tipo_equipamento: str
-    subtipo_equipamento: Optional[str] = None
-    numero_serie: Optional[str] = None
     fabricante: Optional[str] = None
     modelo: Optional[str] = None
-    criticidade: Criticidade = Criticidade.MEDIA
-    status: AssetStatus = AssetStatus.OPERACIONAL
+    numero_serie: Optional[str] = None
     observacoes: Optional[str] = None
 
 class AtivoUpdate(BaseModel):
     sector_id: Optional[str] = None
     nome: Optional[str] = None
     tipo_equipamento: Optional[str] = None
-    subtipo_equipamento: Optional[str] = None
-    numero_serie: Optional[str] = None
     fabricante: Optional[str] = None
     modelo: Optional[str] = None
-    criticidade: Optional[Criticidade] = None
-    status: Optional[AssetStatus] = None
+    numero_serie: Optional[str] = None
+    observacoes: Optional[str] = None
+
+# Materiais por Equipamento
+class AtivoMaterialCreate(BaseModel):
+    nome: str
+    codigo: Optional[str] = None
+    quantidade: float = 1
+    unidade: str = "UN"
     observacoes: Optional[str] = None
 
 # OS
@@ -182,7 +185,7 @@ class OSCreate(BaseModel):
     ativo_id: str
     tipo: OSTipo
     disciplina: Disciplina
-    prioridade: Criticidade = Criticidade.MEDIA
+    prioridade: Prioridade = Prioridade.MEDIA
     titulo: str
     descricao: Optional[str] = None
     origem: OSOrigem = OSOrigem.MANUAL
@@ -198,7 +201,7 @@ class OSCreate(BaseModel):
 class OSUpdate(BaseModel):
     tipo: Optional[OSTipo] = None
     disciplina: Optional[Disciplina] = None
-    prioridade: Optional[Criticidade] = None
+    prioridade: Optional[Prioridade] = None
     titulo: Optional[str] = None
     descricao: Optional[str] = None
     responsavel_id: Optional[str] = None

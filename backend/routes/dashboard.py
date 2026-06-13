@@ -27,48 +27,42 @@ async def get_kpis(sector_id: Optional[str] = None, user: Dict = Depends(get_cur
         if asset_ids is not None:
             os_query['ativo_id'] = {"$in": asset_ids}
 
-    os_concluidas = await db.ordens_servico.find({**os_query, "status": "concluida", "tempo_execucao_minutos": {"$exists": True, "$ne": None}}, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1}).to_list(1000)
-    tempos = [o['tempo_execucao_minutos'] for o in os_concluidas if o.get('tempo_execucao_minutos')]
-    mttr_minutos = sum(tempos) / len(tempos) if tempos else 126
-    mttr_horas = mttr_minutos / 60
+    # Auto-calculated from OS data
+    os_corretivas_concluidas = await db.ordens_servico.find(
+        {**os_query, "tipo": "corretiva", "status": "concluida", "tempo_execucao_minutos": {"$exists": True, "$ne": None}},
+        {"_id": 0, "tempo_execucao_minutos": 1}
+    ).to_list(5000)
 
-    all_os = await db.ordens_servico.find(os_query, {"_id": 0, "tipo": 1}).to_list(5000)
-    total_os_all = len(all_os)
-    preventivas = len([o for o in all_os if o.get('tipo') == 'preventiva'])
-    corretivas = len([o for o in all_os if o.get('tipo') == 'corretiva'])
+    num_falhas = len(os_corretivas_concluidas)
+    tempos = [o['tempo_execucao_minutos'] for o in os_corretivas_concluidas if o.get('tempo_execucao_minutos')]
+
+    # MTTR = avg repair time of corretiva OS
+    mttr_horas = round(sum(tempos) / len(tempos) / 60, 2) if tempos else 0
+    # MTBF = operational hours / failures (720h/month baseline)
+    mtbf_horas = round(720 / num_falhas, 1) if num_falhas > 0 else 0
+    # Disponibilidade = MTBF / (MTBF + MTTR)
+    disponibilidade = round(mtbf_horas / (mtbf_horas + mttr_horas) * 100, 1) if (mtbf_horas + mttr_horas) > 0 else 100
 
     ativos_total = await db.ativos.count_documents(asset_query)
-    ativos_operacionais = await db.ativos.count_documents({**asset_query, "status": "operacional"})
-    ativos_parados = await db.ativos.count_documents({**asset_query, "status": {"$in": ["parado", "manutencao"]}})
-
-    disponibilidade = (ativos_operacionais / ativos_total * 100) if ativos_total > 0 else 100
-    mtbf_horas = ((ativos_total - ativos_parados) / ativos_total * 720) if ativos_total > 0 else 720
-    confiabilidade = (1 - (corretivas / total_os_all)) * 100 if total_os_all > 0 else 100
-
-    insp_query = dict(os_query)
-    insp_finalizadas = await db.inspecoes.count_documents({**insp_query, "status": {"$in": ["concluida", "com_pendencias"]}})
-    insp_conformes = await db.inspecoes.count_documents({**insp_query, "resultado": "conforme"})
-    taxa_conformidade = (insp_conformes / insp_finalizadas * 100) if insp_finalizadas > 0 else 100
-
     backlog = await db.ordens_servico.count_documents({**os_query, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}})
     os_atrasadas = await db.ordens_servico.count_documents({**os_query, "status": {"$nin": ["concluida", "cancelada"]}, "data_planejada": {"$lt": now.isoformat()}})
+
+    insp_pendentes = await db.inspecoes.count_documents({**os_query, "status": "pendente"})
+    insp_nao_conformes = await db.inspecoes.count_documents({**os_query, "resultado": "nao_conforme"})
+
     os_mes = await db.ordens_servico.find({**os_query, "status": "concluida", "data_conclusao": {"$gte": month_start}}, {"_id": 0, "custo_total": 1}).to_list(1000)
     custo_mes = sum(o.get('custo_total', 0) or 0 for o in os_mes)
 
     return {
-        "disponibilidade_percent": round(disponibilidade, 1),
-        "mtbf_horas": round(mtbf_horas, 1),
-        "mttr_horas": round(mttr_horas, 2),
-        "confiabilidade_percent": round(confiabilidade, 1),
-        "taxa_conformidade_percent": round(taxa_conformidade, 1),
+        "disponibilidade_percent": disponibilidade,
+        "mtbf_horas": mtbf_horas,
+        "mttr_horas": mttr_horas,
         "backlog_total": backlog,
         "os_atrasadas": os_atrasadas,
-        "preventivas_percent": round((preventivas / total_os_all * 100) if total_os_all > 0 else 0, 1),
-        "corretivas_percent": round((corretivas / total_os_all * 100) if total_os_all > 0 else 0, 1),
         "custo_manutencao_mes": round(custo_mes, 2),
         "ativos_total": ativos_total,
-        "ativos_operacionais": ativos_operacionais,
-        "ativos_parados": ativos_parados
+        "inspecoes_pendentes": insp_pendentes,
+        "achados_criticos": insp_nao_conformes
     }
 
 

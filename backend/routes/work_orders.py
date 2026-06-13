@@ -10,7 +10,7 @@ from deps import (
     audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids
 )
 from models import (
-    OSCreate, OSUpdate, OSStatus, OSTipo, Criticidade, Disciplina,
+    OSCreate, OSUpdate, OSStatus, OSTipo, Prioridade, Disciplina,
     NotificacaoTipo, KanbanMoveBody, ConcluirOSBody
 )
 
@@ -22,7 +22,7 @@ async def list_os(
     status: Optional[OSStatus] = None,
     tipo: Optional[OSTipo] = None,
     disciplina: Optional[Disciplina] = None,
-    prioridade: Optional[Criticidade] = None,
+    prioridade: Optional[Prioridade] = None,
     responsavel_id: Optional[str] = None,
     ativo_id: Optional[str] = None,
     sector_id: Optional[str] = None,
@@ -129,6 +129,8 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
     os['ativo'] = await db.ativos.find_one({"id": os.get('ativo_id')}, {"_id": 0})
     if os.get('responsavel_id'):
         os['responsavel'] = await db.users.find_one({"id": os['responsavel_id']}, {"_id": 0, "nome": 1, "email": 1, "telefone": 1})
+    # Materiais sugeridos do ativo
+    os['materiais_sugeridos'] = await db.ativo_materiais.find({"ativo_id": os.get('ativo_id'), "deleted_at": None}, {"_id": 0}).to_list(50)
     return os
 
 
@@ -141,6 +143,9 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
 
     org_id = ativo.get('organization_id', user.get('organization_id', ''))
     numero = await generate_os_numero(org_id)
+
+    # Suggest materials from asset's BOM
+    materiais = await db.ativo_materiais.find({"ativo_id": data.ativo_id, "deleted_at": None}, {"_id": 0}).to_list(50)
 
     os_id = str(uuid.uuid4())
     os_doc = {
