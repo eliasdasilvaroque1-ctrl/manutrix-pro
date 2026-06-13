@@ -22,6 +22,18 @@ import axios from "axios";
 // Register PWA Service Worker
 registerServiceWorker();
 
+// Global error normalizer — handles Pydantic validation arrays, objects, and strings
+const normalizeError = (error) => {
+  const detail = error?.response?.data?.detail;
+  if (!detail) return error?.message || 'Erro desconhecido';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(d => typeof d === 'object' ? (d.msg || JSON.stringify(d)) : String(d)).join('; ');
+  }
+  if (typeof detail === 'object') return detail.msg || JSON.stringify(detail);
+  return String(detail);
+};
+
 // ============== COMPONENTS ==============
 
 // Modal Component
@@ -529,7 +541,7 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
       onSuccess();
       onClose();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao salvar ativo');
+      toast.error(normalizeError(error));
     } finally {
       setLoading(false);
     }
@@ -877,7 +889,7 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
       onSuccess();
       onClose();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao salvar item');
+      toast.error(normalizeError(error));
     } finally {
       setLoading(false);
     }
@@ -1179,7 +1191,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
         onClose();
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao salvar OS');
+      toast.error(normalizeError(error));
     } finally {
       setLoading(false);
     }
@@ -1418,7 +1430,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
       onSuccess();
       onClose();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao criar inspeção');
+      toast.error(normalizeError(error));
     } finally {
       setLoading(false);
     }
@@ -1687,7 +1699,7 @@ const LoginPage = () => {
         navigate('/');
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro no login');
+      toast.error(normalizeError(error));
     } finally {
       setLoading(false);
     }
@@ -1703,7 +1715,7 @@ const LoginPage = () => {
       setView('reset');
       toast.success('Token de redefinição gerado!');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao solicitar reset');
+      toast.error(normalizeError(error));
     } finally { setLoading(false); }
   };
 
@@ -1719,7 +1731,7 @@ const LoginPage = () => {
       setNewPassword('');
       setConfirmPassword('');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao redefinir senha');
+      toast.error(normalizeError(error));
     } finally { setLoading(false); }
   };
 
@@ -1736,7 +1748,7 @@ const LoginPage = () => {
       setNewPassword('');
       setConfirmPassword('');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao alterar senha');
+      toast.error(normalizeError(error));
     } finally { setLoading(false); }
   };
   
@@ -2505,7 +2517,7 @@ const AtivoDetailPage = () => {
       const res = await api.get(`/ativos/${id}/manuais`);
       setManuais(res.data);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao carregar manual');
+      toast.error(normalizeError(error));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -2518,7 +2530,7 @@ const AtivoDetailPage = () => {
       toast.success('Manual removido');
       setManuais(prev => prev.filter(m => m.id !== manualId));
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao remover');
+      toast.error(normalizeError(error));
     }
   };
 
@@ -2844,7 +2856,7 @@ const OSPage = () => {
       setOsList(prev => prev.map(os => os.id === osId ? { ...os, status: newStatus } : os));
       toast.success(`OS movida para ${kanbanColumns.find(c => c.id === newStatus)?.title || newStatus}`);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao mover OS');
+      toast.error(normalizeError(error));
       fetchData();
     }
   };
@@ -4041,7 +4053,7 @@ const SobressalentesPage = () => {
       setEditItem(null);
       setForm({ descricao: '', modelo: '', fabricante: '', status: 'estoque', localizacao: '', custo: '' });
       fetchData();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(normalizeError(e)); }
     finally { setSaving(false); }
   };
 
@@ -4053,7 +4065,7 @@ const SobressalentesPage = () => {
       toast.success('Sobressalente excluído!');
       setDeleteItem(null);
       fetchData();
-    } catch (error) { toast.error(error.response?.data?.detail || 'Erro ao excluir'); }
+    } catch (error) { toast.error(normalizeError(error)); }
   };
 
   const handleEdit = (sp) => {
@@ -4176,7 +4188,7 @@ const AnomaliasPage = () => {
       toast.success(`Anomalia criada! Prioridade: ${res.data.prioridade_os?.toUpperCase()}${res.data.os_gerada_id ? ' - OS gerada automaticamente' : ''}`);
       setShowModal(false);
       fetchData();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(normalizeError(e)); }
     finally { setSaving(false); }
   };
 
@@ -4387,7 +4399,7 @@ const AdminUsuariosPage = () => {
       setShowModal(false);
       setForm({ nome: '', email: '', password: '', role: 'tecnico', telefone: '' });
       fetchUsers();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(normalizeError(e)); }
     finally { setSaving(false); }
   };
 
@@ -4401,7 +4413,7 @@ const AdminUsuariosPage = () => {
       const res = await api.post(`/admin/users/${uid}/reset-password`);
       setResetResult({ nome, temp_password: res.data.temp_password });
       toast.success('Senha temporária gerada!');
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(normalizeError(e)); }
   };
 
   const handleEditUser = (u) => {
@@ -4418,7 +4430,7 @@ const AdminUsuariosPage = () => {
       setShowModal(false);
       setEditUser(null);
       fetchUsers();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(normalizeError(e)); }
     finally { setSaving(false); }
   };
 
@@ -4587,7 +4599,7 @@ const PlantasPage = () => {
       }
       setShowModal(false);
       fetchPlants();
-    } catch (err) { toast.error(err.response?.data?.detail || 'Erro ao salvar'); }
+    } catch (err) { toast.error(normalizeError(err)); }
     finally { setSaving(false); }
   };
 
@@ -4597,7 +4609,7 @@ const PlantasPage = () => {
       toast.success('Planta excluída!');
       setDeleteItem(null);
       fetchPlants();
-    } catch (err) { toast.error(err.response?.data?.detail || 'Erro ao excluir'); }
+    } catch (err) { toast.error(normalizeError(err)); }
   };
 
   return (
@@ -4718,7 +4730,7 @@ const SetoresPage = () => {
       }
       setShowModal(false);
       fetchData();
-    } catch (err) { toast.error(err.response?.data?.detail || 'Erro ao salvar'); }
+    } catch (err) { toast.error(normalizeError(err)); }
     finally { setSaving(false); }
   };
 
@@ -4728,7 +4740,7 @@ const SetoresPage = () => {
       toast.success('Setor excluído!');
       setDeleteItem(null);
       fetchData();
-    } catch (err) { toast.error(err.response?.data?.detail || 'Erro ao excluir'); }
+    } catch (err) { toast.error(normalizeError(err)); }
   };
 
   const handleToggle = async (sector) => {

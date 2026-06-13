@@ -270,9 +270,11 @@ class EstoqueCreate(BaseModel):
     quantidade: float = 0
     unidade: UnidadeEstoque = UnidadeEstoque.UN
     estoque_minimo: float = 0
+    estoque_maximo: Optional[float] = None
     custo_unitario: float = 0
     almoxarifado: str = "Principal"
     prateleira: Optional[str] = None
+    posicao: Optional[str] = None
     fornecedor: Optional[str] = None
     item_critico: bool = False
     alertar_minimo: bool = True

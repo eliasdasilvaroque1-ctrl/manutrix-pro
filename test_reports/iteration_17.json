@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 17 — P0 Estoque bugfix verification. BOTH FIXES CONFIRMED WORKING. Backend: 9/9 pytest passed including POST /api/estoque happy path (returns 200 with id+sku), POST with new optional fields estoque_maximo + posicao (200, no longer 500), POST {} returns 422 with proper Pydantic detail array, and regressions for /api/dashboard/stats, /api/ordens-servico, /api/checklists/templates, /api/inspecoes. Frontend: logged in as admin@manutrix.com; opened /estoque -> 'Novo Item' modal; submitted with empty Nome — browser-native required validation displayed ('Please fill out this field') and NO React crash (no 'Objects are not valid as a React child', root tree stable, 0 page/console errors); then filled Nome='Parafuso M10' and saved — modal closed cleanly without crash. Regressions: dashboard renders all KPIs and charts; /os Kanban shows all 5 columns including 'Em Execução'; Nova Inspeção modal still has the 3 tabs (Mecânica, Elétrica, Lubrificação).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "OS Kanban",
+        "issues": ["Legacy seeded OS #2026-00041 'AUDIT-OS-EMERG' still displays old tipo label (carryover from iter16, cosmetic only)."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration17_estoque_bugfix.py",
+    "/app/test_reports/pytest/pytest_results_iteration17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "normalizeError() in App.js correctly handles strings, arrays of {msg,loc,...} and plain objects — good. Consider also surfacing field 'loc' (e.g. 'nome: field required') to give users actionable hints instead of generic 'Field required'.",
+    "EstoqueUpdate model in /app/backend/models.py is still MISSING estoque_maximo and posicao (only EstoqueCreate was fixed). If server.py PUT /estoque references these fields, the same 500 bug will resurface on edit. Recommend mirroring the two new optional fields into EstoqueUpdate.",
+    "App.js is ~4914 lines (well over the 700-line guideline). Split modals/forms into per-feature components.",
+    "Some toast.error calls still pass raw strings instead of going through normalizeError (e.g. 'Erro ao carregar dashboard', 'Erro ao excluir'). These are fine but inconsistent — consider routing all error toasts through normalizeError for uniformity."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration17_estoque_bugfix.py",
+    "/app/test_reports/pytest/pytest_results_iteration17.xml",
+    "/app/test_reports/iteration_17.json"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9)",
+    "frontend": "100% on critical flows (login, dashboard, estoque create happy + empty-nome no-crash, OS Kanban, Nova Inspeção 3 tabs)"
+  },
+  "test_credentials": "admin@manutrix.com / admin123 (works)",
+  "seed_data_creation": "Test created two TEST_-prefixed Estoque items ('TEST_BugFix Item', 'TEST_OptFields_*') and attempts cleanup in teardown_class. UI test created a 'Parafuso M10' item — not auto-cleaned (manual cleanup may be desired).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "P0 Estoque bug is fully fixed. Use /app/backend/tests/test_iteration17_estoque_bugfix.py for regression. Watch for the EstoqueUpdate model still missing estoque_maximo+posicao — if the next change is an edit-item flow, that path could still 500.",
+  "rca of the issue": "ROOT CAUSE: (a) EstoqueCreate Pydantic model lacked estoque_maximo/posicao but server.py wrote those fields on insert -> 500. (b) Front-end called toast.error(error.response.data.detail) which receives a list of Pydantic ValidationError dicts on 422; rendering that list as a React child threw 'Objects are not valid as a React child'. MITIGATION (already applied by main agent and verified): added the two fields to EstoqueCreate; added normalizeError() helper in App.js and routed all critical toast.error calls through it. Verified via 9 pytest cases and an end-to-end Playwright flow with empty-Nome and valid-Nome submit — no React crash, no console/page errors, item creation succeeds."
+}
