@@ -1,0 +1,13 @@
+[
+  {
+    "nome": "Planta Principal",
+    "endereco": "Rua Industrial, 1000 - S\u00e3o Paulo, SP",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "latitude": -23.55052,
+    "longitude": -46.633308,
+    "imagem_url": null,
+    "id": "6e17bc98-e1d2-44d1-80ad-c74d1c01a6ea",
+    "created_at": "2026-03-17T22:21:47.517368+00:00",
+    "deleted_at": null
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "nome": "Utilidades",
+    "planta_id": "6e17bc98-e1d2-44d1-80ad-c74d1c01a6ea",
+    "descricao": "Sistemas de \u00e1gua, ar comprimido e energia",
+    "cor": "#10b981",
+    "id": "d5e5c629-91bf-4ad8-98ac-45353404e758",
+    "created_at": "2026-03-17T22:21:47.571358+00:00",
+    "deleted_at": null
+  },
+  {
+    "nome": "Produ\u00e7\u00e3o",
+    "planta_id": "6e17bc98-e1d2-44d1-80ad-c74d1c01a6ea",
+    "descricao": "Linha de produ\u00e7\u00e3o principal",
+    "cor": "#3b82f6",
+    "id": "55991d0b-ff83-4df9-a4cf-121cf028ffcb",
+    "created_at": "2026-03-17T22:21:47.586452+00:00",
+    "deleted_at": null
+  },
+  {
+    "nome": "Embalagem",
+    "planta_id": "6e17bc98-e1d2-44d1-80ad-c74d1c01a6ea",
+    "descricao": "\u00c1rea de embalagem e expedi\u00e7\u00e3o",
+    "cor": "#f59e0b",
+    "id": "d7643507-b653-4ad0-a6b2-b0e32fdf1a5f",
+    "created_at": "2026-03-17T22:21:47.587340+00:00",
+    "deleted_at": null
+  },
+  {
+    "nome": "Manuten\u00e7\u00e3o",
+    "planta_id": "6e17bc98-e1d2-44d1-80ad-c74d1c01a6ea",
+    "descricao": "Oficina de manuten\u00e7\u00e3o",
+    "cor": "#8b5cf6",
+    "id": "cfc37def-0379-434f-a5db-d00f5fb78168",
+    "created_at": "2026-03-17T22:21:47.587922+00:00",
+    "deleted_at": null
+  }
+]

@@ -1,0 +1,104 @@
+[
+  {
+    "id": "d5e5c629-91bf-4ad8-98ac-45353404e758",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "codigo": "UTIL",
+    "nome": "Utilidades",
+    "descricao": "Sistemas de \u00e1gua, ar comprimido e energia",
+    "cor": "#10b981",
+    "is_active": true,
+    "created_at": "2026-03-17T22:21:47.571358+00:00",
+    "deleted_at": "2026-06-13T12:05:01.771711+00:00"
+  },
+  {
+    "id": "55991d0b-ff83-4df9-a4cf-121cf028ffcb",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "codigo": "PROD",
+    "nome": "Produ\u00e7\u00e3o",
+    "descricao": "Linha de produ\u00e7\u00e3o principal",
+    "cor": "#3b82f6",
+    "is_active": true,
+    "created_at": "2026-03-17T22:21:47.586452+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "d7643507-b653-4ad0-a6b2-b0e32fdf1a5f",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "codigo": "EMBA",
+    "nome": "Embalagem",
+    "descricao": "\u00c1rea de embalagem e expedi\u00e7\u00e3o",
+    "cor": "#f59e0b",
+    "is_active": true,
+    "created_at": "2026-03-17T22:21:47.587340+00:00",
+    "deleted_at": "2026-06-13T12:04:53.233819+00:00"
+  },
+  {
+    "id": "cfc37def-0379-434f-a5db-d00f5fb78168",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "codigo": "MANU",
+    "nome": "Manuten\u00e7\u00e3o",
+    "descricao": "Oficina de manuten\u00e7\u00e3o",
+    "cor": "#8b5cf6",
+    "is_active": true,
+    "created_at": "2026-03-17T22:21:47.587922+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "bdd61171-91c6-448b-b2a3-b7e7cf9b719a",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "codigo": "T094D",
+    "nome": "Setor T094D",
+    "descricao": "Teste",
+    "cor": "#10b981",
+    "is_active": true,
+    "created_at": "2026-06-11T19:40:05.309207+00:00",
+    "deleted_at": "2026-06-11T19:40:05.364238+00:00"
+  },
+  {
+    "id": "ccf73f35-a47d-4219-bf45-87803e6885f4",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "codigo": "TBRTF886",
+    "nome": "TEST_Britagem Prim\u00e1ria",
+    "descricao": null,
+    "cor": "#10b981",
+    "is_active": false,
+    "created_at": "2026-06-12T17:50:51.173834+00:00",
+    "deleted_at": "2026-06-12T17:50:51.455289+00:00",
+    "updated_at": "2026-06-12T17:50:51.337924+00:00"
+  },
+  {
+    "id": "e8fcc4b5-bbae-4284-a990-a26495225869",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "codigo": "AUDIT1",
+    "nome": "Audit Sector Updated",
+    "descricao": "Test",
+    "cor": "#10b981",
+    "is_active": false,
+    "created_at": "2026-06-13T12:23:28.958307+00:00",
+    "deleted_at": "2026-06-13T12:23:29.504214+00:00",
+    "updated_at": "2026-06-13T12:23:29.397916+00:00"
+  },
+  {
+    "id": "a7b132fb-be3b-409a-a0ae-366f736f6e5c",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "codigo": "AUD51A1E6",
+    "nome": "AUDIT_Sector_UPD_51A1E6",
+    "descricao": "audit",
+    "cor": "#10b981",
+    "is_active": false,
+    "created_at": "2026-06-13T12:31:15.430338+00:00",
+    "deleted_at": "2026-06-13T12:31:15.999996+00:00",
+    "updated_at": "2026-06-13T12:31:15.897219+00:00"
+  },
+  {
+    "id": "386b26d7-443a-4abc-bca0-c50f8256e2a4",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "codigo": "ATV51A1E6",
+    "nome": "AUDIT_AtivoSec_51A1E6",
+    "descricao": null,
+    "cor": "#10b981",
+    "is_active": true,
+    "created_at": "2026-06-13T12:31:16.104703+00:00",
+    "deleted_at": "2026-06-13T12:31:20.550359+00:00"
+  }
+]

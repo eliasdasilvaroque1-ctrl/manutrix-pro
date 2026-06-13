@@ -1,0 +1,106 @@
+{
+  "timestamp": "2026-06-13T12:37:42.935553",
+  "db_name": "test_database",
+  "collections": {
+    "users": {
+      "count": 9,
+      "file": "/app/backups/production_20260613/users.json",
+      "status": "OK"
+    },
+    "sectors": {
+      "count": 9,
+      "file": "/app/backups/production_20260613/sectors.json",
+      "status": "OK"
+    },
+    "ativos": {
+      "count": 36,
+      "file": "/app/backups/production_20260613/ativos.json",
+      "status": "OK"
+    },
+    "itens_estoque": {
+      "count": 29,
+      "file": "/app/backups/production_20260613/itens_estoque.json",
+      "status": "OK"
+    },
+    "ordens_servico": {
+      "count": 49,
+      "file": "/app/backups/production_20260613/ordens_servico.json",
+      "status": "OK"
+    },
+    "inspecoes": {
+      "count": 49,
+      "file": "/app/backups/production_20260613/inspecoes.json",
+      "status": "OK"
+    },
+    "anomalias": {
+      "count": 6,
+      "file": "/app/backups/production_20260613/anomalias.json",
+      "status": "OK"
+    },
+    "spare_assets": {
+      "count": 9,
+      "file": "/app/backups/production_20260613/spare_assets.json",
+      "status": "OK"
+    },
+    "spare_movements": {
+      "count": 1,
+      "file": "/app/backups/production_20260613/spare_movements.json",
+      "status": "OK"
+    },
+    "attachments": {
+      "count": 7,
+      "file": "/app/backups/production_20260613/attachments.json",
+      "status": "OK"
+    },
+    "audit_logs": {
+      "count": 40,
+      "file": "/app/backups/production_20260613/audit_logs.json",
+      "status": "OK"
+    },
+    "notificacoes": {
+      "count": 60,
+      "file": "/app/backups/production_20260613/notificacoes.json",
+      "status": "OK"
+    },
+    "rotas_inspecao": {
+      "count": 4,
+      "file": "/app/backups/production_20260613/rotas_inspecao.json",
+      "status": "OK"
+    },
+    "checklist_templates": {
+      "count": 0,
+      "file": "/app/backups/production_20260613/checklist_templates.json",
+      "status": "OK"
+    },
+    "areas": {
+      "count": 4,
+      "file": "/app/backups/production_20260613/areas.json",
+      "status": "OK"
+    },
+    "plantas": {
+      "count": 1,
+      "file": "/app/backups/production_20260613/plantas.json",
+      "status": "OK"
+    },
+    "plants": {
+      "count": 4,
+      "file": "/app/backups/production_20260613/plants.json",
+      "status": "OK"
+    },
+    "movimentacoes_estoque": {
+      "count": 21,
+      "file": "/app/backups/production_20260613/movimentacoes_estoque.json",
+      "status": "OK"
+    },
+    "knowledge_base": {
+      "count": 3,
+      "file": "/app/backups/production_20260613/knowledge_base.json",
+      "status": "OK"
+    },
+    "manuals": {
+      "count": 0,
+      "file": "/app/backups/production_20260613/manuals.json",
+      "status": "OK"
+    }
+  }
+}

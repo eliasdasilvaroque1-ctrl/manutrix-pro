@@ -1,0 +1,40 @@
+[
+  {
+    "id": "ee31527a-6aed-4047-a774-2f00e9a59ed5",
+    "tipo_equipamento": "Bomba Centr\u00edfuga",
+    "problema": "Vibra\u00e7\u00e3o excessiva",
+    "solucao": "Verificar alinhamento, balanceamento do rotor e estado dos rolamentos",
+    "tags": [
+      "vibra\u00e7\u00e3o",
+      "rolamento",
+      "bomba"
+    ],
+    "created_by": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-20T14:42:45.971680+00:00"
+  },
+  {
+    "id": "4300b750-7c15-43a6-83c8-dd24b4aeb07e",
+    "tipo_equipamento": "Bomba Centr\u00edfuga",
+    "problema": "TEST_Vibra\u00e7\u00e3o excessiva",
+    "solucao": "Verificar alinhamento, balanceamento e rolamentos",
+    "tags": [
+      "vibra\u00e7\u00e3o",
+      "bomba",
+      "manuten\u00e7\u00e3o"
+    ],
+    "created_by": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-20T14:48:06.019809+00:00"
+  },
+  {
+    "id": "71ad508c-cf23-48cf-9c99-97b86305d481",
+    "tipo_equipamento": "Motor El\u00e9trico",
+    "problema": "TEST_Superaquecimento",
+    "solucao": "Verificar ventila\u00e7\u00e3o e carga",
+    "tags": [],
+    "created_by": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-20T14:48:06.323237+00:00"
+  }
+]

@@ -1,0 +1,3269 @@
+[
+  {
+    "ativo_id": "52cc5ab7-54c8-4b27-88d8-38a882e53a3d",
+    "rota_id": "f783ea6e-a5a1-4b01-a66a-dc2d16c22f0c",
+    "tecnico_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "id": "fcf66d33-3751-4a47-b8ee-99991f7fd157",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "status": "com_pendencias",
+    "respostas": [
+      {
+        "item_id": "4cfe8476-7aec-427d-9d7f-92b1c4e068e9",
+        "valor": false,
+        "conforme": false,
+        "observacao": "RUIDO NO LADA ESQUERDO DO ROLAMENTO",
+        "foto_url": null,
+        "timestamp": "2026-03-17T22:36:21.522480+00:00"
+      },
+      {
+        "item_id": "8767a435-283c-453f-8d80-382e4f09e8dd",
+        "valor": true,
+        "conforme": true,
+        "observacao": "",
+        "foto_url": null,
+        "timestamp": "2026-03-17T22:36:21.522487+00:00"
+      },
+      {
+        "item_id": "e6aac992-6e8b-4842-b551-34fd49d4e2f8",
+        "valor": true,
+        "conforme": true,
+        "observacao": "",
+        "foto_url": null,
+        "timestamp": "2026-03-17T22:36:21.522489+00:00"
+      },
+      {
+        "item_id": "3e1ffe9f-255f-4add-bc02-3a2946885ef2",
+        "valor": false,
+        "conforme": false,
+        "observacao": "NIVEL BAIXO DE OLEO",
+        "foto_url": null,
+        "timestamp": "2026-03-17T22:36:21.522490+00:00"
+      }
+    ],
+    "os_geradas": [
+      "af9709b4-46d5-4de2-b9a1-40440e100cef",
+      "4459ea4c-4d27-43db-bbc2-a6ffb03a4e99"
+    ],
+    "started_at": "2026-03-17T22:35:22.281721+00:00",
+    "finished_at": "2026-03-17T22:36:21.535255+00:00",
+    "duracao_minutos": 0,
+    "geolocalizacao": null,
+    "offline_sync": false,
+    "created_at": "2026-03-17T22:35:22.281726+00:00",
+    "deleted_at": "2026-04-11T15:41:58.220156+00:00"
+  },
+  {
+    "id": "3ec8c56e-3f90-4ad9-bc4f-8e2a9bfc0290",
+    "ativo_id": "90d13355-38a7-464b-b3ab-16c5a068dbbf",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "em_andamento",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "7e373c3d-5956-4c50-b678-3d522f55e0e3",
+        "descricao": "Vibra\u00e7\u00e3o OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "ab979c60-125f-40bc-9808-ac3ab90a4fdc",
+        "descricao": "Temperatura OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "8cd8f516-8f9e-4510-a8d0-33b3d4fcf4e4",
+        "descricao": "Ru\u00eddo OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "6081ec8a-da0f-4936-979d-88546ddd1dc9",
+        "descricao": "Vazamento OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "20caecfb-08d9-46b8-8f65-aec7ec56bee1",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T14:28:31.381976+00:00",
+    "data_inicio": "2026-04-11T14:28:31.533271+00:00",
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "created_at": "2026-04-11T14:28:31.381985+00:00",
+    "updated_at": "2026-04-11T14:28:31.533278+00:00",
+    "deleted_at": "2026-04-11T14:28:31.777350+00:00"
+  },
+  {
+    "id": "3bcdd2ac-ac7a-4a92-8284-5f1dec15f314",
+    "ativo_id": "90d13355-38a7-464b-b3ab-16c5a068dbbf",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "com_pendencias",
+    "resultado": "nao_conforme",
+    "checklist": [
+      {
+        "id": "b3208e17-faf9-4ecc-9d63-0da9713470a3",
+        "descricao": "Vibra\u00e7\u00e3o OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": false,
+        "conforme": false,
+        "observacao": "Vibracao excessiva"
+      },
+      {
+        "id": "995bb704-42be-4dd6-abbb-85d11d80f80d",
+        "descricao": "Temperatura OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "bfcd5374-41a6-4a25-b6e7-0f3a9a199900",
+        "descricao": "Ru\u00eddo OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "1b53c2fa-9eed-4e0a-bb8a-efd2a80a2f9f",
+        "descricao": "Vazamento OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "97ed9494-e0a8-4a04-b708-1fed7c906cd5",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false,
+        "resultado": true,
+        "conforme": true
+      }
+    ],
+    "data_programada": "2026-04-11T14:30:35.036539+00:00",
+    "data_inicio": "2026-04-11T14:30:35.302280+00:00",
+    "data_conclusao": "2026-04-11T14:30:35.435857+00:00",
+    "duracao_minutos": 0,
+    "observacoes": "Teste P0",
+    "fotos": [],
+    "os_gerada_id": "1b7c66f2-6d69-4aa3-b0fb-8f2e1b4de8d3",
+    "created_at": "2026-04-11T14:30:35.036548+00:00",
+    "updated_at": "2026-04-11T14:30:35.435863+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "a4a50751-fc05-453b-a225-caa117529ee1",
+    "ativo_id": "89c4fc42-7be2-4cf0-a31f-40a57f0e3f4a",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "52fade98-b794-43d3-b6d3-424c685e317e",
+        "descricao": "Vibra\u00e7\u00e3o OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "0f24aa53-ab7a-4cc9-819b-06e270be40ca",
+        "descricao": "Temperatura OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "4ef74b82-ddc1-427d-81bf-657ba3ce764c",
+        "descricao": "Ru\u00eddo OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "5805c66b-b056-4b8c-a3e0-a5c0da481484",
+        "descricao": "Vazamento OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "1cde0bae-bc0d-41b9-b22e-362871aea5dc",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T14:34:10.759452+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "created_at": "2026-04-11T14:34:10.759461+00:00",
+    "updated_at": "2026-04-11T14:34:10.759463+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "25dda5ce-8e72-4fbb-bea2-1238878eb847",
+    "ativo_id": "89c4fc42-7be2-4cf0-a31f-40a57f0e3f4a",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "06b36b4c-51f9-4262-b235-06c1700f026b",
+        "descricao": "Vibra\u00e7\u00e3o OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "8c225d82-d69c-4fa2-aa8e-92941e4e5970",
+        "descricao": "Temperatura OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "bf044d41-cf8b-4196-9fe8-96390eff5595",
+        "descricao": "Ru\u00eddo OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a2597813-300e-4f39-9988-b91b98f99585",
+        "descricao": "Vazamento OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "4e7850ab-ec84-4792-8d5e-cc148d7738d7",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T14:34:11.184705+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "created_at": "2026-04-11T14:34:11.184713+00:00",
+    "updated_at": "2026-04-11T14:34:11.184715+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "ae91174b-4597-410a-9fa0-2b462e4ce404",
+    "ativo_id": "89c4fc42-7be2-4cf0-a31f-40a57f0e3f4a",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "concluida",
+    "resultado": "conforme",
+    "checklist": [
+      {
+        "id": "1",
+        "descricao": "Vibra\u00e7\u00e3o OK",
+        "tipo": "boolean",
+        "conforme": true,
+        "obrigatorio": true
+      },
+      {
+        "id": "2",
+        "descricao": "Temperatura OK",
+        "tipo": "boolean",
+        "conforme": true,
+        "obrigatorio": true
+      },
+      {
+        "id": "3",
+        "descricao": "Ru\u00eddo OK",
+        "tipo": "boolean",
+        "conforme": true,
+        "obrigatorio": true
+      }
+    ],
+    "data_programada": "2026-04-11T14:34:11.802363+00:00",
+    "data_inicio": "2026-04-11T14:34:12.165209+00:00",
+    "data_conclusao": "2026-04-11T14:34:12.638202+00:00",
+    "duracao_minutos": 0,
+    "observacoes": "Teste conclu\u00eddo",
+    "fotos": [],
+    "os_gerada_id": null,
+    "created_at": "2026-04-11T14:34:11.802370+00:00",
+    "updated_at": "2026-04-11T14:34:12.638209+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "41874946-b609-4d79-b28e-0c7a70705596",
+    "ativo_id": "89c4fc42-7be2-4cf0-a31f-40a57f0e3f4a",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "696499a0-7e1b-4f4b-9923-c94fdc66ff80",
+        "descricao": "Vibra\u00e7\u00e3o OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a632c5a8-3dad-4d20-9f8d-fb09ec41c605",
+        "descricao": "Temperatura OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "1ca745a9-dc9c-40c4-84b7-86594974badb",
+        "descricao": "Ru\u00eddo OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "e2497536-f2bd-44bc-a21e-2d0b8840b526",
+        "descricao": "Vazamento OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "f9d116fb-8f66-4cd7-aa77-b32304a539bd",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T14:34:13.075505+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "created_at": "2026-04-11T14:34:13.075513+00:00",
+    "updated_at": "2026-04-11T14:34:13.075515+00:00",
+    "deleted_at": "2026-04-11T14:34:13.192376+00:00"
+  },
+  {
+    "id": "4d8dbede-9efc-4e3e-8fbb-fea64dd0ef92",
+    "ativo_id": "17a54207-b69b-4f74-9b74-9de86b6af2d6",
+    "rota_id": "f783ea6e-a5a1-4b01-a66a-dc2d16c22f0c",
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "em_andamento",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "4cfe8476-7aec-427d-9d7f-92b1c4e068e9",
+        "descricao": "Verificar ru\u00eddo anormal",
+        "tipo_resposta": "boolean",
+        "valor_esperado": null,
+        "tolerancia_min": null,
+        "tolerancia_max": null,
+        "unidade": null,
+        "opcoes": null,
+        "obrigatorio": true,
+        "requer_foto_se_nok": false,
+        "ordem": 1,
+        "categoria": "Opera\u00e7\u00e3o",
+        "tipo": "boolean"
+      },
+      {
+        "id": "8767a435-283c-453f-8d80-382e4f09e8dd",
+        "descricao": "Verificar vazamentos",
+        "tipo_resposta": "boolean",
+        "valor_esperado": null,
+        "tolerancia_min": null,
+        "tolerancia_max": null,
+        "unidade": null,
+        "opcoes": null,
+        "obrigatorio": true,
+        "requer_foto_se_nok": true,
+        "ordem": 2,
+        "categoria": "Opera\u00e7\u00e3o",
+        "tipo": "boolean"
+      },
+      {
+        "id": "e6aac992-6e8b-4842-b551-34fd49d4e2f8",
+        "descricao": "Verificar vibra\u00e7\u00e3o excessiva",
+        "tipo_resposta": "boolean",
+        "valor_esperado": null,
+        "tolerancia_min": null,
+        "tolerancia_max": null,
+        "unidade": null,
+        "opcoes": null,
+        "obrigatorio": true,
+        "requer_foto_se_nok": false,
+        "ordem": 3,
+        "categoria": "Opera\u00e7\u00e3o",
+        "tipo": "boolean"
+      },
+      {
+        "id": "3e1ffe9f-255f-4add-bc02-3a2946885ef2",
+        "descricao": "Verificar n\u00edvel de \u00f3leo",
+        "tipo_resposta": "boolean",
+        "valor_esperado": null,
+        "tolerancia_min": null,
+        "tolerancia_max": null,
+        "unidade": null,
+        "opcoes": null,
+        "obrigatorio": true,
+        "requer_foto_se_nok": false,
+        "ordem": 4,
+        "categoria": "Lubrifica\u00e7\u00e3o",
+        "tipo": "boolean"
+      }
+    ],
+    "data_programada": "2026-04-11T15:08:14.426843+00:00",
+    "data_inicio": "2026-04-11T15:08:19.814361+00:00",
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "created_at": "2026-04-11T15:08:14.426852+00:00",
+    "updated_at": "2026-04-11T15:08:19.814368+00:00",
+    "deleted_at": "2026-04-11T15:42:18.756650+00:00"
+  },
+  {
+    "id": "c1b03f60-cff6-40c2-923d-bfa217999508",
+    "ativo_id": "04fdfde2-4774-4f9f-8758-4e67a1561793",
+    "rota_id": "",
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "com_pendencias",
+    "resultado": "nao_conforme",
+    "checklist": [
+      {
+        "id": "1e5681d9-43da-45c5-9d2a-91c54a293ad7",
+        "descricao": "Vibra\u00e7\u00e3o OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "bed088b0-5627-49bc-a2e7-ba139db2a7c4",
+        "descricao": "Temperatura OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "37a2d148-c29a-4408-b908-207f7c6c208a",
+        "descricao": "Ru\u00eddo OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "f58be327-2f01-453e-b3d4-d3f136152614",
+        "descricao": "Vazamento OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": false,
+        "conforme": false,
+        "observacao": "ALIMENTADOR COM VAZAMENTO "
+      },
+      {
+        "id": "717c1a4e-1ae3-4d8f-bc85-e3ab73a2a941",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T15:38:30.736724+00:00",
+    "data_inicio": "2026-04-11T15:38:37.326669+00:00",
+    "data_conclusao": "2026-04-11T15:39:38.390176+00:00",
+    "duracao_minutos": 1,
+    "observacoes": "",
+    "fotos": [],
+    "os_gerada_id": "39aa792d-c442-44c9-a771-9af1d1824598",
+    "created_at": "2026-04-11T15:38:30.736732+00:00",
+    "updated_at": "2026-04-11T15:39:38.390181+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "f1d377eb-62b0-4cb3-b272-6ce9a517642e",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": "",
+    "responsavel_id": "d8e83162-6bd0-4459-b199-41bcec864150",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "concluida",
+    "resultado": "conforme",
+    "checklist": [
+      {
+        "id": "69a89f06-1f41-49a4-9520-a3d02331131b",
+        "descricao": "Vibra\u00e7\u00e3o OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "036be0f8-f260-4305-9861-9f98677696c0",
+        "descricao": "Temperatura OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "176d27ec-6117-49c2-9cbd-ea0b1700dcd4",
+        "descricao": "Ru\u00eddo OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "a6cc786c-a6bc-487c-aa15-251fc40b097e",
+        "descricao": "Vazamento OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "f9f2b3d0-8287-47c5-99b8-7f881720fd9f",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T16:07:43.640333+00:00",
+    "data_inicio": "2026-04-11T16:07:51.032425+00:00",
+    "data_conclusao": "2026-04-11T16:08:26.229247+00:00",
+    "duracao_minutos": 0,
+    "observacoes": "",
+    "fotos": [],
+    "os_gerada_id": null,
+    "created_at": "2026-04-11T16:07:43.640342+00:00",
+    "updated_at": "2026-04-11T16:08:26.229253+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "20fde9c1-1611-45a7-b0eb-c738e79a2b16",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": "",
+    "responsavel_id": "d8e83162-6bd0-4459-b199-41bcec864150",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "status": "com_pendencias",
+    "resultado": "nao_conforme",
+    "checklist": [
+      {
+        "id": "81cec9d2-db8b-440e-8996-f04482525162",
+        "descricao": "Vibra\u00e7\u00e3o OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": false,
+        "conforme": false,
+        "observacao": "Equipamento vibrando muito"
+      },
+      {
+        "id": "2d429d6c-e429-427e-bff1-14e6a89fd607",
+        "descricao": "Temperatura OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": false,
+        "conforme": false,
+        "observacao": "T\u00e1 muito quente o acionamento "
+      },
+      {
+        "id": "9e7e2b53-d1a4-4cfb-8d69-0bc1dba503ff",
+        "descricao": "Ru\u00eddo OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "2bf4a80d-42f9-4435-89ee-895db8f9424b",
+        "descricao": "Vazamento OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": false,
+        "conforme": false
+      },
+      {
+        "id": "0d05ec4a-655b-4eb9-99c5-be1df9a9f9de",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T16:08:51.551732+00:00",
+    "data_inicio": "2026-04-11T16:09:19.647284+00:00",
+    "data_conclusao": "2026-04-11T16:10:02.429308+00:00",
+    "duracao_minutos": 0,
+    "observacoes": "",
+    "fotos": [],
+    "os_gerada_id": "19df692c-74be-4e42-bfb1-c440ce946ee6",
+    "created_at": "2026-04-11T16:08:51.551740+00:00",
+    "updated_at": "2026-04-11T16:10:02.429314+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "316276ed-4783-4de3-b7c2-8245d9282aec",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "884910bf-7e92-433d-b778-74edd04adc0d",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "d1af9b05-9bfa-4878-8167-946165c50472",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a0affcab-588e-4ea1-9fa5-e783fd368cab",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "1af43ca5-5d5c-4988-91e5-a46010a17866",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "dccd5077-9136-4813-aa5d-493189c8d2d6",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:11:33.925204+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:11:33.925216+00:00",
+    "updated_at": "2026-04-11T17:11:33.925218+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "5244f529-91a8-4ac6-819f-fa916990a20b",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "mensal",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "f3f23356-67d6-496f-82f8-112e2366b8ed",
+        "descricao": "Vibra\u00e7\u00e3o (mm/s)",
+        "tipo": "numero",
+        "tolerancia_min": 0,
+        "tolerancia_max": 4.5,
+        "unidade": "mm/s",
+        "obrigatorio": true
+      },
+      {
+        "id": "d8487c1b-5399-4930-937d-d004d5dfbdfc",
+        "descricao": "Temperatura (\u00b0C)",
+        "tipo": "numero",
+        "tolerancia_min": 20,
+        "tolerancia_max": 80,
+        "unidade": "\u00b0C",
+        "obrigatorio": true
+      },
+      {
+        "id": "bbf56ac0-9a1a-4ba7-aa73-b277118fe0dc",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "c28b8862-d42a-4bc8-bba9-7157d1a11aae",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "4de58c8a-b015-4a67-9827-71ccc96c7ef7",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "b9e4412b-da67-4aae-843b-ec8e9a2edefe",
+        "descricao": "Alinhamento verificado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "603dc6a8-725b-43b9-9f95-5d341a624403",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "b80cd2e3-48b0-4a1a-ba4a-9bac1abd568a",
+        "descricao": "Correias/acoplamentos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "4132fa58-bd57-423c-bf2b-de82b1e9d528",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:11:34.192295+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:11:34.192306+00:00",
+    "updated_at": "2026-04-11T17:11:34.192308+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "8054b62c-8345-4979-aef9-603d29ea4813",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "54aa1a5d-2041-48e2-8d98-c9b8c92c895a",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "87871e52-2cc0-4054-9f9d-67aae63e5a9e",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "0f50db45-e138-4a26-a2f9-75ec993184eb",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "6114e480-e62c-4669-a381-09f84d1ecef2",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "f96036a8-02f7-4777-8c53-76250bf9a0fa",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "200ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "ca01c108-81b1-4b09-829e-29b7f77305b6",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-15T08:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "graxa_base_litio",
+    "quantidade_lubrificante": "200ml",
+    "ponto_lubrificacao": "Rolamento lado acoplamento",
+    "metodo_aplicacao": "manual",
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:11:34.336095+00:00",
+    "updated_at": "2026-04-11T17:11:34.336103+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "d752acef-0190-4999-8137-619ac0f04bb0",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "b19df12a-dcf0-4674-bcac-b9839375d43b",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "125bf813-99d0-4067-931f-af70bb80695d",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "260fdf3c-557e-4280-8df9-65ad1a792544",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "c03748b2-ff1a-468b-86fb-b20122011718",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "d176dfd3-7f58-41cf-9d8d-f3a86bf6abe2",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-01-15T10:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:15:22.267138+00:00",
+    "updated_at": "2026-04-11T17:15:22.267147+00:00",
+    "deleted_at": "2026-04-11T17:15:22.316899+00:00"
+  },
+  {
+    "id": "0b37ca90-ba27-4519-afa8-a15b403b72bf",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "quinzenal",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "93d8d8ec-2c5f-4a93-956b-0a4e2c08aa2e",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2a2122d4-7664-4d77-91f8-8c75a7260964",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "61669410-01e3-4262-8f41-9eee8bdd9e39",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "0fa5c5b0-5a7c-4999-a91e-e1418a3071f8",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "41b6c901-c716-4894-af54-bb949bef65fd",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "645e3b2e-da07-4ccd-8267-437a7865469a",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "f38ca2f2-2e5f-449c-b14a-7289378d9e8e",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-01-20T14:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:15:22.670869+00:00",
+    "updated_at": "2026-04-11T17:15:22.670876+00:00",
+    "deleted_at": "2026-04-11T17:15:22.727895+00:00"
+  },
+  {
+    "id": "37d62fd0-c368-4bc8-937c-1cb46cd700e8",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "mensal",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "f92918c8-a481-4f8e-b4fc-c91807b3fd2d",
+        "descricao": "Vibra\u00e7\u00e3o (mm/s)",
+        "tipo": "numero",
+        "tolerancia_min": 0,
+        "tolerancia_max": 4.5,
+        "unidade": "mm/s",
+        "obrigatorio": true
+      },
+      {
+        "id": "6fedc62f-a2b1-4b65-8e87-6d8bfdcae7a0",
+        "descricao": "Temperatura (\u00b0C)",
+        "tipo": "numero",
+        "tolerancia_min": 20,
+        "tolerancia_max": 80,
+        "unidade": "\u00b0C",
+        "obrigatorio": true
+      },
+      {
+        "id": "fbdf3cc0-7fd6-4bd7-9d87-2f38c31ed949",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "7eac8f05-54ba-4458-90ef-7b4388fdcd15",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "47596b16-b15f-44cf-ba5d-781cbadbf27a",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "3b9ded27-c594-4416-a414-5bea5b32dc87",
+        "descricao": "Alinhamento verificado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "cdf1c1ce-83c9-46fe-9366-87431075be67",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "71994de5-b6d5-436a-994a-82c06015e213",
+        "descricao": "Correias/acoplamentos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "f98cf9cc-d8c6-4318-b627-5828f3ca4891",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-02-01T08:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:15:23.050305+00:00",
+    "updated_at": "2026-04-11T17:15:23.050313+00:00",
+    "deleted_at": "2026-04-11T17:15:23.099747+00:00"
+  },
+  {
+    "id": "8f450876-cc8f-4eff-93f4-f2e3b7532874",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "45f32b86-7aa4-485e-8b7e-1d84767b7175",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a7ef505b-3e2a-468b-964c-c00e960c8eaa",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "24c18852-3c31-4def-8468-14c3f352d857",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "34aad40c-9c2d-4922-8e23-d28aa0fa98e2",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "b3fc0d72-e2da-4e87-a2e0-5979e3ea8081",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "200ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "eed457e1-f07f-44ba-a6c9-44f1062359aa",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-01-15T09:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "oleo_mineral",
+    "quantidade_lubrificante": "200ml",
+    "ponto_lubrificacao": "Rolamento lado acoplamento",
+    "metodo_aplicacao": "manual",
+    "observacoes_lubrificacao": "TEST_Lubrifica\u00e7\u00e3o de teste",
+    "created_at": "2026-04-11T17:15:23.415939+00:00",
+    "updated_at": "2026-04-11T17:15:23.415948+00:00",
+    "deleted_at": "2026-04-11T17:15:23.478501+00:00"
+  },
+  {
+    "id": "e5c85c1c-7b65-4eed-b398-d0df7fc2ff87",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "68cbb8c9-d161-468e-9171-e8a3c100a86a",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "85a25c1a-0e23-48ab-806e-4915e91c5498",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "28dafc3e-fa54-4bf1-be40-d82a100433cd",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "cfed39c6-d87e-46d5-9599-ad2d2c97f77a",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "9f49aa64-70d8-4a4f-b091-30325b72d10e",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "50g",
+        "obrigatorio": false
+      },
+      {
+        "id": "40ec3ef0-b8cb-447a-b9ec-717d90f85fa1",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-01-16T10:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "graxa_base_litio",
+    "quantidade_lubrificante": "50g",
+    "ponto_lubrificacao": "Mancal principal",
+    "metodo_aplicacao": "bomba",
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:15:23.807051+00:00",
+    "updated_at": "2026-04-11T17:15:23.807058+00:00",
+    "deleted_at": "2026-04-11T17:15:23.855077+00:00"
+  },
+  {
+    "id": "a664c2ee-0845-4724-8a61-e92804a7b80f",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "ce3404c8-55e5-46e1-b368-fad651c1fcf6",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "d0af2d98-bd33-4827-bdc6-b627c39aaa25",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2410b5e4-5d47-4439-b301-7c0742ff87f7",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "59081226-0fff-4425-a445-042d20208c0d",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "6bd9fd4c-70b7-4ba2-af4a-5e824b633954",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:15:24.168208+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:15:24.168219+00:00",
+    "updated_at": "2026-04-11T17:15:24.168221+00:00",
+    "deleted_at": "2026-04-11T17:15:24.345536+00:00"
+  },
+  {
+    "id": "b06f8bbc-4e43-47f2-b8ca-31496ffdfe6e",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "d79b95b4-674c-4d7e-8413-acc8dbe9fd18",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "cf6b0d3b-89b7-415d-b011-b7aad9882557",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "87011ce1-60f6-46c7-9828-7ef5d610c2ce",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2424bec9-59f9-4875-a015-b7edfae5a616",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "29886537-3112-4e79-bd7a-99eb7324cb07",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "100ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "79171fa3-5e02-4b46-adfb-ea8090b0d74c",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:15:24.235189+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "oleo_sintetico",
+    "quantidade_lubrificante": "100ml",
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:15:24.235198+00:00",
+    "updated_at": "2026-04-11T17:15:24.235200+00:00",
+    "deleted_at": "2026-04-11T17:15:24.396820+00:00"
+  },
+  {
+    "id": "ec609734-d7ab-4e8a-abf1-d270b4e187c9",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "d1c713e1-47fb-4ba8-81b3-e200d59d3548",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "7bbc26f4-79c9-49d7-a84c-12558013278e",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "6179cefb-1e09-4917-bc2e-6fa273e8a19e",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "700831a1-a7d6-4488-833e-17ce5a794736",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a5dc4686-6084-4a92-b80f-4aab2b5a97d3",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "500ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "65301a53-7bb0-4747-9582-2dcc3783c28d",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:15:24.734171+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "oleo_hidraulico",
+    "quantidade_lubrificante": "500ml",
+    "ponto_lubrificacao": "Sistema hidr\u00e1ulico",
+    "metodo_aplicacao": "gotejamento",
+    "observacoes_lubrificacao": "TEST_Verificar n\u00edvel ap\u00f3s aplica\u00e7\u00e3o",
+    "created_at": "2026-04-11T17:15:24.734181+00:00",
+    "updated_at": "2026-04-11T17:15:24.734183+00:00",
+    "deleted_at": "2026-04-11T17:15:24.846424+00:00"
+  },
+  {
+    "id": "30a0f4f3-8e4d-4133-b38d-6455d3458e0a",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "52c455ef-305d-4dce-a029-9a91fb780651",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "f93d7380-27a3-418b-8d86-911a3f7fe73b",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "88fcf214-f09e-4bff-ac7d-ca0bbcb4d2eb",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "d136f899-6035-46e2-87a0-4b21ae4290fa",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "5e131c59-8c1e-4dc5-b8aa-d9da54424d22",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:16:34.289822+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:16:34.289833+00:00",
+    "updated_at": "2026-04-11T17:16:34.289835+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "ae0f4077-22e6-411d-ae45-26eccb354b3c",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "em_andamento",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "6d8d1368-1ec0-45d4-ae79-741503f11523",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "d11c5622-3516-4388-b041-0832d61eab48",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "30be3677-7afd-44aa-831b-971e9e679a5d",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "c43aa176-7054-4a8a-a920-533d8c801617",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "b0a476a5-0c0f-40ab-8c81-408009e19ecc",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "150ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "ae5afd15-bfff-4e95-88a4-d8f87932aa5b",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-01-20",
+    "data_inicio": "2026-05-04T20:12:59.541669+00:00",
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "oleo_mineral",
+    "quantidade_lubrificante": "150ml",
+    "ponto_lubrificacao": "Mancal principal",
+    "metodo_aplicacao": "manual",
+    "observacoes_lubrificacao": "",
+    "created_at": "2026-04-11T17:16:38.520982+00:00",
+    "updated_at": "2026-05-04T20:12:59.541679+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "8d63d7d4-113b-483c-a288-2d6f3bb26b50",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "452ff8db-d992-4d8c-9086-ccea0d8244d9",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "25522f0d-312d-4d48-82cb-8868eaacbcab",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "db4b5649-3778-4644-a62c-f8e495d2ba17",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "80903d37-0342-41ee-9472-b9200ebb1a71",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "5949ecac-3d05-4f07-ad18-a91482177e79",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-01-15T10:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:17:18.729545+00:00",
+    "updated_at": "2026-04-11T17:17:18.729553+00:00",
+    "deleted_at": "2026-04-11T17:17:18.783267+00:00"
+  },
+  {
+    "id": "6414ec59-c932-4f1f-af15-f936767c7455",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "quinzenal",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "fd37ebe9-0137-4aaa-901f-32f5e9cf6415",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "f181e961-6be2-4b60-b29f-d45d5d395ca3",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2db2eeee-da88-4e45-83d3-3b96d0f56eb3",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "66a03203-cb20-45df-af12-f85116c8396b",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "46661b67-e18b-4a69-b88d-1799905b85ed",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "4aac3c19-e318-4276-abea-3d1bf0117db7",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "5e77bf65-2378-4253-9ea9-6362ba371ff9",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-01-20T14:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:17:19.107623+00:00",
+    "updated_at": "2026-04-11T17:17:19.107632+00:00",
+    "deleted_at": "2026-04-11T17:17:19.156143+00:00"
+  },
+  {
+    "id": "f79c1e4d-0137-44b7-afd1-820f26e20797",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "mensal",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "145f154f-f23a-4ebc-9588-e9f084d0423f",
+        "descricao": "Vibra\u00e7\u00e3o (mm/s)",
+        "tipo": "numero",
+        "tolerancia_min": 0,
+        "tolerancia_max": 4.5,
+        "unidade": "mm/s",
+        "obrigatorio": true
+      },
+      {
+        "id": "83d15ade-713e-44ea-a49f-7221fead1915",
+        "descricao": "Temperatura (\u00b0C)",
+        "tipo": "numero",
+        "tolerancia_min": 20,
+        "tolerancia_max": 80,
+        "unidade": "\u00b0C",
+        "obrigatorio": true
+      },
+      {
+        "id": "21f22ca3-c1eb-47b9-8637-05d0305bd4ab",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2bc61aee-4ae5-4d28-9b93-2342e0c46f4e",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "1c7d6a1b-0413-43fc-a122-8e4d5a37468f",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "161b165e-a3f5-4b8d-aad4-ddb96d43478c",
+        "descricao": "Alinhamento verificado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "cd078f02-8a3c-4f14-8fdf-20244a915309",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "606b6e00-26a6-4cc1-9a69-4d9fc9aedfd7",
+        "descricao": "Correias/acoplamentos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "cf7cb32a-603f-425b-b98d-2fe4e44a9206",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-02-01T08:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:17:19.480277+00:00",
+    "updated_at": "2026-04-11T17:17:19.480286+00:00",
+    "deleted_at": "2026-04-11T17:17:19.528427+00:00"
+  },
+  {
+    "id": "76d9d806-d9b1-4aba-8687-93ea9e59fdf4",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "a4ba211b-e3d4-4b84-a66a-7213ee060913",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "70f22469-6eb8-4b8c-b920-af6a91e9f385",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "adb710f6-3d23-4224-a20e-ece8b651c430",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "875dd5c3-28ca-4b0b-979a-dcb882fd01af",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "d6080fec-61d4-468e-8b87-605c21c4c941",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "200ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "833836dc-cc01-4dfd-aa3c-1a015539933b",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-01-15T09:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "oleo_mineral",
+    "quantidade_lubrificante": "200ml",
+    "ponto_lubrificacao": "Rolamento lado acoplamento",
+    "metodo_aplicacao": "manual",
+    "observacoes_lubrificacao": "TEST_Lubrifica\u00e7\u00e3o de teste",
+    "created_at": "2026-04-11T17:17:19.924875+00:00",
+    "updated_at": "2026-04-11T17:17:19.924883+00:00",
+    "deleted_at": "2026-04-11T17:17:19.986998+00:00"
+  },
+  {
+    "id": "70b228da-0840-4fec-a877-21017ab98dc0",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "9472c617-13a3-4d65-8808-d6c658c3ad5c",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "cd3388d5-92a5-4acf-bd19-44b0c06cf2f8",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "d04a5188-5bc5-445f-add8-29f85c7fd361",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "3dae5650-a858-413a-b9cd-c503b2971f80",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a87ca8f5-1425-4458-a354-73bcfdb04265",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "50g",
+        "obrigatorio": false
+      },
+      {
+        "id": "14971044-d7d7-4c43-8fdc-f9739ff9f4ff",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-01-16T10:00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "graxa_base_litio",
+    "quantidade_lubrificante": "50g",
+    "ponto_lubrificacao": "Mancal principal",
+    "metodo_aplicacao": "bomba",
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:17:20.317909+00:00",
+    "updated_at": "2026-04-11T17:17:20.317918+00:00",
+    "deleted_at": "2026-04-11T17:17:20.448538+00:00"
+  },
+  {
+    "id": "3f516c1b-a142-4682-baf5-30c1cb768945",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "d94635f1-82ba-4018-9a8d-b9a0c8e1f992",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "5941c7f7-65a6-4f8f-9bd8-63e3535c9c2b",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2023ae89-6098-4ca0-875e-364ad1fa1644",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2a96a2ea-6ce3-4901-8135-87b0198adeb9",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "875720f1-c2f3-4e4e-877a-39ee9d6ddf7a",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:17:20.787387+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:17:20.787399+00:00",
+    "updated_at": "2026-04-11T17:17:20.787401+00:00",
+    "deleted_at": "2026-04-11T17:17:20.954125+00:00"
+  },
+  {
+    "id": "efd03578-d024-4b5e-b3a8-11bf6121bdf3",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "d968a15a-146a-4ada-a4ba-e7aa9154eced",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "4b1699f3-a79a-40b6-b632-541f1c3cde52",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "1b148e27-47c2-4a84-9ac6-70a4520e4a24",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "efc88e7b-ef15-43e1-b146-54799d798987",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "795864f5-7512-4f3a-b50f-02b6a389987a",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "100ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "84c7ef3e-f378-49cb-ac26-2ff198af03b6",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:17:20.837095+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "oleo_sintetico",
+    "quantidade_lubrificante": "100ml",
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:17:20.837105+00:00",
+    "updated_at": "2026-04-11T17:17:20.837107+00:00",
+    "deleted_at": "2026-04-11T17:17:21.005912+00:00"
+  },
+  {
+    "id": "dc111215-41d3-4642-9a70-c16e9c1c68cb",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "2e3fc5b1-1a75-4e30-9e36-2977e9d36f1b",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "1d9e7bec-f6c7-41d9-a333-b9a7c40d7e3a",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "167e54b4-1ad2-4a3b-9702-0c4498b3eae2",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "dede5a52-7f73-40e4-9dea-2e39af7c33db",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "e3132829-cc70-41a7-848f-14e403066a52",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "500ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "f9ab6ec3-e19e-4a1b-b650-1137e8866444",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:17:21.337298+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "oleo_hidraulico",
+    "quantidade_lubrificante": "500ml",
+    "ponto_lubrificacao": "Sistema hidr\u00e1ulico",
+    "metodo_aplicacao": "gotejamento",
+    "observacoes_lubrificacao": "TEST_Verificar n\u00edvel ap\u00f3s aplica\u00e7\u00e3o",
+    "created_at": "2026-04-11T17:17:21.337309+00:00",
+    "updated_at": "2026-04-11T17:17:21.337311+00:00",
+    "deleted_at": "2026-04-11T17:17:21.438578+00:00"
+  },
+  {
+    "id": "ff0989d4-b60c-4793-a7c4-f13910f2e537",
+    "ativo_id": "04fdfde2-4774-4f9f-8758-4e67a1561793",
+    "rota_id": null,
+    "responsavel_id": "eb33456e-9f60-4b37-8657-595c84606d3d",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "em_andamento",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "611761d4-36c7-4b7e-9550-1423734c8031",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a3930c4e-3cee-49bc-b03d-463b98af383b",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "46cbff1e-8b15-41c0-bad0-d36b41143fac",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "9785c8bd-50f3-43e9-a277-5e9dc4d8e25e",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2f09c0c7-d361-49f1-a9a6-439949d748c4",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:40:21.778109+00:00",
+    "data_inicio": "2026-04-11T17:40:43.099024+00:00",
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-11T17:40:21.778120+00:00",
+    "updated_at": "2026-04-11T17:40:43.099032+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "d53b4dd5-fc2f-428c-aec7-6945e43c795d",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "eb33456e-9f60-4b37-8657-595c84606d3d",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "506b59b9-3a5f-4094-8b8e-ee7a09babe84",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "091db1ba-f9a1-4abd-85a3-ed8cabe5434c",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "197db1ff-dd2f-40db-b0a7-c22214482698",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "597777f6-2de4-4723-8b40-f2924a59ac13",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "7efe4d5d-e8ac-4a81-9af3-59cc4ba3fbc7",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "ff37e1c2-6cf0-4868-a4d0-dd289208d208",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-11T17:41:37.659914+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "oleo_hidraulico",
+    "quantidade_lubrificante": "",
+    "ponto_lubrificacao": "",
+    "metodo_aplicacao": "bomba",
+    "observacoes_lubrificacao": "",
+    "created_at": "2026-04-11T17:41:37.659925+00:00",
+    "updated_at": "2026-04-11T17:41:37.659927+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "1999be77-55ef-4d76-a874-a3c1e49852ea",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "em_andamento",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "abd8e0c6-5423-4d32-9021-3b0a2a11e21b",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "cc745714-09bd-47e4-a13f-9ad90207227a",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "10676bbc-07d6-4492-b0fd-a047af585120",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "c3fbdd0a-0e86-42a1-b3c6-f8e5dbf6c87c",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "750f33c6-f867-478f-86c8-0c1e773e40ed",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-13T12:20:47.320133+00:00",
+    "data_inicio": "2026-04-13T12:20:54.949265+00:00",
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-13T12:20:47.320145+00:00",
+    "updated_at": "2026-04-13T12:20:54.949272+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "194ed497-129c-4eba-9c2a-53ea0f46d0f5",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "eb33456e-9f60-4b37-8657-595c84606d3d",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "concluida",
+    "resultado": "conforme",
+    "checklist": [
+      {
+        "id": "69441172-4687-4b4d-b945-e0305262ee83",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "95fe89a5-331f-40ed-9bd6-8ec90bb33409",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "0aa32371-4c17-4c10-9f7e-a2d7e7f65062",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "822263b7-daa8-4d81-8f67-1515ecd6778b",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "e8ec8849-ca63-41db-8b08-365d1a5ceba7",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "200",
+        "obrigatorio": false,
+        "resultado": 250
+      },
+      {
+        "id": "e847565f-6515-4a19-bce1-4b3391a04525",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false,
+        "resultado": "o oleo retirado estava muito contaminado, precisa programar o limpeza do reservatorio e filtros"
+      }
+    ],
+    "data_programada": "2026-04-13T17:44:05.095081+00:00",
+    "data_inicio": "2026-04-13T17:44:49.899443+00:00",
+    "data_conclusao": "2026-04-13T17:46:12.100895+00:00",
+    "duracao_minutos": 1,
+    "observacoes": "",
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "oleo_hidraulico",
+    "quantidade_lubrificante": "200",
+    "ponto_lubrificacao": "unidade",
+    "metodo_aplicacao": "bomba",
+    "observacoes_lubrificacao": "",
+    "created_at": "2026-04-13T17:44:05.095091+00:00",
+    "updated_at": "2026-04-13T17:46:12.100902+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "ff10e0d4-a29c-4fcc-bdcc-e849ca26206f",
+    "ativo_id": "27805282-1ee4-45dc-b66a-2ea57d4eee64",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "concluida",
+    "resultado": "conforme",
+    "checklist": [
+      {
+        "id": "36850fce-5616-4935-9fe7-b138c9fcb7e0",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "77ea1f44-7d42-4de0-952a-55a23c37a3e4",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "0ea1140e-9cf1-468f-ab3f-db7c3c41c7cd",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "521ab26c-a250-4bbe-8647-5495b5e461e9",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "8881452d-cb93-42e0-95fb-30150729ceac",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-21T13:00:00",
+    "data_inicio": "2026-04-21T14:37:09.267656+00:00",
+    "data_conclusao": "2026-04-21T17:43:37.445734+00:00",
+    "duracao_minutos": 186,
+    "observacoes": "",
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-21T14:37:04.628971+00:00",
+    "updated_at": "2026-04-21T17:43:37.445741+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "7a2eeb19-af0c-4a3f-95e2-56e701f2902a",
+    "ativo_id": "e45fce4c-74c8-412f-957e-20fba11a4552",
+    "rota_id": null,
+    "responsavel_id": "eb33456e-9f60-4b37-8657-595c84606d3d",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "em_andamento",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "e356c3ff-83fe-4270-9b8c-7b370778708e",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "39fc8de8-2353-465a-a763-a9a105f1a642",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "055f3f76-aab5-4551-b1df-fa0cf5f453fc",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "c5bc1978-d3ca-45b9-a681-dfc2a9d06171",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "7f833e61-c417-4a90-a4bf-750e4a971535",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-04-21T10:00:00",
+    "data_inicio": "2026-04-21T17:46:20.991347+00:00",
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-04-21T17:46:08.245437+00:00",
+    "updated_at": "2026-04-21T17:46:20.991355+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "321c6645-7bf2-4795-a640-644925dc181a",
+    "ativo_id": "69f450f7-8dee-4592-987f-69944ef882e1",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "diaria",
+    "status": "concluida",
+    "resultado": "conforme",
+    "checklist": [
+      {
+        "id": "69d4c052-d103-44e3-8c71-98d4758f76ee",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "43a86c50-182c-4a31-9581-96707666c000",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "b71fc5dd-e1e5-46f5-9631-fa7efd0e2394",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "5a6c01e5-c152-4249-aa2f-0f44d30d9892",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "d1ba69c4-65ae-48dc-9b95-46a746856948",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false,
+        "resultado": "OK"
+      }
+    ],
+    "data_programada": "2026-06-11T15:22:12.986386+00:00",
+    "data_inicio": "2026-06-11T15:22:13.486160+00:00",
+    "data_conclusao": "2026-06-11T15:22:13.697930+00:00",
+    "duracao_minutos": 0,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-11T15:22:12.986399+00:00",
+    "updated_at": "2026-06-11T15:22:13.697938+00:00",
+    "deleted_at": "2026-06-11T15:22:14.161721+00:00"
+  },
+  {
+    "id": "8fddf8dd-86a5-4173-ad20-d7b3b9723efa",
+    "ativo_id": "69f450f7-8dee-4592-987f-69944ef882e1",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": null,
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "64d9a265-ca38-4d6c-b76d-196030a5f03d",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "d6ee9b31-ac31-4d21-8f0f-cd5454a1d08e",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "9da3a00b-e28d-4a57-975a-46bd0e14e8df",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "7893ec30-12bf-421a-ac77-5deef2cf0078",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "dfd12524-92cf-4993-b468-abf56201876f",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "200ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "06ebe212-81b2-48da-b600-81eef0672ebf",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-06-11T15:22:13.137393+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": "graxa_base_litio",
+    "quantidade_lubrificante": "200ml",
+    "ponto_lubrificacao": "Rolamento LA",
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-11T15:22:13.137404+00:00",
+    "updated_at": "2026-06-11T15:22:13.137406+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "f1965442-4db9-47be-a53c-5e4858824415",
+    "ativo_id": "69f450f7-8dee-4592-987f-69944ef882e1",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "mensal",
+    "status": "concluida",
+    "resultado": "conforme",
+    "checklist": [
+      {
+        "id": "1842f395-e8a6-496b-bd78-7d5ad63d4374",
+        "descricao": "Vibra\u00e7\u00e3o (mm/s)",
+        "tipo": "numero",
+        "tolerancia_min": 0,
+        "tolerancia_max": 4.5,
+        "unidade": "mm/s",
+        "obrigatorio": true,
+        "resultado": 5.0,
+        "conforme": true
+      },
+      {
+        "id": "14b1b62c-2ba6-4267-98f5-d63e8da00a1c",
+        "descricao": "Temperatura (\u00b0C)",
+        "tipo": "numero",
+        "tolerancia_min": 20,
+        "tolerancia_max": 80,
+        "unidade": "\u00b0C",
+        "obrigatorio": true,
+        "resultado": 5.0,
+        "conforme": true
+      },
+      {
+        "id": "dbee5209-930f-4da0-af79-8d8df4569636",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "41d9c19c-31e4-4d5d-b1af-fa63552cdfe4",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "3c27d396-3958-4918-b1d4-bf28a5b6573f",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "50a755d8-bf51-4ccd-9aa6-ac2294480667",
+        "descricao": "Alinhamento verificado",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "0f63c50f-5d4a-4516-adb5-e1410eed961f",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "33793f0a-ee9a-43f3-8a6e-026739c2b8e1",
+        "descricao": "Correias/acoplamentos OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "e21a5c12-ecd5-4d43-b800-278c83d41010",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false,
+        "resultado": "OK"
+      }
+    ],
+    "data_programada": "2026-06-11T15:22:13.244573+00:00",
+    "data_inicio": "2026-06-11T15:22:13.821682+00:00",
+    "data_conclusao": "2026-06-11T15:22:14.031290+00:00",
+    "duracao_minutos": 0,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-11T15:22:13.244583+00:00",
+    "updated_at": "2026-06-11T15:22:14.031297+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "ac45ce53-3dbf-4d7f-b6b2-273628870c0c",
+    "ativo_id": "69f450f7-8dee-4592-987f-69944ef882e1",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "mensal",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "ccb1fc21-90d7-4cba-a05b-5aa49ea01155",
+        "descricao": "Vibra\u00e7\u00e3o (mm/s)",
+        "tipo": "numero",
+        "tolerancia_min": 0,
+        "tolerancia_max": 4.5,
+        "unidade": "mm/s",
+        "obrigatorio": true
+      },
+      {
+        "id": "aa245f18-aa10-427c-a319-bbe4ed26c0c5",
+        "descricao": "Temperatura (\u00b0C)",
+        "tipo": "numero",
+        "tolerancia_min": 20,
+        "tolerancia_max": 80,
+        "unidade": "\u00b0C",
+        "obrigatorio": true
+      },
+      {
+        "id": "8fc60eb4-59a4-43bc-a461-7c70dab48566",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "dfcf8d28-12a8-4da0-8e91-432690e41859",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2b969b9c-c276-40ff-9760-c3b9020b8099",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "5fcc0db9-ac00-4d0f-a0b6-9f35f6e5baaf",
+        "descricao": "Alinhamento verificado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "73bb0513-a777-412a-a633-d09415697075",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "de73ffea-6714-4c11-9429-f2f0e2de9b2c",
+        "descricao": "Correias/acoplamentos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "b95b5c47-2c5f-4442-a8bf-eb7fa1f90726",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-06-11T15:22:41.033784+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-11T15:22:41.033794+00:00",
+    "updated_at": "2026-06-11T15:22:41.033796+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "9abf058d-1f79-4b81-8832-faa84ae89536",
+    "ativo_id": "69f450f7-8dee-4592-987f-69944ef882e1",
+    "rota_id": null,
+    "responsavel_id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "checklist",
+    "frequencia": "mensal",
+    "status": "com_pendencias",
+    "resultado": "nao_conforme",
+    "checklist": [
+      {
+        "id": "677353a9-a7b4-48c0-a24a-e36dddd12e1b",
+        "descricao": "Vibra\u00e7\u00e3o (mm/s)",
+        "tipo": "numero",
+        "tolerancia_min": 0,
+        "tolerancia_max": 4.5,
+        "unidade": "mm/s",
+        "obrigatorio": true,
+        "resultado": 3.5,
+        "conforme": true
+      },
+      {
+        "id": "2b1bb8c8-40d2-4a03-9a14-827824c26837",
+        "descricao": "Temperatura (\u00b0C)",
+        "tipo": "numero",
+        "tolerancia_min": 20,
+        "tolerancia_max": 80,
+        "unidade": "\u00b0C",
+        "obrigatorio": true,
+        "resultado": 3.5,
+        "conforme": true
+      },
+      {
+        "id": "4f5dc4f5-7a8f-486c-ac45-7e661e0cdc21",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": false,
+        "conforme": false,
+        "observacao": "Ru\u00eddo anormal detectado"
+      },
+      {
+        "id": "a4f3c53b-ebad-412e-a62a-551f74da096b",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "ed56624a-a96c-4d26-baa4-5dde67122f24",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "0bfeb21d-3d5e-46a8-9a43-a99f27c8cb06",
+        "descricao": "Alinhamento verificado",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "acd61038-79c2-4fb9-8d11-c894b8b044d5",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "b60c5ae6-363e-462a-b9b6-a6a0527b1094",
+        "descricao": "Correias/acoplamentos OK",
+        "tipo": "boolean",
+        "obrigatorio": true,
+        "resultado": true,
+        "conforme": true
+      },
+      {
+        "id": "03ad7870-6d49-467a-8c77-6f457989a8be",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false,
+        "resultado": "Verificado"
+      }
+    ],
+    "data_programada": "2026-06-11T15:25:04.361580+00:00",
+    "data_inicio": "2026-06-11T15:25:04.493167+00:00",
+    "data_conclusao": "2026-06-11T15:25:04.752525+00:00",
+    "duracao_minutos": 0,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": "ea28cf61-72ae-40cb-a209-d1977e6f3553",
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-11T15:25:04.361590+00:00",
+    "updated_at": "2026-06-11T15:25:04.752534+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "7603c905-7c47-446f-855a-507f141a9cce",
+    "ativo_id": "3ef71c03-0b31-4009-b9f8-fa0f13275284",
+    "rota_id": null,
+    "responsavel_id": null,
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "mecanica",
+    "frequencia": "diaria",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "60ccbd0c-0563-46a7-9208-b09392aeb3f9",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "6255dfc5-3278-44b3-a7c1-01f310983dbe",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "ff6ab122-99fb-4616-b670-12c684579440",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "51880a3d-746e-46d1-a676-71a92fadf500",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "66901059-8004-44e4-befd-207a7fbaac3c",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-06-13T12:26:08.352307+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-13T12:26:08.352318+00:00",
+    "updated_at": "2026-06-13T12:26:08.352320+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "6a88fec3-4b8c-49e0-9ebb-79e039106bf7",
+    "ativo_id": "3ef71c03-0b31-4009-b9f8-fa0f13275284",
+    "rota_id": null,
+    "responsavel_id": null,
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "mecanica",
+    "frequencia": "diaria",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "e0afc7e7-e659-414b-a738-93d5ad8bf9b8",
+        "descricao": "Vibra\u00e7\u00e3o normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "ea8e59b2-09ee-42c7-8528-1a37ed39c402",
+        "descricao": "Temperatura normal",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "24472064-c23c-4b24-b427-84f414d42da4",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "c7ccbdd5-6b61-4b8c-94f5-60a9ed8140d3",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "2bce719a-a23a-4566-aac1-9ab25cbf41df",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-06-13T12:26:49.390097+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-13T12:26:49.390108+00:00",
+    "updated_at": "2026-06-13T12:26:49.390111+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "f718c289-7d17-426c-a78c-95a4c611e516",
+    "ativo_id": "3ef71c03-0b31-4009-b9f8-fa0f13275284",
+    "rota_id": null,
+    "responsavel_id": null,
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": "diaria",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "c51884af-f57c-4211-b4e2-139aa6d61e14",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "b86e02c4-e46f-42cc-bcfb-15a59a274ad4",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "91a9febf-666e-4a8a-9ee0-2e492535921b",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "af083d12-a1e4-49a7-ad7b-d81aa420900a",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "ac327a3c-8731-4c25-980b-5d6d77ce6720",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "886d02ce-b284-422c-842e-cf1ad23aa40f",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-06-13T12:26:49.490855+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-13T12:26:49.490866+00:00",
+    "updated_at": "2026-06-13T12:26:49.490868+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "6d53c449-162f-4a67-96be-9b0dfd9a335d",
+    "ativo_id": "9a0650d6-c90e-4b6c-be0f-b1909883eaa0",
+    "rota_id": null,
+    "responsavel_id": null,
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "mecanica",
+    "frequencia": "mensal",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "1659dcad-087e-42cc-ab02-be81842f57a0",
+        "descricao": "Vibra\u00e7\u00e3o (mm/s)",
+        "tipo": "numero",
+        "tolerancia_min": 0,
+        "tolerancia_max": 4.5,
+        "unidade": "mm/s",
+        "obrigatorio": true
+      },
+      {
+        "id": "4f7d4abf-837a-47f0-955d-bb9bf7897d58",
+        "descricao": "Temperatura (\u00b0C)",
+        "tipo": "numero",
+        "tolerancia_min": 20,
+        "tolerancia_max": 80,
+        "unidade": "\u00b0C",
+        "obrigatorio": true
+      },
+      {
+        "id": "a34e8a2c-7a14-4aa4-84d4-0db9373e7a9e",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "3d10aaab-594d-4e79-824e-02589d5595a6",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "30f0901c-6114-4f48-b3f6-c9e9932e27f2",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a4de0034-12ea-41f3-87bb-5a7f73cdd8dd",
+        "descricao": "Alinhamento verificado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "53a66266-0cdb-49cd-91a9-201f18495aa2",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "6ba28731-2c6d-4f37-9cbc-2251dd6eb568",
+        "descricao": "Correias/acoplamentos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "6d164a95-59e3-4c91-b4ab-3b1d6b479bca",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-06-13T12:31:18.096072+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-13T12:31:18.096085+00:00",
+    "updated_at": "2026-06-13T12:31:18.096087+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "a10e72a0-8509-4671-a79d-7839dba9eb24",
+    "ativo_id": "9a0650d6-c90e-4b6c-be0f-b1909883eaa0",
+    "rota_id": null,
+    "responsavel_id": null,
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "lubrificacao",
+    "frequencia": "semanal",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "9239494c-85be-42fc-bbfa-69cd10a6a27c",
+        "descricao": "Ponto de lubrifica\u00e7\u00e3o acess\u00edvel",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "4df3e4a7-30be-42a6-923c-551a7eaeb5e8",
+        "descricao": "\u00c1rea limpa antes da aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "c6ebd1ae-7811-43a1-913a-a1fc8652ad91",
+        "descricao": "Lubrificante aplicado corretamente",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "468f2f04-b127-4075-a89f-3545a5fe0d19",
+        "descricao": "Sem vazamentos ap\u00f3s aplica\u00e7\u00e3o",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "d627bbc3-e91c-4157-983b-1d7ba921c2ff",
+        "descricao": "Quantidade aplicada (ml/g)",
+        "tipo": "numero",
+        "unidade": "ml",
+        "obrigatorio": false
+      },
+      {
+        "id": "97f574a0-0221-4347-849e-8f730d9a2626",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-06-13T12:31:18.205869+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-13T12:31:18.205879+00:00",
+    "updated_at": "2026-06-13T12:31:18.205881+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "0d7f0625-4d88-4566-81a4-3faae0c655c2",
+    "ativo_id": "9a0650d6-c90e-4b6c-be0f-b1909883eaa0",
+    "rota_id": null,
+    "responsavel_id": null,
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "tipo": "eletrica",
+    "frequencia": "mensal",
+    "status": "pendente",
+    "resultado": "pendente",
+    "checklist": [
+      {
+        "id": "25825303-6636-4f82-a223-16ca1408f1ad",
+        "descricao": "Vibra\u00e7\u00e3o (mm/s)",
+        "tipo": "numero",
+        "tolerancia_min": 0,
+        "tolerancia_max": 4.5,
+        "unidade": "mm/s",
+        "obrigatorio": true
+      },
+      {
+        "id": "1d580bc7-697a-4828-9546-da79401b93ec",
+        "descricao": "Temperatura (\u00b0C)",
+        "tipo": "numero",
+        "tolerancia_min": 20,
+        "tolerancia_max": 80,
+        "unidade": "\u00b0C",
+        "obrigatorio": true
+      },
+      {
+        "id": "67f3ef25-e20d-415c-9999-055bac3cf264",
+        "descricao": "Sem ru\u00eddos anormais",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a8b1e448-097d-4693-9b2c-3b4d23a86959",
+        "descricao": "Sem vazamentos",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "a066ea94-60f1-4f2f-890c-9a137f1b0acc",
+        "descricao": "N\u00edvel de \u00f3leo adequado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "5e0b287a-29dc-46f2-ad6c-624a65b53b94",
+        "descricao": "Alinhamento verificado",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "02f68f4d-c771-498a-aa9e-d6fbe5905c8d",
+        "descricao": "Fixa\u00e7\u00f5es e parafusos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "de8f04a4-914f-411e-ac0a-b510cf59b629",
+        "descricao": "Correias/acoplamentos OK",
+        "tipo": "boolean",
+        "obrigatorio": true
+      },
+      {
+        "id": "79824392-c209-4b8b-9c61-921dae7bfb48",
+        "descricao": "Observa\u00e7\u00f5es",
+        "tipo": "texto",
+        "obrigatorio": false
+      }
+    ],
+    "data_programada": "2026-06-13T12:31:18.308771+00:00",
+    "data_inicio": null,
+    "data_conclusao": null,
+    "duracao_minutos": null,
+    "observacoes": null,
+    "fotos": [],
+    "os_gerada_id": null,
+    "tipo_lubrificante": null,
+    "quantidade_lubrificante": null,
+    "ponto_lubrificacao": null,
+    "metodo_aplicacao": null,
+    "observacoes_lubrificacao": null,
+    "created_at": "2026-06-13T12:31:18.308782+00:00",
+    "updated_at": "2026-06-13T12:31:18.308784+00:00",
+    "deleted_at": null
+  }
+]

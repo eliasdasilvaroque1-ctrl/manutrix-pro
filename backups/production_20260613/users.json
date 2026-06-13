@@ -1,0 +1,112 @@
+[
+  {
+    "email": "admin@manutrix.com",
+    "nome": "Administrador",
+    "role": "admin",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "avatar_url": null,
+    "telefone": null,
+    "id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "created_at": "2026-03-17T22:21:47.503144+00:00",
+    "deleted_at": null,
+    "password_hash": "$2b$12$iklIszdXLhG8KOpiHJeiXeqOPzDz7q8vkvk/jcxreoNIw8iO7K6ge",
+    "force_password_change": false,
+    "updated_at": "2026-04-21T14:42:58.284529+00:00",
+    "supabase_id": "99219539-3708-4bdd-8d76-7521503f4f22"
+  },
+  {
+    "email": "supervisor@manutrix.com",
+    "nome": "Maria Supervisora",
+    "role": "supervisor",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "avatar_url": null,
+    "telefone": "(11) 98765-4321",
+    "id": "872fbaa8-0744-4b17-bdbd-0e4bec2c533b",
+    "created_at": "2026-03-17T22:21:47.515544+00:00",
+    "deleted_at": null,
+    "password_hash": "$2b$12$.sXHg.1T0SIGIYKhE82.XOx10dbbn2exupCGgfH/LiXUnTlEjFg8.",
+    "force_password_change": false,
+    "updated_at": "2026-04-21T14:44:27.140703+00:00"
+  },
+  {
+    "email": "tecnico@manutrix.com",
+    "nome": "Jo\u00e3o Silva",
+    "role": "tecnico",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "avatar_url": null,
+    "telefone": "(11) 91234-5678",
+    "id": "d8e83162-6bd0-4459-b199-41bcec864150",
+    "created_at": "2026-03-17T22:21:47.516300+00:00",
+    "deleted_at": null,
+    "password_hash": "$2b$12$53zQ1dbl7zmuAQf3jmYocOL11QzxGs9MJuBi0IHFTYB6YO0pmX5z.",
+    "force_password_change": false,
+    "updated_at": "2026-04-21T14:45:03.116212+00:00"
+  },
+  {
+    "email": "pedro@manutrix.com",
+    "nome": "Pedro Santos",
+    "role": "tecnico",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "avatar_url": null,
+    "telefone": "(11) 99999-8888",
+    "id": "eb33456e-9f60-4b37-8657-595c84606d3d",
+    "created_at": "2026-03-17T22:21:47.516830+00:00",
+    "deleted_at": null,
+    "password_hash": "2702cb34ee041711b9df0c67a8d5c9de02110c80e3fc966ba8341456dbc9ef2b"
+  },
+  {
+    "id": "80c2d53a-a765-4701-8617-02af79515b06",
+    "email": "test_6107f223@manutrix.com",
+    "nome": "TEST_Novo Usu\u00e1rio",
+    "role": "tecnico",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "telefone": "11999999999",
+    "password_hash": "ecd71870d1963316a97e3ac3408c9835ad8cf0f3c1bc703527c30265534f75ae",
+    "created_at": "2026-04-20T14:48:06.964303+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "f26fb6ed-849d-48e9-83d7-d1169f2bc404",
+    "email": "TEST_newuser@manutrix.com",
+    "nome": "TEST New User",
+    "role": "tecnico",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "telefone": null,
+    "password_hash": "$2b$12$nWZbPu/bvA.74qWPAGmHPOYgtXU20KYjZ/6Rl9OvbB1DTSzWz3nKG",
+    "created_at": "2026-04-21T14:41:30.340893+00:00",
+    "deleted_at": "2026-04-21T14:42:33.902059+00:00"
+  },
+  {
+    "id": "5f3e5f04-310e-46ef-a7bd-3fc816af71da",
+    "email": "test_newuser@manutrix.com",
+    "nome": "TEST New User",
+    "role": "tecnico",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "telefone": null,
+    "password_hash": "$2b$12$zjDTDesFU5WueVGpqgkZZ.iR7mfWL0eA7mD.jvUG3kRC4okKOMsi.",
+    "created_at": "2026-04-21T14:42:06.068632+00:00",
+    "deleted_at": null
+  },
+  {
+    "id": "563214e5-6dc3-44cc-b24f-0255a316d4f5",
+    "email": "test_newuser_1776782617@manutrix.com",
+    "nome": "TEST New User",
+    "role": "tecnico",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "telefone": null,
+    "password_hash": "$2b$12$A/I/HDQ72rKYBF0jfp1i3OwFGv8lDGQHFF/1q/s8XSpWBRIbvM3wu",
+    "created_at": "2026-04-21T14:43:37.507917+00:00",
+    "deleted_at": "2026-04-21T14:43:38.062081+00:00"
+  },
+  {
+    "id": "cb8f1d9d-2103-4117-abe8-53c058ca5427",
+    "email": "eliasdasilvaroque@gmail.com",
+    "nome": "Elias Roque",
+    "role": "tecnico",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "telefone": "31999262313",
+    "password_hash": "$2b$12$dA8wiQFvPnZWWdTSeKpmWu5c8swYcMaE0f/Oxcc6ztwXJIsyd/rW.",
+    "created_at": "2026-05-01T16:26:10.322538+00:00",
+    "deleted_at": null
+  }
+]

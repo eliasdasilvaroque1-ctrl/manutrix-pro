@@ -1,0 +1,233 @@
+[
+  {
+    "id": "208e3928-011c-4863-ae9d-bc809d2e053a",
+    "item_id": "d60ae8e7-268f-4ec1-9865-bb2321cd7536",
+    "tipo": "entrada",
+    "quantidade": 50.0,
+    "custo_unitario": 45.9,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T14:28:04.997614+00:00"
+  },
+  {
+    "id": "f60863df-f604-42c6-85de-28b5bd9bb012",
+    "item_id": "b2d5e671-dfe0-480a-aef6-a28a7777fa19",
+    "tipo": "entrada",
+    "quantidade": 10.0,
+    "custo_unitario": 45.5,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T14:34:05.370845+00:00"
+  },
+  {
+    "id": "195f1fe9-6cea-4d54-bebe-a6d2cbad04d6",
+    "item_id": "1d96ca2f-2ae9-45ec-be55-dbc8506dd042",
+    "tipo": "entrada",
+    "quantidade": 5.0,
+    "custo_unitario": 0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T14:34:05.579176+00:00"
+  },
+  {
+    "id": "32db1ed1-f210-43b5-852b-74fa7b3e2fe3",
+    "item_id": "38deb2d1-6d84-4bfa-89c3-e2a335ece7e2",
+    "tipo": "entrada",
+    "quantidade": 10.0,
+    "custo_unitario": 0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T14:34:05.926076+00:00"
+  },
+  {
+    "id": "919e5586-c0e5-4b7a-876f-85e1a319d2d4",
+    "item_id": "65d3d640-30cd-4b51-a21b-090d480d743a",
+    "tipo": "entrada",
+    "quantidade": 5.0,
+    "custo_unitario": 0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T14:34:06.281035+00:00"
+  },
+  {
+    "id": "a1017034-ced9-4c77-989f-7698674ce390",
+    "item_id": "758b719c-db5b-4deb-b176-9a2875d38867",
+    "tipo": "entrada",
+    "quantidade": 10.0,
+    "custo_unitario": 300.0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T15:10:35.636337+00:00"
+  },
+  {
+    "id": "18cc21e0-89b3-4660-b48b-acfc837cf1a5",
+    "item_id": "bace8ed4-f440-40a7-9f27-d2c50f94ffa5",
+    "tipo": "entrada",
+    "quantidade": 400.0,
+    "custo_unitario": 20.0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T15:56:47.145345+00:00"
+  },
+  {
+    "id": "717a85cd-8b40-418e-af6c-96a335a102cf",
+    "item_id": "e09b708d-7743-4c8c-9869-f673b624b413",
+    "tipo": "entrada",
+    "quantidade": 2.0,
+    "custo_unitario": 20.0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T16:14:13.792031+00:00"
+  },
+  {
+    "id": "51e8fe7f-7820-4223-adfa-b1516db4ad9b",
+    "item_id": "2850872e-b965-4861-9483-38c5952e0478",
+    "tipo": "entrada",
+    "quantidade": 10.0,
+    "custo_unitario": 0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T17:15:26.857213+00:00"
+  },
+  {
+    "id": "07638ebb-ca36-4032-927a-6ed234c6e199",
+    "item_id": "93434631-3c22-4fd7-bf33-c75e55f4c0c2",
+    "tipo": "entrada",
+    "quantidade": 10.0,
+    "custo_unitario": 0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-11T17:17:23.512748+00:00"
+  },
+  {
+    "id": "143afe6d-fa18-4adb-921a-96a80500f9d3",
+    "item_id": "41ed86d2-33fa-41dd-9b9c-0ec59a5f2794",
+    "tipo": "entrada",
+    "quantidade": 3.0,
+    "custo_unitario": 0.0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-04-22T16:42:18.921159+00:00"
+  },
+  {
+    "id": "d1653103-651a-40f8-bb46-ffbca2ee1768",
+    "item_id": "da660543-10ca-4435-8c13-45e804f9ca79",
+    "tipo": "entrada",
+    "quantidade": 50.0,
+    "custo_unitario": 45.9,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-11T15:25:29.086504+00:00"
+  },
+  {
+    "id": "17900639-0bc7-4865-aabb-a91cb24b74a0",
+    "item_id": "da660543-10ca-4435-8c13-45e804f9ca79",
+    "tipo": "saida",
+    "quantidade": -5.0,
+    "custo_unitario": 45.9,
+    "motivo": "OS #123",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-11T15:25:29.508670+00:00"
+  },
+  {
+    "id": "d8804969-53a1-48e6-8af2-35137ed7ceb5",
+    "item_id": "40b39a12-29bf-41e4-95fe-13a01c337517",
+    "tipo": "entrada",
+    "quantidade": 10.0,
+    "custo_unitario": 45.5,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-13T12:17:30.289749+00:00"
+  },
+  {
+    "id": "d4a5cca9-a286-43a2-8bff-d9f92b136d9a",
+    "item_id": "2bda4174-874c-410f-914b-49c5c7ae82de",
+    "tipo": "entrada",
+    "quantidade": 5.0,
+    "custo_unitario": 10.0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-13T12:19:26.999113+00:00"
+  },
+  {
+    "id": "fbf18570-5283-436e-99ec-40088a4d3181",
+    "item_id": "c5aa1f45-894a-4c0a-9f74-6884fbd06262",
+    "tipo": "entrada",
+    "quantidade": 5.0,
+    "custo_unitario": 10.0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-13T12:20:23.464364+00:00"
+  },
+  {
+    "id": "e447fbc6-49d8-4bb7-aa16-a099209abed9",
+    "item_id": "872ec262-b5a6-472e-b8e3-1cd3cd0d6cf8",
+    "tipo": "entrada",
+    "quantidade": 1.0,
+    "custo_unitario": 25.5,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-13T12:20:23.516089+00:00"
+  },
+  {
+    "id": "23a20ba8-42f3-4795-ab9b-d828a3c37e69",
+    "item_id": "46aaad10-3d39-4100-9e36-5420903cdb92",
+    "tipo": "entrada",
+    "quantidade": 20.0,
+    "custo_unitario": 55.0,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-13T12:23:48.176141+00:00"
+  },
+  {
+    "id": "795769e3-c89a-415f-8d76-c5beb4cc9f46",
+    "item_id": "46aaad10-3d39-4100-9e36-5420903cdb92",
+    "tipo": "saida",
+    "quantidade": -3.0,
+    "custo_unitario": 55.0,
+    "motivo": "Audit test",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-13T12:23:48.503280+00:00"
+  },
+  {
+    "id": "0cdeea40-4efb-4a9f-b3c9-37de5924e97b",
+    "item_id": "44e1a8ba-633f-43ec-9017-39612c13fdef",
+    "tipo": "entrada",
+    "quantidade": 10.0,
+    "custo_unitario": 12.5,
+    "motivo": "Estoque inicial",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-13T12:31:16.634533+00:00"
+  },
+  {
+    "id": "af3a8138-cccf-4d91-8b9d-e6eb680592f0",
+    "item_id": "44e1a8ba-633f-43ec-9017-39612c13fdef",
+    "tipo": "saida",
+    "quantidade": -3.0,
+    "custo_unitario": 12.5,
+    "motivo": "audit",
+    "usuario_id": "5cc69ef1-bfd3-4660-8bc0-5accb400b585",
+    "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+    "created_at": "2026-06-13T12:31:16.974827+00:00"
+  }
+]
