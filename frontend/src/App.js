@@ -683,7 +683,7 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
 const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    sku: '', nome: '', descricao: '', categoria: 'outros',
+    sku: '', nome: '', descricao: '', categoria: 'outro',
     quantidade: 0, estoque_minimo: 0, estoque_maximo: '',
     unidade: 'UN', custo_unitario: 0, fornecedor: '',
     almoxarifado: 'Principal', prateleira: '', posicao: '',
@@ -711,7 +711,7 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
       });
     } else {
       setForm({
-        sku: '', nome: '', descricao: '', categoria: 'outros',
+        sku: '', nome: '', descricao: '', categoria: 'outro',
         quantidade: 0, estoque_minimo: 0, estoque_maximo: '',
         unidade: 'UN', custo_unitario: 0, fornecedor: '',
         almoxarifado: 'Principal', prateleira: '', posicao: '',
@@ -756,13 +756,15 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
   const categorias = [
     { value: 'rolamento', label: 'Rolamento' },
     { value: 'lubrificante', label: 'Lubrificante' },
-    { value: 'eletrica', label: 'Elétrica' },
-    { value: 'mecanica', label: 'Mecânica' },
-    { value: 'instrumentacao', label: 'Instrumentação' },
+    { value: 'correia', label: 'Correia' },
     { value: 'vedacao', label: 'Vedação' },
     { value: 'filtro', label: 'Filtro' },
-    { value: 'correia', label: 'Correia' },
-    { value: 'outros', label: 'Outros' },
+    { value: 'eletrico', label: 'Elétrico' },
+    { value: 'mecanico', label: 'Mecânico' },
+    { value: 'hidraulico', label: 'Hidráulico' },
+    { value: 'pneumatico', label: 'Pneumático' },
+    { value: 'instrumentacao', label: 'Instrumentação' },
+    { value: 'outro', label: 'Outro' },
   ];
   
   const unidades = [
@@ -4683,7 +4685,8 @@ const ANOMALIA_STATUS = {
   aberta: { label: 'Aberta', color: 'text-red-400 bg-red-500/10' },
   em_analise: { label: 'Em Análise', color: 'text-amber-400 bg-amber-500/10' },
   os_gerada: { label: 'OS Gerada', color: 'text-blue-400 bg-blue-500/10' },
-  corrigida: { label: 'Corrigida', color: 'text-emerald-400 bg-emerald-500/10' },
+  aguardando_execucao: { label: 'Aguardando Execução', color: 'text-purple-400 bg-purple-500/10' },
+  resolvida: { label: 'Resolvida', color: 'text-emerald-400 bg-emerald-500/10' },
   encerrada: { label: 'Encerrada', color: 'text-slate-400 bg-slate-500/10' },
 };
 
@@ -4762,8 +4765,33 @@ const AnomaliasPage = () => {
   };
 
   const getNextStatuses = (current) => {
-    const map = { aberta: ['em_analise'], em_analise: ['os_gerada','corrigida'], os_gerada: ['corrigida'], corrigida: ['encerrada'] };
+    const map = {
+      aberta: ['em_analise'],
+      em_analise: ['os_gerada', 'resolvida'],
+      os_gerada: ['aguardando_execucao', 'resolvida'],
+      aguardando_execucao: ['resolvida'],
+      resolvida: ['encerrada'],
+    };
     return map[current] || [];
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Excluir esta anomalia? Esta ação não pode ser desfeita.')) return;
+    try {
+      await api.delete(`/anomalias/${selected.id}`);
+      toast.success('Anomalia excluída');
+      setSelected(null);
+      fetchData();
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleReopen = async () => {
+    try {
+      await api.post(`/anomalias/${selected.id}/status`, { status: 'aberta' });
+      toast.success('Anomalia reaberta');
+      fetchDetail(selected.id);
+      fetchData();
+    } catch (e) { toast.error(normalizeError(e)); }
   };
 
   const filtered = anomalias.filter(a => !filterStatus || a.status === filterStatus);
@@ -4817,8 +4845,24 @@ const AnomaliasPage = () => {
               {ANOMALIA_STATUS[ns]?.label}
             </button>
           ))}
-          <button onClick={() => handleStatusChange('encerrada')} className="btn-secondary text-sm flex items-center gap-1 border-red-500/30 text-red-400" data-testid="anomalia-encerrar">Encerrar</button>
+          {user?.role !== 'tecnico' && (
+            <button onClick={() => handleStatusChange('encerrada')} className="btn-secondary text-sm flex items-center gap-1 border-slate-500/30" data-testid="anomalia-encerrar">Encerrar</button>
+          )}
         </div>
+      )}
+      {selected.status === 'encerrada' && user?.role !== 'tecnico' && (
+        <div className="flex gap-2" data-testid="anomalia-actions-closed">
+          <button onClick={handleReopen} className="btn-primary text-sm flex items-center gap-1" data-testid="anomalia-reabrir">
+            <RefreshCw size={14} /> Reabrir Anomalia
+          </button>
+        </div>
+      )}
+
+      {/* Excluir (admin/supervisor) */}
+      {user?.role !== 'tecnico' && (
+        <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-300 mt-2" data-testid="anomalia-excluir">
+          <Trash2 size={12} className="inline mr-1" /> Excluir anomalia
+        </button>
       )}
 
       {/* OS Gerada */}

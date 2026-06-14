@@ -2107,12 +2107,14 @@ async def update_anomalia(anomalia_id: str, body: dict, user: Dict = Depends(get
 
 @api_router.post("/anomalias/{anomalia_id}/status")
 async def change_anomalia_status(anomalia_id: str, body: dict, user: Dict = Depends(get_current_user)):
-    """Change anomalia status: aberta → em_analise → os_gerada → corrigida → encerrada"""
+    """Workflow: aberta → em_analise → os_gerada → aguardando_execucao → resolvida → encerrada"""
     VALID_TRANSITIONS = {
         'aberta': ['em_analise', 'encerrada'],
-        'em_analise': ['os_gerada', 'corrigida', 'encerrada'],
-        'os_gerada': ['corrigida', 'encerrada'],
-        'corrigida': ['encerrada'],
+        'em_analise': ['os_gerada', 'resolvida', 'encerrada'],
+        'os_gerada': ['aguardando_execucao', 'resolvida', 'encerrada'],
+        'aguardando_execucao': ['resolvida', 'encerrada'],
+        'resolvida': ['encerrada'],
+        'encerrada': ['aberta'],  # reabrir
     }
     a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
     if not a:
@@ -2123,17 +2125,38 @@ async def change_anomalia_status(anomalia_id: str, body: dict, user: Dict = Depe
     current = a.get('status', 'aberta')
     if new_status not in VALID_TRANSITIONS.get(current, []):
         raise HTTPException(status_code=400, detail=f"Transição inválida: {current} → {new_status}")
+    # Permission: encerrar e reabrir apenas supervisor/admin
+    if new_status in ['encerrada'] or (current == 'encerrada' and new_status == 'aberta'):
+        if user.get('role') not in ['admin', 'supervisor', 'pcm']:
+            raise HTTPException(status_code=403, detail="Apenas supervisor/admin pode encerrar ou reabrir")
     update = {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}
     if new_status == 'encerrada':
         update['data_encerramento'] = datetime.now(timezone.utc).isoformat()
         update['encerrado_por'] = user['id']
+    if new_status == 'aberta' and current == 'encerrada':
+        update['data_encerramento'] = None
+        update['encerrado_por'] = None
     await db.anomalias.update_one({"id": anomalia_id}, {"$set": update})
+    descricao = f"Status: {current} → {new_status}"
+    if new_status == 'aberta' and current == 'encerrada':
+        descricao = f"Anomalia reaberta por {user.get('nome', user.get('email'))}"
     await db.anomalia_historico.insert_one({
         "id": str(uuid.uuid4()), "anomalia_id": anomalia_id,
-        "tipo": "status", "descricao": f"Status: {current} → {new_status}",
+        "tipo": "status", "descricao": descricao,
         "usuario_id": user['id'], "created_at": datetime.now(timezone.utc).isoformat()
     })
     return await db.anomalias.find_one({"id": anomalia_id}, {"_id": 0})
+
+@api_router.delete("/anomalias/{anomalia_id}")
+async def delete_anomalia(anomalia_id: str, user: Dict = Depends(get_current_user)):
+    """Soft delete anomalia (admin/supervisor only)"""
+    if user.get('role') not in ['admin', 'supervisor', 'pcm']:
+        raise HTTPException(status_code=403, detail="Sem permissão")
+    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
+    if not a:
+        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
+    await db.anomalias.update_one({"id": anomalia_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    return {"success": True}
 
 @api_router.post("/anomalias/{anomalia_id}/comentarios")
 async def add_anomalia_comment(anomalia_id: str, body: dict, user: Dict = Depends(get_current_user)):
