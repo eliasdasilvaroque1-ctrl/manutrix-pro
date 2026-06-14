@@ -1,0 +1,64 @@
+{
+  "summary": "Iteration 25 — Anomalia workflow + Inspection Templates linkage + Sobressalentes. Backend pytest 15/15 PASS covering full Anomalia lifecycle (create → em_analise → corrigida → encerrada), invalid transition rejection (em_analise → aberta = 400; encerrada → anything = 400), comentarios + historico arrays in GET detail, POST /comentarios creates comment, PUT /anomalias updates descricao + emits historico entry, inspection-templates filter by tipo_equipamento, estoque GET works. Frontend Playwright validated end-to-end: login → /anomalias loads → create anomalia (AV-01, severidade=alta, gerar_os=true) → OS auto-generated toast → click card → detail view → Em Análise button → comment 'TEST_iter25_UI comentario' visible with 'Administrador' attribution → Editar → save → 'TEST_iter25_UI EDITED descricao' persisted → Corrigida → Encerrada → toast 'Status alterado para Encerrada' → Histórico shows all 4 transitions + edit entry → back to list → Encerrada filter → encerrada anomalia STILL listed (NOT deleted). Filter buttons (Todas/Aberta/Encerrada) visible with counts. Histórico tab on /ativos/{AV-01} shows ANOMALIA badge linked to created anomalia. Sobressalentes /sobressalentes page does NOT show 'SKU' label (uses SP-{code} format). Estoque modal label 'Código' confirmed in iter24.",
+  "pass_fail_matrix": {
+    "BACKEND POST /api/anomalias create with gerar_os=true": "PASS (os_gerada_id returned)",
+    "BACKEND GET /api/anomalias/{id} returns comentarios+historico arrays": "PASS",
+    "BACKEND POST /api/anomalias/{id}/status aberta→em_analise": "PASS",
+    "BACKEND POST /api/anomalias/{id}/status em_analise→aberta REJECTED": "PASS (400 invalid transition)",
+    "BACKEND POST /api/anomalias/{id}/status em_analise→corrigida": "PASS",
+    "BACKEND POST /api/anomalias/{id}/status corrigida→encerrada (sets data_encerramento)": "PASS",
+    "BACKEND POST /api/anomalias/{id}/status from encerrada REJECTED": "PASS (400)",
+    "BACKEND POST /api/anomalias/{id}/comentarios": "PASS (texto persisted, visible in GET detail)",
+    "BACKEND POST /comentarios empty rejected": "PASS (400)",
+    "BACKEND PUT /api/anomalias/{id} updates descricao + appends historico": "PASS",
+    "BACKEND GET /api/anomalias list — encerrada NOT deleted": "PASS",
+    "BACKEND POST /api/inspection-templates with tipo_equipamento='ALIMENTADOR VIBRATORIO'": "PASS",
+    "BACKEND GET /api/inspection-templates?tipo_equipamento=...": "PASS (returns filtered list)",
+    "BACKEND GET /api/estoque": "PASS",
+    "FRONTEND /anomalias list + filter buttons (Todas/Aberta/Encerrada)": "PASS",
+    "FRONTEND Create anomalia modal → submit": "PASS (toast 'Anomalia criada! OS gerada automaticamente.')",
+    "FRONTEND Anomalia detail view (status badge, severidade, ativo card)": "PASS",
+    "FRONTEND Status transition buttons (em_analise, corrigida, encerrada)": "PASS — all 3 transitions executed via UI",
+    "FRONTEND Comment input + Enviar button": "PASS (comment renders with usuario_nome='Administrador')",
+    "FRONTEND Editar anomalia + Salvar": "PASS (descricao persisted)",
+    "FRONTEND Encerrada anomalia kept in list (filter shows 3+)": "PASS",
+    "FRONTEND /ativos/{id} Histórico tab shows ANOMALIA timeline entry": "PASS",
+    "FRONTEND Sobressalentes /sobressalentes page no 'SKU' label visible": "PASS",
+    "FRONTEND Nova Inspeção modal Template-linked section": "FAIL — 'Templates para ALIMENTADOR VIBRATORIO' section did NOT render when modal opened from asset-detail flow via /inspecoes?ativo=… (template exists in DB and backend filter returns it correctly)"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ModalNovaInspecao", "issue": "When opened from asset detail (URL /inspecoes?ativo={id}), the equipment-specific Templates section ('Templates para {tipo}') does NOT appear even when a matching template exists. Default mecanica/eletrica/lubrificacao tabs render instead.", "selector": "[data-testid=\"equip-template-section\"]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration25_anomalia_templates.py",
+    "/app/test_reports/pytest/pytest_iteration25.xml"
+  ],
+  "action_items": [
+    "Fix ModalNovaInspecao template-linked render: the useEffect on lines 1287-1307 depends on [isOpen, user, preSelectedAtivoId] but uses `ativos.find(a => a.id === preSelectedAtivoId)` from props — if parent InspecoesPage hasn't finished fetching `ativos` array when the modal opens with preSelectedAtivoId from searchParams, the lookup returns undefined and equipTemplates fetch is skipped. Fix by adding `ativos` to effect deps OR moving the template fetch to a separate effect that watches both `ativos` and `preSelectedAtivoId`, OR fetch templates by ativo_id from backend (let backend resolve tipo_equipamento).",
+    "Minor: 'Templates Inspeção' (sidebar) vs 'Templates de Inspeção' (page title) — still inconsistent from iter24."
+  ],
+  "critical_code_review_comments": [
+    "Backend anomalia status state machine (server.py L2111-2116) correctly enforces transitions aberta→[em_analise,encerrada], em_analise→[os_gerada,corrigida,encerrada], os_gerada→[corrigida,encerrada], corrigida→[encerrada]. Returns 400 with clear message on invalid transition. Encerrada is terminal — good.",
+    "Backend: encerrada sets data_encerramento + encerrado_por (L2127-2129) and emits historico entry — good audit trail.",
+    "Backend: PUT /anomalias/{id} (L2092) emits historico entry 'Anomalia editada por …' — good.",
+    "Frontend AnomaliasPage (App.js L4678-4921) is well-structured single-component with list/detail/edit modes and proper data-testid coverage. getNextStatuses (L4752) hides invalid transition buttons in UI even though backend also rejects — defense in depth.",
+    "Frontend ModalNovaInspecao template fetch race condition described above is the only blocker for feature 'Templates linked to inspection'. Quick fix: add `ativos` to effect deps array or restructure."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration25_anomalia_templates.py",
+    "/app/test_reports/pytest/pytest_iteration25.xml",
+    "/app/test_reports/iteration_25.json"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "92% (12/13 critical UI flows; 1 template-linked inspection flow fails due to timing bug)"},
+  "test_credentials": "admin@manutrix.com / admin123 — working",
+  "seed_data_creation": "Backend test creates TEST_iter25-prefixed anomalia/template — anomalia is left in DB as 'encerrada' (cannot be deleted per workflow, only soft-closed). Template is cleaned up via DELETE. UI test created additional anomalia 'TEST_iter25_UI anomalia alta v2' which went through full lifecycle to Encerrada. None of these affect production data.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All anomalia workflow features work end-to-end (backend + frontend). The ONLY failing test is template-linked inspection modal when opened from asset detail flow — root cause is a useEffect dependency timing issue in ModalNovaInspecao (App.js L1287-1307) where `ativos.find` runs before parent's ativos array is populated. After main agent fixes this (suggest adding `ativos` to effect deps or fetching template by ativo_id from backend), re-run the Playwright section that creates a template and opens Nova Inspeção from /ativos/435593b8-a66a-4ddd-a8c6-f4bcce70d4cd. Test file at /app/backend/tests/test_iteration25_anomalia_templates.py — 15/15 pass. Screenshots at /app/.screenshots/iter25*.png. The Sobressalentes 'sku→codigo' rename is UI-label-only (estoque modal shows 'Código'); the backend field is still `sku` (no migration needed since old code path coexists).",
+  "rca of the issue": "ModalNovaInspecao (App.js L1287-1307): when /inspecoes?ativo={id} is loaded, the modal's useEffect fires with preSelectedAtivoId set. Inside, `ativos.find(a => a.id === preSelectedAtivoId)` reads from the `ativos` prop. If the parent InspecoesPage fetches `ativos` asynchronously and the modal opens before the fetch resolves (e.g., the modal mounts immediately due to a state set on URL param parse), `ativos` is [] and the lookup returns undefined, so equipTemplates is never populated and the 'Templates para …' section never renders. Mitigation: add `ativos` to the useEffect dependency array (lines 1287-1307), OR introduce a separate useEffect that watches `[ativos, preSelectedAtivoId]` to fetch templates as soon as both are available, OR have the backend resolve tipo_equipamento from ativo_id and accept ativo_id directly on /inspection-templates filter."
+}

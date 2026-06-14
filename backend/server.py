@@ -2071,6 +2071,89 @@ async def create_anomalia(data: AnomaliaCreate, user: Dict = Depends(get_current
     anomalia_doc.pop('_id', None)
     return {**anomalia_doc, "os_gerada_id": os_id, "prioridade_os": prioridade_os}
 
+@api_router.get("/anomalias/{anomalia_id}")
+async def get_anomalia(anomalia_id: str, user: Dict = Depends(get_current_user)):
+    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None}, {"_id": 0})
+    if not a:
+        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
+    ativo = await db.ativos.find_one({"id": a.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
+    if ativo and ativo.get('sector_id'):
+        ativo['sector'] = await db.sectors.find_one({"id": ativo['sector_id']}, {"_id": 0, "nome": 1})
+    a['ativo'] = ativo
+    a['comentarios'] = await db.anomalia_comentarios.find({"anomalia_id": anomalia_id}, {"_id": 0}).sort("created_at", 1).to_list(100)
+    # Resolve user names for comments
+    for c in a['comentarios']:
+        if c.get('usuario_id'):
+            u = await db.users.find_one({"id": c['usuario_id']}, {"_id": 0, "nome": 1})
+            c['usuario_nome'] = u.get('nome') if u else None
+    a['historico'] = await db.anomalia_historico.find({"anomalia_id": anomalia_id}, {"_id": 0}).sort("created_at", 1).to_list(100)
+    return a
+
+@api_router.put("/anomalias/{anomalia_id}")
+async def update_anomalia(anomalia_id: str, body: dict, user: Dict = Depends(get_current_user)):
+    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
+    if not a:
+        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
+    update = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    for field in ['descricao', 'severidade']:
+        if field in body: update[field] = body[field]
+    await db.anomalias.update_one({"id": anomalia_id}, {"$set": update})
+    await db.anomalia_historico.insert_one({
+        "id": str(uuid.uuid4()), "anomalia_id": anomalia_id,
+        "tipo": "edicao", "descricao": f"Anomalia editada por {user.get('nome', user.get('email'))}",
+        "usuario_id": user['id'], "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    return await db.anomalias.find_one({"id": anomalia_id}, {"_id": 0})
+
+@api_router.post("/anomalias/{anomalia_id}/status")
+async def change_anomalia_status(anomalia_id: str, body: dict, user: Dict = Depends(get_current_user)):
+    """Change anomalia status: aberta → em_analise → os_gerada → corrigida → encerrada"""
+    VALID_TRANSITIONS = {
+        'aberta': ['em_analise', 'encerrada'],
+        'em_analise': ['os_gerada', 'corrigida', 'encerrada'],
+        'os_gerada': ['corrigida', 'encerrada'],
+        'corrigida': ['encerrada'],
+    }
+    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
+    if not a:
+        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
+    new_status = body.get('status')
+    if not new_status:
+        raise HTTPException(status_code=400, detail="Status é obrigatório")
+    current = a.get('status', 'aberta')
+    if new_status not in VALID_TRANSITIONS.get(current, []):
+        raise HTTPException(status_code=400, detail=f"Transição inválida: {current} → {new_status}")
+    update = {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if new_status == 'encerrada':
+        update['data_encerramento'] = datetime.now(timezone.utc).isoformat()
+        update['encerrado_por'] = user['id']
+    await db.anomalias.update_one({"id": anomalia_id}, {"$set": update})
+    await db.anomalia_historico.insert_one({
+        "id": str(uuid.uuid4()), "anomalia_id": anomalia_id,
+        "tipo": "status", "descricao": f"Status: {current} → {new_status}",
+        "usuario_id": user['id'], "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    return await db.anomalias.find_one({"id": anomalia_id}, {"_id": 0})
+
+@api_router.post("/anomalias/{anomalia_id}/comentarios")
+async def add_anomalia_comment(anomalia_id: str, body: dict, user: Dict = Depends(get_current_user)):
+    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
+    if not a:
+        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
+    texto = body.get('texto', '').strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="Comentário vazio")
+    doc = {
+        "id": str(uuid.uuid4()), "anomalia_id": anomalia_id,
+        "texto": texto, "usuario_id": user['id'],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.anomalia_comentarios.insert_one(doc)
+    doc.pop('_id', None)
+    u = await db.users.find_one({"id": user['id']}, {"_id": 0, "nome": 1})
+    doc['usuario_nome'] = u.get('nome') if u else None
+    return doc
+
 # ============== KNOWLEDGE BASE (ESTRUTURA) ==============
 
 

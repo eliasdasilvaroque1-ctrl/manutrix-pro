@@ -1276,6 +1276,8 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   const [loading, setLoading] = useState(false);
   const [tipoTab, setTipoTab] = useState('mecanica');
   const [templates, setTemplates] = useState({});
+  const [equipTemplates, setEquipTemplates] = useState([]);
+  const [selectedEquipTemplate, setSelectedEquipTemplate] = useState(null);
   const [checklist, setChecklist] = useState([]);
   const [form, setForm] = useState({
     ativo_id: '', responsavel_id: '', data_planejada: '', observacoes: ''
@@ -1285,20 +1287,48 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   useEffect(() => {
     if (isOpen) {
       setTipoTab('mecanica');
+      setSelectedEquipTemplate(null);
+      setEquipTemplates([]);
       setForm({ ativo_id: preSelectedAtivoId || '', responsavel_id: user?.id || '', data_planejada: '', observacoes: '' });
-      // Load checklist templates
       api.get('/checklists/templates').then(r => {
         setTemplates(r.data);
         if (r.data.mecanica) setChecklist(r.data.mecanica.itens || []);
       }).catch(() => {});
+      // Load equipment-specific templates if ativo is pre-selected
+      if (preSelectedAtivoId) {
+        const ativo = ativos.find(a => a.id === preSelectedAtivoId);
+        if (ativo?.tipo_equipamento) {
+          api.get('/inspection-templates', { params: { tipo_equipamento: ativo.tipo_equipamento } })
+            .then(r => setEquipTemplates(r.data || []))
+            .catch(() => {});
+        }
+      }
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, preSelectedAtivoId]);
+
+  // When ativo changes, load equipment-specific templates
+  const handleAtivoChange = (ativoId) => {
+    setForm(prev => ({...prev, ativo_id: ativoId}));
+    setSelectedEquipTemplate(null);
+    setEquipTemplates([]);
+    const ativo = ativos.find(a => a.id === ativoId);
+    if (ativo?.tipo_equipamento) {
+      api.get('/inspection-templates', { params: { tipo_equipamento: ativo.tipo_equipamento } })
+        .then(r => setEquipTemplates(r.data || []))
+        .catch(() => {});
+    }
+  };
   
   useEffect(() => {
-    if (templates[tipoTab]) {
+    if (selectedEquipTemplate) {
+      const t = equipTemplates.find(et => et.id === selectedEquipTemplate);
+      if (t) {
+        setChecklist(t.itens.map(i => ({ ...i, id: i.id || String(Date.now()), conforme: null, resultado: null, observacao: null })));
+      }
+    } else if (templates[tipoTab]) {
       setChecklist(templates[tipoTab].itens || []);
     }
-  }, [tipoTab, templates]);
+  }, [tipoTab, templates, selectedEquipTemplate]);
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1311,7 +1341,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
     try {
       const payload = {
         ativo_id: form.ativo_id,
-        tipo: tipoTab,
+        tipo: selectedEquipTemplate ? 'personalizada' : tipoTab,
         responsavel_id: form.responsavel_id || null,
         checklist: checklist,
         data_planejada: form.data_planejada || null,
@@ -1339,22 +1369,44 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Nova Inspeção" size="lg">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Tabs — Tipo de Inspeção */}
-        <div className="flex bg-slate-800/50 rounded-lg p-1 gap-1">
-          {[
-            { key: 'mecanica', label: 'Mecânica', icon: Cog, color: 'emerald' },
-            { key: 'eletrica', label: 'Elétrica', icon: Zap, color: 'blue' },
-            { key: 'lubrificacao', label: 'Lubrificação', icon: Droplet, color: 'amber' },
-          ].map(tab => (
-            <button key={tab.key} type="button" onClick={() => setTipoTab(tab.key)}
-              className={`flex-1 py-2.5 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                tipoTab === tab.key ? `bg-${tab.color}-500/20 text-${tab.color}-400 border border-${tab.color}-500/30` : 'text-slate-400 hover:text-slate-200'
-              }`} data-testid={`tab-${tab.key}`}
-            >
-              <tab.icon size={16} /> {tab.label}
-            </button>
-          ))}
-        </div>
+        {/* Tipo de Inspeção — Padrão ou Template por Equipamento */}
+        {equipTemplates.length > 0 && (
+          <div className="glass-card p-4 space-y-3" data-testid="equip-template-section">
+            <h3 className="text-sm font-semibold text-amber-400">Templates para {selectedAtivo?.tipo_equipamento}</h3>
+            <div className="flex gap-2 flex-wrap">
+              <button type="button" onClick={() => setSelectedEquipTemplate(null)}
+                className={`px-3 py-2 rounded-lg text-sm border transition-all ${!selectedEquipTemplate ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'border-slate-700 text-slate-400'}`}>
+                Padrão (Mec/Elé/Lub)
+              </button>
+              {equipTemplates.map(et => (
+                <button key={et.id} type="button" onClick={() => setSelectedEquipTemplate(et.id)}
+                  className={`px-3 py-2 rounded-lg text-sm border transition-all ${selectedEquipTemplate === et.id ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'border-slate-700 text-slate-400'}`}
+                  data-testid={`equip-template-${et.id}`}>
+                  {et.nome} ({et.itens?.length || 0} itens)
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tabs — Tipo Padrão (only when no equip template selected) */}
+        {!selectedEquipTemplate && (
+          <div className="flex bg-slate-800/50 rounded-lg p-1 gap-1">
+            {[
+              { key: 'mecanica', label: 'Mecânica', icon: Cog, color: 'emerald' },
+              { key: 'eletrica', label: 'Elétrica', icon: Zap, color: 'blue' },
+              { key: 'lubrificacao', label: 'Lubrificação', icon: Droplet, color: 'amber' },
+            ].map(tab => (
+              <button key={tab.key} type="button" onClick={() => { setTipoTab(tab.key); setSelectedEquipTemplate(null); }}
+                className={`flex-1 py-2.5 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                  tipoTab === tab.key ? `bg-${tab.color}-500/20 text-${tab.color}-400 border border-${tab.color}-500/30` : 'text-slate-400 hover:text-slate-200'
+                }`} data-testid={`tab-${tab.key}`}
+              >
+                <tab.icon size={16} /> {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Equipamento + Responsável */}
         <div className="glass-card p-4 space-y-4">
@@ -1371,7 +1423,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
                   ) : <span className="text-slate-400">Ativo vinculado</span>; })()}
                 </div>
               ) : (
-                <Select value={form.ativo_id} onChange={(val) => setForm({...form, ativo_id: val})}
+                <Select value={form.ativo_id} onChange={(val) => handleAtivoChange(val)}
                   options={ativos.map(a => ({ value: a.id, label: `${a.sector?.nome || ''} • ${a.tag} - ${a.nome}` }))} placeholder="Selecione o equipamento..." />
               )}
             </FormInput>
@@ -2131,6 +2183,7 @@ const DashboardPage = () => {
                     {item.ativo && <span className="font-mono text-xs text-emerald-400">{item.ativo.tag}</span>}
                     {item.tag && <span className="font-mono text-xs text-emerald-400">{item.tag}</span>}
                     {item.sku && <span className="font-mono text-xs text-purple-400">{item.sku}</span>}
+                    <span className="text-slate-100">{item.nome}</span>
                     {item.prioridade && <PriorityBadge priority={item.prioridade} />}
                     {item.severidade && <PriorityBadge priority={item.severidade} />}
                   </div>
@@ -3223,7 +3276,7 @@ const EstoquePage = () => {
   };
   
   const filtered = search ? items.filter(i => 
-    i.nome.toLowerCase().includes(search.toLowerCase()) || i.sku.toLowerCase().includes(search.toLowerCase())
+    i.nome.toLowerCase().includes(search.toLowerCase()) || (i.sku || '').toLowerCase().includes(search.toLowerCase())
   ) : items;
   
   return (
@@ -3317,7 +3370,7 @@ const EstoquePage = () => {
         onClose={() => setDeleteItem(null)}
         onConfirm={handleDelete}
         title="Excluir Item"
-        message={`Tem certeza que deseja excluir "${deleteItem?.sku} - ${deleteItem?.nome}"?`}
+        message={`Tem certeza que deseja excluir "${deleteItem?.sku || deleteItem?.nome}"?`}
         confirmText="Excluir"
         danger
       />
@@ -4557,7 +4610,7 @@ const SobressalentesPage = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-emerald-400 text-sm">{sp.tag}</span>
+                    <span className="font-mono text-emerald-400 text-sm">{sp.tag || sp.codigo}</span>
                     <span className={`text-xs px-2 py-0.5 rounded ${statusConfig[sp.status]?.class || ''}`}>{statusConfig[sp.status]?.label || sp.status}</span>
                   </div>
                   <p className="text-slate-100">{sp.descricao}</p>
@@ -4614,6 +4667,14 @@ const SobressalentesPage = () => {
 
 // ============== ANOMALIAS PAGE ==============
 
+const ANOMALIA_STATUS = {
+  aberta: { label: 'Aberta', color: 'text-red-400 bg-red-500/10' },
+  em_analise: { label: 'Em Análise', color: 'text-amber-400 bg-amber-500/10' },
+  os_gerada: { label: 'OS Gerada', color: 'text-blue-400 bg-blue-500/10' },
+  corrigida: { label: 'Corrigida', color: 'text-emerald-400 bg-emerald-500/10' },
+  encerrada: { label: 'Encerrada', color: 'text-slate-400 bg-slate-500/10' },
+};
+
 const AnomaliasPage = () => {
   const [anomalias, setAnomalias] = useState([]);
   const [ativos, setAtivos] = useState([]);
@@ -4621,71 +4682,223 @@ const AnomaliasPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ ativo_id: '', descricao: '', severidade: 'media', gerar_os: true });
   const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState(null); // anomalia detail
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [comment, setComment] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
   const fetchData = async () => {
     try {
       const [anomRes, ativosRes] = await Promise.all([api.get('/anomalias'), api.get('/ativos')]);
       setAnomalias(anomRes.data);
       setAtivos(ativosRes.data);
-    } catch (e) { toast.error('Erro ao carregar'); }
+    } catch { toast.error('Erro ao carregar'); }
     finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); }, []);
 
-  const handleSubmit = async (e) => {
+  const fetchDetail = async (id) => {
+    try {
+      const res = await api.get(`/anomalias/${id}`);
+      setSelected(res.data);
+    } catch { toast.error('Erro ao carregar detalhe'); }
+  };
+
+  const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.ativo_id || !form.descricao) { toast.error('Preencha ativo e descrição'); return; }
     setSaving(true);
     try {
       const res = await api.post('/anomalias', form);
-      toast.success(`Anomalia criada! Prioridade: ${res.data.prioridade_os?.toUpperCase()}${res.data.os_gerada_id ? ' - OS gerada automaticamente' : ''}`);
+      toast.success(`Anomalia criada!${res.data.os_gerada_id ? ' OS gerada automaticamente.' : ''}`);
       setShowModal(false);
+      setForm({ ativo_id: '', descricao: '', severidade: 'media', gerar_os: true });
       fetchData();
     } catch (e) { toast.error(normalizeError(e)); }
     finally { setSaving(false); }
   };
 
+  const handleStatusChange = async (newStatus) => {
+    try {
+      await api.post(`/anomalias/${selected.id}/status`, { status: newStatus });
+      toast.success(`Status alterado para ${ANOMALIA_STATUS[newStatus]?.label}`);
+      fetchDetail(selected.id);
+      fetchData();
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleEdit = async () => {
+    try {
+      await api.put(`/anomalias/${selected.id}`, editForm);
+      toast.success('Anomalia atualizada!');
+      setEditMode(false);
+      fetchDetail(selected.id);
+      fetchData();
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleComment = async () => {
+    if (!comment.trim()) return;
+    try {
+      await api.post(`/anomalias/${selected.id}/comentarios`, { texto: comment });
+      setComment('');
+      fetchDetail(selected.id);
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const getNextStatuses = (current) => {
+    const map = { aberta: ['em_analise'], em_analise: ['os_gerada','corrigida'], os_gerada: ['corrigida'], corrigida: ['encerrada'] };
+    return map[current] || [];
+  };
+
+  const filtered = anomalias.filter(a => !filterStatus || a.status === filterStatus);
+
+  // DETAIL VIEW
+  if (selected) return (
+    <div className="space-y-4" data-testid="anomalia-detail">
+      <div className="flex items-center gap-3">
+        <button onClick={() => setSelected(null)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg"><ArrowLeft size={20} className="text-slate-400" /></button>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className={`text-xs px-2 py-0.5 rounded ${ANOMALIA_STATUS[selected.status]?.color || ''}`}>{ANOMALIA_STATUS[selected.status]?.label}</span>
+            <PriorityBadge priority={selected.severidade} />
+          </div>
+          <h1 className="text-lg font-bold text-slate-100 mt-1">Anomalia</h1>
+        </div>
+        {!editMode && selected.status !== 'encerrada' && user?.role !== 'tecnico' && (
+          <button onClick={() => { setEditMode(true); setEditForm({ descricao: selected.descricao, severidade: selected.severidade }); }} className="btn-secondary text-sm flex items-center gap-1" data-testid="edit-anomalia"><Edit size={14} /> Editar</button>
+        )}
+      </div>
+
+      {/* Ativo */}
+      {selected.ativo && (
+        <div className="glass-card p-4 cursor-pointer hover:border-slate-600" onClick={() => navigate(`/ativos/${selected.ativo_id}`)}>
+          {selected.ativo.sector && <p className="text-xs text-slate-500 uppercase">{selected.ativo.sector?.nome}</p>}
+          <span className="font-mono text-emerald-400">{selected.ativo.tag}</span>
+          <span className="text-slate-300 ml-2">{selected.ativo.nome}</span>
+        </div>
+      )}
+
+      {/* Descrição (edit or view) */}
+      {editMode ? (
+        <div className="glass-card p-4 space-y-3">
+          <FormInput label="Descrição"><textarea value={editForm.descricao} onChange={e => setEditForm({...editForm, descricao: e.target.value})} className="input-industrial w-full px-4 py-3 min-h-[80px]" /></FormInput>
+          <FormInput label="Severidade"><Select value={editForm.severidade} onChange={v => setEditForm({...editForm, severidade: v})} options={[{value:'baixa',label:'Baixa'},{value:'media',label:'Média'},{value:'alta',label:'Alta'},{value:'critica',label:'Crítica'}]} /></FormInput>
+          <div className="flex gap-2 justify-end"><button onClick={() => setEditMode(false)} className="btn-secondary text-sm">Cancelar</button><button onClick={handleEdit} className="btn-primary text-sm" data-testid="save-anomalia-edit">Salvar</button></div>
+        </div>
+      ) : (
+        <div className="glass-card p-4">
+          <p className="text-slate-200 whitespace-pre-wrap">{selected.descricao}</p>
+          <p className="text-xs text-slate-500 mt-2">{new Date(selected.created_at).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</p>
+          {selected.data_encerramento && <p className="text-xs text-slate-500">Encerrada em: {new Date(selected.data_encerramento).toLocaleDateString('pt-BR')}</p>}
+        </div>
+      )}
+
+      {/* Status Actions */}
+      {selected.status !== 'encerrada' && (
+        <div className="flex gap-2 flex-wrap" data-testid="anomalia-actions">
+          {getNextStatuses(selected.status).map(ns => (
+            <button key={ns} onClick={() => handleStatusChange(ns)} className="btn-primary text-sm flex items-center gap-1" data-testid={`anomalia-status-${ns}`}>
+              {ANOMALIA_STATUS[ns]?.label}
+            </button>
+          ))}
+          <button onClick={() => handleStatusChange('encerrada')} className="btn-secondary text-sm flex items-center gap-1 border-red-500/30 text-red-400" data-testid="anomalia-encerrar">Encerrar</button>
+        </div>
+      )}
+
+      {/* OS Gerada */}
+      {selected.os_gerada_id && (
+        <div className="glass-card p-3 border-blue-500/30 cursor-pointer" onClick={() => navigate(`/os/${selected.os_gerada_id}`)}>
+          <span className="text-xs text-blue-400">OS Gerada</span> <ChevronRight size={14} className="inline text-slate-500" />
+        </div>
+      )}
+
+      {/* Comentários */}
+      <div className="glass-card p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-400">Comentários</h3>
+        {selected.comentarios?.length > 0 ? selected.comentarios.map(c => (
+          <div key={c.id} className="bg-slate-800/50 rounded-lg p-3">
+            <p className="text-sm text-slate-200">{c.texto}</p>
+            <p className="text-xs text-slate-500 mt-1">{c.usuario_nome || 'Usuário'} • {new Date(c.created_at).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>
+          </div>
+        )) : <p className="text-xs text-slate-600">Nenhum comentário</p>}
+        {selected.status !== 'encerrada' && (
+          <div className="flex gap-2">
+            <input value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleComment()} className="input-industrial flex-1 px-3 text-sm" placeholder="Adicionar comentário..." data-testid="anomalia-comment-input" />
+            <button onClick={handleComment} className="btn-primary text-sm px-3" data-testid="anomalia-comment-send">Enviar</button>
+          </div>
+        )}
+      </div>
+
+      {/* Histórico */}
+      {selected.historico?.length > 0 && (
+        <div className="glass-card p-4 space-y-2">
+          <h3 className="text-sm font-semibold text-slate-400">Histórico</h3>
+          {selected.historico.map(h => (
+            <div key={h.id} className="flex items-center gap-2 text-xs text-slate-500 py-1 border-b border-slate-800/30">
+              <Clock size={12} /> <span>{h.descricao}</span> <span className="ml-auto">{new Date(h.created_at).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <PhotoUploader entityType="anomaly" entityId={selected.id} label="Fotos do Problema" />
+    </div>
+  );
+
+  // LIST VIEW
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="anomalias-page">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-100">Anomalias</h1>
         <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-anomalia-btn"><Plus size={20} /> Reportar Anomalia</button>
       </div>
-      {loading ? <Loading rows={5} /> : anomalias.length > 0 ? (
+
+      {/* Filters */}
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={() => setFilterStatus('')} className={`px-3 py-1.5 rounded-lg text-xs border ${!filterStatus ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'border-slate-700 text-slate-400'}`}>Todas ({anomalias.length})</button>
+        {Object.entries(ANOMALIA_STATUS).map(([k, v]) => {
+          const count = anomalias.filter(a => a.status === k).length;
+          return count > 0 ? (
+            <button key={k} onClick={() => setFilterStatus(k)} className={`px-3 py-1.5 rounded-lg text-xs border ${filterStatus === k ? `${v.color} border-current` : 'border-slate-700 text-slate-400'}`}>{v.label} ({count})</button>
+          ) : null;
+        })}
+      </div>
+
+      {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
         <div className="space-y-2">
-          {anomalias.map((a) => (
-            <div key={a.id} className="glass-card p-4 space-y-3">
+          {filtered.map((a) => (
+            <div key={a.id} className="glass-card p-4 cursor-pointer hover:border-slate-600 transition-all" onClick={() => fetchDetail(a.id)} data-testid={`anomalia-card-${a.id}`}>
               <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    {a.ativo && (
-                      <div className="mb-1">
-                        {a.ativo.sector && <span className="text-[10px] text-slate-600 uppercase">{a.ativo.sector?.nome} • </span>}
-                        <span className="font-mono text-emerald-400 text-sm">{a.ativo.tag}</span>
-                        <span className="text-slate-400 text-xs ml-1">{a.ativo.nome}</span>
-                      </div>
-                    )}
-                    <PriorityBadge priority={a.severidade} />
-                    <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded">Score: {a.score_prioridade}</span>
-                  </div>
-                  <p className="text-slate-100">{a.descricao}</p>
-                  <p className="text-xs text-slate-500">{new Date(a.created_at).toLocaleDateString('pt-BR')}</p>
+                <div className="flex-1">
+                  {a.ativo && (
+                    <div className="mb-1">
+                      {a.ativo.sector && <span className="text-[10px] text-slate-600 uppercase">{a.ativo.sector?.nome} • </span>}
+                      <span className="font-mono text-emerald-400 text-sm">{a.ativo.tag}</span>
+                      <span className="text-slate-400 text-xs ml-1">{a.ativo.nome}</span>
+                    </div>
+                  )}
+                  <p className="text-slate-100 text-sm line-clamp-1">{a.descricao}</p>
+                  <p className="text-xs text-slate-500 mt-1">{new Date(a.created_at).toLocaleDateString('pt-BR')}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <PriorityBadge priority={a.prioridade_calculada} />
-                  {a.os_gerada_id && <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded">OS Gerada</span>}
+                <div className="flex items-center gap-2 ml-3">
+                  <span className={`text-xs px-2 py-0.5 rounded whitespace-nowrap ${ANOMALIA_STATUS[a.status]?.color || ''}`}>{ANOMALIA_STATUS[a.status]?.label || a.status}</span>
+                  <PriorityBadge priority={a.severidade} />
+                  <ChevronRight className="text-slate-600" />
                 </div>
               </div>
-              <PhotoUploader entityType="anomaly" entityId={a.id} label="Fotos do Problema" />
             </div>
           ))}
         </div>
       ) : <EmptyState icon={AlertTriangle} title="Nenhuma anomalia" description="Reporte anomalias detectadas nos equipamentos." action={() => setShowModal(true)} actionLabel="Reportar" />}
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Reportar Anomalia" size="md">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleCreate} className="space-y-4">
           <FormInput label="Equipamento" required>
-            <Select value={form.ativo_id} onChange={(v) => setForm({...form, ativo_id: v})} options={ativos.map(a => ({value: a.id, label: `${a.tag} - ${a.nome}`}))} placeholder="Selecione..." />
+            <Select value={form.ativo_id} onChange={(v) => setForm({...form, ativo_id: v})} options={ativos.map(a => ({value: a.id, label: `${a.sector?.nome || ''} • ${a.tag} - ${a.nome}`}))} placeholder="Selecione..." />
           </FormInput>
           <FormInput label="Descrição da Anomalia" required>
             <textarea value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4 py-3 min-h-[100px]" placeholder="Descreva o problema encontrado..." required />
@@ -4699,7 +4912,7 @@ const AnomaliasPage = () => {
           </label>
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
             <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
-            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Criando...' : 'Reportar'}</button>
+            <button type="submit" disabled={saving} className="btn-primary" data-testid="submit-anomalia">{saving ? 'Criando...' : 'Reportar'}</button>
           </div>
         </form>
       </Modal>
