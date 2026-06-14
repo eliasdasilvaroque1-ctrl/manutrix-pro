@@ -6,7 +6,7 @@ from enum import Enum
 import uuid
 
 from deps import (
-    db, get_current_user, check_admin_only, check_write_permission,
+    db, get_current_user, check_admin_only, check_write_permission, check_not_gerente,
     audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids
 )
 from models import (
@@ -148,6 +148,7 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
 @router.post("/ordens-servico")
 async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
     check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
+    check_not_gerente(user)
     ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
@@ -175,6 +176,8 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "equipamento_parado": data.equipamento_parado,
         "horas_parada": data.horas_parada,
         "tempo_execucao_minutos": None, "observacoes": None,
+        "criado_por": user.get('id'),
+        "iniciado_por": None, "concluido_por": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None
     }
@@ -222,7 +225,7 @@ async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
     os = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os:
         raise HTTPException(status_code=404, detail="OS não encontrada")
-    await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "em_execucao", "data_inicio": datetime.now(timezone.utc).isoformat(), "updated_at": datetime.now(timezone.utc).isoformat()}})
+    await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "em_execucao", "data_inicio": datetime.now(timezone.utc).isoformat(), "iniciado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}})
     await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os.get('numero')} → em_execucao")
     return {"success": True, "message": "OS iniciada"}
 
@@ -277,9 +280,9 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
     await db.ordens_servico.update_one({"id": os_id}, {"$set": {
         "status": "concluida", "data_conclusao": datetime.now(timezone.utc).isoformat(),
         "tempo_execucao_minutos": tempo, "descricao_servico": descricao,
+        "concluido_por": user.get('id'),
         "observacoes": body.observacoes, "updated_at": datetime.now(timezone.utc).isoformat()
     }})
-    await db.ativos.update_one({"id": os_doc.get('ativo_id')}, {"$set": {"status": "operacional", "updated_at": datetime.now(timezone.utc).isoformat()}})
     await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → concluida (tempo: {tempo}min)")
     return {"success": True, "tempo_execucao_minutos": tempo}
 

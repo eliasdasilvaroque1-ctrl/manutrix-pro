@@ -98,11 +98,21 @@ def check_write_permission(user: Dict, allowed_roles: list = None):
     raise HTTPException(status_code=403, detail="Sem permissão para esta operação")
 
 def check_admin_only(user: Dict):
-    if not is_admin(user):
+    if user.get('role') not in ['admin']:
         raise HTTPException(status_code=403, detail="Apenas administradores podem realizar esta operação")
 
+def check_pcm_or_admin(user: Dict):
+    """PCM: estoque, sobressalentes, templates, relatórios, exportações"""
+    if user.get('role') not in ['admin', 'pcm']:
+        raise HTTPException(status_code=403, detail="Apenas Admin ou PCM podem realizar esta operação")
+
+def check_not_gerente(user: Dict):
+    """Gerente: somente leitura"""
+    if user.get('role') == 'gerente':
+        raise HTTPException(status_code=403, detail="Perfil Gerente possui apenas acesso de leitura")
+
 def can_export(user: Dict) -> bool:
-    return user.get('role') in ['admin', 'pcm', 'gerente']
+    return user.get('role') in ['admin', 'pcm', 'gerente', 'supervisor']
 
 def can_view_dashboard(user: Dict) -> bool:
     return user.get('role') in ['admin', 'pcm', 'gerente', 'supervisor']

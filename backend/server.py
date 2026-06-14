@@ -27,7 +27,7 @@ from deps import (
     JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS,
     SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, supabase_client,
     hash_password, verify_password, create_token, get_current_user,
-    is_admin, check_write_permission, check_admin_only, can_export, can_view_dashboard,
+    is_admin, check_write_permission, check_admin_only, check_pcm_or_admin, check_not_gerente, can_export, can_view_dashboard,
     generate_tag, generate_sku, generate_os_numero,
     audit_log, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids,
     logger
@@ -357,7 +357,7 @@ async def get_estoque_item(item_id: str, user: Dict = Depends(get_current_user))
 
 @api_router.post("/estoque")
 async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'supervisor'])
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
     org_id = user.get('organization_id', '')
     
     # Generate SKU if not provided
@@ -415,7 +415,7 @@ async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_u
 
 @api_router.put("/estoque/{item_id}")
 async def update_estoque(item_id: str, data: EstoqueUpdate, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
     existing = await db.itens_estoque.find_one({"id": item_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Item não encontrado")
@@ -438,7 +438,7 @@ async def update_estoque(item_id: str, data: EstoqueUpdate, user: Dict = Depends
 
 @api_router.delete("/estoque/{item_id}")
 async def delete_estoque(item_id: str, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_write_permission(user, ['admin', 'pcm'])
     existing = await db.itens_estoque.find_one({"id": item_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Item não encontrado")
@@ -864,6 +864,8 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         "ponto_lubrificacao": data.ponto_lubrificacao,
         "metodo_aplicacao": data.metodo_aplicacao,
         "observacoes_lubrificacao": data.observacoes_lubrificacao,
+        "criado_por": user.get('id'),
+        "concluido_por": user.get('id') if has_responses else None,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None
@@ -935,6 +937,7 @@ async def iniciar_inspecao(inspecao_id: str, user: Dict = Depends(get_current_us
         {"$set": {
             "status": "em_andamento",
             "data_inicio": datetime.now(timezone.utc).isoformat(),
+            "iniciado_por": user.get('id'),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
@@ -1017,29 +1020,20 @@ async def concluir_inspecao(
         update_data['os_gerada_id'] = os_id
         
         # Update asset status
-        await db.ativos.update_one(
-            {"id": insp.get('ativo_id')},
-            {"$set": {"status": "manutencao", "updated_at": datetime.now(timezone.utc).isoformat()}}
-        )
-        
-        # Notify
+        # Notify admins about non-conformity
         admins = await db.users.find(
             {"organization_id": org_id, "role": {"$in": ["admin", "supervisor"]}, "deleted_at": None},
             {"_id": 0, "id": 1}
         ).to_list(10)
         for admin in admins:
             await criar_notificacao(
-                admin['id'], org_id, NotificacaoTipo.FALHA_DETECTADA,
+                admin['id'], org_id, NotificacaoTipo.ANOMALIA,
                 f"Falha detectada: {ativo.get('tag', '')}",
                 f"Inspeção não conforme - OS #{numero} gerada",
                 f"/os/{os_id}"
             )
-    else:
-        # Update asset status to operational
-        await db.ativos.update_one(
-            {"id": insp.get('ativo_id')},
-            {"$set": {"status": "operacional", "updated_at": datetime.now(timezone.utc).isoformat()}}
-        )
+    
+    update_data['concluido_por'] = user.get('id')
     
     await db.inspecoes.update_one({"id": inspecao_id}, {"$set": update_data})
     
