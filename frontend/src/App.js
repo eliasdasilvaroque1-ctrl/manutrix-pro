@@ -95,10 +95,6 @@ const Select = ({ value, onChange, options, placeholder, className = "" }) => (
 // Status Badge
 const StatusBadge = ({ status, size = 'md' }) => {
   const config = {
-    operacional: { class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', label: 'Operacional', icon: CheckCircle },
-    parado: { class: 'bg-red-500/10 text-red-400 border-red-500/30', label: 'Parado', icon: XCircle },
-    manutencao: { class: 'bg-amber-500/10 text-amber-400 border-amber-500/30', label: 'Manutenção', icon: Wrench },
-    desativado: { class: 'bg-slate-500/10 text-slate-400 border-slate-500/30', label: 'Desativado', icon: XCircle },
     aberta: { class: 'bg-blue-500/10 text-blue-400 border-blue-500/30', label: 'Aberta', icon: Clock },
     planejada: { class: 'bg-purple-500/10 text-purple-400 border-purple-500/30', label: 'Planejada', icon: Calendar },
     em_execucao: { class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', label: 'Em Execução', icon: Play },
@@ -2126,9 +2122,9 @@ const DashboardPage = () => {
       
       {/* Row 3 — New Dashboard Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* OS por Setor */}
+        {/* OS por Área */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5" data-testid="chart-os-setor">
-          <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Layers size={16} className="text-emerald-400" /> OS por Setor</h3>
+          <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Layers size={16} className="text-emerald-400" /> OS por Área</h3>
           <div className="space-y-2">
             {osPorSetor.length === 0 ? <p className="text-xs text-slate-600 text-center py-4">Sem dados</p> :
             osPorSetor.map((s, i) => (
@@ -4566,7 +4562,20 @@ const SobressalentesPage = () => {
     finally { setSaving(false); }
   };
 
-  const handleExport = (fmt) => { window.open(`${API}/export/sobressalentes?format=${fmt}&token=${sessionStorage.getItem('manutrix_token')}`, '_blank'); };
+  const handleExport = async (fmt) => {
+    try {
+      const res = await api.get(`/export/sobressalentes?format=${fmt}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `sobressalentes_manutrix.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Exportado com sucesso!');
+    } catch { toast.error('Erro ao exportar'); }
+  };
 
   const handleDelete = async () => {
     try {
@@ -5439,134 +5448,6 @@ const ProtectedRoute = ({ children }) => {
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Cog size={48} className="text-emerald-400 animate-spin" /></div>;
   if (!user) return <Navigate to="/login" replace />;
   return children;
-};
-
-// ============== PLANTAS PAGE ==============
-const PlantasPage = () => {
-  const [plants, setPlants] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editItem, setEditItem] = useState(null);
-  const [deleteItem, setDeleteItem] = useState(null);
-  const [form, setForm] = useState({ codigo: '', nome: '', descricao: '' });
-  const [saving, setSaving] = useState(false);
-  const { user } = useAuth();
-
-  const fetchPlants = async () => {
-    try {
-      const res = await api.get('/plants');
-      setPlants(res.data);
-    } catch { toast.error('Erro ao carregar plantas'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchPlants(); }, []);
-
-  const openModal = (item = null) => {
-    setEditItem(item);
-    setForm(item ? { codigo: item.codigo || '', nome: item.nome || '', descricao: item.descricao || '' } : { codigo: '', nome: '', descricao: '' });
-    setShowModal(true);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.codigo || !form.nome) { toast.error('Código e nome são obrigatórios'); return; }
-    setSaving(true);
-    try {
-      if (editItem) {
-        await api.put(`/plants/${editItem.id}`, { nome: form.nome, descricao: form.descricao });
-        toast.success('Planta atualizada!');
-      } else {
-        await api.post('/plants', form);
-        toast.success('Planta criada!');
-      }
-      setShowModal(false);
-      fetchPlants();
-    } catch (err) { toast.error(normalizeError(err)); }
-    finally { setSaving(false); }
-  };
-
-  const handleDelete = async () => {
-    try {
-      await api.delete(`/plants/${deleteItem.id}`);
-      toast.success('Planta excluída!');
-      setDeleteItem(null);
-      fetchPlants();
-    } catch (err) { toast.error(normalizeError(err)); }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100" data-testid="plantas-title">Plantas</h1>
-          <p className="text-sm text-slate-500">Gerencie as plantas industriais da organização</p>
-        </div>
-        {user?.role === 'admin' && (
-          <button onClick={() => openModal()} className="btn-primary flex items-center gap-2" data-testid="add-plant-btn">
-            <Plus size={20} /> Nova Planta
-          </button>
-        )}
-      </div>
-
-      {loading ? <Loading rows={3} /> : plants.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {plants.map(p => (
-            <div key={p.id} className="glass-card p-5 hover:border-emerald-500/30 transition-all group" data-testid={`plant-card-${p.codigo}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-emerald-500/10">
-                    <Building size={20} className="text-emerald-400" />
-                  </div>
-                  <div>
-                    <span className="font-mono text-emerald-400 text-sm">{p.codigo}</span>
-                    <p className="text-slate-100 font-medium">{p.nome}</p>
-                  </div>
-                </div>
-                {user?.role === 'admin' && (
-                  <div className="hidden group-hover:flex items-center gap-1">
-                    <button onClick={() => openModal(p)} className="p-2 hover:bg-slate-700 rounded-lg"><Edit size={16} className="text-slate-400" /></button>
-                    <button onClick={() => setDeleteItem(p)} className="p-2 hover:bg-red-500/10 rounded-lg"><Trash2 size={16} className="text-red-400" /></button>
-                  </div>
-                )}
-              </div>
-              {p.descricao && <p className="text-xs text-slate-500 mb-3">{p.descricao}</p>}
-              <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <Layers size={14} /> <span>{p.sector_count || 0} setores</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <Box size={14} /> <span>{p.asset_count || 0} ativos</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState icon={Building} title="Nenhuma planta cadastrada" description="Crie a primeira planta da organização" action={() => openModal()} actionLabel="Nova Planta" />
-      )}
-
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? "Editar Planta" : "Nova Planta"} size="sm">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <FormInput label="Código" required>
-            <input type="text" value={form.codigo} onChange={e => setForm({...form, codigo: e.target.value.toUpperCase()})} placeholder="Ex: PP, FAB2" className="input-industrial w-full px-4 font-mono" required disabled={!!editItem} data-testid="plant-codigo-input" />
-          </FormInput>
-          <FormInput label="Nome" required>
-            <input type="text" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} placeholder="Ex: Planta Principal" className="input-industrial w-full px-4" required data-testid="plant-nome-input" />
-          </FormInput>
-          <FormInput label="Descrição">
-            <textarea value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} placeholder="Endereço ou descrição..." className="input-industrial w-full px-4 min-h-[80px]" data-testid="plant-desc-input" />
-          </FormInput>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
-            <button type="submit" disabled={saving} className="btn-primary" data-testid="plant-save-btn">{saving ? 'Salvando...' : 'Salvar'}</button>
-          </div>
-        </form>
-      </Modal>
-
-      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Planta" message={`Excluir a planta "${deleteItem?.nome}"? Todos os setores precisam ser removidos antes.`} confirmText="Excluir" danger />
-    </div>
-  );
 };
 
 // ============== SETORES PAGE ==============

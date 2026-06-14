@@ -1638,7 +1638,7 @@ async def export_ativos(format: str = "excel", user: Dict = Depends(get_current_
         elements = [Paragraph("MANUTRIX - Relatório de Ativos", styles['Title']), Spacer(1, 12)]
         data = [["Área", "TAG", "Nome", "Tipo", "Fabricante", "Modelo"]]
         for a in ativos:
-            data.append([sector_map.get(a.get('sector_id',''),''), a.get('tag',''), a.get('nome','')[:30], a.get('tipo_equipamento','')[:20], a.get('fabricante','')[:20], a.get('modelo','')[:20]])
+            data.append([sector_map.get(a.get('sector_id',''),''), a.get('tag','') or '', (a.get('nome','') or '')[:30], (a.get('tipo_equipamento','') or '')[:20], (a.get('fabricante','') or '')[:20], (a.get('modelo','') or '')[:20]])
         t = Table(data)
         t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#10b981')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
         elements.append(t)
@@ -1710,10 +1710,10 @@ async def export_estoque(format: str = "excel", user: Dict = Depends(get_current
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Estoque"
-        headers = ["SKU", "Nome", "Categoria", "Quantidade", "Unidade", "Mínimo", "Máximo", "Custo Unit.", "Valor Total", "Fornecedor", "Almoxarifado"]
+        headers = ["Código", "Nome", "Categoria", "Quantidade", "Unidade", "Mínimo", "Custo Unit.", "Almoxarifado"]
         ws.append(headers)
         for i in items:
-            ws.append([i.get('sku',''), i.get('nome',''), i.get('categoria',''), i.get('quantidade',0), i.get('unidade',''), i.get('estoque_minimo',0), i.get('estoque_maximo',''), i.get('custo_unitario',0), i.get('valor_total',0), i.get('fornecedor',''), i.get('almoxarifado','')])
+            ws.append([i.get('sku',''), i.get('nome',''), i.get('categoria',''), i.get('quantidade',0), i.get('unidade',''), i.get('estoque_minimo',0), i.get('custo_unitario',0), i.get('almoxarifado','')])
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
@@ -1728,9 +1728,9 @@ async def export_estoque(format: str = "excel", user: Dict = Depends(get_current
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
         elements = [Paragraph("MANUTRIX - Relatório de Estoque", styles['Title']), Spacer(1, 12)]
-        data = [["SKU", "Nome", "Categoria", "Qtd", "Un", "Mín", "Custo Unit.", "Valor Total"]]
+        data = [["Código", "Nome", "Categoria", "Qtd", "Un", "Mín", "Custo Unit."]]
         for i in items:
-            data.append([i.get('sku',''), i.get('nome','')[:25], i.get('categoria',''), i.get('quantidade',0), i.get('unidade',''), i.get('estoque_minimo',0), f"R${i.get('custo_unitario',0):.2f}", f"R${i.get('valor_total',0):.2f}"])
+            data.append([i.get('sku',''), (i.get('nome','') or '')[:25], i.get('categoria',''), i.get('quantidade',0), i.get('unidade',''), i.get('estoque_minimo',0), f"R${i.get('custo_unitario',0):.2f}"])
         t = Table(data)
         t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#8b5cf6')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
         elements.append(t)
@@ -2264,7 +2264,7 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Sobressalentes"
-        ws.append(["TAG", "Descrição", "Modelo", "Fabricante", "Série", "Status", "Localização", "Custo"])
+        ws.append(["Código", "Descrição", "Modelo", "Fabricante", "Série", "Status", "Localização", "Custo"])
         for s in spares:
             ws.append([s.get('tag',''), s.get('descricao',''), s.get('modelo',''), s.get('fabricante',''), s.get('numero_serie',''), s.get('status',''), s.get('localizacao',''), s.get('custo','')])
         buf = io.BytesIO()

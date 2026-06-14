@@ -1,0 +1,62 @@
+{
+  "summary": "Iteration 26 — Final Production Audit. Backend pytest 13/13 PASS (exports + CRUD + workflows). All export endpoints validated: Ativos XLSX (headers=[Área,TAG,Nome,Tipo,Fabricante,Modelo,Número de Série,Observações]), Ativos PDF (valid %PDF- header, ~3KB), OS XLSX (headers include Número/Ativo TAG/Ativo/Tipo/Prioridade/Status/Título/etc), OS PDF, Estoque XLSX (Código NOT SKU), Estoque PDF, Inspecoes XLSX, Sobressalentes XLSX (Código NOT TAG). All forbidden legacy headers (Planta, Criticidade, Status do Ativo, Centro de Custo, SKU) confirmed ABSENT from export headers. Frontend visual audit of /dashboard, /ativos, /os, /inspecoes, /anomalias, /estoque, /sobressalentes — main content of all pages is CLEAN of forbidden legacy LABELS (Planta, Criticidade, Status do Ativo, Centro de Custo). One finding: /estoque list shows literal 'SKU-' prefix in some item CODE VALUES (e.g. 'SKU-NGGCA5', 'SKU-XNWRGM', 'SKU-BH67JS') — this is DATA in the `sku`/codigo field of seed/legacy items, NOT a UI label. The UI label is correctly 'Código' (search placeholder shows 'Buscar por nome ou código…'). OS Kanban renders columns Abertas/Planejadas/Em Execução/Pausadas/Concluidas correctly. Sobressalentes shows SP-{code} pattern, no SKU label. Sidebar uses 'Áreas' (not 'Setores'), 'Estoque', 'Sobressalentes', 'Ronda'. Dashboard shows 'OS por Área' (renamed from Setor) + 'OS por Disciplina'. Full OS lifecycle (POST create → POST /iniciar → POST /concluir with servicos_realizados+tempo_execucao_minutos) validated end-to-end via API. Anomalia full lifecycle aberta→em_analise→corrigida→encerrada validated. Anomaly historico array populated correctly.",
+  "pass_fail_matrix": {
+    "BACKEND GET /api/export/ativos?format=excel headers correct": "PASS",
+    "BACKEND GET /api/export/ativos?format=pdf valid %PDF- header": "PASS",
+    "BACKEND GET /api/export/ordens-servico?format=excel": "PASS",
+    "BACKEND GET /api/export/ordens-servico?format=pdf": "PASS",
+    "BACKEND GET /api/export/estoque?format=excel (Código, NOT SKU)": "PASS",
+    "BACKEND GET /api/export/estoque?format=pdf": "PASS",
+    "BACKEND GET /api/export/inspecoes?format=excel": "PASS",
+    "BACKEND GET /api/export/sobressalentes?format=excel (Código, NOT TAG)": "PASS",
+    "BACKEND Ativo CRUD (create→search→update→delete)": "PASS",
+    "BACKEND OS lifecycle (create preventiva → /iniciar → /concluir)": "PASS",
+    "BACKEND Anomalia full lifecycle (aberta→em_analise→corrigida→encerrada + historico)": "PASS",
+    "BACKEND GET /api/estoque list": "PASS",
+    "BACKEND GET /api/sobressalentes list": "PASS",
+    "FRONTEND Login (admin@manutrix.com/admin123)": "PASS",
+    "FRONTEND Dashboard renders (OS por Área, OS por Disciplina, Performance MTBF/MTTR)": "PASS",
+    "FRONTEND /ativos no forbidden labels in main": "PASS",
+    "FRONTEND /os Kanban renders (Abertas/Planejadas/Em Execução/Pausadas/Concluidas)": "PASS",
+    "FRONTEND /inspecoes no forbidden labels": "PASS",
+    "FRONTEND /anomalias no forbidden labels": "PASS",
+    "FRONTEND /estoque uses 'Código' label (search placeholder, modal)": "PASS — but legacy item code VALUES still contain literal 'SKU-' prefix (data, not label)",
+    "FRONTEND /sobressalentes no SKU label, uses SP-{code} format": "PASS",
+    "FRONTEND Sidebar uses Áreas/Estoque/Sobressalentes/Ronda (no Setores/Plantas)": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/estoque list", "issues": ["Several legacy seed/test items have literal 'SKU-' prefix embedded in their `sku`/código VALUE (e.g. 'SKU-NGGCA5'). UI label is correct ('Código') but the displayed code values contain 'SKU' substring. This is a data-cleanup concern, not a label bug. Consider migration script to strip 'SKU-' prefix from existing item codes, or leave as-is since the label is correct."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration26_exports.py",
+    "/app/test_reports/pytest/pytest_iteration26.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Run one-time migration to strip 'SKU-' prefix from existing itens_estoque.sku values (e.g. 'SKU-NGGCA5' → 'NGGCA5') so the displayed Código is clean. Backend label/header already correct.",
+    "Consider adding label/text-only audit test to CI: scan rendered HTML for forbidden terms (Planta/Criticidade/Status do Ativo/Centro de Custo) excluding data attributes."
+  ],
+  "critical_code_review_comments": [
+    "Export endpoints (server.py L1598-2273) all return correct Content-Type and proper StreamingResponse. Estoque headers (L1713) and Sobressalentes headers (L2267) confirmed to use 'Código' instead of legacy SKU/TAG.",
+    "Backend Sobressalentes export (L2252-2273) only supports format='excel' — if a user passes format='pdf' the endpoint returns nothing (implicit None). Minor: consider returning 400 for unsupported format or implementing PDF.",
+    "Export of estoque uses `i.get('sku','')` to populate the 'Código' column (L1716,1733) — header rename is cosmetic only, the underlying field is still `sku`. This is fine for backward compatibility but worth documenting.",
+    "OS routes correctly modularized in /app/backend/routes/work_orders.py. /concluir endpoint (L259) enforces servicos_realizados+tempo_execucao_minutos+attachments-for-corretiva — matches the UI modal contract.",
+    "PowerBI endpoint (L2289) still references legacy fields (criticidade, centro_custo, status) — these are intentional for BI consumers, not UI."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration26_exports.py",
+    "/app/test_reports/pytest/pytest_iteration26.xml",
+    "/app/test_reports/iteration_26.json"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (7/7 routes audited; no forbidden labels in main content)"},
+  "test_credentials": "admin@manutrix.com / admin123 — working",
+  "seed_data_creation": "Tests create TEST_ITER26_AV99 ativo (deleted in same test), TEST_iter26 OS (preventiva, concluida — left in DB), TEST_iter26 anomalia (encerrada — left in DB as terminal state). No production data affected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All export endpoints validated with file-content checks (openpyxl for xlsx, %PDF- magic for PDF). Test file at /app/backend/tests/test_iteration26_exports.py — 13/13 pass in ~4s. Visual audit confirms no forbidden labels in /dashboard, /ativos, /os, /inspecoes, /anomalias, /estoque, /sobressalentes. The only residual 'SKU' visibility is in legacy item code VALUES in /estoque list — not a label, just data. Sobressalentes export does NOT implement PDF format (Excel only). If main agent wants full PDF parity, add PDF branch to /api/export/sobressalentes (server.py L2252). Screenshots at /app/.screenshots/iter26_*.png. The Ronda flow was not tested via UI in this iteration — backend POST /inspecoes with Ronda checklist mode is covered by previous iteration tests (iter21). All previously-failing items from iter25 (template-linked inspection modal) were NOT re-tested in iter26 as the focus was production audit / exports.",
+  "rca of the issue": "N/A — no blocking issues found. The 'SKU-' prefix in /estoque code values is legacy data (seed/test items were created with the prefix as part of the auto-generated SKU) and is purely cosmetic. UI labels and export headers are correctly migrated to 'Código'."
+}
