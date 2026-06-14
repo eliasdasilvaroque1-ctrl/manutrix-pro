@@ -13,7 +13,7 @@ import {
   Zap, Target, Layers, Filter, MoreVertical, Eye, Edit, Trash2, Save,
   Phone, Mail, Building, Hash, Thermometer, Volume2, Droplet, Cog,
   DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
-  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3
+  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
 import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData } from "@/lib/offlineQueue";
@@ -787,7 +787,7 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
             <Tag size={16} /> Identificação
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormInput label="SKU">
+            <FormInput label="Código">
               <input
                 type="text"
                 value={form.sku}
@@ -1006,7 +1006,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
     } else {
       setForm({
         ativo_id: preSelectedAtivoId || '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
-        titulo: '', descricao: '', responsavel_id: '',
+        titulo: '', descricao: '', responsavel_id: '', equipe: [],
         data_planejada: '', custo_pecas: 0, custo_mao_obra: 0,
         causa_falha: '', equipamento_parado: false, horas_parada: null
       });
@@ -1186,6 +1186,29 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                 options={tecnicos.map(t => ({ value: t.id, label: t.nome }))}
                 placeholder="Não atribuído"
               />
+            </FormInput>
+            <FormInput label="Executantes">
+              <div className="space-y-1">
+                <div className="flex flex-wrap gap-1 min-h-[40px]">
+                  {(form.equipe || []).map(uid => {
+                    const t = tecnicos.find(x => x.id === uid);
+                    return t ? (
+                      <span key={uid} className="bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded flex items-center gap-1">
+                        {t.nome} <button type="button" onClick={() => setForm({...form, equipe: form.equipe.filter(id => id !== uid)})} className="hover:text-red-400"><X size={12} /></button>
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+                <select onChange={e => {
+                  if (e.target.value && !(form.equipe || []).includes(e.target.value)) {
+                    setForm({...form, equipe: [...(form.equipe || []), e.target.value]});
+                  }
+                  e.target.value = '';
+                }} className="input-industrial w-full px-3 text-sm">
+                  <option value="">Adicionar executante...</option>
+                  {tecnicos.filter(t => !(form.equipe || []).includes(t.id)).map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+              </div>
             </FormInput>
             <FormInput label="Data Planejada">
               <input
@@ -1438,6 +1461,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       label: 'ADMIN',
       items: [
         { icon: Users, label: 'Usuários', path: '/admin/usuarios' },
+        { icon: ClipboardCheck, label: 'Templates Inspeção', path: '/admin/templates' },
       ]
     }] : [])
   ];
@@ -2324,6 +2348,10 @@ const AtivoDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
+  const [showBomModal, setShowBomModal] = useState(false);
+  const [bomEdit, setBomEdit] = useState(null);
+  const [bomForm, setBomForm] = useState({ nome: '', codigo: '', quantidade: 1, unidade: 'UN', observacoes: '' });
+  const [bomSearch, setBomSearch] = useState(undefined);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -2466,21 +2494,76 @@ const AtivoDetailPage = () => {
             {ativo.observacoes && <div className="pt-2 border-t border-slate-800"><p className="text-xs text-slate-500 mb-1">Observações</p><p className="text-sm text-slate-300">{ativo.observacoes}</p></div>}
           </div>
 
-          {/* Materiais */}
+          {/* Lista Técnica (BOM) */}
           <div className="glass-card p-4" data-testid="ativo-materiais">
-            <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2 mb-3"><Package size={16} /> Materiais do Equipamento</h3>
-            {ativo.materiais?.length > 0 ? (
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2"><Package size={16} /> Lista Técnica (BOM)</h3>
+              {user?.role === 'admin' && <button onClick={() => setShowBomModal(true)} className="text-xs btn-primary flex items-center gap-1" data-testid="add-bom-btn"><Plus size={14} /> Adicionar</button>}
+            </div>
+            {bomSearch !== undefined && (
+              <input value={bomSearch} onChange={e => setBomSearch(e.target.value)} placeholder="Buscar por código ou descrição..." className="input-industrial w-full px-3 text-sm mb-3" data-testid="bom-search" />
+            )}
+            {(ativo.materiais?.filter(m => {
+              if (!bomSearch) return true;
+              const s = bomSearch.toLowerCase();
+              return m.codigo?.toLowerCase().includes(s) || m.nome?.toLowerCase().includes(s);
+            }) || []).length > 0 ? (
               <div className="space-y-1">
-                {ativo.materiais.map((m, idx) => (
-                  <div key={m.id || idx} className="flex items-center gap-3 text-sm py-1.5 border-b border-slate-800/50">
-                    {m.codigo && <span className="font-mono text-xs text-slate-500 w-20">{m.codigo}</span>}
+                {(ativo.materiais || []).filter(m => {
+                  if (!bomSearch) return true;
+                  const s = bomSearch.toLowerCase();
+                  return m.codigo?.toLowerCase().includes(s) || m.nome?.toLowerCase().includes(s);
+                }).map((m, idx) => (
+                  <div key={m.id || idx} className="flex items-center gap-3 text-sm py-2 border-b border-slate-800/50 group">
+                    <span className="font-mono text-xs text-slate-500 w-24">{m.codigo || '-'}</span>
                     <span className="text-slate-300 flex-1">{m.nome}</span>
                     <span className="text-slate-500">{m.quantidade} {m.unidade}</span>
+                    {user?.role === 'admin' && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                        <button onClick={() => { setBomEdit(m); setBomForm({ nome: m.nome, codigo: m.codigo || '', quantidade: m.quantidade, unidade: m.unidade || 'UN', observacoes: m.observacoes || '' }); setShowBomModal(true); }} className="p-1 hover:bg-slate-700 rounded"><Edit size={12} className="text-slate-400" /></button>
+                        <button onClick={async () => { await api.delete(`/ativos/${ativo.id}/materiais/${m.id}`); toast.success('Removido'); fetchAtivo(); }} className="p-1 hover:bg-red-500/10 rounded"><Trash2 size={12} className="text-red-400" /></button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-            ) : <p className="text-xs text-slate-600 text-center py-3">Nenhum material vinculado</p>}
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-xs text-slate-600">{bomSearch ? 'Nenhum material encontrado' : 'Nenhum material na lista técnica'}</p>
+                {!bomSearch && ativo.materiais?.length === 0 && <button onClick={() => setBomSearch('')} className="text-xs text-emerald-400 mt-1">Habilitar busca</button>}
+              </div>
+            )}
           </div>
+
+          {/* Modal BOM */}
+          <Modal isOpen={showBomModal} onClose={() => { setShowBomModal(false); setBomEdit(null); setBomForm({ nome: '', codigo: '', quantidade: 1, unidade: 'UN', observacoes: '' }); }} title={bomEdit ? 'Editar Material' : 'Adicionar Material'} size="sm">
+            <div className="space-y-3">
+              <FormInput label="Código"><input value={bomForm.codigo} onChange={e => setBomForm({...bomForm, codigo: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: ROL-22218" data-testid="bom-codigo" /></FormInput>
+              <FormInput label="Descrição" required><input value={bomForm.nome} onChange={e => setBomForm({...bomForm, nome: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Rolamento 22218" data-testid="bom-nome" /></FormInput>
+              <div className="grid grid-cols-2 gap-3">
+                <FormInput label="Quantidade"><input type="number" min="1" value={bomForm.quantidade} onChange={e => setBomForm({...bomForm, quantidade: parseFloat(e.target.value) || 1})} className="input-industrial w-full px-4" /></FormInput>
+                <FormInput label="Unidade"><input value={bomForm.unidade} onChange={e => setBomForm({...bomForm, unidade: e.target.value})} className="input-industrial w-full px-4" placeholder="UN" /></FormInput>
+              </div>
+              <div className="flex gap-3 justify-end pt-3 border-t border-slate-800">
+                <button onClick={() => { setShowBomModal(false); setBomEdit(null); }} className="btn-secondary">Cancelar</button>
+                <button onClick={async () => {
+                  if (!bomForm.nome) { toast.error('Preencha a descrição'); return; }
+                  try {
+                    if (bomEdit) {
+                      await api.put(`/ativos/${ativo.id}/materiais/${bomEdit.id}`, bomForm);
+                      toast.success('Material atualizado!');
+                    } else {
+                      await api.post(`/ativos/${ativo.id}/materiais`, bomForm);
+                      toast.success('Material adicionado!');
+                    }
+                    setShowBomModal(false); setBomEdit(null);
+                    setBomForm({ nome: '', codigo: '', quantidade: 1, unidade: 'UN', observacoes: '' });
+                    fetchAtivo();
+                  } catch (error) { toast.error(normalizeError(error)); }
+                }} className="btn-primary" data-testid="save-bom">Salvar</button>
+              </div>
+            </div>
+          </Modal>
 
           {/* Fotos */}
           <div className="glass-card p-4">
@@ -3162,7 +3245,7 @@ const EstoquePage = () => {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome ou SKU..."
+            placeholder="Buscar por nome ou código..."
             className="input-industrial w-full pl-10 pr-4"
           />
         </div>
@@ -3415,7 +3498,15 @@ const InspecaoDetailPage = () => {
   };
   
   const handleConcluir = async () => {
-    const missing = checklist.filter(item => item.obrigatorio && item.resultado === undefined);
+    const isItemFilled = (item) => {
+      const t = item.tipo || 'boolean';
+      if (t === 'boolean') return item.conforme !== null && item.conforme !== undefined;
+      if (t === 'numero' || t === 'numerico') return item.resultado !== null && item.resultado !== undefined && item.resultado !== '';
+      if (t === 'texto' || t === 'observacao') return item.resultado !== null && item.resultado !== undefined && item.resultado !== '';
+      if (t === 'opcao' || t === 'temperatura' || t === 'vibracao') return item.resultado !== null && item.resultado !== undefined && item.resultado !== '';
+      return item.resultado !== undefined;
+    };
+    const missing = checklist.filter(item => item.obrigatorio && !isItemFilled(item));
     if (missing.length > 0) {
       toast.error(`Preencha todos os itens obrigatórios (${missing.length} faltando)`);
       return;
@@ -3511,23 +3602,31 @@ const InspecaoDetailPage = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-sm text-slate-400">Checklist</h3>
             <span className="text-xs text-slate-500">
-              {checklist.filter(i => i.resultado !== undefined).length}/{checklist.length} respondidos
+              {checklist.filter(i => {
+                const t = i.tipo || 'boolean';
+                return t === 'boolean' ? (i.conforme !== null && i.conforme !== undefined) : (i.resultado !== null && i.resultado !== undefined && i.resultado !== '');
+              }).length}/{checklist.length} respondidos
             </span>
           </div>
           
           {checklist.map((item, idx) => {
             const itemTipo = item.tipo || 'boolean';
+            const isNumeric = itemTipo === 'numero' || itemTipo === 'numerico' || itemTipo === 'temperatura' || itemTipo === 'vibracao';
+            const isOption = itemTipo === 'opcao';
+            const isText = itemTipo === 'texto' || itemTipo === 'observacao';
+            const isBool = itemTipo === 'boolean';
+            const isFilled = isBool ? (item.conforme !== null && item.conforme !== undefined) : (item.resultado !== null && item.resultado !== undefined && item.resultado !== '');
             return (
-            <div key={item.id} className={`glass-card p-4 ${item.resultado !== undefined ? 'border-emerald-500/30' : ''}`}>
+            <div key={item.id} className={`glass-card p-4 ${isFilled ? 'border-emerald-500/30' : ''}`}>
               <div className="flex items-start gap-3">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                  item.resultado !== undefined ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'
+                  isFilled ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'
                 }`}>{idx + 1}</span>
                 <div className="flex-1">
-                  <p className="text-slate-200">{item.descricao}</p>
-                  {item.obrigatorio && <span className="text-xs text-red-400">* Obrigatório</span>}
+                  <p className="text-sm text-slate-200">{item.descricao} {item.obrigatorio && <span className="text-red-400">*</span>}</p>
+                  {item.unidade && <span className="text-xs text-slate-500">{item.unidade}</span>}
                   
-                  {!isFinished && itemTipo === 'boolean' && (
+                  {!isFinished && isBool && (
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => {
@@ -3535,7 +3634,7 @@ const InspecaoDetailPage = () => {
                           handleItemChange(item.id, 'conforme', true);
                         }}
                         className={`flex-1 py-3 rounded-lg border transition-all ${
-                          item.resultado === true ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'border-slate-700 text-slate-400'
+                          item.conforme === true ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'border-slate-700 text-slate-400'
                         }`}
                       >
                         <CheckCircle size={20} className="mx-auto mb-1" />
@@ -3547,7 +3646,7 @@ const InspecaoDetailPage = () => {
                           handleItemChange(item.id, 'conforme', false);
                         }}
                         className={`flex-1 py-3 rounded-lg border transition-all ${
-                          item.resultado === false ? 'bg-red-500/20 border-red-500 text-red-400' : 'border-slate-700 text-slate-400'
+                          item.conforme === false ? 'bg-red-500/20 border-red-500 text-red-400' : 'border-slate-700 text-slate-400'
                         }`}
                       >
                         <XCircle size={20} className="mx-auto mb-1" />
@@ -3556,52 +3655,69 @@ const InspecaoDetailPage = () => {
                     </div>
                   )}
                   
-                  {!isFinished && itemTipo === 'numero' && (
+                  {!isFinished && isNumeric && (
                     <div className="mt-3 flex gap-2">
                       <input
                         type="number"
                         step="0.1"
-                        value={item.resultado || ''}
+                        value={item.resultado ?? ''}
                         onChange={(e) => {
-                          const val = parseFloat(e.target.value);
+                          const val = e.target.value === '' ? '' : parseFloat(e.target.value);
                           handleItemChange(item.id, 'resultado', val);
-                          if (item.tolerancia_min !== undefined && item.tolerancia_max !== undefined) {
+                          if (item.tolerancia_min !== undefined && item.tolerancia_max !== undefined && val !== '') {
                             handleItemChange(item.id, 'conforme', val >= item.tolerancia_min && val <= item.tolerancia_max);
                           }
                         }}
-                        placeholder={item.valor_esperado ? `Esperado: ${item.valor_esperado}` : 'Valor'}
+                        placeholder={item.tolerancia_min !== undefined ? `${item.tolerancia_min} - ${item.tolerancia_max}` : 'Valor'}
                         className="input-industrial flex-1 px-4"
                       />
                       {item.unidade && <span className="input-industrial px-4 flex items-center text-slate-400">{item.unidade}</span>}
                     </div>
                   )}
                   
-                  {!isFinished && itemTipo === 'texto' && (
+                  {!isFinished && isOption && (
+                    <div className="flex gap-2 mt-3 flex-wrap">
+                      {['Bom', 'Regular', 'Ruim', 'Crítico'].map(opt => (
+                        <button key={opt} onClick={() => {
+                          handleItemChange(item.id, 'resultado', opt);
+                          handleItemChange(item.id, 'conforme', opt === 'Bom' || opt === 'Regular');
+                        }} className={`px-4 py-2 rounded-lg border text-sm transition-all ${
+                          item.resultado === opt
+                            ? (opt === 'Bom' || opt === 'Regular' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-red-500/20 border-red-500 text-red-400')
+                            : 'border-slate-700 text-slate-400 hover:border-slate-500'
+                        }`}>{opt}</button>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {!isFinished && isText && (
                     <textarea
                       value={item.resultado || ''}
                       onChange={(e) => handleItemChange(item.id, 'resultado', e.target.value)}
                       className="input-industrial w-full px-4 py-3 mt-3"
+                      placeholder="Digite aqui..."
                       rows={2}
                     />
                   )}
                   
                   {isFinished && (
                     <div className="mt-2">
-                      {itemTipo === 'boolean' && (
-                        <StatusBadge status={item.conforme ? 'conforme' : 'nao_conforme'} size="sm" />
-                      )}
-                      {itemTipo === 'numero' && item.resultado !== undefined && (
+                      {isBool && <StatusBadge status={item.conforme ? 'conforme' : 'nao_conforme'} size="sm" />}
+                      {isNumeric && item.resultado !== undefined && (
                         <span className={`text-sm ${item.conforme ? 'text-emerald-400' : 'text-red-400'}`}>
                           {item.resultado} {item.unidade}
                         </span>
                       )}
-                      {itemTipo === 'texto' && item.resultado && (
+                      {isOption && item.resultado && (
+                        <span className={`text-sm px-2 py-1 rounded ${item.conforme ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>{item.resultado}</span>
+                      )}
+                      {isText && item.resultado && (
                         <p className="text-sm text-slate-300">{item.resultado}</p>
                       )}
                     </div>
                   )}
                   
-                  {!isFinished && item.resultado === false && itemTipo === 'boolean' && (
+                  {!isFinished && item.conforme === false && isBool && (
                     <textarea
                       value={item.observacao || ''}
                       onChange={(e) => handleItemChange(item.id, 'observacao', e.target.value)}
@@ -4713,6 +4829,214 @@ const AssistentePage = () => {
   );
 };
 
+
+// ============== ADMIN TEMPLATES INSPEÇÃO ==============
+
+const FIELD_TYPES = [
+  { value: 'boolean', label: 'Conforme / Não Conforme' },
+  { value: 'numerico', label: 'Número' },
+  { value: 'temperatura', label: 'Temperatura' },
+  { value: 'vibracao', label: 'Vibração' },
+  { value: 'opcao', label: 'Opção (Bom/Regular/Ruim)' },
+  { value: 'texto', label: 'Texto' },
+  { value: 'observacao', label: 'Observação' },
+];
+
+const AdminTemplatesPage = () => {
+  const [templates, setTemplates] = useState([]);
+  const [equipTypes, setEquipTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null); // null = list, object = editing
+  const [form, setForm] = useState({ nome: '', tipo_equipamento: '', descricao: '', itens: [] });
+  const [saving, setSaving] = useState(false);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const { user } = useAuth();
+
+  const fetchData = async () => {
+    try {
+      const [tRes, eRes] = await Promise.all([
+        api.get('/inspection-templates'),
+        api.get('/equipment-types').catch(() => ({ data: [] }))
+      ]);
+      setTemplates(tRes.data);
+      setEquipTypes(eRes.data);
+    } catch { toast.error('Erro ao carregar templates'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { fetchData(); }, []);
+
+  const openNew = () => {
+    setForm({ nome: '', tipo_equipamento: '', descricao: '', itens: [] });
+    setEditing('new');
+  };
+
+  const openEdit = (t) => {
+    setForm({ nome: t.nome, tipo_equipamento: t.tipo_equipamento, descricao: t.descricao || '', itens: t.itens || [] });
+    setEditing(t);
+  };
+
+  const handleDuplicate = async (t) => {
+    try {
+      await api.post(`/inspection-templates/${t.id}/duplicate`);
+      toast.success('Template duplicado!');
+      fetchData();
+    } catch { toast.error('Erro ao duplicar'); }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/inspection-templates/${deleteItem.id}`);
+      toast.success('Template excluído!');
+      setDeleteItem(null);
+      fetchData();
+    } catch { toast.error('Erro ao excluir'); }
+  };
+
+  const addItem = () => {
+    setForm(prev => ({ ...prev, itens: [...prev.itens, { id: `new-${Date.now()}`, descricao: '', tipo: 'boolean', obrigatorio: true, unidade: '', tolerancia_min: null, tolerancia_max: null }] }));
+  };
+
+  const updateItem = (idx, field, value) => {
+    setForm(prev => ({ ...prev, itens: prev.itens.map((it, i) => i === idx ? { ...it, [field]: value } : it) }));
+  };
+
+  const removeItem = (idx) => {
+    setForm(prev => ({ ...prev, itens: prev.itens.filter((_, i) => i !== idx) }));
+  };
+
+  const handleSave = async () => {
+    if (!form.nome || !form.tipo_equipamento) { toast.error('Preencha nome e tipo de equipamento'); return; }
+    if (form.itens.length === 0) { toast.error('Adicione pelo menos um item ao checklist'); return; }
+    setSaving(true);
+    try {
+      if (editing === 'new') {
+        await api.post('/inspection-templates', form);
+        toast.success('Template criado!');
+      } else {
+        await api.put(`/inspection-templates/${editing.id}`, form);
+        toast.success('Template atualizado!');
+      }
+      setEditing(null);
+      fetchData();
+    } catch (error) { toast.error(normalizeError(error)); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return <Loading rows={3} />;
+
+  // EDIT VIEW
+  if (editing) return (
+    <div className="space-y-4" data-testid="template-editor">
+      <div className="flex items-center gap-3">
+        <button onClick={() => setEditing(null)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg"><ArrowLeft size={20} className="text-slate-400" /></button>
+        <h1 className="text-xl font-bold text-slate-100">{editing === 'new' ? 'Novo Template' : 'Editar Template'}</h1>
+      </div>
+
+      <div className="glass-card p-4 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormInput label="Nome do Template" required>
+            <input value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Inspeção Alimentador Vibratório" data-testid="template-nome" />
+          </FormInput>
+          <FormInput label="Tipo de Equipamento" required>
+            <input value={form.tipo_equipamento} onChange={e => setForm({...form, tipo_equipamento: e.target.value})} list="equip-types" className="input-industrial w-full px-4" placeholder="Ex: Alimentador Vibratório" data-testid="template-tipo" />
+            <datalist id="equip-types">{equipTypes.map(t => <option key={t} value={t} />)}</datalist>
+          </FormInput>
+        </div>
+        <FormInput label="Descrição">
+          <input value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4" placeholder="Descrição opcional" />
+        </FormInput>
+      </div>
+
+      <div className="glass-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-emerald-400">Itens do Checklist ({form.itens.length})</h3>
+          <button onClick={addItem} className="btn-primary text-sm flex items-center gap-1" data-testid="add-checklist-item"><Plus size={16} /> Adicionar Item</button>
+        </div>
+
+        {form.itens.map((item, idx) => (
+          <div key={item.id || idx} className="bg-slate-800/50 rounded-lg p-3 space-y-2" data-testid={`template-item-${idx}`}>
+            <div className="flex items-start gap-2">
+              <span className="text-xs text-slate-500 mt-2 w-6">{idx+1}.</span>
+              <div className="flex-1 space-y-2">
+                <input value={item.descricao} onChange={e => updateItem(idx, 'descricao', e.target.value)} className="input-industrial w-full px-3 text-sm" placeholder="Descrição do item (ex: Verificar vibração)" />
+                <div className="flex gap-2 flex-wrap">
+                  <select value={item.tipo} onChange={e => updateItem(idx, 'tipo', e.target.value)} className="input-industrial px-3 text-sm">
+                    {FIELD_TYPES.map(ft => <option key={ft.value} value={ft.value}>{ft.label}</option>)}
+                  </select>
+                  {(item.tipo === 'numerico' || item.tipo === 'temperatura' || item.tipo === 'vibracao') && (
+                    <>
+                      <input type="text" value={item.unidade || ''} onChange={e => updateItem(idx, 'unidade', e.target.value)} className="input-industrial px-3 text-sm w-20" placeholder="Un." />
+                      <input type="number" value={item.tolerancia_min ?? ''} onChange={e => updateItem(idx, 'tolerancia_min', e.target.value ? parseFloat(e.target.value) : null)} className="input-industrial px-3 text-sm w-20" placeholder="Mín" />
+                      <input type="number" value={item.tolerancia_max ?? ''} onChange={e => updateItem(idx, 'tolerancia_max', e.target.value ? parseFloat(e.target.value) : null)} className="input-industrial px-3 text-sm w-20" placeholder="Máx" />
+                    </>
+                  )}
+                  <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer">
+                    <input type="checkbox" checked={item.obrigatorio} onChange={e => updateItem(idx, 'obrigatorio', e.target.checked)} className="accent-emerald-500" />
+                    Obrigatório
+                  </label>
+                </div>
+              </div>
+              <button onClick={() => removeItem(idx)} className="p-1.5 hover:bg-red-500/10 rounded"><Trash2 size={14} className="text-red-400" /></button>
+            </div>
+          </div>
+        ))}
+        {form.itens.length === 0 && <p className="text-center text-slate-600 text-sm py-4">Nenhum item. Clique em "Adicionar Item" para começar.</p>}
+      </div>
+
+      <div className="flex gap-3 justify-end">
+        <button onClick={() => setEditing(null)} className="btn-secondary">Cancelar</button>
+        <button onClick={handleSave} disabled={saving} className="btn-primary flex items-center gap-2" data-testid="save-template">
+          {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+          {saving ? 'Salvando...' : 'Salvar Template'}
+        </button>
+      </div>
+    </div>
+  );
+
+  // LIST VIEW
+  return (
+    <div className="space-y-4" data-testid="templates-page">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Templates de Inspeção</h1>
+          <p className="text-sm text-slate-500">Gerenciar checklists por tipo de equipamento</p>
+        </div>
+        <button onClick={openNew} className="btn-primary flex items-center gap-2" data-testid="new-template-btn"><Plus size={20} /> Novo Template</button>
+      </div>
+
+      {templates.length > 0 ? (
+        <div className="space-y-2">
+          {templates.map(t => (
+            <div key={t.id} className="glass-card p-4 hover:border-slate-600 transition-all group" data-testid={`template-card-${t.id}`}>
+              <div className="flex items-center justify-between">
+                <div className="cursor-pointer flex-1" onClick={() => openEdit(t)}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ClipboardCheck size={16} className="text-emerald-400" />
+                    <span className="text-slate-100 font-medium">{t.nome}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                    <span className="bg-slate-800 px-2 py-0.5 rounded">{t.tipo_equipamento}</span>
+                    <span>{t.itens?.length || 0} itens</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => openEdit(t)} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar"><Edit size={16} className="text-slate-400" /></button>
+                  <button onClick={() => handleDuplicate(t)} className="p-2 hover:bg-blue-500/10 rounded-lg" title="Duplicar"><Copy size={16} className="text-blue-400" /></button>
+                  <button onClick={() => setDeleteItem(t)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir"><Trash2 size={16} className="text-red-400" /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={ClipboardCheck} title="Nenhum template" description="Crie templates de inspeção para cada tipo de equipamento" actionLabel="Novo Template" onAction={openNew} />
+      )}
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Template" message={`Excluir "${deleteItem?.nome}"?`} confirmText="Excluir" danger />
+    </div>
+  );
+};
+
+
 // ============== ADMIN USUARIOS PAGE ==============
 
 const AdminUsuariosPage = () => {
@@ -5244,6 +5568,7 @@ function App() {
           <Route path="/anomalias" element={<ProtectedRoute><AppLayout><AnomaliasPage /></AppLayout></ProtectedRoute>} />
           <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
           <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/admin/templates" element={<ProtectedRoute><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
           <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -404,3 +404,27 @@ class KnowledgeBaseCreate(BaseModel):
     solucao: str
     tags: List[str] = []
     categoria: str = "geral"
+
+
+# ============== TEMPLATES DE INSPEÇÃO ==============
+
+class TemplateItemCreate(BaseModel):
+    descricao: str
+    tipo: str = "boolean"  # boolean, numerico, texto, opcao, temperatura, vibracao, observacao
+    obrigatorio: bool = True
+    unidade: Optional[str] = None
+    tolerancia_min: Optional[float] = None
+    tolerancia_max: Optional[float] = None
+    opcoes: Optional[List[str]] = None  # For 'opcao' type custom options
+
+class InspectionTemplateCreate(BaseModel):
+    nome: str
+    tipo_equipamento: str  # e.g. "Alimentador Vibratório", "Britador", "Motor"
+    descricao: Optional[str] = None
+    itens: List[TemplateItemCreate] = []
+
+class InspectionTemplateUpdate(BaseModel):
+    nome: Optional[str] = None
+    tipo_equipamento: Optional[str] = None
+    descricao: Optional[str] = None
+    itens: Optional[List[TemplateItemCreate]] = None

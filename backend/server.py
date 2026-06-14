@@ -587,7 +587,107 @@ async def update_checklist_template(tipo: str, body: dict, user: Dict = Depends(
     return {"success": True}
 
 
-# ============== INSPEÇÕES - CRUD COMPLETO ==============
+# ============== TEMPLATES DE INSPEÇÃO POR EQUIPAMENTO ==============
+
+@api_router.get("/inspection-templates")
+async def list_inspection_templates(tipo_equipamento: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    org_id = user.get('organization_id', '')
+    query = {"organization_id": org_id, "deleted_at": None}
+    if tipo_equipamento:
+        query["tipo_equipamento"] = tipo_equipamento
+    templates = await db.inspection_templates.find(query, {"_id": 0}).sort("nome", 1).to_list(200)
+    return templates
+
+@api_router.post("/inspection-templates")
+async def create_inspection_template(data: InspectionTemplateCreate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+    itens = []
+    for item in data.itens:
+        d = item.model_dump()
+        d['id'] = str(uuid.uuid4())
+        itens.append(d)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "organization_id": org_id,
+        "nome": data.nome,
+        "tipo_equipamento": data.tipo_equipamento,
+        "descricao": data.descricao,
+        "itens": itens,
+        "created_by": user.get('id'),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.inspection_templates.insert_one(doc)
+    doc.pop('_id', None)
+    return doc
+
+@api_router.get("/inspection-templates/{template_id}")
+async def get_inspection_template(template_id: str, user: Dict = Depends(get_current_user)):
+    t = await db.inspection_templates.find_one({"id": template_id, "deleted_at": None}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Template não encontrado")
+    return t
+
+@api_router.put("/inspection-templates/{template_id}")
+async def update_inspection_template(template_id: str, data: InspectionTemplateUpdate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    t = await db.inspection_templates.find_one({"id": template_id, "deleted_at": None})
+    if not t:
+        raise HTTPException(status_code=404, detail="Template não encontrado")
+    update = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.nome is not None: update['nome'] = data.nome
+    if data.tipo_equipamento is not None: update['tipo_equipamento'] = data.tipo_equipamento
+    if data.descricao is not None: update['descricao'] = data.descricao
+    if data.itens is not None:
+        itens = []
+        for item in data.itens:
+            d = item.model_dump()
+            if not d.get('id'): d['id'] = str(uuid.uuid4())
+            itens.append(d)
+        update['itens'] = itens
+    await db.inspection_templates.update_one({"id": template_id}, {"$set": update})
+    return await db.inspection_templates.find_one({"id": template_id}, {"_id": 0})
+
+@api_router.delete("/inspection-templates/{template_id}")
+async def delete_inspection_template(template_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    await db.inspection_templates.update_one({"id": template_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    return {"success": True}
+
+@api_router.post("/inspection-templates/{template_id}/duplicate")
+async def duplicate_inspection_template(template_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+    original = await db.inspection_templates.find_one({"id": template_id, "deleted_at": None}, {"_id": 0})
+    if not original:
+        raise HTTPException(status_code=404, detail="Template não encontrado")
+    itens = []
+    for item in original.get('itens', []):
+        itens.append({**item, "id": str(uuid.uuid4())})
+    doc = {
+        "id": str(uuid.uuid4()),
+        "organization_id": org_id,
+        "nome": f"{original['nome']} (Cópia)",
+        "tipo_equipamento": original.get('tipo_equipamento', ''),
+        "descricao": original.get('descricao'),
+        "itens": itens,
+        "created_by": user.get('id'),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.inspection_templates.insert_one(doc)
+    doc.pop('_id', None)
+    return doc
+
+@api_router.get("/equipment-types")
+async def list_equipment_types(user: Dict = Depends(get_current_user)):
+    """List distinct equipment types from ativos"""
+    org_id = user.get('organization_id', '')
+    types = await db.ativos.distinct("tipo_equipamento", {"organization_id": org_id, "deleted_at": None})
+    return [t for t in types if t]
 
 @api_router.get("/inspecoes")
 async def list_inspecoes(

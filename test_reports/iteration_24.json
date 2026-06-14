@@ -1,0 +1,58 @@
+{
+  "summary": "Iteration 24 — MANUTRIX OMNI Phase 2 P0 validation. Backend 18/18 pytest PASS covering: Inspection Templates CRUD (create/list/get/update/duplicate/delete/filter by tipo_equipamento), Equipment Types listing, BOM (materiais) CRUD with new PUT endpoint, Inspecao mixed-checklist Concluir flow (boolean+numerico+opcao+texto), and OS create with equipe[] executantes. Frontend smoke + critical-flow Playwright tests confirm visually: /admin/templates page renders with 'Novo Template', estoque modal label says 'Código' (not SKU), asset detail shows 'Lista Técnica (BOM)' with ADICIONAR button + 'Habilitar busca', Nova OS modal has 'Executantes' multi-select (Adicionar executante...), and the checklist BUG FIX is verified: inspecao Iniciar → fill 4 Conforme + 1 texto → 5/5 respondidos → Concluir → toast 'Inspeção concluída em 0 minutos!' → redirect to /inspecoes (NO 'Preencha todos os itens obrigatórios' error).",
+  "pass_fail_matrix": {
+    "BACKEND POST /api/inspection-templates": "PASS",
+    "BACKEND GET /api/inspection-templates (list + filter by tipo_equipamento)": "PASS",
+    "BACKEND PUT /api/inspection-templates/{id}": "PASS (verified via GET)",
+    "BACKEND POST /api/inspection-templates/{id}/duplicate": "PASS (name contains '(Cópia)', items cloned with new ids)",
+    "BACKEND DELETE /api/inspection-templates/{id}": "PASS (subsequent GET → 404)",
+    "BACKEND GET /api/equipment-types": "PASS (returns list)",
+    "BACKEND POST /api/ativos/{id}/materiais (BOM create)": "PASS",
+    "BACKEND PUT /api/ativos/{id}/materiais/{mat_id} (NEW endpoint)": "PASS (quantidade 2→4, nome updated)",
+    "BACKEND DELETE BOM material": "PASS",
+    "BACKEND Inspecao Concluir with mixed itens (boolean+numerico+opcao+texto)": "PASS — bug fix confirmed at API level",
+    "BACKEND OS create with equipe[] executantes": "PASS (equipe persisted, returned on GET)",
+    "FRONTEND /admin/templates page renders + 'Novo Template' button": "PASS (visual)",
+    "FRONTEND estoque modal label 'Código' (not SKU)": "PASS (visual — field label shows 'Código' with placeholder 'Auto-gerado se vazio')",
+    "FRONTEND asset detail 'Lista Técnica (BOM)' section with ADICIONAR + Habilitar busca": "PASS (visual)",
+    "FRONTEND Nova OS modal 'Executantes' multi-select": "PASS (visual — 'Adicionar executante...' dropdown under Execução section)",
+    "FRONTEND checklist concluir bug fix": "PASS — Iniciar → 4 Conforme + texto → 5/5 respondidos → Concluir succeeded, redirected, no false 'Preencha todos' error"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/templates empty state", "issues": ["Sidebar shows label 'Templates Inspeção' but page title is 'Templates de Inspeção' — minor copy inconsistency, non-blocking"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration24_phase2.py",
+    "/app/test_reports/pytest/pytest_iteration24.xml"
+  ],
+  "action_items": [
+    "Optional: add data-testid attributes on Template create modal fields, BOM modal fields, OS Executantes multi-select, and checklist item input buttons (Conforme/Não Conforme/Bom/Regular/Ruim/Crítico) for future regression automation — current iteration relied on text selectors which worked but are brittle.",
+    "Optional: the mecanica default checklist on AV-01 only includes boolean+texto items — to surface numerico/opcao UI rendering in production data, ensure the new inspection-templates created via /admin/templates are linked to ativos by tipo_equipamento (verify the inspecao create path picks the org-template before falling back to the hard-coded default).",
+    "Minor copy: 'Templates Inspeção' (sidebar) vs 'Templates de Inspeção' (page title) — align for consistency."
+  ],
+  "critical_code_review_comments": [
+    "Backend: POST /inspection-templates correctly assigns uuid to each item id and stores org-scoped — good.",
+    "Backend: duplicate endpoint clones items with NEW uuids (avoids id collision) and appends '(Cópia)' suffix — clean.",
+    "Backend: PUT /ativos/{id}/materiais/{mat_id} added — was the missing piece for full BOM CRUD.",
+    "Frontend isItemFilled now correctly normalizes both 'numero' AND 'numerico' tipos (line 3504 App.js), and handles 'opcao' via resultado check (line 3506). This is the actual bug fix and is verified working — Concluir no longer returns false 'Preencha todos' for mixed-type items.",
+    "Frontend checklist render path (line 3614-3700) correctly emits the Bom/Regular/Ruim/Crítico buttons for tipo='opcao' and number inputs for tipo='numerico|numero|temperatura|vibracao'. Visual test on /inspecoes/{id} for a mecanica AV-01 inspection only showed 4 boolean + 1 texto because the default template used here lacks opcao/numerico items — backend test_03 (mixed itens) exercises the full type matrix.",
+    "OS create requires 'titulo' (not just 'descricao') — keep this enforced and ensure the Nova OS UI modal exposes the Título field (visually confirmed it does)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration24_phase2.py",
+    "/app/test_reports/pytest/pytest_iteration24.xml",
+    "/app/test_reports/iteration_24.json"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% (5/5 critical flows visually confirmed)"},
+  "test_credentials": "admin@manutrix.com / admin123 — verified working. Login returns JWT in body (access_token/token) AND sets cookie. Frontend uses Bearer token from localStorage.",
+  "seed_data_creation": "Backend tests create TEST_-prefixed templates/materiais/inspecoes/OS and clean them up via DELETE. One UI test inspecao (ff314a59-e7b9-4fc6-b06a-d7c009431fcc) was concluded during the test and is now in /inspecoes list as 'Concluída'.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All Phase 2 P0 features are working: (1) checklist concluir bug fix confirmed at both backend (mixed boolean+numerico+opcao+texto) and frontend (boolean+texto path), (2) inspection-templates CRUD + duplicate + filter, (3) BOM materiais CRUD with new PUT endpoint, (4) equipment-types listing, (5) OS equipe[] executantes persisted, (6) SKU→Código rename done in estoque modal. To exercise the full numerico/opcao UI: create a template via POST /api/inspection-templates with itens of all 4 tipos, link to an ativo by tipo_equipamento, create an inspecao using that template, then visually fill via Bom/Regular/Ruim/Crítico buttons. Screenshots saved at /app/.screenshots/iter24_*.png. Test file at /app/backend/tests/test_iteration24_phase2.py — pytest passes 18/18.",
+  "rca of the issue": "Original bug RCA confirmed by inspection of App.js: previously isItemFilled only checked tipo==='numero' but backend templates emit tipo='numerico', and there was no handler for tipo='opcao'. The fix (lines 3501-3508) normalizes both number aliases and explicitly handles opcao/temperatura/vibracao via resultado check. Verified end-to-end."
+}

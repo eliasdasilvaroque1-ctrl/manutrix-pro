@@ -59,8 +59,17 @@ async def list_os(
     resp_map = {r['id']: r for r in resp_batch}
 
     for os in os_list:
-        os['ativo'] = ativo_map.get(os.get('ativo_id'))
+        ativo = ativo_map.get(os.get('ativo_id'))
+        if ativo and ativo.get('sector_id'):
+            sector = await db.sectors.find_one({"id": ativo['sector_id']}, {"_id": 0, "nome": 1})
+            ativo['sector'] = sector
+        os['ativo'] = ativo
         os['responsavel'] = resp_map.get(os.get('responsavel_id'))
+        # Enrich equipe names
+        equipe_ids = os.get('equipe', [])
+        if equipe_ids:
+            equipe_users = await db.users.find({"id": {"$in": equipe_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(equipe_ids))
+            os['equipe_nomes'] = [u.get('nome') for u in equipe_users]
         try:
             if os.get('data_planejada') and os.get('status') not in ['concluida', 'cancelada']:
                 planned = datetime.fromisoformat(str(os['data_planejada']).replace('Z', '+00:00'))

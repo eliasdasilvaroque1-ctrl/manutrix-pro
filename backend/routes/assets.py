@@ -261,6 +261,21 @@ async def remove_ativo_material(ativo_id: str, material_id: str, user: Dict = De
     await db.ativo_materiais.update_one({"id": material_id, "ativo_id": ativo_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
     return {"success": True}
 
+@router.put("/ativos/{ativo_id}/materiais/{material_id}")
+async def update_ativo_material(ativo_id: str, material_id: str, data: AtivoMaterialCreate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
+    mat = await db.ativo_materiais.find_one({"id": material_id, "ativo_id": ativo_id, "deleted_at": None})
+    if not mat:
+        raise HTTPException(status_code=404, detail="Material não encontrado")
+    update = {
+        "nome": data.nome, "codigo": data.codigo,
+        "quantidade": data.quantidade, "unidade": data.unidade,
+        "observacoes": data.observacoes,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.ativo_materiais.update_one({"id": material_id}, {"$set": update})
+    return await db.ativo_materiais.find_one({"id": material_id}, {"_id": 0})
+
 
 
 # ============== HISTÓRICO DO ATIVO (PRONTUÁRIO) ==============
