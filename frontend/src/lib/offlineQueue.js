@@ -155,13 +155,26 @@ export async function syncPendingOperations(apiInstance) {
   return { synced, failed };
 }
 
-// Register service worker
+// Register service worker with auto-update
 export function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/service-worker.js')
         .then((reg) => {
           console.log('SW registered:', reg.scope);
+          // Check for updates every 60 seconds
+          setInterval(() => reg.update(), 60000);
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'activated') {
+                  console.log('SW updated, reloading...');
+                  window.location.reload();
+                }
+              });
+            }
+          });
         })
         .catch((err) => {
           console.log('SW registration failed:', err);

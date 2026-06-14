@@ -2170,35 +2170,25 @@ const OSDistChart = ({ data, onBarClick }) => {
 // Ativos Page
 const AtivosPage = () => {
   const [ativos, setAtivos] = useState([]);
-  const [areas, setAreas] = useState([]);
   const [sectors, setSectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
   const [filterSector, setFilterSector] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  
-  useEffect(() => {
-    const status = searchParams.get('status');
-    if (status) setFilterStatus(status);
-  }, [searchParams]);
   
   const fetchData = async () => {
     try {
       const params = {};
       if (filterSector) params.sector_id = filterSector;
-      const [ativosRes, areasRes, sectorsRes] = await Promise.all([
+      const [ativosRes, sectorsRes] = await Promise.all([
         api.get('/ativos', { params }),
-        api.get('/areas'),
         api.get('/sectors')
       ]);
       setAtivos(ativosRes.data);
-      setAreas(areasRes.data);
       setSectors(sectorsRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
@@ -2221,10 +2211,9 @@ const AtivosPage = () => {
   };
   
   const filtered = ativos.filter(a => {
-    if (filterStatus && a.status !== filterStatus) return false;
     if (search) {
       const s = search.toLowerCase();
-      return a.tag?.toLowerCase().includes(s) || a.nome?.toLowerCase().includes(s);
+      return a.tag?.toLowerCase().includes(s) || a.nome?.toLowerCase().includes(s) || a.sector?.nome?.toLowerCase().includes(s);
     }
     return true;
   });
@@ -2251,7 +2240,7 @@ const AtivosPage = () => {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por TAG ou nome..."
+            placeholder="Buscar por TAG, nome ou área..."
             className="input-industrial w-full pl-10 pr-4"
           />
         </div>
@@ -2310,7 +2299,6 @@ const AtivosPage = () => {
         isOpen={showModal}
         onClose={() => { setShowModal(false); setEditItem(null); }}
         onSuccess={fetchData}
-        areas={areas}
         editData={editItem}
       />
       

@@ -1,48 +1,36 @@
 # MANUTRIX OMNI - Product Requirements Document
 
 ## Original Problem Statement
-MANUTRIX OMNI is a field-ready CMMS/EAM system for industrial maintenance. Flat Area -> Asset hierarchy, Kanban Work Orders, customizable Inspections (Mechanical, Electrical, Lubrication), Spare Parts, QR Code scanning, offline-first PWA.
+MANUTRIX OMNI — CMMS/EAM field-ready for industrial maintenance. Flat Area→Asset hierarchy, Kanban Work Orders, Inspections, Spare Parts, QR Code, PWA offline-first.
 
 ## Architecture
-- **Backend**: FastAPI + MongoDB + Supabase Auth
-- **Frontend**: React PWA
-- **DB**: sectors (=Áreas), ativos, ordens_servico, inspecoes, anomalias, itens_estoque, spare_assets
+- Backend: FastAPI + MongoDB + Supabase Auth
+- Frontend: React PWA (Service Worker network-first)
+- DB: sectors, ativos, ordens_servico, inspecoes, anomalias, itens_estoque
 
-## What's Implemented (Validated 2026-06-14, Phase 1)
+## FASE 1 — Estabilização Operacional (COMPLETA 2026-06-14)
 
-### FASE 1 — Estabilização Operacional ✅
-- [x] **Área + TAG + Equipamento** em todas as telas (lista, ficha, OS, inspeções, anomalias, ronda, histórico)
-- [x] **Cadastro limpo**: removidos Criticidade, Status, Centro de Custo, MTBF/MTTR manual, financeiros
-- [x] **Herdar ativo automaticamente**: "Nova OS" e "Nova Inspeção" da ficha do ativo → ativo travado
-- [x] **Conclusão de OS com modal**: campo obrigatório "Serviço Executado" + tempo gasto
-- [x] **Histórico do Ativo (Prontuário)**: aba com timeline de OS, Inspeções, Anomalias
-- [x] **UNIQUE(area_id, tag)**: TAG repetida em áreas diferentes OK, bloqueada na mesma
-- [x] **Export limpo**: Excel/PDF com "Área" como primeira coluna
-- [x] **Terminologia**: "Áreas" consistente em toda a UI
+### Implementado e Validado com Evidência Visual:
+- [x] Área + TAG + Equipamento em TODAS as telas
+- [x] Cadastro limpo (removidos criticidade, status, centro de custo, MTBF/MTTR manual, financeiros)
+- [x] Herdar ativo automaticamente (Nova OS/Inspeção com ativo travado)
+- [x] Modal conclusão OS com "Serviço Executado" + "Tempo Gasto" obrigatórios
+- [x] Histórico do Ativo (prontuário) com timeline OS/Inspeções/Anomalias
+- [x] UNIQUE(area_id, tag) com índice MongoDB
+- [x] Export Excel com "Área" como primeira coluna
+- [x] Service Worker corrigido: network-first (cache-v3) para evitar versão antiga
 
-### Módulos Anteriores (Validados Auditoria E2E 2026-06-13)
-- [x] Auth: Login (admin/supervisor/tecnico), forgot password
-- [x] Áreas: CRUD com cores e contagem de ativos
-- [x] Ativos: CRUD com QR code, upload PDF
-- [x] Inspeções: Mecânica/Elétrica/Lubrificação com checklists
-- [x] Ronda: Fluxo completo Área→Equipamento→Tipo→Checklist→Salvar
-- [x] OS: Kanban, criar/iniciar/concluir, audit trail
-- [x] Estoque: CRUD com movimentações
-- [x] Sobressalentes: CRUD
-- [x] PWA: manifest, Service Worker, offline queue
+### Bug Corrigido: OS "Erro na ação"
+- **Causa raiz**: Service Worker usava cache-first para JS/CSS → navegador servia bundle antigo
+- **Correção**: Bump cache para v3 + estratégia network-first + auto-update do SW
+- **Evidência**: Fluxo completo OS Criar→Iniciar→Pausar→Retomar→Concluir via modal com screenshots
 
-## Backlog — FASE 2 (Próxima)
-- [ ] **Anomalias completo**: workflow status (Aberta→Em análise→OS→Corrigida→Encerrada), edição, comentários
-- [ ] **Templates de inspeção por tipo de equipamento**: CRUD vinculado a tipo de equipamento
-- [ ] **Bug checklist obrigatório**: investigar "Preencha todos os itens" após preenchimento
+## FASE 2 — Anomalias e Templates (PRÓXIMA)
+- [ ] Anomalias: workflow completo (Aberta→Em análise→OS→Corrigida→Encerrada)
+- [ ] Templates de inspeção por tipo de equipamento (CRUD admin)
+- [ ] Bug checklist "Preencha todos os itens"
+- [ ] Consulta histórica filtrada (anomalias abertas/encerradas)
+- [ ] Auditoria visual final
 
-## Backlog — FASE 3
-- [ ] Exportações: validar Excel/PDF com download real e conteúdo
-- [ ] Ronda: validação completa com evidências
-- [ ] Varredura E2E final
-
-## SUSPENSO (por solicitação do usuário)
-- Dashboard Executivo
-- OEE
-- Tree View
-- Push Notifications
+## SUSPENSO
+- Dashboard Executivo, OEE, Tree View, Push Notifications

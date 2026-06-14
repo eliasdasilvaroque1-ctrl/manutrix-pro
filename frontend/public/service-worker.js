@@ -1,5 +1,5 @@
-const CACHE_NAME = 'manutrix-v1';
-const API_CACHE = 'manutrix-api-v1';
+const CACHE_NAME = 'manutrix-v3';
+const API_CACHE = 'manutrix-api-v3';
 
 const STATIC_ASSETS = [
   '/',
@@ -63,19 +63,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first
+  // Static assets: network-first (ensures latest code after deploy)
   if (url.origin === self.location.origin) {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((response) => {
-          if (response.ok && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.png') || url.pathname === '/')) {
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
           return response;
-        });
-      })
+        })
+        .catch(() => caches.match(event.request))
     );
     return;
   }
