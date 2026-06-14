@@ -977,7 +977,7 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
 };
 
 // Modal Nova OS
-const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], editData = null }) => {
+const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], editData = null, preSelectedAtivoId = null }) => {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     ativo_id: '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
@@ -1005,13 +1005,13 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
       });
     } else {
       setForm({
-        ativo_id: '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
+        ativo_id: preSelectedAtivoId || '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
         titulo: '', descricao: '', responsavel_id: '',
         data_planejada: '', custo_pecas: 0, custo_mao_obra: 0,
         causa_falha: '', equipamento_parado: false, horas_parada: null
       });
     }
-  }, [editData, isOpen]);
+  }, [editData, isOpen, preSelectedAtivoId]);
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1069,12 +1069,24 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormInput label="Ativo" required>
-              <Select
-                value={form.ativo_id}
-                onChange={(val) => setForm({...form, ativo_id: val})}
-                options={ativos.map(a => ({ value: a.id, label: `${a.tag} - ${a.nome}` }))}
-                placeholder="Selecione o ativo..."
-              />
+              {preSelectedAtivoId ? (
+                <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                  {(() => { const a = ativos.find(x => x.id === preSelectedAtivoId); return a ? (
+                    <div>
+                      {a.sector && <p className="text-xs text-slate-500 uppercase">{a.sector.nome}</p>}
+                      <span className="font-mono text-emerald-400 text-sm">{a.tag}</span>
+                      <span className="text-slate-300 text-sm ml-2">{a.nome}</span>
+                    </div>
+                  ) : <span className="text-slate-400">Ativo vinculado</span>; })()}
+                </div>
+              ) : (
+                <Select
+                  value={form.ativo_id}
+                  onChange={(val) => setForm({...form, ativo_id: val})}
+                  options={ativos.map(a => ({ value: a.id, label: `${a.sector?.nome || ''} • ${a.tag} - ${a.nome}` }))}
+                  placeholder="Selecione o ativo..."
+                />
+              )}
             </FormInput>
             <FormInput label="Título" required>
               <input
@@ -1237,7 +1249,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
 };
 
 // Modal Nova Inspeção
-const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = [], tecnicos = [] }) => {
+const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = [], tecnicos = [], preSelectedAtivoId = null }) => {
   const [loading, setLoading] = useState(false);
   const [tipoTab, setTipoTab] = useState('mecanica');
   const [templates, setTemplates] = useState({});
@@ -1250,7 +1262,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   useEffect(() => {
     if (isOpen) {
       setTipoTab('mecanica');
-      setForm({ ativo_id: '', responsavel_id: user?.id || '', data_planejada: '', observacoes: '' });
+      setForm({ ativo_id: preSelectedAtivoId || '', responsavel_id: user?.id || '', data_planejada: '', observacoes: '' });
       // Load checklist templates
       api.get('/checklists/templates').then(r => {
         setTemplates(r.data);
@@ -1325,8 +1337,20 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
         <div className="glass-card p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormInput label="Ativo / Equipamento" required>
-              <Select value={form.ativo_id} onChange={(val) => setForm({...form, ativo_id: val})}
-                options={ativos.map(a => ({ value: a.id, label: `${a.tag} - ${a.nome}` }))} placeholder="Selecione o equipamento..." />
+              {preSelectedAtivoId ? (
+                <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                  {(() => { const a = ativos.find(x => x.id === preSelectedAtivoId); return a ? (
+                    <div>
+                      {a.sector && <p className="text-xs text-slate-500 uppercase">{a.sector.nome}</p>}
+                      <span className="font-mono text-emerald-400 text-sm">{a.tag}</span>
+                      <span className="text-slate-300 text-sm ml-2">{a.nome}</span>
+                    </div>
+                  ) : <span className="text-slate-400">Ativo vinculado</span>; })()}
+                </div>
+              ) : (
+                <Select value={form.ativo_id} onChange={(val) => setForm({...form, ativo_id: val})}
+                  options={ativos.map(a => ({ value: a.id, label: `${a.sector?.nome || ''} • ${a.tag} - ${a.nome}` }))} placeholder="Selecione o equipamento..." />
+              )}
             </FormInput>
             <FormInput label="Responsável">
               <Select value={form.responsavel_id} onChange={(val) => setForm({...form, responsavel_id: val})}
@@ -2246,22 +2270,15 @@ const AtivosPage = () => {
             <div key={ativo.id} className="glass-card p-4 hover:border-slate-600 transition-all group">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/ativos/${ativo.id}`)}>
-                  <div className={`p-2 rounded-lg ${
-                    ativo.status === 'operacional' ? 'bg-emerald-500/10' :
-                    ativo.status === 'parado' ? 'bg-red-500/10' : 'bg-amber-500/10'
-                  }`}>
-                    <Box size={22} className={
-                      ativo.status === 'operacional' ? 'text-emerald-400' :
-                      ativo.status === 'parado' ? 'text-red-400' : 'text-amber-400'
-                    } />
+                  <div className="p-2 rounded-lg bg-emerald-500/10">
+                    <Box size={22} className="text-emerald-400" />
                   </div>
                   <div>
+                    {ativo.sector && <p className="text-xs text-slate-500 font-medium uppercase">{ativo.sector.nome}</p>}
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-emerald-400 text-sm">{ativo.tag}</span>
-                      {ativo.location_path && <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-800 rounded">{ativo.location_path}</span>}
                     </div>
                     <p className="text-slate-100">{ativo.nome}</p>
-                    {ativo.fabricante && <p className="text-xs text-slate-500">{ativo.fabricante} {ativo.modelo}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2315,20 +2332,24 @@ const AtivoDetailPage = () => {
   const { id } = useParams();
   const [ativo, setAtivo] = useState(null);
   const [manuais, setManuais] = useState([]);
+  const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState('info');
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { user } = useAuth();
   
   const fetchAtivo = async () => {
     try {
-      const [ativoRes, manuaisRes] = await Promise.all([
+      const [ativoRes, manuaisRes, histRes] = await Promise.all([
         api.get(`/ativos/${id}`),
-        api.get(`/ativos/${id}/manuais`)
+        api.get(`/ativos/${id}/manuais`),
+        api.get(`/ativos/${id}/historico`).catch(() => ({ data: [] }))
       ]);
       setAtivo(ativoRes.data);
       setManuais(manuaisRes.data);
+      setHistorico(histRes.data);
     } catch (error) {
       toast.error('Ativo não encontrado');
       navigate('/ativos');
@@ -2375,18 +2396,31 @@ const AtivoDetailPage = () => {
   if (loading) return <Loading rows={4} />;
   if (!ativo) return null;
   
+  const tabs = [
+    { key: 'info', label: 'Informações' },
+    { key: 'historico', label: 'Histórico' },
+    { key: 'manuais', label: `Manuais (${manuais.length})` },
+  ];
+
+  const tipoEventoConfig = {
+    os: { color: 'text-blue-400', bg: 'bg-blue-500/10', icon: Wrench, label: 'OS' },
+    inspecao: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', icon: ClipboardCheck, label: 'Inspeção' },
+    anomalia: { color: 'text-red-400', bg: 'bg-red-500/10', icon: AlertTriangle, label: 'Anomalia' },
+  };
+  
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="ativo-detail-page">
+      {/* Header — Área + TAG + Equipamento */}
       <div className="flex items-center gap-3">
         <button onClick={() => navigate('/ativos')} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg">
           <ArrowLeft size={20} className="text-slate-400" />
         </button>
         <div className="flex-1">
+          {ativo.sector && <p className="text-xs text-slate-500 font-medium uppercase" data-testid="ativo-area-name">{ativo.sector.nome}</p>}
           <div className="flex items-center gap-2">
-            <span className="font-mono text-emerald-400 text-lg">{ativo.tag}</span>
-            {ativo.sector && <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">{ativo.sector.nome}</span>}
+            <span className="font-mono text-emerald-400 text-lg" data-testid="ativo-tag">{ativo.tag}</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-100">{ativo.nome}</h1>
+          <h1 className="text-xl font-bold text-slate-100" data-testid="ativo-nome">{ativo.nome}</h1>
           {ativo.tipo_equipamento && <p className="text-sm text-slate-500">{ativo.tipo_equipamento}</p>}
         </div>
         <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 text-sm print:hidden" data-testid="print-qr-btn">
@@ -2400,162 +2434,147 @@ const AtivoDetailPage = () => {
           <div className="bg-white p-4 rounded-xl shadow-lg print:shadow-none">
             <QRCodeSVG 
               value={ativo.qr_code || `${window.location.origin}/ativos/${ativo.id}`} 
-              size={140} 
-              level="H"
-              includeMargin={false}
+              size={140} level="H" includeMargin={false}
             />
           </div>
           <div className="flex-1 text-center sm:text-left">
+            {ativo.sector && <p className="text-sm text-slate-500 uppercase print:text-gray-600">{ativo.sector.nome}</p>}
             <p className="font-mono text-2xl font-bold text-emerald-400 print:text-black">{ativo.tag}</p>
             <p className="text-lg text-slate-200 print:text-black">{ativo.nome}</p>
             <p className="text-sm text-slate-500 print:text-gray-600">{ativo.tipo_equipamento} {ativo.fabricante ? `• ${ativo.fabricante}` : ''} {ativo.modelo ? `• ${ativo.modelo}` : ''}</p>
-            {ativo.sector && <p className="text-xs text-slate-600 mt-1 print:text-gray-500">Área: {ativo.sector.nome}</p>}
           </div>
-          {ativo.kpis && (
-            <div className="grid grid-cols-3 gap-3 text-center print:hidden">
-              <div className="bg-slate-800/50 rounded-lg px-3 py-2">
-                <p className="text-lg font-bold text-emerald-400">{ativo.kpis.disponibilidade_percent}%</p>
-                <p className="text-[10px] text-slate-500 uppercase">Disponib.</p>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg px-3 py-2">
-                <p className="text-lg font-bold text-blue-400">{ativo.kpis.mtbf_horas}h</p>
-                <p className="text-[10px] text-slate-500 uppercase">MTBF</p>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg px-3 py-2">
-                <p className="text-lg font-bold text-amber-400">{ativo.kpis.mttr_horas}h</p>
-                <p className="text-[10px] text-slate-500 uppercase">MTTR</p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
-      
-      {/* Info Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="glass-card p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-emerald-400">Informações Técnicas</h3>
-          {ativo.tipo_equipamento && <div className="flex justify-between text-sm"><span className="text-slate-500">Tipo</span><span className="text-slate-200">{ativo.tipo_equipamento}</span></div>}
-          {ativo.fabricante && <div className="flex justify-between text-sm"><span className="text-slate-500">Fabricante</span><span className="text-slate-200">{ativo.fabricante}</span></div>}
-          {ativo.modelo && <div className="flex justify-between text-sm"><span className="text-slate-500">Modelo</span><span className="text-slate-200">{ativo.modelo}</span></div>}
-          {ativo.numero_serie && <div className="flex justify-between text-sm"><span className="text-slate-500">Nº Série</span><span className="text-slate-200 font-mono">{ativo.numero_serie}</span></div>}
-        </div>
-        
-        <div className="glass-card p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-blue-400">KPIs Automáticos</h3>
-          <div className="flex justify-between text-sm"><span className="text-slate-500">Total OS</span><span className="text-slate-200">{ativo.kpis?.total_os || 0}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-slate-500">Falhas (Corretivas)</span><span className="text-red-400">{ativo.kpis?.total_falhas || 0}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-slate-500">MTBF</span><span className="text-blue-400">{ativo.kpis?.mtbf_horas || 0}h</span></div>
-          <div className="flex justify-between text-sm"><span className="text-slate-500">MTTR</span><span className="text-amber-400">{ativo.kpis?.mttr_horas || 0}h</span></div>
-          <div className="flex justify-between text-sm"><span className="text-slate-500">Disponibilidade</span><span className="text-emerald-400">{ativo.kpis?.disponibilidade_percent || 100}%</span></div>
-        </div>
+
+      {/* Action Buttons — Nova OS / Nova Inspeção (herdando ativo) */}
+      <div className="grid grid-cols-2 gap-3 print:hidden" data-testid="ativo-actions">
+        <button onClick={() => navigate(`/os?new=true&ativo=${ativo.id}`)} className="btn-secondary py-3 flex items-center justify-center gap-2" data-testid="new-os-from-ativo">
+          <Wrench size={18} /> Nova OS
+        </button>
+        <button onClick={() => navigate(`/inspecoes?new=true&ativo=${ativo.id}`)} className="btn-primary py-3 flex items-center justify-center gap-2" data-testid="new-inspecao-from-ativo">
+          <ClipboardCheck size={18} /> Nova Inspeção
+        </button>
       </div>
-      
-      {/* Materiais Vinculados */}
-      <div className="glass-card p-4" data-testid="ativo-materiais">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2"><Package size={16} /> Materiais do Equipamento</h3>
-        </div>
-        {ativo.materiais?.length > 0 ? (
-          <div className="space-y-1">
-            {ativo.materiais.map((m, idx) => (
-              <div key={m.id || idx} className="flex items-center gap-3 text-sm py-1.5 border-b border-slate-800/50">
-                {m.codigo && <span className="font-mono text-xs text-slate-500 w-20">{m.codigo}</span>}
-                <span className="text-slate-300 flex-1">{m.nome}</span>
-                <span className="text-slate-500">{m.quantidade} {m.unidade}</span>
-              </div>
-            ))}
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-slate-800 print:hidden">
+        {tabs.map(tab => (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2.5 text-sm font-medium transition-all border-b-2 ${activeTab === tab.key ? 'border-emerald-400 text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+            data-testid={`tab-${tab.key}`}
+          >{tab.label}</button>
+        ))}
+      </div>
+
+      {/* TAB: Informações */}
+      {activeTab === 'info' && (
+        <div className="space-y-4">
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-emerald-400">Dados do Equipamento</h3>
+            {ativo.tipo_equipamento && <div className="flex justify-between text-sm"><span className="text-slate-500">Tipo</span><span className="text-slate-200">{ativo.tipo_equipamento}</span></div>}
+            {ativo.fabricante && <div className="flex justify-between text-sm"><span className="text-slate-500">Fabricante</span><span className="text-slate-200">{ativo.fabricante}</span></div>}
+            {ativo.modelo && <div className="flex justify-between text-sm"><span className="text-slate-500">Modelo</span><span className="text-slate-200">{ativo.modelo}</span></div>}
+            {ativo.numero_serie && <div className="flex justify-between text-sm"><span className="text-slate-500">Nº Série</span><span className="text-slate-200 font-mono">{ativo.numero_serie}</span></div>}
+            {ativo.observacoes && <div className="pt-2 border-t border-slate-800"><p className="text-xs text-slate-500 mb-1">Observações</p><p className="text-sm text-slate-300">{ativo.observacoes}</p></div>}
           </div>
-        ) : (
-          <p className="text-xs text-slate-600 text-center py-3">Nenhum material vinculado a este equipamento</p>
-        )}
-      </div>
-      
-      {/* Recent OS */}
-      {ativo.ordens_servico?.length > 0 && (
-        <div className="glass-card p-4">
-          <h3 className="text-sm font-semibold text-slate-400 mb-3">Últimas OS</h3>
-          <div className="space-y-2">
-            {ativo.ordens_servico.slice(0, 5).map(os => (
-              <div key={os.id} className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg cursor-pointer hover:bg-slate-800" onClick={() => navigate(`/os/${os.id}`)}>
-                <div>
-                  <span className="font-mono text-emerald-400 text-sm">#{os.numero}</span>
-                  <p className="text-sm text-slate-300">{os.titulo}</p>
-                </div>
-                <StatusBadge status={os.status} size="sm" />
+
+          {/* Materiais */}
+          <div className="glass-card p-4" data-testid="ativo-materiais">
+            <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2 mb-3"><Package size={16} /> Materiais do Equipamento</h3>
+            {ativo.materiais?.length > 0 ? (
+              <div className="space-y-1">
+                {ativo.materiais.map((m, idx) => (
+                  <div key={m.id || idx} className="flex items-center gap-3 text-sm py-1.5 border-b border-slate-800/50">
+                    {m.codigo && <span className="font-mono text-xs text-slate-500 w-20">{m.codigo}</span>}
+                    <span className="text-slate-300 flex-1">{m.nome}</span>
+                    <span className="text-slate-500">{m.quantidade} {m.unidade}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : <p className="text-xs text-slate-600 text-center py-3">Nenhum material vinculado</p>}
+          </div>
+
+          {/* Fotos */}
+          <div className="glass-card p-4">
+            <PhotoUploader entityType="asset" entityId={ativo.id} label="Fotos do Equipamento" />
           </div>
         </div>
       )}
-      
-      {/* Manuais PDF */}
-      <div className="glass-card p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2"><FileText size={16} /> Manuais Técnicos</h3>
-          {user?.role === 'admin' && (
-            <label className="btn-primary text-sm flex items-center gap-2 cursor-pointer" data-testid="upload-manual-btn">
-              <Upload size={16} /> {uploading ? 'Enviando...' : 'Enviar PDF'}
-              <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUploadManual} className="hidden" disabled={uploading} />
-            </label>
-          )}
-        </div>
-        {manuais.length > 0 ? (
-          <div className="space-y-2">
-            {manuais.map((m) => (
-              <div key={m.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg group">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-500/10 rounded-lg"><FileText size={20} className="text-red-400" /></div>
-                  <div>
-                    <p className="text-sm text-slate-200">{m.filename}</p>
-                    <p className="text-xs text-slate-500">{(m.size_bytes / 1024).toFixed(0)} KB • {new Date(m.created_at).toLocaleDateString('pt-BR')}</p>
+
+      {/* TAB: Histórico (Prontuário) */}
+      {activeTab === 'historico' && (
+        <div className="space-y-2" data-testid="ativo-historico">
+          {historico.length > 0 ? historico.map((ev, idx) => {
+            const cfg = tipoEventoConfig[ev.tipo_evento] || tipoEventoConfig.os;
+            return (
+              <div key={`${ev.tipo_evento}-${ev.id}-${idx}`} className="glass-card p-4 flex items-start gap-3" data-testid={`historico-item-${idx}`}>
+                <div className={`p-2 rounded-lg ${cfg.bg} mt-0.5`}><cfg.icon size={16} className={cfg.color} /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`text-xs font-semibold uppercase ${cfg.color}`}>{cfg.label}</span>
+                    {ev.status && <span className="text-xs px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded">{ev.status}</span>}
+                  </div>
+                  <p className="text-sm text-slate-200 font-medium">{ev.titulo}</p>
+                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{ev.descricao}</p>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-600">
+                    <span>{ev.data ? new Date(ev.data).toLocaleDateString('pt-BR') : ''}</span>
+                    {ev.responsavel && <span>• {ev.responsavel}</span>}
+                    {ev.tempo_minutos && <span>• {ev.tempo_minutos}min</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => {
-                    const url = `${BACKEND_URL}${m.url}`;
-                    window.open(url, '_blank');
-                  }} className="p-2 hover:bg-blue-500/10 rounded-lg transition-colors" title="Abrir PDF">
-                    <Eye size={16} className="text-blue-400" />
-                  </button>
-                  <button onClick={async () => {
-                    try {
-                      const res = await fetch(`${BACKEND_URL}${m.url}`);
-                      const blob = await res.blob();
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url; a.download = m.filename; a.click();
-                      window.URL.revokeObjectURL(url);
-                    } catch { toast.error('Erro ao baixar'); }
-                  }} className="p-2 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Baixar PDF">
-                    <Download size={16} className="text-emerald-400" />
-                  </button>
-                  {user?.role === 'admin' && (
-                    <button onClick={() => handleDeleteManual(m.id)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" title="Remover">
-                      <Trash2 size={16} className="text-red-400" />
-                    </button>
-                  )}
-                </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-6 text-slate-500">
-            <FileText size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Nenhum manual carregado</p>
-            {user?.role === 'admin' && <p className="text-xs mt-1">Clique em "Enviar PDF" para adicionar</p>}
-          </div>
-        )}
-      </div>
+            );
+          }) : (
+            <div className="text-center py-12 text-slate-500">
+              <Clock size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Nenhum registro no histórico</p>
+              <p className="text-xs mt-1">Inspeções, OS e anomalias aparecerão aqui</p>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Actions - Ativo Detail */}
-      <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => navigate(`/inspecoes?new=true&ativo=${ativo.id}`)} className="btn-primary py-4 flex items-center justify-center gap-2">
-          <ClipboardCheck size={20} /> Nova Inspeção
-        </button>
-        <button onClick={() => navigate(`/os?new=true&ativo=${ativo.id}`)} className="btn-secondary py-4 flex items-center justify-center gap-2">
-          <Wrench size={20} /> Nova OS
-        </button>
-      </div>
+      {/* TAB: Manuais */}
+      {activeTab === 'manuais' && (
+        <div className="glass-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2"><FileText size={16} /> Manuais Técnicos</h3>
+            {user?.role === 'admin' && (
+              <label className="btn-primary text-sm flex items-center gap-2 cursor-pointer" data-testid="upload-manual-btn">
+                <Upload size={16} /> {uploading ? 'Enviando...' : 'Enviar PDF'}
+                <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUploadManual} className="hidden" disabled={uploading} />
+              </label>
+            )}
+          </div>
+          {manuais.length > 0 ? (
+            <div className="space-y-2">
+              {manuais.map((m) => (
+                <div key={m.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg group">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-red-500/10 rounded-lg"><FileText size={20} className="text-red-400" /></div>
+                    <div>
+                      <p className="text-sm text-slate-200">{m.filename}</p>
+                      <p className="text-xs text-slate-500">{(m.size_bytes / 1024).toFixed(0)} KB • {new Date(m.created_at).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => window.open(`${BACKEND_URL}${m.url}`, '_blank')} className="p-2 hover:bg-blue-500/10 rounded-lg" title="Abrir PDF"><Eye size={16} className="text-blue-400" /></button>
+                    <button onClick={async () => {
+                      try { const res = await fetch(`${BACKEND_URL}${m.url}`); const blob = await res.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = m.filename; a.click(); window.URL.revokeObjectURL(url); } catch { toast.error('Erro ao baixar'); }
+                    }} className="p-2 hover:bg-emerald-500/10 rounded-lg" title="Baixar"><Download size={16} className="text-emerald-400" /></button>
+                    {user?.role === 'admin' && <button onClick={() => handleDeleteManual(m.id)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100" title="Remover"><Trash2 size={16} className="text-red-400" /></button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-slate-500">
+              <FileText size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Nenhum manual carregado</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -2838,7 +2857,7 @@ const OSPage = () => {
         </>
       )}
       
-      <ModalNovaOS isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} onSuccess={fetchData} ativos={ativos} tecnicos={tecnicos} editData={editItem} />
+      <ModalNovaOS isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} onSuccess={fetchData} ativos={ativos} tecnicos={tecnicos} editData={editItem} preSelectedAtivoId={searchParams.get('ativo') || null} />
       <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir OS" message={`Tem certeza que deseja excluir a OS #${deleteItem?.numero}?`} confirmText="Excluir" danger />
     </div>
   );
@@ -2851,6 +2870,8 @@ const OSDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [historico, setHistorico] = useState([]);
+  const [showConcluir, setShowConcluir] = useState(false);
+  const [concluirForm, setConcluirForm] = useState({ servicos_realizados: '', tempo_execucao_minutos: '', observacoes: '' });
   const navigate = useNavigate();
   
   const fetchOS = async () => {
@@ -2872,13 +2893,41 @@ const OSDetailPage = () => {
   useEffect(() => { fetchOS(); }, [id]);
   
   const handleAction = async (action) => {
+    if (action === 'concluir') { setShowConcluir(true); return; }
     setUpdating(true);
     try {
       await api.post(`/ordens-servico/${id}/${action}`);
-      toast.success(`OS ${action === 'iniciar' ? 'iniciada' : action === 'pausar' ? 'pausada' : 'concluída'}!`);
+      toast.success(`OS ${action === 'iniciar' ? 'iniciada' : 'pausada'}!`);
       fetchOS();
     } catch (error) {
-      toast.error('Erro na ação');
+      toast.error(normalizeError(error));
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleConcluir = async () => {
+    if (!concluirForm.servicos_realizados.trim()) {
+      toast.error('Preencha o serviço executado');
+      return;
+    }
+    const tempo = parseInt(concluirForm.tempo_execucao_minutos);
+    if (!tempo || tempo <= 0) {
+      toast.error('Informe o tempo gasto (minutos)');
+      return;
+    }
+    setUpdating(true);
+    try {
+      await api.post(`/ordens-servico/${id}/concluir`, {
+        servicos_realizados: concluirForm.servicos_realizados.trim(),
+        tempo_execucao_minutos: tempo,
+        observacoes: concluirForm.observacoes || null,
+      });
+      toast.success('OS concluída com sucesso!');
+      setShowConcluir(false);
+      fetchOS();
+    } catch (error) {
+      toast.error(normalizeError(error));
     } finally {
       setUpdating(false);
     }
@@ -2888,7 +2937,7 @@ const OSDetailPage = () => {
   if (!os) return null;
   
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="os-detail-page">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate('/os')} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg">
           <ArrowLeft size={20} className="text-slate-400" />
@@ -2903,12 +2952,13 @@ const OSDetailPage = () => {
         </div>
       </div>
       
-      {/* Ativo */}
+      {/* Ativo — Área + TAG + Equipamento */}
       {os.ativo && (
-        <div className="glass-card p-4 cursor-pointer hover:border-slate-600" onClick={() => navigate(`/ativos/${os.ativo.id}`)}>
-          <p className="text-xs text-slate-500">Ativo</p>
+        <div className="glass-card p-4 cursor-pointer hover:border-slate-600" onClick={() => navigate(`/ativos/${os.ativo.id}`)} data-testid="os-ativo-card">
+          <p className="text-xs text-slate-500 mb-1">Equipamento</p>
           <div className="flex items-center justify-between">
             <div>
+              {os.ativo.sector && <p className="text-xs text-slate-500 uppercase font-medium">{os.ativo.sector.nome || os.ativo.sector_nome}</p>}
               <span className="font-mono text-emerald-400">{os.ativo.tag}</span>
               <p className="text-slate-200">{os.ativo.nome}</p>
             </div>
@@ -2931,6 +2981,14 @@ const OSDetailPage = () => {
         <div className="glass-card p-4">
           <p className="text-xs text-slate-500 mb-1">Descrição</p>
           <p className="text-slate-200 whitespace-pre-wrap">{os.descricao}</p>
+        </div>
+      )}
+
+      {/* Serviço Executado (exibido quando concluída) */}
+      {os.descricao_servico && (
+        <div className="glass-card p-4 border-l-4 border-emerald-500" data-testid="os-servico-executado">
+          <p className="text-xs text-emerald-400 font-semibold uppercase mb-1">Serviço Executado</p>
+          <p className="text-slate-200 whitespace-pre-wrap">{os.descricao_servico}</p>
         </div>
       )}
       
@@ -2979,14 +3037,14 @@ const OSDetailPage = () => {
       {!['concluida', 'cancelada'].includes(os.status) && (
         <div className="space-y-2">
           {os.status === 'aberta' && (
-            <button onClick={() => handleAction('iniciar')} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2">
+            <button onClick={() => handleAction('iniciar')} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="os-iniciar-btn">
               <Play size={20} /> {updating ? 'Iniciando...' : 'Iniciar OS'}
             </button>
           )}
           {os.status === 'em_execucao' && (
             <>
-              <button onClick={() => handleAction('concluir')} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2">
-                <CheckCircle size={20} /> {updating ? 'Finalizando...' : 'Concluir OS'}
+              <button onClick={() => handleAction('concluir')} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="os-concluir-btn">
+                <CheckCircle size={20} /> Concluir OS
               </button>
               <button onClick={() => handleAction('pausar')} disabled={updating} className="btn-secondary w-full flex items-center justify-center gap-2">
                 <Pause size={20} /> Pausar
@@ -3000,6 +3058,55 @@ const OSDetailPage = () => {
           )}
         </div>
       )}
+
+      {/* Modal Concluir OS */}
+      <Modal isOpen={showConcluir} onClose={() => setShowConcluir(false)} title="Concluir Ordem de Serviço" size="md">
+        <div className="space-y-4">
+          {/* Ativo info (read-only) */}
+          {os.ativo && (
+            <div className="bg-slate-800/50 rounded-lg p-3">
+              {os.ativo.sector && <p className="text-xs text-slate-500 uppercase">{os.ativo.sector.nome || os.ativo.sector_nome}</p>}
+              <span className="font-mono text-emerald-400 text-sm">{os.ativo.tag}</span>
+              <span className="text-slate-300 text-sm ml-2">{os.ativo.nome}</span>
+            </div>
+          )}
+          <FormInput label="Serviço Executado" required>
+            <textarea
+              value={concluirForm.servicos_realizados}
+              onChange={(e) => setConcluirForm({...concluirForm, servicos_realizados: e.target.value})}
+              className="input-industrial w-full px-4 py-3 min-h-[120px]"
+              placeholder="Descreva o serviço realizado. Ex: Troca de correias, troca de rolamento, alinhamento..."
+              data-testid="os-servico-input"
+            />
+          </FormInput>
+          <FormInput label="Tempo Gasto (minutos)" required>
+            <input
+              type="number"
+              min="1"
+              value={concluirForm.tempo_execucao_minutos}
+              onChange={(e) => setConcluirForm({...concluirForm, tempo_execucao_minutos: e.target.value})}
+              className="input-industrial w-full px-4"
+              placeholder="Ex: 60"
+              data-testid="os-tempo-input"
+            />
+          </FormInput>
+          <FormInput label="Observações">
+            <textarea
+              value={concluirForm.observacoes}
+              onChange={(e) => setConcluirForm({...concluirForm, observacoes: e.target.value})}
+              className="input-industrial w-full px-4 py-3 min-h-[60px]"
+              placeholder="Observações adicionais..."
+            />
+          </FormInput>
+          <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
+            <button type="button" onClick={() => setShowConcluir(false)} className="btn-secondary">Cancelar</button>
+            <button onClick={handleConcluir} disabled={updating} className="btn-primary flex items-center gap-2" data-testid="os-confirmar-conclusao">
+              {updating ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+              {updating ? 'Concluindo...' : 'Confirmar Conclusão'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -3214,7 +3321,13 @@ const InspecoesPage = () => {
               <div className="flex items-center justify-between">
                 <div className="flex-1 cursor-pointer" onClick={() => navigate(`/inspecoes/${insp.id}`)}>
                   <div className="flex items-center gap-2 mb-1">
-                    {insp.ativo && <span className="font-mono text-emerald-400 text-sm">{insp.ativo.tag}</span>}
+                    {insp.ativo && (
+                      <div>
+                        {insp.ativo.sector && <span className="text-[10px] text-slate-600 uppercase block">{insp.ativo.sector?.nome}</span>}
+                        <span className="font-mono text-emerald-400 text-sm">{insp.ativo.tag}</span>
+                        <span className="text-slate-400 text-xs ml-1">{insp.ativo.nome}</span>
+                      </div>
+                    )}
                     {insp.tipo === 'lubrificacao' ? (
                       <span className="text-xs px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded">Lubrificação</span>
                     ) : insp.frequencia ? (
@@ -3257,6 +3370,7 @@ const InspecoesPage = () => {
         ativos={ativos}
         rotas={rotas}
         tecnicos={tecnicos}
+        preSelectedAtivoId={searchParams.get('ativo') || null}
       />
       
       <ConfirmDialog
@@ -3351,7 +3465,13 @@ const InspecaoDetailPage = () => {
           <ArrowLeft size={20} className="text-slate-400" />
         </button>
         <div className="flex-1">
-          {inspecao.ativo && <span className="font-mono text-emerald-400">{inspecao.ativo.tag}</span>}
+          {inspecao.ativo && (
+            <div className="mb-1">
+              {inspecao.ativo.sector && <p className="text-xs text-slate-500 uppercase">{inspecao.ativo.sector?.nome}</p>}
+              <span className="font-mono text-emerald-400">{inspecao.ativo.tag}</span>
+              <span className="text-slate-300 ml-2">{inspecao.ativo.nome}</span>
+            </div>
+          )}
           <h1 className="text-lg font-bold text-slate-100">
             {inspecao.tipo === 'lubrificacao' 
               ? `Lubrificação - ${inspecao.ativo?.nome || ''}`
@@ -4434,7 +4554,13 @@ const AnomaliasPage = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    {a.ativo && <span className="font-mono text-emerald-400 text-sm">{a.ativo.tag}</span>}
+                    {a.ativo && (
+                      <div className="mb-1">
+                        {a.ativo.sector && <span className="text-[10px] text-slate-600 uppercase">{a.ativo.sector?.nome} • </span>}
+                        <span className="font-mono text-emerald-400 text-sm">{a.ativo.tag}</span>
+                        <span className="text-slate-400 text-xs ml-1">{a.ativo.nome}</span>
+                      </div>
+                    )}
                     <PriorityBadge priority={a.severidade} />
                     <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded">Score: {a.score_prioridade}</span>
                   </div>

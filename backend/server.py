@@ -615,7 +615,10 @@ async def list_inspecoes(
     inspecoes = await db.inspecoes.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
     for insp in inspecoes:
-        ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
+        ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
+        if ativo and ativo.get('sector_id'):
+            sector = await db.sectors.find_one({"id": ativo['sector_id']}, {"_id": 0, "nome": 1})
+            ativo['sector'] = sector
         insp['ativo'] = ativo
         if insp.get('responsavel_id'):
             resp = await db.users.find_one({"id": insp['responsavel_id']}, {"_id": 0, "nome": 1})
@@ -1507,10 +1510,14 @@ async def export_ativos(format: str = "excel", user: Dict = Depends(get_current_
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Ativos"
-        headers = ["TAG", "Nome", "Tipo", "Fabricante", "Modelo", "Número de Série", "Área"]
+        # Enrich with area names
+        sid_list = list(set(a.get('sector_id') for a in ativos if a.get('sector_id')))
+        sectors = await db.sectors.find({"id": {"$in": sid_list}}, {"_id": 0}).to_list(len(sid_list)) if sid_list else []
+        sector_map = {s['id']: s.get('nome','') for s in sectors}
+        headers = ["Área", "TAG", "Nome", "Tipo", "Fabricante", "Modelo", "Número de Série", "Observações"]
         ws.append(headers)
         for a in ativos:
-            ws.append([a.get('tag',''), a.get('nome',''), a.get('tipo_equipamento',''), a.get('fabricante',''), a.get('modelo',''), a.get('numero_serie',''), a.get('criticidade',''), a.get('status',''), a.get('centro_custo',''), a.get('mtbf_horas',''), a.get('mttr_horas',''), a.get('valor_aquisicao','')])
+            ws.append([sector_map.get(a.get('sector_id',''),''), a.get('tag',''), a.get('nome',''), a.get('tipo_equipamento',''), a.get('fabricante',''), a.get('modelo',''), a.get('numero_serie',''), a.get('observacoes','')])
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
@@ -1521,13 +1528,17 @@ async def export_ativos(format: str = "excel", user: Dict = Depends(get_current_
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib import colors
+        # Enrich with area names
+        sid_list = list(set(a.get('sector_id') for a in ativos if a.get('sector_id')))
+        sectors = await db.sectors.find({"id": {"$in": sid_list}}, {"_id": 0}).to_list(len(sid_list)) if sid_list else []
+        sector_map = {s['id']: s.get('nome','') for s in sectors}
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
         elements = [Paragraph("MANUTRIX - Relatório de Ativos", styles['Title']), Spacer(1, 12)]
-        data = [["TAG", "Nome", "Tipo", "Fabricante", "Criticidade", "Status"]]
+        data = [["Área", "TAG", "Nome", "Tipo", "Fabricante", "Modelo"]]
         for a in ativos:
-            data.append([a.get('tag',''), a.get('nome','')[:30], a.get('tipo_equipamento','')[:20], a.get('fabricante','')[:20], a.get('criticidade',''), a.get('status','')])
+            data.append([sector_map.get(a.get('sector_id',''),''), a.get('tag',''), a.get('nome','')[:30], a.get('tipo_equipamento','')[:20], a.get('fabricante','')[:20], a.get('modelo','')[:20]])
         t = Table(data)
         t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#10b981')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
         elements.append(t)
@@ -1882,7 +1893,10 @@ async def list_anomalias(sector_id: Optional[str] = None, user: Dict = Depends(g
     
     anomalias = await db.anomalias.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     for a in anomalias:
-        ativo = await db.ativos.find_one({"id": a.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
+        ativo = await db.ativos.find_one({"id": a.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
+        if ativo and ativo.get('sector_id'):
+            sector = await db.sectors.find_one({"id": ativo['sector_id']}, {"_id": 0, "nome": 1})
+            ativo['sector'] = sector
         a['ativo'] = ativo
     return anomalias
 

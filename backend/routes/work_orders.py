@@ -127,6 +127,8 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
     if not os:
         raise HTTPException(status_code=404, detail="OS não encontrada")
     os['ativo'] = await db.ativos.find_one({"id": os.get('ativo_id')}, {"_id": 0})
+    if os.get('ativo') and os['ativo'].get('sector_id'):
+        os['ativo']['sector'] = await db.sectors.find_one({"id": os['ativo']['sector_id']}, {"_id": 0, "nome": 1})
     if os.get('responsavel_id'):
         os['responsavel'] = await db.users.find_one({"id": os['responsavel_id']}, {"_id": 0, "nome": 1, "email": 1, "telefone": 1})
     # Materiais sugeridos do ativo
