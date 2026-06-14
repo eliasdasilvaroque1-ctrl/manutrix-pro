@@ -3580,7 +3580,7 @@ const InspecaoDetailPage = () => {
       }
       navigate('/inspecoes');
     } catch (error) {
-      toast.error('Erro ao concluir');
+      toast.error(normalizeError(error) || 'Erro ao concluir');
     } finally {
       setSubmitting(false);
     }

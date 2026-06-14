@@ -297,7 +297,7 @@ async def get_upload(filename: str):
 
 @api_router.get("/estoque")
 async def list_estoque(
-    categoria: Optional[CategoriaEstoque] = None,
+    categoria: Optional[str] = None,
     critico: Optional[bool] = None,
     search: Optional[str] = None,
     user: Dict = Depends(get_current_user)
@@ -306,7 +306,7 @@ async def list_estoque(
     if user.get('organization_id'):
         query['organization_id'] = user['organization_id']
     if categoria:
-        query['categoria'] = categoria.value
+        query['categoria'] = categoria
     
     items = await db.itens_estoque.find(query, {"_id": 0}).sort("nome", 1).to_list(1000)
     
@@ -374,11 +374,11 @@ async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_u
         "sku": sku,
         "nome": data.nome,
         "descricao": data.descricao,
-        "categoria": data.categoria.value,
+        "categoria": data.categoria or "outro",
         "quantidade": data.quantidade,
         "estoque_minimo": data.estoque_minimo,
         "estoque_maximo": data.estoque_maximo,
-        "unidade": data.unidade.value,
+        "unidade": data.unidade or "UN",
         "custo_unitario": data.custo_unitario,
         "valor_total": data.quantidade * data.custo_unitario,
         "fornecedor": data.fornecedor,
@@ -954,15 +954,21 @@ async def concluir_inspecao(
         raise HTTPException(status_code=404, detail="Inspeção não encontrada")
     
     # Determine result
-    nao_conformes = [item for item in checklist if item.get('conforme') == False]
+    # Safely check conforme - treat missing/None as neutral
+    nao_conformes = [item for item in checklist if item.get('conforme') is False]
     resultado = "nao_conforme" if nao_conformes else "conforme"
     status = "com_pendencias" if nao_conformes else "concluida"
     
     # Calculate duration
     duracao = None
     if insp.get('data_inicio'):
-        start = datetime.fromisoformat(insp['data_inicio'].replace('Z', '+00:00'))
-        duracao = int((datetime.now(timezone.utc) - start).total_seconds() / 60)
+        try:
+            start_str = insp['data_inicio']
+            if isinstance(start_str, str):
+                start = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+                duracao = int((datetime.now(timezone.utc) - start).total_seconds() / 60)
+        except (ValueError, TypeError):
+            duracao = None
     
     update_data = {
         "status": status,
