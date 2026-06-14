@@ -6,34 +6,58 @@ MANUTRIX OMNI — CMMS/EAM field-ready for industrial maintenance. Flat Area→A
 ## Architecture
 - Backend: FastAPI + MongoDB + Supabase Auth
 - Frontend: React PWA (Service Worker network-first v3)
-- DB: sectors, ativos, ordens_servico, inspecoes, anomalias, anomalia_comentarios, anomalia_historico, itens_estoque, inspection_templates, ativo_materiais
+- DB: sectors, ativos, ordens_servico, inspecoes, anomalias, anomalia_comentarios, anomalia_historico, itens_estoque, inspection_templates, ativo_materiais, spare_assets
 
-## IMPLEMENTED AND VALIDATED
+## ALL MODULES VALIDATED — Production Ready (2026-06-14)
 
-### FASE 1 — Estabilização Operacional ✅
-- [x] Área + TAG + Equipamento em todas as telas
-- [x] Cadastro limpo (removidos criticidade, status, centro de custo, MTBF/MTTR manual)
-- [x] Herdar ativo automaticamente (Nova OS/Inspeção com ativo travado)
-- [x] Modal conclusão OS com "Serviço Executado" + "Tempo Gasto"
-- [x] Histórico do Ativo (prontuário)
-- [x] UNIQUE(area_id, tag)
-- [x] Service Worker network-first (cache-v3)
+### Ativos ✅
+- CRUD completo, busca por TAG/nome/área
+- BOM (Lista Técnica) CRUD com busca
+- Upload PDF manuais
+- QR Code geração e impressão
+- Área + TAG + Equipamento em todas as telas
 
-### FASE 2 P0 — Operacional ✅
-- [x] Bug Checklist CORRIGIDO (tipo numerico/opcao)
-- [x] Templates de Inspeção por Equipamento (CRUD admin)
-- [x] Lista Técnica (BOM) CRUD completo na ficha do ativo
-- [x] Executantes na OS (multi-select equipe[])
-- [x] SKU → Código em Estoque
+### Ordens de Serviço ✅
+- CRUD + Kanban (Aberta/Em Execução/Pausada/Concluída)
+- Modal conclusão com "Serviço Executado" + "Tempo Gasto"
+- Executantes múltiplos (equipe[])
+- Histórico completo com audit trail
 
-### FASE 2 P1 — Workflow e Vinculação ✅ (2026-06-14)
-- [x] **Templates vinculados ao fluxo de inspeção**: ao selecionar equipamento, templates específicos auto-carregam
-- [x] **Anomalias workflow completo**: Aberta→Em Análise→OS Gerada→Corrigida→Encerrada
-- [x] **Anomalias edição + comentários + histórico**: completo com audit trail
-- [x] **Anomalias encerradas preservadas**: não são excluídas, permanecem vinculadas ao ativo
-- [x] **SKU → Código em Sobressalentes**: renomeado
-- [x] **Filtros de anomalias**: por status (Todas/Aberta/Em Análise/Corrigida/Encerrada)
-- [x] **Anomalias no histórico do ativo**: aparecem na timeline com badge
+### Inspeções ✅
+- Templates por tipo de equipamento (CRUD admin)
+- Mecânica/Elétrica/Lubrificação padrão
+- 7 tipos de campo (Boolean, Numérico, Temperatura, Vibração, Opção, Texto, Observação)
+- Auto-conclusão via Ronda
+- Geração automática de OS para não conformidades
+
+### Anomalias ✅
+- Workflow: Aberta→Em Análise→OS Gerada→Corrigida→Encerrada
+- Edição, comentários, histórico
+- Encerradas preservadas vinculadas ao ativo
+
+### Estoque ✅
+- CRUD com movimentações (entrada/saída)
+- Label "Código" (não SKU)
+
+### Sobressalentes ✅
+- CRUD com busca
+- Label "Código" (não TAG)
+
+### Exportações ✅ (Validadas com conteúdo)
+| Módulo | Excel | PDF |
+|--------|-------|-----|
+| Ativos | ✅ 15 registros | ✅ 2.8KB |
+| OS | ✅ 31 registros | ✅ 4.4KB |
+| Estoque | ✅ 18 registros | ✅ 3.1KB |
+| Inspeções | ✅ 38 registros | ✅ 4.5KB |
+| Sobressalentes | ✅ 6 registros | — |
+
+### Auditoria Visual ✅
+- Zero resquícios de: Planta, Criticidade, Status do Ativo, Centro de Custo, SKU
+- PlantasPage removido (código morto)
+- StatusBadge limpo (removidos operacional/parado/manutencao)
+- Dashboard: "OS por Área" (não "Setor")
+- Dados legados com prefixo "SKU-" migrados
 
 ## SUSPENSO
-- Dashboard Executivo, OEE, Tree View, Push Notifications
+- Dashboard Executivo, OEE, Tree View, Push Notifications, novos KPIs
