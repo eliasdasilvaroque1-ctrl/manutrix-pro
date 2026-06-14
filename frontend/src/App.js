@@ -1294,17 +1294,20 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
         setTemplates(r.data);
         if (r.data.mecanica) setChecklist(r.data.mecanica.itens || []);
       }).catch(() => {});
-      // Load equipment-specific templates if ativo is pre-selected
-      if (preSelectedAtivoId) {
-        const ativo = ativos.find(a => a.id === preSelectedAtivoId);
-        if (ativo?.tipo_equipamento) {
-          api.get('/inspection-templates', { params: { tipo_equipamento: ativo.tipo_equipamento } })
-            .then(r => setEquipTemplates(r.data || []))
-            .catch(() => {});
-        }
-      }
     }
   }, [isOpen, user, preSelectedAtivoId]);
+
+  // Fetch equipment-specific templates when ativos are loaded
+  useEffect(() => {
+    const ativoId = preSelectedAtivoId || form.ativo_id;
+    if (!ativoId || ativos.length === 0) return;
+    const ativo = ativos.find(a => a.id === ativoId);
+    if (ativo?.tipo_equipamento) {
+      api.get('/inspection-templates', { params: { tipo_equipamento: ativo.tipo_equipamento } })
+        .then(r => setEquipTemplates(r.data || []))
+        .catch(() => {});
+    }
+  }, [ativos, preSelectedAtivoId, form.ativo_id]);
 
   // When ativo changes, load equipment-specific templates
   const handleAtivoChange = (ativoId) => {

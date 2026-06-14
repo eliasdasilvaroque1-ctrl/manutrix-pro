@@ -6,30 +6,34 @@ MANUTRIX OMNI — CMMS/EAM field-ready for industrial maintenance. Flat Area→A
 ## Architecture
 - Backend: FastAPI + MongoDB + Supabase Auth
 - Frontend: React PWA (Service Worker network-first v3)
-- DB: sectors, ativos, ordens_servico, inspecoes, anomalias, itens_estoque, inspection_templates, ativo_materiais
+- DB: sectors, ativos, ordens_servico, inspecoes, anomalias, anomalia_comentarios, anomalia_historico, itens_estoque, inspection_templates, ativo_materiais
 
-## FASE 1 — Estabilização Operacional (COMPLETA 2026-06-14)
+## IMPLEMENTED AND VALIDATED
+
+### FASE 1 — Estabilização Operacional ✅
 - [x] Área + TAG + Equipamento em todas as telas
-- [x] Cadastro limpo (removidos criticidade, status, centro de custo, MTBF/MTTR manual, financeiros)
+- [x] Cadastro limpo (removidos criticidade, status, centro de custo, MTBF/MTTR manual)
 - [x] Herdar ativo automaticamente (Nova OS/Inspeção com ativo travado)
-- [x] Modal conclusão OS com "Serviço Executado" + "Tempo Gasto" obrigatórios
-- [x] Histórico do Ativo (prontuário) com timeline OS/Inspeções/Anomalias
-- [x] UNIQUE(area_id, tag) com índice MongoDB
-- [x] Export limpo com "Área" como primeira coluna
-- [x] Service Worker corrigido: network-first (cache-v3)
+- [x] Modal conclusão OS com "Serviço Executado" + "Tempo Gasto"
+- [x] Histórico do Ativo (prontuário)
+- [x] UNIQUE(area_id, tag)
+- [x] Service Worker network-first (cache-v3)
 
-## FASE 2 — P0 Operacional (COMPLETA 2026-06-14)
-- [x] **Bug Checklist CORRIGIDO**: tipo 'numerico' vs 'numero' normalizado + handler 'opcao' (Bom/Regular/Ruim/Crítico) adicionado
-- [x] **Templates de Inspeção por Equipamento**: CRUD admin completo (criar/editar/excluir/duplicar), vinculado a tipo_equipamento, 7 tipos de campo
-- [x] **Lista Técnica (BOM)**: CRUD completo na ficha do ativo com busca por código/descrição
-- [x] **Executantes na OS**: Multi-select de executantes (equipe[]) com tags visuais
-- [x] **SKU → Código**: Renomeado em Estoque
+### FASE 2 P0 — Operacional ✅
+- [x] Bug Checklist CORRIGIDO (tipo numerico/opcao)
+- [x] Templates de Inspeção por Equipamento (CRUD admin)
+- [x] Lista Técnica (BOM) CRUD completo na ficha do ativo
+- [x] Executantes na OS (multi-select equipe[])
+- [x] SKU → Código em Estoque
 
-## Backlog P1 (PRÓXIMA FASE)
-- [ ] Anomalias: workflow completo (Aberta→Em análise→OS→Corrigida→Encerrada), edição, comentários, encerramento
-- [ ] Consulta histórica do ativo: filtros de anomalias (abertas/encerradas/todas)
-- [ ] Vincular templates de inspeção ao fluxo de criação de inspeção (selecionar template por tipo de equipamento)
-- [ ] SKU → Código: completar em Sobressalentes
+### FASE 2 P1 — Workflow e Vinculação ✅ (2026-06-14)
+- [x] **Templates vinculados ao fluxo de inspeção**: ao selecionar equipamento, templates específicos auto-carregam
+- [x] **Anomalias workflow completo**: Aberta→Em Análise→OS Gerada→Corrigida→Encerrada
+- [x] **Anomalias edição + comentários + histórico**: completo com audit trail
+- [x] **Anomalias encerradas preservadas**: não são excluídas, permanecem vinculadas ao ativo
+- [x] **SKU → Código em Sobressalentes**: renomeado
+- [x] **Filtros de anomalias**: por status (Todas/Aberta/Em Análise/Corrigida/Encerrada)
+- [x] **Anomalias no histórico do ativo**: aparecem na timeline com badge
 
 ## SUSPENSO
-- Dashboard Executivo, OEE, Tree View, Push Notifications, novos KPIs
+- Dashboard Executivo, OEE, Tree View, Push Notifications
