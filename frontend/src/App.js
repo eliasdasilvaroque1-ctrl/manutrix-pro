@@ -2267,7 +2267,7 @@ const AtivosPage = () => {
       {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
         <div className="space-y-2">
           {filtered.map((ativo) => (
-            <div key={ativo.id} className="glass-card p-4 hover:border-slate-600 transition-all group">
+            <div key={ativo.id} className="glass-card p-4 hover:border-slate-600 transition-all group" data-testid={`ativo-card-${ativo.tag}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/ativos/${ativo.id}`)}>
                   <div className="p-2 rounded-lg bg-emerald-500/10">
