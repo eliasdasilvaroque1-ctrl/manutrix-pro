@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 27 — Sobressalentes Edit/Delete UI buttons fix validated end-to-end. Backend: 9/9 pytest PASS (admin CRUD create+update+delete with GET verification, RBAC: tecnico GET 200 / POST PUT DELETE all 403, audit log records both 'update' and 'delete' actions on entity_type='sobressalentes' with matching entity_id). Frontend (Playwright): Admin sees add-spare-btn + edit-spare-{id} + delete-spare-{id} buttons on every card; admin successfully edits description (TEST_UI27_EDITED_{id6}) and persists in list; admin successfully deletes spare (toast 'Sobressalente excluído!' shown, card removed from DOM). Tecnico: add-spare-btn ABSENT, all edit/delete buttons ABSENT (0/0), but can list spares (10 cards visible). Fix is fully working — buttons are now always visible (no group-hover hidden class) and role check is ['admin','pcm'] both in JSX guards and backend check_write_permission.",
+  "pass_fail_matrix": {
+    "BACKEND POST /api/sobressalentes (admin)": "PASS",
+    "BACKEND PUT /api/sobressalentes/{id} (admin)": "PASS",
+    "BACKEND DELETE /api/sobressalentes/{id} (admin)": "PASS",
+    "BACKEND GET /api/sobressalentes (tecnico)": "PASS",
+    "BACKEND POST /api/sobressalentes (tecnico → 403)": "PASS",
+    "BACKEND PUT /api/sobressalentes/{id} (tecnico → 403)": "PASS",
+    "BACKEND DELETE /api/sobressalentes/{id} (tecnico → 403)": "PASS",
+    "BACKEND GET /api/admin/audit-logs records update on sobressalentes": "PASS",
+    "BACKEND GET /api/admin/audit-logs records delete on sobressalentes": "PASS",
+    "FRONTEND Admin sees Edit + Delete buttons on every spare card": "PASS",
+    "FRONTEND Admin can open Edit modal pre-filled and save changes": "PASS",
+    "FRONTEND Admin sees updated description after edit": "PASS",
+    "FRONTEND Admin can Delete spare via confirmation dialog": "PASS",
+    "FRONTEND Tecnico does NOT see add-spare-btn / edit-spare / delete-spare": "PASS",
+    "FRONTEND Tecnico CAN see spare list (read access)": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/sobressalentes", "issues": ["Status 'disponivel' renders as raw lowercase string (no badge styling) because it is not present in statusConfig map. Already flagged by main agent as out-of-scope for this iteration. Example: SP-275F95 'Test spare' card shows 'disponivel' instead of 'Disponível' with a colored badge."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_spares_rbac_audit.py",
+    "/app/test_reports/pytest/pytest_iteration27.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (already flagged): Add 'disponivel' (and any other valid statuses) to statusConfig map in SobressalentesPage so the badge renders styled label.",
+    "OPTIONAL: Consider showing 'Sobressalentes' link in sidebar for Tecnico role (read-only access works via direct URL but the sidebar omits it — discoverability issue). Confirm intended behaviour with product."
+  ],
+  "critical_code_review_comments": [
+    "App.js L4703-4708: Edit/Delete buttons now wrapped in `['admin','pcm'].includes(user?.role)` guard with no group-hover hiding — fix is correct and matches the Add button guard at L4679.",
+    "App.js L4661: handleEdit pre-fills form with `sp.modelo || ''`, `sp.fabricante || ''` etc — fixes the React 'changing uncontrolled to controlled' warning that briefly appears when editing a spare whose fields were null at create time. Minor: also coerce `sp.descricao` to `sp.descricao || ''` to silence the console warning observed during testing ('`value` prop on input should not be null').",
+    "server.py L1929 (PUT) and L1942 (DELETE) — check_write_permission(user, ['admin','pcm']) matches the frontend guard. RBAC enforced server-side too (verified: tecnico got 403 on both write endpoints).",
+    "Audit log emission for sobressalentes update + delete is working — entity_type='sobressalentes' with matching entity_id appears in /api/admin/audit-logs."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_spares_rbac_audit.py",
+    "/app/test_reports/pytest/pytest_iteration27.xml",
+    "/app/test_reports/iteration_27.json"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (5/5 UI assertions)"},
+  "test_credentials": "admin@manutrix.com/admin123 and tecnico@manutrix.com/tecnico123 — both working",
+  "seed_data_creation": "Tests create transient TEST_SPARE_iter27_* and TEST_AUDIT_iter27 spares which are deleted in the same test. One leftover from playwright run: 'TEST_UI_Rolamento 6310' (SP-AB712A) and 'TEST_Detail Spare' (SP-F89950) and 'TEST_Rolamento 6205-2RS' (SP-CB67D7) — these are pre-existing from earlier iterations, NOT created by this run. No production data affected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sobressalentes Edit/Delete fix is fully validated. Backend pytest at /app/backend/tests/test_spares_rbac_audit.py (9 tests, ~4s, all PASS). Run with `REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_spares_rbac_audit.py -v`. UI screenshots at /app/.screenshots/iter27_admin_ok.png (shows Novo + edit/delete pencil+trash icons + 'Sobressalente excluído!' toast) and iter27_tecnico_ok.png (no Novo, no edit/delete icons, only read view). Console emits a benign React warning during Edit modal open: '`value` prop on input should not be null' — caused by sp.descricao being null on a couple of legacy records. Cosmetic only, does not block the flow.",
+  "rca of the issue": "Original bug: Edit/Delete buttons had `hidden group-hover:flex` CSS and parent card lacked the `group` class — buttons were never visible. Additionally permission gate used only 'admin' instead of ['admin','pcm']. Main agent's fix removed the hover-gated visibility (buttons now always rendered when user role is admin or pcm) and updated the role array. Validated: buttons render unconditionally on every card for admin/pcm and never for tecnico (RBAC enforced both client-side and server-side). Audit logs correctly record update/delete actions with entity_type='sobressalentes'."
+}

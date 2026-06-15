@@ -4688,9 +4688,9 @@ const SobressalentesPage = () => {
       {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
         <div className="space-y-2">
           {filtered.map((sp) => (
-            <div key={sp.id} className="glass-card p-4 hover:border-slate-600 transition-all">
+            <div key={sp.id} className="glass-card p-4 hover:border-slate-600 transition-all" data-testid={`spare-card-${sp.id}`}>
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-mono text-emerald-400 text-sm">{sp.tag || sp.codigo}</span>
                     <span className={`text-xs px-2 py-0.5 rounded ${statusConfig[sp.status]?.class || ''}`}>{statusConfig[sp.status]?.label || sp.status}</span>
@@ -4699,11 +4699,11 @@ const SobressalentesPage = () => {
                   <p className="text-xs text-slate-500">{[sp.fabricante, sp.modelo, sp.localizacao].filter(Boolean).join(' • ')}</p>
                   {sp.ativo_vinculado && <p className="text-xs text-blue-400 mt-1">Ativo: {sp.ativo_vinculado.tag} - {sp.ativo_vinculado.nome}</p>}
                 </div>
-                {sp.custo && <p className="text-lg font-bold text-slate-200">R$ {sp.custo.toFixed(2)}</p>}
-                {user?.role === 'admin' && (
-                  <div className="hidden group-hover:flex items-center gap-1">
-                    <button onClick={() => handleEdit(sp)} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar"><Edit3 size={15} className="text-blue-400" /></button>
-                    <button onClick={() => setDeleteItem(sp)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir"><Trash2 size={15} className="text-red-400" /></button>
+                {sp.custo && <p className="text-lg font-bold text-slate-200 mx-3">R$ {sp.custo.toFixed(2)}</p>}
+                {['admin','pcm'].includes(user?.role) && (
+                  <div className="flex items-center gap-1 ml-2">
+                    <button onClick={() => handleEdit(sp)} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar" data-testid={`edit-spare-${sp.id}`}><Edit3 size={15} className="text-blue-400" /></button>
+                    <button onClick={() => setDeleteItem(sp)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir" data-testid={`delete-spare-${sp.id}`}><Trash2 size={15} className="text-red-400" /></button>
                   </div>
                 )}
               </div>

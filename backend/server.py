@@ -1922,12 +1922,13 @@ async def create_spare(data: SpareAssetCreate, user: Dict = Depends(get_current_
         "deleted_at": None
     }
     await db.spare_assets.insert_one(spare_doc)
+    await audit_log("create", "sobressalentes", spare_doc['id'], user, f"Sobressalente: {spare_doc.get('tag','')} {data.nome}")
     spare_doc.pop('_id', None)
     return spare_doc
 
 @api_router.put("/sobressalentes/{spare_id}")
 async def update_spare(spare_id: str, data: SpareAssetUpdate, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_write_permission(user, ['admin', 'pcm'])
     existing = await db.spare_assets.find_one({"id": spare_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Sobressalente não encontrado")
@@ -1935,14 +1936,15 @@ async def update_spare(spare_id: str, data: SpareAssetUpdate, user: Dict = Depen
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     await db.spare_assets.update_one({"id": spare_id}, {"$set": update_data})
+    await audit_log("update", "sobressalentes", spare_id, user, f"Sobressalente editado: {existing.get('tag','')} {existing.get('nome','')}")
     return await db.spare_assets.find_one({"id": spare_id}, {"_id": 0})
 
 @api_router.delete("/sobressalentes/{spare_id}")
 async def delete_spare(spare_id: str, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_write_permission(user, ['admin', 'pcm'])
     existing = await db.spare_assets.find_one({"id": spare_id, "deleted_at": None}, {"_id": 0})
     await db.spare_assets.update_one({"id": spare_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
-    await audit_log("delete", "sobressalentes", spare_id, user, f"Sobressalente {(existing or {}).get('tag','')} excluído")
+    await audit_log("delete", "sobressalentes", spare_id, user, f"Sobressalente excluído: {(existing or {}).get('tag','')} {(existing or {}).get('nome','')}")
     return {"success": True}
 
 @api_router.post("/sobressalentes/movimentacao")
