@@ -2406,6 +2406,10 @@ const AtivoDetailPage = () => {
   const [bomEdit, setBomEdit] = useState(null);
   const [bomForm, setBomForm] = useState({ nome: '', codigo: '', quantidade: 1, unidade: 'UN', observacoes: '' });
   const [bomSearch, setBomSearch] = useState(undefined);
+  const [showDupModal, setShowDupModal] = useState(false);
+  const [dupForm, setDupForm] = useState({ sector_id: '', tag: '', numero_serie: '' });
+  const [dupSectors, setDupSectors] = useState([]);
+  const [dupSaving, setDupSaving] = useState(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -2493,9 +2497,21 @@ const AtivoDetailPage = () => {
           <h1 className="text-xl font-bold text-slate-100" data-testid="ativo-nome">{ativo.nome}</h1>
           {ativo.tipo_equipamento && <p className="text-sm text-slate-500">{ativo.tipo_equipamento}</p>}
         </div>
-        <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 text-sm print:hidden" data-testid="print-qr-btn">
-          <QrCode size={16} /> Imprimir QR
-        </button>
+        <div className="flex items-center gap-2 print:hidden">
+          {user?.role === 'admin' && (
+            <button onClick={async () => {
+              const res = await api.get('/sectors');
+              setDupSectors(res.data);
+              setDupForm({ sector_id: ativo.sector_id || '', tag: '', numero_serie: '' });
+              setShowDupModal(true);
+            }} className="btn-secondary flex items-center gap-2 text-sm" data-testid="duplicate-ativo-btn">
+              <Copy size={16} /> Duplicar
+            </button>
+          )}
+          <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 text-sm" data-testid="print-qr-btn">
+            <QrCode size={16} /> Imprimir QR
+          </button>
+        </div>
       </div>
       
       {/* QR Code — printable */}
@@ -2700,6 +2716,49 @@ const AtivoDetailPage = () => {
           )}
         </div>
       )}
+
+      {/* Modal Duplicar Ativo */}
+      <Modal isOpen={showDupModal} onClose={() => setShowDupModal(false)} title="Duplicar Ativo" size="sm">
+        <div className="space-y-4">
+          <div className="bg-slate-800/50 rounded-lg p-3 text-sm">
+            <p className="text-xs text-slate-500 mb-1">Duplicando de:</p>
+            {ativo.sector && <p className="text-xs text-slate-500 uppercase">{ativo.sector.nome}</p>}
+            <span className="font-mono text-emerald-400">{ativo.tag}</span>
+            <span className="text-slate-300 ml-2">{ativo.nome}</span>
+          </div>
+          <FormInput label="Área do Novo Ativo" required>
+            <Select value={dupForm.sector_id} onChange={v => setDupForm({...dupForm, sector_id: v})}
+              options={dupSectors.map(s => ({ value: s.id, label: s.nome }))} placeholder="Selecione a área..." />
+          </FormInput>
+          <FormInput label="Nova TAG" required>
+            <input value={dupForm.tag} onChange={e => setDupForm({...dupForm, tag: e.target.value.toUpperCase()})}
+              className="input-industrial w-full px-4 font-mono" placeholder="Ex: AV-02" data-testid="dup-tag-input" />
+          </FormInput>
+          <FormInput label="Novo Número de Série">
+            <input value={dupForm.numero_serie} onChange={e => setDupForm({...dupForm, numero_serie: e.target.value})}
+              className="input-industrial w-full px-4" placeholder="Opcional" data-testid="dup-serie-input" />
+          </FormInput>
+          <p className="text-xs text-slate-500">Será copiado: tipo, fabricante, modelo, observações, lista técnica (BOM), manuais e fotos.</p>
+          <div className="flex gap-3 justify-end pt-3 border-t border-slate-800">
+            <button onClick={() => setShowDupModal(false)} className="btn-secondary">Cancelar</button>
+            <button disabled={dupSaving} onClick={async () => {
+              if (!dupForm.sector_id || !dupForm.tag) { toast.error('Preencha área e TAG'); return; }
+              setDupSaving(true);
+              try {
+                const res = await api.post(`/ativos/${ativo.id}/duplicar`, dupForm);
+                const d = res.data;
+                toast.success(`Ativo ${d.tag} criado! (${d._materiais_copied} materiais, ${d._manuais_copied} manuais, ${d._fotos_copied} copiados)`);
+                setShowDupModal(false);
+                navigate(`/ativos/${d.id}`);
+              } catch (error) { toast.error(normalizeError(error)); }
+              finally { setDupSaving(false); }
+            }} className="btn-primary flex items-center gap-2" data-testid="confirm-duplicate">
+              {dupSaving ? <RefreshCw size={16} className="animate-spin" /> : <Copy size={16} />}
+              {dupSaving ? 'Duplicando...' : 'Duplicar Ativo'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

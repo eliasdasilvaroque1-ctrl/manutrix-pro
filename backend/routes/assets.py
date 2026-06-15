@@ -228,6 +228,75 @@ async def delete_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
     await audit_log("delete", "ativos", ativo_id, user, f"Ativo {existing.get('tag','')} excluído")
     return {"success": True}
 
+@router.post("/ativos/{ativo_id}/duplicar")
+async def duplicate_ativo(ativo_id: str, body: dict, user: Dict = Depends(get_current_user)):
+    """Duplicate an asset: copies tipo, fabricante, modelo, observacoes, BOM, manuais, fotos"""
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+
+    original = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not original:
+        raise HTTPException(status_code=404, detail="Ativo original não encontrado")
+
+    new_sector_id = body.get('sector_id', original.get('sector_id'))
+    new_tag = (body.get('tag', '') or '').upper()
+    new_numero_serie = body.get('numero_serie', '')
+
+    if not new_tag:
+        raise HTTPException(status_code=400, detail="TAG é obrigatória")
+
+    sector = await db.sectors.find_one({"id": new_sector_id, "deleted_at": None})
+    if not sector:
+        raise HTTPException(status_code=404, detail="Área não encontrada")
+
+    existing = await db.ativos.find_one({"tag": new_tag, "sector_id": new_sector_id, "deleted_at": None})
+    if existing:
+        raise HTTPException(status_code=400, detail="TAG já existe nesta área")
+
+    new_id = str(uuid.uuid4())
+    new_doc = {
+        "id": new_id, "tag": new_tag, "qr_code": str(uuid.uuid4()),
+        "nome": original.get('nome', ''),
+        "tipo_equipamento": original.get('tipo_equipamento', ''),
+        "fabricante": original.get('fabricante'),
+        "modelo": original.get('modelo'),
+        "numero_serie": new_numero_serie or None,
+        "sector_id": new_sector_id,
+        "organization_id": org_id,
+        "observacoes": original.get('observacoes'),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.ativos.insert_one(new_doc)
+
+    # Duplicate BOM (materiais)
+    materiais = await db.ativo_materiais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(200)
+    for mat in materiais:
+        mat_copy = {**mat, "id": str(uuid.uuid4()), "ativo_id": new_id, "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.ativo_materiais.insert_one(mat_copy)
+
+    # Duplicate manuais (reference only — files stay shared)
+    manuais = await db.manuais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(50)
+    for man in manuais:
+        man_copy = {**man, "id": str(uuid.uuid4()), "ativo_id": new_id, "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.manuais.insert_one(man_copy)
+
+    # Duplicate fotos/attachments
+    attachments = await db.attachments.find({"entity_type": "asset", "entity_id": ativo_id}, {"_id": 0}).to_list(50)
+    for att in attachments:
+        att_copy = {**att, "id": str(uuid.uuid4()), "entity_id": new_id, "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.attachments.insert_one(att_copy)
+
+    await audit_log("duplicate", "ativos", new_id, user, f"Ativo {new_tag} duplicado de {original.get('tag','')}")
+
+    new_doc.pop('_id', None)
+    new_doc['_duplicated_from'] = original.get('tag', '')
+    new_doc['_materiais_copied'] = len(materiais)
+    new_doc['_manuais_copied'] = len(manuais)
+    new_doc['_fotos_copied'] = len(attachments)
+    return new_doc
+
 
 # ============== MATERIAIS POR EQUIPAMENTO ==============
 
