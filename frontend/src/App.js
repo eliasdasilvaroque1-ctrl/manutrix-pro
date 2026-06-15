@@ -1479,44 +1479,53 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   
+  const role = user?.role || 'tecnico';
   const menuGroups = [
     {
       label: 'GESTÃO',
       items: [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
         { icon: Box, label: 'Ativos', path: '/ativos' },
-        { icon: Wrench, label: 'Ordens de Serviço', path: '/os' },
+        ...(role !== 'pcm' ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
         { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
         { icon: AlertTriangle, label: 'Anomalias', path: '/anomalias' },
-        { icon: Target, label: 'Ronda', path: '/ronda' },
+        ...(role !== 'gerente' && role !== 'pcm' ? [{ icon: Target, label: 'Ronda', path: '/ronda' }] : []),
       ]
     },
-    {
+    ...(role !== 'tecnico' ? [{
       label: 'INFRAESTRUTURA',
       items: [
         { icon: Layers, label: 'Áreas', path: '/setores' },
       ]
-    },
-    {
+    }] : []),
+    ...(role !== 'tecnico' ? [{
       label: 'MATERIAIS',
       items: [
         { icon: Package, label: 'Estoque', path: '/estoque' },
         { icon: Cog, label: 'Sobressalentes', path: '/sobressalentes' },
       ]
-    },
-    {
-      label: 'SUPORTE',
-      items: [
-        { icon: Zap, label: 'Assistente IA', path: '/assistente' },
-      ]
-    },
-    ...(user?.role === 'admin' ? [{
+    }] : []),
+    ...(role === 'admin' ? [{
       label: 'ADMIN',
       items: [
         { icon: Users, label: 'Usuários', path: '/admin/usuarios' },
-        { icon: ClipboardCheck, label: 'Templates Inspeção', path: '/admin/templates' },
+        { icon: ClipboardCheck, label: 'Templates', path: '/admin/templates' },
+        { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
       ]
-    }] : [])
+    }] : []),
+    ...(role === 'pcm' ? [{
+      label: 'ADMIN',
+      items: [
+        { icon: ClipboardCheck, label: 'Templates', path: '/admin/templates' },
+        { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
+      ]
+    }] : []),
+    ...(role === 'gerente' ? [{
+      label: 'ADMIN',
+      items: [
+        { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
+      ]
+    }] : []),
   ];
   
   return (
@@ -5367,6 +5376,118 @@ const AdminTemplatesPage = () => {
 
 // ============== ADMIN USUARIOS PAGE ==============
 
+
+// ============== AUDITORIA ==============
+
+const AuditoriaPage = () => {
+  const [logs, setLogs] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({ entity_type: '', action: '', date_from: '', date_to: '' });
+  const { user } = useAuth();
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (filters.entity_type) params.entity_type = filters.entity_type;
+      if (filters.action) params.action = filters.action;
+      if (filters.date_from) params.date_from = filters.date_from;
+      if (filters.date_to) params.date_to = filters.date_to;
+      const [logsRes, statsRes] = await Promise.all([
+        api.get('/admin/audit-logs', { params }),
+        api.get('/admin/audit-logs/stats').catch(() => ({ data: null }))
+      ]);
+      setLogs(logsRes.data);
+      setStats(statsRes.data);
+    } catch { toast.error('Erro ao carregar auditoria'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { fetchLogs(); }, []);
+
+  const handleExport = async (fmt) => {
+    try {
+      const res = await api.get(`/export/audit?format=${fmt}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `auditoria_manutrix.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
+      document.body.appendChild(link); link.click(); link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Exportado!');
+    } catch { toast.error('Erro ao exportar'); }
+  };
+
+  const modules = ['auth', 'ativos', 'ordens_servico', 'inspecoes', 'anomalias', 'estoque', 'sobressalentes', 'security'];
+  const actions = ['login', 'create', 'update', 'delete', 'status_change', 'access_denied', 'duplicate'];
+  const actionColors = {
+    login: 'text-blue-400 bg-blue-500/10', create: 'text-emerald-400 bg-emerald-500/10',
+    update: 'text-amber-400 bg-amber-500/10', delete: 'text-red-400 bg-red-500/10',
+    status_change: 'text-purple-400 bg-purple-500/10', access_denied: 'text-red-400 bg-red-500/20',
+    duplicate: 'text-blue-400 bg-blue-500/10',
+  };
+
+  return (
+    <div className="space-y-4" data-testid="auditoria-page">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Auditoria</h1>
+          <p className="text-sm text-slate-500">{stats ? `${stats.total} registros` : ''}</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => handleExport('excel')} className="btn-secondary text-sm flex items-center gap-1" data-testid="audit-export-excel"><Download size={14} /> Excel</button>
+          <button onClick={() => handleExport('pdf')} className="btn-secondary text-sm flex items-center gap-1"><FileText size={14} /> PDF</button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      {stats && (
+        <div className="flex gap-2 flex-wrap">
+          {Object.entries(stats.by_module || {}).map(([mod, count]) => (
+            <span key={mod} className="bg-slate-800/50 text-slate-400 text-xs px-2 py-1 rounded">{mod}: {count}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="glass-card p-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <select value={filters.entity_type} onChange={e => setFilters({...filters, entity_type: e.target.value})} className="input-industrial px-3 text-sm">
+            <option value="">Todos os módulos</option>
+            {modules.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={filters.action} onChange={e => setFilters({...filters, action: e.target.value})} className="input-industrial px-3 text-sm">
+            <option value="">Todas as operações</option>
+            {actions.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <input type="date" value={filters.date_from} onChange={e => setFilters({...filters, date_from: e.target.value})} className="input-industrial px-3 text-sm" />
+          <div className="flex gap-2">
+            <input type="date" value={filters.date_to} onChange={e => setFilters({...filters, date_to: e.target.value})} className="input-industrial px-3 text-sm flex-1" />
+            <button onClick={fetchLogs} className="btn-primary text-sm px-3" data-testid="audit-filter-btn">Filtrar</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Logs */}
+      {loading ? <Loading rows={8} /> : logs.length > 0 ? (
+        <div className="space-y-1">
+          {logs.map((log, idx) => (
+            <div key={log.id || idx} className="glass-card px-4 py-3 flex items-center gap-3" data-testid={`audit-row-${idx}`}>
+              <span className="text-xs text-slate-600 w-28 shrink-0">{(log.created_at || '').slice(0,16).replace('T',' ')}</span>
+              <span className="text-xs text-slate-300 w-28 shrink-0 truncate">{log.user_nome}</span>
+              <span className="text-[10px] text-slate-500 w-16 shrink-0">{log.user_role}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded w-20 text-center shrink-0 ${actionColors[log.action] || 'text-slate-400 bg-slate-800'}`}>{log.action}</span>
+              <span className="text-xs text-slate-500 w-20 shrink-0">{log.entity_type}</span>
+              <span className="text-xs text-slate-400 flex-1 truncate">{log.details}</span>
+            </div>
+          ))}
+        </div>
+      ) : <EmptyState icon={Shield} title="Nenhum registro" description="Logs de auditoria aparecerão aqui." />}
+    </div>
+  );
+};
+
+
 const AdminUsuariosPage = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -5769,6 +5890,7 @@ function App() {
           <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
           <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
           <Route path="/admin/templates" element={<ProtectedRoute><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/admin/auditoria" element={<ProtectedRoute><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
           <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

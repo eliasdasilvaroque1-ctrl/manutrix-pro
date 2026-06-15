@@ -29,7 +29,7 @@ from deps import (
     hash_password, verify_password, create_token, get_current_user,
     is_admin, check_write_permission, check_admin_only, check_pcm_or_admin, check_not_gerente, can_export, can_view_dashboard,
     generate_tag, generate_sku, generate_os_numero,
-    audit_log, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids,
+    audit_log, audit_denial, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids,
     logger
 )
 from models import *
@@ -113,6 +113,7 @@ async def login(credentials: UserLogin):
                     await db.users.update_one({"id": user['id']}, {"$set": {"supabase_id": auth_response.user.id}})
                 
                 token = create_token(user['id'], user.get('role', 'tecnico'), user.get('organization_id', ''))
+                await audit_log("login", "auth", user['id'], user, f"Login via Supabase: {email}")
                 return TokenResponse(
                     access_token=token,
                     user={"id": user['id'], "email": user['email'], "nome": user.get('nome', ''),
@@ -140,6 +141,7 @@ async def login(credentials: UserLogin):
             logger.warning(f"Supabase sync: {e}")
     
     token = create_token(user['id'], user['role'], user.get('organization_id', ''))
+    await audit_log("login", "auth", user['id'], user, f"Login local: {email}")
     return TokenResponse(
         access_token=token,
         user={"id": user['id'], "email": user['email'], "nome": user['nome'],
@@ -394,6 +396,7 @@ async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_u
     }
     
     await db.itens_estoque.insert_one(item_doc)
+    await audit_log("create", "estoque", item_id, user, f"Estoque: {item_doc.get('sku','')} {data.nome}")
     
     # Register initial movement if quantity > 0
     if data.quantidade > 0:
@@ -872,6 +875,7 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
     }
     
     await db.inspecoes.insert_one(insp_doc)
+    await audit_log("create", "inspecoes", insp_id, user, f"Inspeção {tipo_str}: {ativo.get('tag','')}")
     
     # Auto-generate OS for non-conformities in Ronda mode
     if has_responses and nao_conformes:
@@ -2068,6 +2072,7 @@ async def create_anomalia(data: AnomaliaCreate, user: Dict = Depends(get_current
         anomalia_doc['os_gerada_id'] = os_id
     
     await db.anomalias.insert_one(anomalia_doc)
+    await audit_log("create", "anomalias", anomalia_doc.get('id',''), user, f"Anomalia: {ativo.get('tag','')}")
     anomalia_doc.pop('_id', None)
     return {**anomalia_doc, "os_gerada_id": os_id, "prioridade_os": prioridade_os}
 
@@ -2390,10 +2395,110 @@ async def powerbi_kpis(user: Dict = Depends(get_current_user)):
     }
 
 @api_router.get("/admin/audit-logs")
-async def get_audit_logs(user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
-    logs = await db.audit_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return logs
+async def get_audit_logs(
+    user_id: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    action: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = 200,
+    user: Dict = Depends(get_current_user)
+):
+    """Audit logs with filters. Admin, PCM, Gerente can view."""
+    if user.get('role') not in ['admin', 'gerente', 'pcm']:
+        raise HTTPException(status_code=403, detail="Sem permissão para visualizar auditoria")
+    query = {}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    if user_id:
+        query['user_id'] = user_id
+    if entity_type:
+        query['entity_type'] = entity_type
+    if action:
+        query['action'] = action
+    if date_from:
+        query['created_at'] = {"$gte": date_from}
+    if date_to:
+        query.setdefault('created_at', {})
+        if isinstance(query['created_at'], dict):
+            query['created_at']['$lte'] = date_to + 'T23:59:59'
+        else:
+            query['created_at'] = {"$gte": query['created_at'], "$lte": date_to + 'T23:59:59'}
+    logs = await db.audit_logs.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    # Normalize old format logs
+    result = []
+    for log in logs:
+        result.append({
+            "id": log.get('id', ''),
+            "action": log.get('action') or log.get('acao', ''),
+            "entity_type": log.get('entity_type') or log.get('entidade', ''),
+            "entity_id": log.get('entity_id') or log.get('entidade_id', ''),
+            "user_id": log.get('user_id') or log.get('usuario_id', ''),
+            "user_nome": log.get('user_nome', ''),
+            "user_role": log.get('user_role', ''),
+            "details": log.get('details') or log.get('acao', ''),
+            "created_at": log.get('created_at', ''),
+        })
+    return result
+
+@api_router.get("/admin/audit-logs/stats")
+async def get_audit_stats(user: Dict = Depends(get_current_user)):
+    if user.get('role') not in ['admin', 'gerente', 'pcm']:
+        raise HTTPException(status_code=403, detail="Sem permissão")
+    pipeline = [
+        {"$group": {"_id": "$entity_type", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    modules = await db.audit_logs.aggregate(pipeline).to_list(50)
+    total = await db.audit_logs.count_documents({})
+    return {"total": total, "by_module": {m['_id']: m['count'] for m in modules if m['_id']}}
+
+@api_router.get("/export/audit")
+async def export_audit(format: str = "excel", user: Dict = Depends(get_current_user)):
+    if user.get('role') not in ['admin', 'gerente', 'pcm']:
+        raise HTTPException(status_code=403, detail="Sem permissão")
+    logs = await db.audit_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    if format == "excel":
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Auditoria"
+        ws.append(["Data/Hora", "Usuário", "Perfil", "Módulo", "Operação", "Detalhes"])
+        for l in logs:
+            ws.append([
+                (l.get('created_at', '') or '')[:19].replace('T', ' '),
+                l.get('user_nome', ''), l.get('user_role', ''),
+                l.get('entity_type', ''), l.get('action', ''), l.get('details', '')
+            ])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=auditoria_manutrix.xlsx"})
+    elif format == "pdf":
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        styles = getSampleStyleSheet()
+        elements = [Paragraph("MANUTRIX - Auditoria", styles['Title']), Spacer(1, 12)]
+        data = [["Data/Hora", "Usuário", "Perfil", "Módulo", "Operação", "Detalhes"]]
+        for l in logs[:200]:
+            data.append([
+                (l.get('created_at', '') or '')[:16].replace('T', ' '),
+                (l.get('user_nome', '') or '')[:15], l.get('user_role', ''),
+                l.get('entity_type', ''), l.get('action', ''),
+                (l.get('details', '') or '')[:40]
+            ])
+        t = Table(data)
+        t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#10b981')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('FONTSIZE',(0,0),(-1,-1),7),('GRID',(0,0),(-1,-1),0.5,colors.grey)]))
+        elements.append(t)
+        doc.build(elements)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=auditoria_manutrix.pdf"})
 
 # ============== ROOT ==============
 

@@ -91,9 +91,12 @@ def is_admin(user: Dict) -> bool:
     return user.get('role') == 'admin'
 
 def check_write_permission(user: Dict, allowed_roles: list = None):
+    role = user.get('role', '')
+    if role == 'gerente':
+        raise HTTPException(status_code=403, detail="Perfil Gerente possui apenas acesso de leitura")
     if is_admin(user):
         return True
-    if allowed_roles and user.get('role') in allowed_roles:
+    if allowed_roles and role in allowed_roles:
         return True
     raise HTTPException(status_code=403, detail="Sem permissão para esta operação")
 
@@ -140,9 +143,25 @@ async def audit_log(action: str, entity_type: str, entity_id: str, user: Dict, d
         "entity_type": entity_type,
         "entity_id": entity_id,
         "user_id": user.get('id'),
-        "user_nome": user.get('nome'),
+        "user_nome": user.get('nome') or user.get('email', ''),
         "user_role": user.get('role'),
+        "organization_id": user.get('organization_id'),
         "details": details,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+async def audit_denial(user: Dict, endpoint: str, reason: str):
+    """Log 403 permission denials"""
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": "access_denied",
+        "entity_type": "security",
+        "entity_id": endpoint,
+        "user_id": user.get('id'),
+        "user_nome": user.get('nome') or user.get('email', ''),
+        "user_role": user.get('role'),
+        "organization_id": user.get('organization_id'),
+        "details": f"403 - {reason}",
         "created_at": datetime.now(timezone.utc).isoformat()
     })
 
