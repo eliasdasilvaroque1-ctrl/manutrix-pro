@@ -2528,7 +2528,7 @@ const AtivoDetailPage = () => {
         <div className="flex flex-col sm:flex-row items-center gap-5">
           <div className="bg-white p-4 rounded-xl shadow-lg print:shadow-none">
             <QRCodeSVG 
-              value={ativo.qr_code || `${window.location.origin}/ativos/${ativo.id}`} 
+              value={`${window.location.origin}/ativos/${ativo.id}`} 
               size={140} level="H" includeMargin={false}
             />
           </div>

@@ -1,0 +1,57 @@
+{
+  "summary": "Iteration 28 - QR code URL format fix VALIDATED. Backend: 9/9 pytest PASS (GET /api/ativos/qr/{qr_code} → 200 with correct asset, GET /api/ativos/tag/{tag} → 200 with correct asset and case-insensitive on tag side because backend uppercases, both endpoints return same asset for same ativo, 404 on invalid id, Sobressalentes RBAC regression still enforced). Frontend (Playwright): On /ativos/{id} the QRCodeSVG.value (read via React fiber memoizedProps) is the full URL 'https://procure-manutrix.preview.emergentagent.com/ativos/5af42d90-...' — no longer the raw qr_code UUID. Both data-testid='ativo-qr-section' and data-testid='print-qr-btn' present and visible. Scanner manual search with TAG 'AV-01' correctly resolved and navigated to /ativos/{id}. Sobressalentes regression: add-spare-btn + 10 edit-spare-* + 10 delete-spare-* all rendered for admin. BUG FOUND on Scanner manual UUID lookup: input handler at App.js:4454 force-uppercases EVERY character, so a pasted UUID qr_code 'fa99...' becomes 'FA99...' and backend /api/ativos/qr/{UPPERCASE} returns 404 (UUIDs stored lowercase in DB). Note: scanning a real QR (which now encodes the full URL) bypasses this because resolveScannedValue first tries the URL regex match and navigates directly. Only the manual-paste-UUID flow is affected.",
+  "pass_fail_matrix": {
+    "BACKEND GET /api/ativos/qr/{qr_code} (valid)": "PASS",
+    "BACKEND GET /api/ativos/qr/{qr_code} (invalid → 404)": "PASS",
+    "BACKEND GET /api/ativos/tag/{tag} (valid)": "PASS",
+    "BACKEND GET /api/ativos/tag/{tag} (lowercase input)": "PASS",
+    "BACKEND GET /api/ativos/tag/{tag} (invalid → 404)": "PASS",
+    "BACKEND qr and tag resolve to same ativo": "PASS",
+    "BACKEND Sobressalentes admin list": "PASS",
+    "BACKEND Sobressalentes tecnico list": "PASS",
+    "BACKEND Sobressalentes tecnico create → 403": "PASS",
+    "FRONTEND QRCodeSVG.value contains '/ativos/{id}' full URL": "PASS",
+    "FRONTEND ativo-qr-section visible on asset detail": "PASS",
+    "FRONTEND print-qr-btn present on asset detail": "PASS",
+    "FRONTEND Scanner manual TAG search navigates to /ativos/{id}": "PASS",
+    "FRONTEND Scanner manual UUID(qr_code) search navigates to /ativos/{id}": "FAIL (input force-uppercases UUID, backend lookup 404)",
+    "FRONTEND Sobressalentes admin Edit/Delete buttons regression": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ScannerPage (App.js)", "issue": "onChange handler force-uppercases ALL input including UUID qr_codes, breaking the manual paste-UUID lookup flow. Real QR scans still work because the encoded value is now a URL and is matched by the /ativos/ regex BEFORE the uppercased value reaches the qr endpoint.", "selector": "[data-testid='manual-search-input']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Manual UUID paste in scanner page", "issue": "GET /api/ativos/qr/{UPPERCASE_UUID} returns 404 because DB stores qr_code in lowercase. Verified: /qr/FA99... → 404, /qr/fa99... → 200.", "affected_selectors": ["[data-testid='manual-search-input']", "[data-testid='manual-search-btn']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration28_qrcode_url.py",
+    "/app/test_reports/pytest/pytest_iteration28.xml"
+  ],
+  "action_items": [
+    "Fix scanner manual UUID lookup. Two equivalent options: (a) at App.js:4454 change onChange to `setManualCode(e.target.value)` (drop .toUpperCase) and instead uppercase only when calling the /tag/ endpoint — resolveScannedValue already does `.toUpperCase()` for the tag fallback at line 4312, so the front input does not need to coerce case. (b) OR keep the uppercase but make resolveScannedValue try the qr endpoint with the original (lower) case by storing both raw and uppercased manualCode. Option (a) is cleaner.",
+    "Optionally also lowercase the value before calling /api/ativos/qr/ in resolveScannedValue (App.js:4308) for defensive parsing, so any uppercased UUID still resolves."
+  ],
+  "critical_code_review_comments": [
+    "App.js:2531 — QRCodeSVG value now '${window.location.origin}/ativos/${ativo.id}' is correct and consistent with the URL pattern matcher in resolveScannedValue (line 4305). Fiber readout confirms the prop is the full preview URL.",
+    "App.js:4304-4316 resolveScannedValue tries URL regex first → qr endpoint → tag endpoint with toUpperCase. Good ordering and graceful fallback. But the qr branch does not lowercase the value, so an uppercased UUID coming from the manual input (line 4454) bypasses the DB record.",
+    "App.js:4454 onChange uppercases all characters — this is correct for TAGs (DB tags are uppercase) but wrong for UUIDs. Recommend dropping the uppercase in onChange and relying on the per-endpoint case handling already in resolveScannedValue.",
+    "backend/routes/assets.py:127 — find_one matches qr_code exactly (case-sensitive). Acceptable because UUIDs are conventionally lowercase, but consider $regex with case-insensitive flag if defensive matching is desired.",
+    "backend/routes/assets.py:134 — tag.upper() before query is correct since tags are stored uppercase (verified by lowercase-input test passing)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration28_qrcode_url.py",
+    "/app/test_reports/pytest/pytest_iteration28.xml",
+    "/app/test_reports/iteration_28.json"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "83% (5/6 — manual UUID scan broken by uppercase)"},
+  "test_credentials": "admin@manutrix.com/admin123 — working. Sample ativo used: tag=AV-01 id=5af42d90-4654-4067-b67d-92d7e7f6f78d qr_code=fa992344-3b43-4c90-9dbd-bab3038d863b",
+  "seed_data_creation": "None. Read-only tests for QR/tag endpoints. Sobressalentes regression only reads; one transient POST attempt by tecnico is rejected with 403 (no record created).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "QR code now encodes URL — verified by reading qrcode.react SVG's React fiber memoizedProps.value. Backend pytest at /app/backend/tests/test_iteration28_qrcode_url.py (9 tests, ~2.5s). Run with `REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_iteration28_qrcode_url.py -v`. Playwright tip: page.evaluate('fetch...') is intercepted by emergent-main.js posthog patch and fails — use `page.request.post(...)` (APIRequestContext) for auth, then inject sessionStorage. Scanner input is data-testid='manual-search-input' and search button is the only button to the right (no testid yet — recommend adding data-testid='manual-search-btn'). Note the open BUG: scanner manual input force-uppercases UUIDs at App.js:4454, so UUID lookup breaks; TAG lookup is fine.",
+  "rca of the issue": "Scanner manual UUID lookup BUG RCA — root cause is App.js:4454 `onChange={(e) => setManualCode(e.target.value.toUpperCase())}` which unconditionally uppercases user input. UUID qr_codes are persisted lowercase in MongoDB by `str(uuid.uuid4())` in assets.py:194/258. resolveScannedValue at line 4308 sends the uppercased UUID to /api/ativos/qr/{value} → backend does exact-match find_one({qr_code: 'FA99...'}) → no document → 404. The /tag/ fallback then tries `value.toUpperCase()` which is the same uppercased string and also 404s, hence 'Ativo não encontrado'. Reproduction: paste any lowercase UUID into the scanner manual input, see it visually uppercased, click search → 404 + toast 'Ativo não encontrado'. Mitigation (recommended): remove `.toUpperCase()` from onChange and let resolveScannedValue (which already uppercases the tag branch at line 4312) handle case for the tag path. The QR-camera scan flow is NOT affected because the encoded value is a full URL and the URL regex (line 4305) matches first and navigates directly with the original-case UUID."
+}
