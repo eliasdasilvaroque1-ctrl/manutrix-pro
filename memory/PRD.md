@@ -10,7 +10,7 @@ Sistema CMMS/EAM industrial simplificado para manutenção em campo. Hierarquia 
 - **Auth:** Supabase (primário) + MongoDB bcrypt (fallback)
 - **Roles:** Admin, PCM, Técnico, Gerente (Supervisor)
 
-## FASE 1 — Segurança, Auditoria e Perfis (CONCLUÍDA)
+## FASE 1 — Segurança, Auditoria e Perfis (CONCLUÍDA — Aguardando aprovação)
 - [x] Rastreabilidade (criado_por, concluido_por, data) em OS, Anomalias, Inspeções
 - [x] RBAC backend: check_write_permission, check_admin_only, check_pcm_or_admin
 - [x] RBAC frontend: botões ocultos por role
@@ -20,11 +20,13 @@ Sistema CMMS/EAM industrial simplificado para manutenção em campo. Hierarquia 
 - [x] Workflow de Anomalias (Aberta -> Em análise -> OS -> Corrigida -> Encerrada)
 - [x] BOM/Lista Técnica em Ativos
 - [x] SKU renomeado para "Código"
-- [x] **P0 FIX: Sobressalentes Edit/Delete botões visíveis e funcionais** (2026-06-15)
-  - Causa raiz: classe CSS `group` ausente no card pai + `hidden group-hover:flex` nos botões
-  - Permissão corrigida: `['admin','pcm']` no frontend (backend já estava correto)
-  - Auditoria: PUT/DELETE registram logs corretamente
-  - Validado: Admin/PCM veem botões, Técnico não vê
+- [x] **FIX: Sobressalentes Edit/Delete** — Botões visíveis e funcionais (2026-06-15)
+  - Causa: CSS `group` ausente + `hidden group-hover:flex` + permissão `=== 'admin'`
+  - Fix: Botões always visible, permissão `['admin','pcm']`, data-testid adicionado
+- [x] **FIX: QR Code dos equipamentos** — Codifica URL completa (2026-06-16)
+  - Causa: QR codificava UUID aleatório (`qr_code` field) em vez de URL navegável
+  - Fix: QRCodeSVG agora usa `${origin}/ativos/${id}` — funciona com scanner externo e interno
+  - Fix adicional: Input manual do scanner removia case sensitivity (toUpperCase) quebrando UUIDs
 
 ## FASE 2 — Experiência Visual (PENDENTE — Aguardando aprovação FASE 1)
 - [ ] Bloco 3: Quick indicators em Ativos (TAG, Nome, Área, Tipo, OS abertas, Anomalias abertas, foto 60x60)

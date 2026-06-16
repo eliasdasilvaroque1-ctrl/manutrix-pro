@@ -4451,7 +4451,7 @@ const ScannerPage = () => {
           <input
             type="text"
             value={manualCode}
-            onChange={(e) => setManualCode(e.target.value.toUpperCase())}
+            onChange={(e) => setManualCode(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Ex: BOM-001"
             className="input-industrial flex-1 px-4 font-mono text-lg"
