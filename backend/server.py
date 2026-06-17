@@ -739,12 +739,25 @@ async def get_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="Inspeção não encontrada")
     
     insp['ativo'] = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0})
+    if insp.get('ativo') and insp['ativo'].get('sector_id'):
+        insp['ativo']['sector'] = await db.sectors.find_one({"id": insp['ativo']['sector_id']}, {"_id": 0, "nome": 1})
     if insp.get('responsavel_id'):
         insp['responsavel'] = await db.users.find_one({"id": insp['responsavel_id']}, {"_id": 0, "nome": 1, "email": 1})
     if insp.get('rota_id'):
         insp['rota'] = await db.rotas_inspecao.find_one({"id": insp['rota_id']}, {"_id": 0})
     if insp.get('os_gerada_id'):
         insp['os_gerada'] = await db.ordens_servico.find_one({"id": insp['os_gerada_id']}, {"_id": 0})
+    # Enrich actor names
+    for field in ['criado_por', 'iniciado_por', 'concluido_por']:
+        uid = insp.get(field)
+        if uid:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1})
+            insp[f'{field}_nome'] = u.get('nome') if u else uid
+    # Enrich executantes
+    exec_ids = insp.get('executantes', [])
+    if exec_ids:
+        exec_users = await db.users.find({"id": {"$in": exec_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(exec_ids))
+        insp['executantes_nomes'] = {u['id']: u.get('nome') for u in exec_users}
     
     return insp
 
@@ -869,6 +882,7 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         "observacoes_lubrificacao": data.observacoes_lubrificacao,
         "criado_por": user.get('id'),
         "concluido_por": user.get('id') if has_responses else None,
+        "executantes": data.executantes or [],
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None

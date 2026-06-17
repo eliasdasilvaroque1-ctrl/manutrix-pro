@@ -1278,7 +1278,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   const [selectedEquipTemplate, setSelectedEquipTemplate] = useState(null);
   const [checklist, setChecklist] = useState([]);
   const [form, setForm] = useState({
-    ativo_id: '', responsavel_id: '', data_planejada: '', observacoes: ''
+    ativo_id: '', responsavel_id: '', executantes: [], data_planejada: '', observacoes: ''
   });
   const { user } = useAuth();
   
@@ -1287,7 +1287,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
       setTipoTab('mecanica');
       setSelectedEquipTemplate(null);
       setEquipTemplates([]);
-      setForm({ ativo_id: preSelectedAtivoId || '', responsavel_id: user?.id || '', data_planejada: '', observacoes: '' });
+      setForm({ ativo_id: preSelectedAtivoId || '', responsavel_id: user?.id || '', executantes: [], data_planejada: '', observacoes: '' });
       api.get('/checklists/templates').then(r => {
         setTemplates(r.data);
         if (r.data.mecanica) setChecklist(r.data.mecanica.itens || []);
@@ -1344,6 +1344,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
         ativo_id: form.ativo_id,
         tipo: selectedEquipTemplate ? 'personalizada' : tipoTab,
         responsavel_id: form.responsavel_id || null,
+        executantes: form.executantes || [],
         checklist: checklist,
         data_planejada: form.data_planejada || null,
         observacoes: form.observacoes || null,
@@ -1436,6 +1437,30 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
               <input type="date" value={form.data_planejada} onChange={(e) => setForm({...form, data_planejada: e.target.value})} className="input-industrial w-full px-4" />
             </FormInput>
           </div>
+          {/* Executantes */}
+          <FormInput label="Executantes">
+            <div className="space-y-1">
+              <div className="flex flex-wrap gap-1 min-h-[32px]">
+                {(form.executantes || []).map(uid => {
+                  const t = tecnicos.find(x => x.id === uid);
+                  return t ? (
+                    <span key={uid} className="bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded flex items-center gap-1">
+                      {t.nome} <button type="button" onClick={() => setForm({...form, executantes: form.executantes.filter(id => id !== uid)})} className="hover:text-red-400"><X size={12} /></button>
+                    </span>
+                  ) : null;
+                })}
+              </div>
+              <select onChange={e => {
+                if (e.target.value && !(form.executantes || []).includes(e.target.value)) {
+                  setForm({...form, executantes: [...(form.executantes || []), e.target.value]});
+                }
+                e.target.value = '';
+              }} className="input-industrial w-full px-3 text-sm" data-testid="inspecao-executantes-select">
+                <option value="">Adicionar executante...</option>
+                {tecnicos.filter(t => !(form.executantes || []).includes(t.id)).map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              </select>
+            </div>
+          </FormInput>
         </div>
 
         {/* Checklist Preview */}
@@ -3162,12 +3187,38 @@ const OSDetailPage = () => {
       )}
       
       {/* Info */}
-      <div className="glass-card p-4 space-y-3">
+      <div className="glass-card p-4 space-y-3" data-testid="os-info-card">
         <div className="flex justify-between text-sm"><span className="text-slate-500">Tipo</span><span className="text-slate-200 capitalize">{os.tipo}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-slate-500">Disciplina</span><span className="text-slate-200 capitalize">{os.disciplina}</span></div>
         {os.responsavel && <div className="flex justify-between text-sm"><span className="text-slate-500">Responsável</span><span className="text-slate-200">{os.responsavel.nome}</span></div>}
-        <div className="flex justify-between text-sm"><span className="text-slate-500">Abertura</span><span className="text-slate-200">{new Date(os.data_abertura).toLocaleString('pt-BR')}</span></div>
-        {os.data_inicio && <div className="flex justify-between text-sm"><span className="text-slate-500">Início</span><span className="text-slate-200">{new Date(os.data_inicio).toLocaleString('pt-BR')}</span></div>}
-        {os.data_conclusao && <div className="flex justify-between text-sm"><span className="text-slate-500">Conclusão</span><span className="text-slate-200">{new Date(os.data_conclusao).toLocaleString('pt-BR')}</span></div>}
+        
+        {/* Executantes */}
+        {(os.equipe?.length > 0) && (
+          <div className="text-sm border-t border-slate-800 pt-2">
+            <span className="text-slate-500 block mb-1">Executantes</span>
+            <div className="flex flex-wrap gap-1">
+              {os.equipe.map(uid => (
+                <span key={uid} className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">{os.equipe_nomes?.[uid] || uid}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Rastreabilidade */}
+        <div className="border-t border-slate-800 pt-2 space-y-2">
+          <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Rastreabilidade</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <div><span className="text-slate-500">Criado por:</span> <span className="text-slate-300">{os.criado_por_nome || '—'}</span></div>
+            <div><span className="text-slate-500">Data abertura:</span> <span className="text-slate-300">{os.data_abertura ? new Date(os.data_abertura).toLocaleString('pt-BR') : '—'}</span></div>
+            <div><span className="text-slate-500">Planejado por:</span> <span className="text-slate-300">{os.planejado_por_nome || '—'}</span></div>
+            <div><span className="text-slate-500">Data planejamento:</span> <span className="text-slate-300">{os.data_planejamento ? new Date(os.data_planejamento).toLocaleString('pt-BR') : '—'}</span></div>
+            <div><span className="text-slate-500">Executado por:</span> <span className="text-slate-300">{os.iniciado_por_nome || '—'}</span></div>
+            <div><span className="text-slate-500">Data execução:</span> <span className="text-slate-300">{os.data_inicio ? new Date(os.data_inicio).toLocaleString('pt-BR') : '—'}</span></div>
+            <div><span className="text-slate-500">Concluído por:</span> <span className="text-slate-300">{os.concluido_por_nome || '—'}</span></div>
+            <div><span className="text-slate-500">Data conclusão:</span> <span className="text-slate-300">{os.data_conclusao ? new Date(os.data_conclusao).toLocaleString('pt-BR') : '—'}</span></div>
+          </div>
+        </div>
+        
         {os.tempo_execucao_minutos && <div className="flex justify-between text-sm border-t border-slate-800 pt-2"><span className="text-slate-500">Tempo Execução</span><span className="text-emerald-400 font-semibold">{Math.floor(os.tempo_execucao_minutos / 60)}h {os.tempo_execucao_minutos % 60}min</span></div>}
       </div>
       
@@ -3716,6 +3767,34 @@ const InspecaoDetailPage = () => {
           )}
         </div>
       )}
+      
+      {/* Rastreabilidade e Executantes */}
+      <div className="glass-card p-4 space-y-3" data-testid="inspecao-rastreabilidade">
+        {inspecao.responsavel && (
+          <div className="flex justify-between text-sm"><span className="text-slate-500">Responsável</span><span className="text-slate-200">{inspecao.responsavel.nome}</span></div>
+        )}
+        {(inspecao.executantes?.length > 0) && (
+          <div className="text-sm">
+            <span className="text-slate-500 block mb-1">Executantes</span>
+            <div className="flex flex-wrap gap-1">
+              {inspecao.executantes.map(uid => (
+                <span key={uid} className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">{inspecao.executantes_nomes?.[uid] || uid}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="border-t border-slate-800 pt-2 space-y-2">
+          <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Rastreabilidade</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <div><span className="text-slate-500">Criado por:</span> <span className="text-slate-300">{inspecao.criado_por_nome || '—'}</span></div>
+            <div><span className="text-slate-500">Data criação:</span> <span className="text-slate-300">{inspecao.created_at ? new Date(inspecao.created_at).toLocaleString('pt-BR') : '—'}</span></div>
+            <div><span className="text-slate-500">Iniciado por:</span> <span className="text-slate-300">{inspecao.iniciado_por_nome || '—'}</span></div>
+            <div><span className="text-slate-500">Data início:</span> <span className="text-slate-300">{inspecao.data_inicio ? new Date(inspecao.data_inicio).toLocaleString('pt-BR') : '—'}</span></div>
+            <div><span className="text-slate-500">Concluído por:</span> <span className="text-slate-300">{inspecao.concluido_por_nome || '—'}</span></div>
+            <div><span className="text-slate-500">Data conclusão:</span> <span className="text-slate-300">{inspecao.data_conclusao ? new Date(inspecao.data_conclusao).toLocaleString('pt-BR') : '—'}</span></div>
+          </div>
+        </div>
+      </div>
       
       {inspecao.status === 'pendente' && !['pcm','gerente'].includes(user?.role) && (
         <button onClick={handleIniciar} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="inspecao-iniciar-btn">

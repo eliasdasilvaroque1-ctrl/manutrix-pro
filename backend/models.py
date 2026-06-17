@@ -242,6 +242,7 @@ class InspecaoCreate(BaseModel):
     tipo: InspecaoTipo = InspecaoTipo.MECANICA
     frequencia: Optional[str] = "diaria"
     responsavel_id: Optional[str] = None
+    executantes: List[str] = []
     rota_id: Optional[str] = None
     checklist: List[ChecklistItem] = []
     observacoes: Optional[str] = None
@@ -254,6 +255,7 @@ class InspecaoCreate(BaseModel):
 
 class InspecaoUpdate(BaseModel):
     responsavel_id: Optional[str] = None
+    executantes: Optional[List[str]] = None
     observacoes: Optional[str] = None
     data_planejada: Optional[str] = None
 

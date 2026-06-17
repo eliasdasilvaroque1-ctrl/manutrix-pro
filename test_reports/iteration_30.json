@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 30 - Rastreabilidade Completa (Bloco 2) VALIDATED end-to-end. Backend pytest 2/2 PASS: Full traceability flow (PCM creates OS with equipe=[tec1,tec2] → criado_por=PCM verified, planejado_por=None initially; PCM PATCH status='planejada' → planejado_por=PCM + data_planejamento set; Tecnico POST iniciar → iniciado_por=Tecnico + data_inicio set; Tecnico POST concluir → concluido_por=Tecnico + data_conclusao set). GET /api/ordens-servico/{id} returns all 4 enriched *_nome fields (criado_por_nome, planejado_por_nome, iniciado_por_nome, concluido_por_nome) AND equipe_nomes as dict {user_id: nome}. Inspections: POST /api/inspecoes with executantes:[tec1,tec2] persists correctly; GET returns executantes_nomes dict + criado_por_nome + ativo.sector enrichment. Frontend Playwright 15/15 PASS: /os/{id} data-testid='os-info-card' contains all 8 labels (Criado por, Data abertura, Planejado por, Data planejamento, Executado por, Data execução, Concluído por, Data conclusão) AND Executantes chip list with names (João Silva, Pedro Santos). /inspecoes/{id} data-testid='inspecao-rastreabilidade' contains all 6 labels (Criado por, Data criação, Iniciado por, Data início, Concluído por, Data conclusão) AND Executantes chip list. Nova Inspeção modal exposes data-testid='inspecao-executantes-select' as expected.",
+  "pass_fail_matrix": {
+    "BACKEND OS criado_por=PCM on create": "PASS",
+    "BACKEND OS PATCH /status planejada → planejado_por + data_planejamento": "PASS",
+    "BACKEND OS POST /iniciar → iniciado_por + data_inicio": "PASS",
+    "BACKEND OS POST /concluir → concluido_por + data_conclusao": "PASS",
+    "BACKEND OS GET enriched *_nome (4 fields)": "PASS",
+    "BACKEND OS GET equipe_nomes as dict": "PASS",
+    "BACKEND Inspecao POST with executantes persists": "PASS",
+    "BACKEND Inspecao GET executantes_nomes + criado_por_nome": "PASS",
+    "BACKEND Inspecao GET ativo.sector enrichment": "PASS",
+    "FRONTEND /os/{id} os-info-card 8 rastreabilidade labels": "PASS",
+    "FRONTEND /os/{id} Executantes chips rendered": "PASS",
+    "FRONTEND /inspecoes/{id} inspecao-rastreabilidade 6 labels": "PASS",
+    "FRONTEND /inspecoes/{id} Executantes chips rendered": "PASS",
+    "FRONTEND Nova Inspeção modal exposes inspecao-executantes-select": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration30_rastreabilidade.py",
+    "/app/test_reports/pytest/pytest_iteration30.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/work_orders.py:190-194 — create_os correctly initializes criado_por=user.id and planejado_por/iniciado_por/concluido_por=None ✓",
+    "backend/routes/work_orders.py:269-274 — Kanban PATCH sets planejado_por+data_planejamento when moving to 'planejada' (idempotent guard via 'not os_doc.get planejado_por'); also handles em_execucao transition ✓",
+    "backend/routes/work_orders.py:241 — iniciar_os sets iniciado_por + data_inicio ✓",
+    "backend/routes/work_orders.py:299-304 — concluir_os sets concluido_por + data_conclusao ✓",
+    "backend/routes/work_orders.py:143-153 — get_os enriches all 4 actor names via single user lookup per field (could be batched into one $in query for slight perf improvement, low priority) and equipe_nomes returned as {id:nome} dict matching frontend contract ✓",
+    "backend/server.py:735-760 — get_inspecao enriches actor names + executantes_nomes dict + ativo.sector ✓",
+    "models.py:245 InspecaoCreate.executantes:List[str]=[] and:258 InspecaoUpdate.executantes:Optional[List[str]] correctly defined ✓",
+    "frontend/src/App.js:3190-3220 — os-info-card grid renders all 8 labels with em-dash fallback for missing actors ✓; line 3201 equipe_nomes lookup uses optional chaining ✓",
+    "frontend/src/App.js:3771-3796 — inspecao-rastreabilidade grid renders all 6 labels ✓",
+    "frontend/src/App.js:1458 — inspecao-executantes-select rendered inside Nova Inspeção modal ✓"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration30_rastreabilidade.py",
+    "/app/test_reports/pytest/pytest_iteration30.xml",
+    "/app/test_reports/iteration_30.json"
+  ],
+  "success_rate": {"backend": "100% (2/2 pytest, 9/9 assertions)", "frontend": "100% (15/15 UI checks)"},
+  "test_credentials": "admin@manutrix.com/admin123, pcm@manutrix.com/pcm123, tecnico@manutrix.com/tecnico123 — all working as expected.",
+  "seed_data_creation": "Backend pytest: 1 OS (titulo='TEST_ITER30_Rastreabilidade', taken full lifecycle aberta→planejada→em_execucao→concluida) + 1 Inspecao (obs='TEST_ITER30_Inspecao_Executantes' with 2 executantes). Frontend Playwright additionally created: OS #2026-00101 titulo='TEST_ITER30_UI_OS' (status planejada, equipe=[tec1,tec2]) and 1 Inspecao (obs='TEST_ITER30_UI_Insp', executantes=[tec1,tec2]).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bloco 2 (Rastreabilidade + Executantes) fully implemented and validated. Backend traceability fields: criado_por, planejado_por, data_planejamento, iniciado_por, data_inicio, concluido_por, data_conclusao — all stamped at correct lifecycle transitions. GET /api/ordens-servico/{id} returns equipe_nomes as {user_id: nome} dict (NOT array) and GET /api/inspecoes/{id} returns executantes_nomes as {user_id: nome} dict — frontend uses optional-chained lookup. Frontend test pattern that worked: POST /api/auth/login via page.request → inject sessionStorage keys 'manutrix_token' + 'manutrix_user' → goto /os/{id} or /inspecoes/{id}. NOTE: page.request.post/get/patch must be awaited in Playwright async context. To re-run regression: `REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_iteration30_rastreabilidade.py -v`.",
+  "rca of the issue": "N/A — no bugs found. All 13 acceptance criteria from review_request PASS as designed."
+}

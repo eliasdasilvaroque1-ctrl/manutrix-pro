@@ -140,6 +140,17 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
         os['ativo']['sector'] = await db.sectors.find_one({"id": os['ativo']['sector_id']}, {"_id": 0, "nome": 1})
     if os.get('responsavel_id'):
         os['responsavel'] = await db.users.find_one({"id": os['responsavel_id']}, {"_id": 0, "nome": 1, "email": 1, "telefone": 1})
+    # Enrich actor names
+    for field in ['criado_por', 'planejado_por', 'iniciado_por', 'concluido_por']:
+        uid = os.get(field)
+        if uid:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1})
+            os[f'{field}_nome'] = u.get('nome') if u else uid
+    # Enrich equipe/executantes names
+    equipe_ids = os.get('equipe', [])
+    if equipe_ids:
+        equipe_users = await db.users.find({"id": {"$in": equipe_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(equipe_ids))
+        os['equipe_nomes'] = {u['id']: u.get('nome') for u in equipe_users}
     # Materiais sugeridos do ativo
     os['materiais_sugeridos'] = await db.ativo_materiais.find({"ativo_id": os.get('ativo_id'), "deleted_at": None}, {"_id": 0}).to_list(50)
     return os
@@ -177,6 +188,7 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "horas_parada": data.horas_parada,
         "tempo_execucao_minutos": None, "observacoes": None,
         "criado_por": user.get('id'),
+        "planejado_por": None, "data_planejamento": None,
         "iniciado_por": None, "concluido_por": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None
@@ -254,8 +266,12 @@ async def update_os_status(os_id: str, body: KanbanMoveBody, user: Dict = Depend
     if os_doc.get('status') == 'concluida':
         raise HTTPException(status_code=400, detail="OS concluída não pode ser reaberta via Kanban")
     update = {"status": body.new_status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.new_status == 'planejada' and not os_doc.get('planejado_por'):
+        update['planejado_por'] = user.get('id')
+        update['data_planejamento'] = datetime.now(timezone.utc).isoformat()
     if body.new_status == 'em_execucao' and not os_doc.get('data_inicio'):
         update['data_inicio'] = datetime.now(timezone.utc).isoformat()
+        update['iniciado_por'] = user.get('id')
     await db.ordens_servico.update_one({"id": os_id}, {"$set": update})
     await audit_log("kanban_move", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → {body.new_status}")
     return {"success": True, "new_status": body.new_status}
