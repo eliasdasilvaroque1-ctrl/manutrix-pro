@@ -911,6 +911,7 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
 
 @api_router.put("/inspecoes/{inspecao_id}")
 async def update_inspecao(inspecao_id: str, data: InspecaoUpdate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
     existing = await db.inspecoes.find_one({"id": inspecao_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Inspeção não encontrada")
@@ -936,6 +937,7 @@ async def delete_inspecao(inspecao_id: str, user: Dict = Depends(get_current_use
 
 @api_router.post("/inspecoes/{inspecao_id}/iniciar")
 async def iniciar_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
     await db.inspecoes.update_one(
         {"id": inspecao_id},
         {"$set": {
@@ -954,6 +956,7 @@ async def concluir_inspecao(
     body: ConcluirInspecaoBody,
     user: Dict = Depends(get_current_user)
 ):
+    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
     checklist = body.checklist
     observacoes = body.observacoes
     insp = await db.inspecoes.find_one({"id": inspecao_id, "deleted_at": None}, {"_id": 0})

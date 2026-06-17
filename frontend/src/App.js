@@ -2993,7 +2993,7 @@ const OSPage = () => {
           items={osList}
           onMove={handleKanbanMove}
           onCardClick={(os) => navigate(`/os/${os.id}`)}
-          onEdit={user?.role === 'admin' ? (os) => { setEditItem(os); setShowModal(true); } : null}
+          onEdit={['admin','pcm'].includes(user?.role) ? (os) => { setEditItem(os); setShowModal(true); } : null}
           onDelete={user?.role === 'admin' ? (os) => setDeleteItem(os) : null}
         />
       ) : (
@@ -3027,10 +3027,10 @@ const OSPage = () => {
                       {os.responsavel && <p className="text-xs text-slate-500"><User size={12} className="inline mr-1" />{os.responsavel.nome}</p>}
                     </div>
                     <div className="flex items-center gap-2">
-                      {user?.role === 'admin' && (
-                        <div className="hidden group-hover:flex items-center gap-1">
-                          <button onClick={(e) => { e.stopPropagation(); setEditItem(os); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar"><Edit3 size={15} className="text-blue-400" /></button>
-                          <button onClick={(e) => { e.stopPropagation(); setDeleteItem(os); }} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir"><Trash2 size={15} className="text-red-400" /></button>
+                      {['admin','pcm'].includes(user?.role) && (
+                        <div className="flex items-center gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); setEditItem(os); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar" data-testid={`edit-os-${os.id}`}><Edit3 size={15} className="text-blue-400" /></button>
+                          {user?.role === 'admin' && <button onClick={(e) => { e.stopPropagation(); setDeleteItem(os); }} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir" data-testid={`delete-os-${os.id}`}><Trash2 size={15} className="text-red-400" /></button>}
                         </div>
                       )}
                       <PriorityBadge priority={os.prioridade} />
@@ -3066,6 +3066,7 @@ const OSDetailPage = () => {
   const [showConcluir, setShowConcluir] = useState(false);
   const [concluirForm, setConcluirForm] = useState({ servicos_realizados: '', tempo_execucao_minutos: '', observacoes: '' });
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const fetchOS = async () => {
     try {
@@ -3227,7 +3228,7 @@ const OSDetailPage = () => {
       )}
       
       {/* Actions — OS Detail */}
-      {!['concluida', 'cancelada'].includes(os.status) && (
+      {!['concluida', 'cancelada'].includes(os.status) && !['pcm','gerente'].includes(user?.role) && (
         <div className="space-y-2">
           {os.status === 'aberta' && (
             <button onClick={() => handleAction('iniciar')} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="os-iniciar-btn">
@@ -3458,6 +3459,7 @@ const InspecoesPage = () => {
   const [deleteItem, setDeleteItem] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   
   useEffect(() => {
     if (searchParams.get('new') === 'true') setShowModal(true);
@@ -3539,9 +3541,11 @@ const InspecoesPage = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setDeleteItem(insp)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100">
-                    <Trash2 size={16} className="text-red-400" />
-                  </button>
+                  {['admin','supervisor'].includes(user?.role) && (
+                    <button onClick={() => setDeleteItem(insp)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100" data-testid={`delete-inspecao-${insp.id}`}>
+                      <Trash2 size={16} className="text-red-400" />
+                    </button>
+                  )}
                   <StatusBadge status={insp.status} size="sm" />
                   {insp.resultado && insp.resultado !== 'pendente' && (
                     <StatusBadge status={insp.resultado} size="sm" />
@@ -3587,6 +3591,7 @@ const InspecaoDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const fetchInspecao = async () => {
     try {
@@ -3712,8 +3717,8 @@ const InspecaoDetailPage = () => {
         </div>
       )}
       
-      {inspecao.status === 'pendente' && (
-        <button onClick={handleIniciar} className="btn-primary w-full flex items-center justify-center gap-2">
+      {inspecao.status === 'pendente' && !['pcm','gerente'].includes(user?.role) && (
+        <button onClick={handleIniciar} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="inspecao-iniciar-btn">
           <Play size={20} /> Iniciar Inspeção
         </button>
       )}
@@ -3900,7 +3905,7 @@ const InspecaoDetailPage = () => {
       )}
       
       {/* Action */}
-      {inspecao.status === 'em_andamento' && (
+      {inspecao.status === 'em_andamento' && !['pcm','gerente'].includes(user?.role) && (
         <div className="fixed bottom-16 left-0 right-0 p-4 bg-slate-950/95 backdrop-blur-sm border-t border-slate-800 md:bottom-0">
           <button
             onClick={handleConcluir}

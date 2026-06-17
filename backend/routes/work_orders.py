@@ -147,7 +147,7 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
 
 @router.post("/ordens-servico")
 async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
+    check_write_permission(user, ['admin', 'pcm', 'supervisor', 'tecnico'])
     check_not_gerente(user)
     ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
@@ -192,7 +192,7 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
 
 @router.put("/ordens-servico/{os_id}")
 async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_write_permission(user, ['admin', 'pcm'])
     existing = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="OS não encontrada")
@@ -222,6 +222,7 @@ async def delete_os(os_id: str, user: Dict = Depends(get_current_user)):
 
 @router.post("/ordens-servico/{os_id}/iniciar")
 async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
     os = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os:
         raise HTTPException(status_code=404, detail="OS não encontrada")
@@ -232,6 +233,7 @@ async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
 
 @router.post("/ordens-servico/{os_id}/pausar")
 async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "pausada", "updated_at": datetime.now(timezone.utc).isoformat()}})
     if os_doc:
@@ -261,6 +263,7 @@ async def update_os_status(os_id: str, body: KanbanMoveBody, user: Dict = Depend
 
 @router.post("/ordens-servico/{os_id}/concluir")
 async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")

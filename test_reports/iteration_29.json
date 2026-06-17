@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 29 - PCM Permissions (Bloco 1) VALIDATED. Backend: 14/14 pytest PASS — PCM can list OS, create OS, edit OS priority (verified persistence via GET), kanban-move to 'planejada', list inspecoes, edit inspecao, and export OS Excel; PCM correctly receives 403 on iniciar/concluir/pausar/delete OS and on iniciar/concluir/delete inspecao. Frontend (Playwright as pcm@manutrix.com): /os list view shows 16 edit-os-* buttons and 0 delete-os-* buttons; on /os/{id} detail page the os-iniciar-btn, os-concluir-btn, os-pausar-btn data-testids are absent AND no buttons matching 'Iniciar OS' / 'Concluir OS' / 'Pausar' text are rendered; on /inspecoes/{id} the inspecao-iniciar-btn and inspecao-concluir-btn are absent AND no 'Iniciar Inspe…' / 'Concluir Inspe…' text-buttons render — only the 'Em Andamento' status badge is shown. Sidebar identifies the user as 'Tessio PCM / Pcm'. OS audit trail confirms PCM-driven kanban transition: 'OS #2026-00098 → planejada · Tessio PCM (pcm)'. All 18 acceptance criteria PASS.",
+  "pass_fail_matrix": {
+    "BACKEND PCM GET /api/ordens-servico": "PASS",
+    "BACKEND PCM POST /api/ordens-servico": "PASS",
+    "BACKEND PCM PUT /api/ordens-servico/{id} (prioridade=alta) + GET verify": "PASS",
+    "BACKEND PCM PATCH /api/ordens-servico/{id}/status (planejada)": "PASS",
+    "BACKEND PCM POST /api/ordens-servico/{id}/iniciar → 403": "PASS",
+    "BACKEND PCM POST /api/ordens-servico/{id}/concluir → 403": "PASS",
+    "BACKEND PCM POST /api/ordens-servico/{id}/pausar → 403": "PASS",
+    "BACKEND PCM DELETE /api/ordens-servico/{id} → 403": "PASS",
+    "BACKEND PCM GET /api/inspecoes": "PASS",
+    "BACKEND PCM PUT /api/inspecoes/{id}": "PASS",
+    "BACKEND PCM POST /api/inspecoes/{id}/iniciar → 403": "PASS",
+    "BACKEND PCM POST /api/inspecoes/{id}/concluir → 403": "PASS",
+    "BACKEND PCM DELETE /api/inspecoes/{id} → 403": "PASS",
+    "BACKEND PCM GET /api/export/ordens-servico?format=excel": "PASS",
+    "FRONTEND /os list: edit-os-* buttons visible (16 found)": "PASS",
+    "FRONTEND /os list: delete-os-* buttons hidden (0 found)": "PASS",
+    "FRONTEND /os/{id}: os-iniciar/concluir/pausar buttons hidden": "PASS",
+    "FRONTEND /inspecoes/{id}: inspecao-iniciar/concluir buttons hidden": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration29_pcm_permissions.py",
+    "/app/test_reports/pytest/pytest_iteration29.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/routes/work_orders.py:150 — create_os allows ['admin','pcm','supervisor','tecnico'] ✓",
+    "backend/routes/work_orders.py:195 — update_os allows ['admin','pcm'] ✓",
+    "backend/routes/work_orders.py:214 — delete_os calls check_admin_only — PCM correctly blocked ✓",
+    "backend/routes/work_orders.py:225/236/266 — iniciar/pausar/concluir restrict to ['admin','supervisor','tecnico'] — PCM blocked ✓",
+    "backend/routes/work_orders.py:247 — update_os_status (Kanban) allows ['admin','pcm','supervisor'] ✓",
+    "backend/server.py:914 — update_inspecao allows ['admin','pcm'] ✓",
+    "backend/server.py:927 — delete_inspecao restricted to ['admin','supervisor'] — PCM blocked ✓",
+    "backend/server.py:940/959 — iniciar/concluir_inspecao restricted to ['admin','supervisor','tecnico'] — PCM blocked ✓",
+    "Frontend App.js view-list at line 2980 — list view exposes edit-os-* and delete-os-* via data-testid (delete hidden for non-admin); PCM sees 16/16 edits and 0 deletes as expected"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration29_pcm_permissions.py",
+    "/app/test_reports/pytest/pytest_iteration29.xml",
+    "/app/test_reports/iteration_29.json"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (4/4 UI checks)"},
+  "test_credentials": "pcm@manutrix.com/pcm123 — works; role='pcm' confirmed in JWT/user payload. admin@manutrix.com/admin123 — works (used to seed Ativos/OS list for fixtures).",
+  "seed_data_creation": "One OS created by PCM during test: titulo='TEST_PCM_CREATE_OS_iter29' on ativo AV-01, then edited to prioridade='alta' and kanban-moved to 'planejada'. Inspection used existing record (PUT observacoes='TEST_PCM_EDIT iter29').",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "PCM RBAC fully implemented and verified at backend (routes/work_orders.py + server.py inspecoes endpoints) and frontend (App.js conditional buttons). To run regression: `REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_iteration29_pcm_permissions.py -v`. Playwright tip: UI form fill is flaky in this preview; bypass by POSTing /api/auth/login with page.request.post then injecting sessionStorage keys 'manutrix_token' and 'manutrix_user' (NOT 'access_token'/'user') — confirmed at App.js:5862-5863. Use [data-testid='view-list'] on /os to switch from Kanban (default) to List view where edit-os-* and delete-os-* render.",
+  "rca of the issue": "N/A — no bugs found. All 14 backend assertions and 4 frontend UI assertions for PCM permissions in Bloco 1 PASS as designed."
+}
