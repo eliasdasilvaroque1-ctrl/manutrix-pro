@@ -3090,17 +3090,24 @@ const OSDetailPage = () => {
   const [historico, setHistorico] = useState([]);
   const [showConcluir, setShowConcluir] = useState(false);
   const [concluirForm, setConcluirForm] = useState({ servicos_realizados: '', tempo_execucao_minutos: '', observacoes: '' });
+  const [materiais, setMateriais] = useState([]);
+  const [estoqueItems, setEstoqueItems] = useState([]);
+  const [showMatModal, setShowMatModal] = useState(false);
+  const [matForm, setMatForm] = useState({ item_estoque_id: '', quantidade: '' });
+  const [deleteMat, setDeleteMat] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
   
   const fetchOS = async () => {
     try {
-      const [osRes, histRes] = await Promise.all([
+      const [osRes, histRes, matRes] = await Promise.all([
         api.get(`/ordens-servico/${id}`),
-        api.get(`/ordens-servico/${id}/historico`).catch(() => ({ data: [] }))
+        api.get(`/ordens-servico/${id}/historico`).catch(() => ({ data: [] })),
+        api.get(`/ordens-servico/${id}/materiais`).catch(() => ({ data: [] }))
       ]);
       setOs(osRes.data);
       setHistorico(histRes.data);
+      setMateriais(matRes.data);
     } catch (error) {
       toast.error('OS não encontrada');
       navigate('/os');
@@ -3110,6 +3117,10 @@ const OSDetailPage = () => {
   };
   
   useEffect(() => { fetchOS(); }, [id]);
+  
+  useEffect(() => {
+    api.get('/estoque').then(r => setEstoqueItems(r.data)).catch(() => {});
+  }, []);
   
   const handleAction = async (action) => {
     if (action === 'concluir') { setShowConcluir(true); return; }
@@ -3150,6 +3161,33 @@ const OSDetailPage = () => {
     } finally {
       setUpdating(false);
     }
+  };
+
+  const handleAddMaterial = async () => {
+    if (!matForm.item_estoque_id || !matForm.quantidade || parseFloat(matForm.quantidade) <= 0) {
+      toast.error('Selecione o item e informe a quantidade'); return;
+    }
+    try {
+      await api.post(`/ordens-servico/${id}/materiais`, {
+        item_estoque_id: matForm.item_estoque_id,
+        quantidade: parseFloat(matForm.quantidade)
+      });
+      toast.success('Material registrado!');
+      setShowMatModal(false);
+      setMatForm({ item_estoque_id: '', quantidade: '' });
+      fetchOS();
+      api.get('/estoque').then(r => setEstoqueItems(r.data)).catch(() => {});
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleRemoveMaterial = async () => {
+    try {
+      await api.delete(`/ordens-servico/${id}/materiais/${deleteMat.id}`);
+      toast.success('Material devolvido ao estoque!');
+      setDeleteMat(null);
+      fetchOS();
+      api.get('/estoque').then(r => setEstoqueItems(r.data)).catch(() => {});
+    } catch (e) { toast.error(normalizeError(e)); }
   };
   
   if (loading) return <Loading rows={4} />;
@@ -3216,6 +3254,12 @@ const OSDetailPage = () => {
             <div><span className="text-slate-500">Data execução:</span> <span className="text-slate-300">{os.data_inicio ? new Date(os.data_inicio).toLocaleString('pt-BR') : '—'}</span></div>
             <div><span className="text-slate-500">Concluído por:</span> <span className="text-slate-300">{os.concluido_por_nome || '—'}</span></div>
             <div><span className="text-slate-500">Data conclusão:</span> <span className="text-slate-300">{os.data_conclusao ? new Date(os.data_conclusao).toLocaleString('pt-BR') : '—'}</span></div>
+            {os.alterado_por_nome && (
+              <>
+                <div><span className="text-slate-500">Última alteração por:</span> <span className="text-amber-400">{os.alterado_por_nome}</span></div>
+                <div><span className="text-slate-500">Data alteração:</span> <span className="text-amber-400">{os.updated_at ? new Date(os.updated_at).toLocaleString('pt-BR') : '—'}</span></div>
+              </>
+            )}
           </div>
         </div>
         
@@ -3237,6 +3281,71 @@ const OSDetailPage = () => {
         </div>
       )}
       
+      {/* Materiais Utilizados */}
+      <div className="glass-card p-4" data-testid="os-materiais-section">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <Package size={16} /> Materiais Utilizados ({materiais.length})
+          </h3>
+          {!['concluida','cancelada'].includes(os.status) && !['gerente'].includes(user?.role) && (
+            <button onClick={() => setShowMatModal(true)} className="text-xs btn-primary flex items-center gap-1" data-testid="add-material-btn">
+              <Plus size={14} /> Adicionar
+            </button>
+          )}
+        </div>
+        {materiais.length > 0 ? (
+          <div className="space-y-2">
+            {materiais.map(m => (
+              <div key={m.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3 border border-slate-700/50" data-testid={`material-item-${m.id}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-emerald-400 text-sm">{m.codigo}</span>
+                    <span className="text-slate-300 text-sm">{m.descricao}</span>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {m.quantidade} {m.unidade} • {m.local_estoque} • {m.usuario_nome} • {new Date(m.created_at).toLocaleString('pt-BR')}
+                  </p>
+                </div>
+                {m.custo_total > 0 && <span className="text-sm text-slate-300 mx-2">R$ {m.custo_total.toFixed(2)}</span>}
+                {!['concluida','cancelada'].includes(os.status) && ['admin','pcm','supervisor'].includes(user?.role) && (
+                  <button onClick={() => setDeleteMat(m)} className="p-1.5 hover:bg-red-500/10 rounded" title="Devolver"><Trash2 size={14} className="text-red-400" /></button>
+                )}
+              </div>
+            ))}
+            <div className="text-right text-sm text-slate-400 pt-1 border-t border-slate-800">
+              Total: <span className="text-slate-200 font-semibold">R$ {materiais.reduce((sum, m) => sum + (m.custo_total || 0), 0).toFixed(2)}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-600 text-center py-3">Nenhum material registrado</p>
+        )}
+      </div>
+
+      {/* Modal Adicionar Material */}
+      <Modal isOpen={showMatModal} onClose={() => setShowMatModal(false)} title="Adicionar Material" size="md">
+        <div className="space-y-4">
+          <FormInput label="Item do Estoque" required>
+            <select value={matForm.item_estoque_id} onChange={e => setMatForm({...matForm, item_estoque_id: e.target.value})} className="input-industrial w-full px-4" data-testid="material-select">
+              <option value="">Selecione...</option>
+              {estoqueItems.filter(i => i.quantidade > 0).map(i => (
+                <option key={i.id} value={i.id}>{i.sku} — {i.nome} (Disp: {i.quantidade} {i.unidade})</option>
+              ))}
+            </select>
+          </FormInput>
+          <FormInput label="Quantidade" required>
+            <input type="number" step="0.01" min="0.01" value={matForm.quantidade} onChange={e => setMatForm({...matForm, quantidade: e.target.value})} className="input-industrial w-full px-4" data-testid="material-quantidade" />
+          </FormInput>
+          <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
+            <button type="button" onClick={() => setShowMatModal(false)} className="btn-secondary">Cancelar</button>
+            <button onClick={handleAddMaterial} className="btn-primary" data-testid="material-submit">Registrar Consumo</button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog isOpen={!!deleteMat} onClose={() => setDeleteMat(null)} onConfirm={handleRemoveMaterial}
+        title="Devolver Material" message={`Devolver ${deleteMat?.quantidade} ${deleteMat?.unidade} de "${deleteMat?.codigo} - ${deleteMat?.descricao}" ao estoque?`}
+        confirmText="Devolver" />
+
       {/* Registro Fotográfico */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="glass-card p-4">
@@ -3792,6 +3901,12 @@ const InspecaoDetailPage = () => {
             <div><span className="text-slate-500">Data início:</span> <span className="text-slate-300">{inspecao.data_inicio ? new Date(inspecao.data_inicio).toLocaleString('pt-BR') : '—'}</span></div>
             <div><span className="text-slate-500">Concluído por:</span> <span className="text-slate-300">{inspecao.concluido_por_nome || '—'}</span></div>
             <div><span className="text-slate-500">Data conclusão:</span> <span className="text-slate-300">{inspecao.data_conclusao ? new Date(inspecao.data_conclusao).toLocaleString('pt-BR') : '—'}</span></div>
+            {inspecao.alterado_por_nome && (
+              <>
+                <div><span className="text-slate-500">Última alteração por:</span> <span className="text-amber-400">{inspecao.alterado_por_nome}</span></div>
+                <div><span className="text-slate-500">Data alteração:</span> <span className="text-amber-400">{inspecao.updated_at ? new Date(inspecao.updated_at).toLocaleString('pt-BR') : '—'}</span></div>
+              </>
+            )}
           </div>
         </div>
       </div>

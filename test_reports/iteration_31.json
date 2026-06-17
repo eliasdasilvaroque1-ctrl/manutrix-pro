@@ -1,0 +1,63 @@
+{
+  "summary": "Iteration 31 - Bloco 3 (Materiais Utilizados + Movimentação de Estoque + alterado_por) VALIDATED end-to-end. Backend pytest 12/12 PASS. Frontend Playwright 6/6 UI checks PASS. POST /api/ordens-servico/{id}/materiais deducts stock and returns full doc (codigo, descricao, quantidade, unidade, local_estoque, usuario_nome, ativo_tag, os_numero, custo_total). DELETE restores stock and records 'devolucao' movement. GET /api/movimentacoes returns enriched movements with correct fields and supports filters (item_id, ativo_id, usuario_id, os_id, tipo). Blocks: negative stock 400, missing item_estoque_id 400, qty<=0 400. Audit log records material_consumo and material_devolucao. PUT /api/ordens-servico/{id} stamps alterado_por and GET returns alterado_por_nome. Frontend OS detail page shows os-materiais-section, add-material-btn, material-select, material-quantidade, material-submit, and 'Última alteração por' label.",
+  "pass_fail_matrix": {
+    "BACKEND POST material adds + deducts stock + returns full doc": "PASS",
+    "BACKEND GET materiais returns list": "PASS",
+    "BACKEND POST material qty>stock → 400 'Estoque insuficiente'": "PASS",
+    "BACKEND POST material without item_estoque_id → 400": "PASS",
+    "BACKEND POST material qty<=0 → 400": "PASS",
+    "BACKEND DELETE material restores stock + creates devolucao": "PASS",
+    "BACKEND GET /movimentacoes returns enriched fields (tipo, item_codigo, quantidade, os_numero, ativo_tag, usuario_nome)": "PASS",
+    "BACKEND /movimentacoes?item_id filter": "PASS",
+    "BACKEND /movimentacoes?ativo_id filter": "PASS",
+    "BACKEND /movimentacoes?usuario_id filter": "PASS",
+    "BACKEND audit log records material_consumo + material_devolucao": "PASS",
+    "BACKEND OS PUT sets alterado_por + GET returns alterado_por_nome": "PASS",
+    "FRONTEND os-materiais-section visible": "PASS",
+    "FRONTEND add-material-btn visible (only when not concluida/cancelada)": "PASS",
+    "FRONTEND Modal: material-select, material-quantidade, material-submit functional": "PASS",
+    "FRONTEND Add material flow end-to-end (selected → submit → renders in list)": "PASS",
+    "FRONTEND 'Última alteração por' label rendered when alterado_por set": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "OS Materiais list — local_estoque rendering", "issue": "Displays 'Almox UI None None' when prateleira/posicao are stored as null. Backend formatter in work_orders.py:381 uses f-string '{item.get(\"prateleira\",\"\")}' which returns None (not the default empty string) when the key exists with null value, producing the literal text 'None'.", "selector": "[data-testid='os-materiais-section']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "OS detail – Adicionar Material modal", "issues": ["React hydration warning: <span> inside <option> caused by Emergent dev instrumentation (x-component tracer adds <span> wrapper around dynamic text). Likely dev-only artifact (not app code), but worth verifying does not affect prod build."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration31_materiais.py",
+    "/app/test_reports/pytest/pytest_iteration31.xml"
+  ],
+  "action_items": [
+    "(Optional) Fix work_orders.py:381 local_estoque formatter to coerce None to '' before f-string concat, e.g.: ' '.join(filter(None, [item.get('almoxarifado'), item.get('prateleira'), item.get('posicao')])) — currently renders 'None None' for empty shelves/positions."
+  ],
+  "critical_code_review_comments": [
+    "work_orders.py:341-358 — POST material validations correctly enforce item_estoque_id presence, quantidade > 0, and quantidade <= current_qty before any mutation ✓",
+    "work_orders.py:362-368 — Stock deduction recomputes valor_total = new_qty * cost atomically with the update — good ✓",
+    "work_orders.py:381 — local_estoque f-string returns literal 'None' when prateleira/posicao keys exist but are null (LOW priority cosmetic bug) — recommend filter(None, [...]) pattern",
+    "work_orders.py:394-412 — Stock movement record uses organization_id from item (not user) — consistent so /movimentacoes org filter works ✓",
+    "work_orders.py:421-466 — DELETE/devolucao: soft-delete via deleted_at + restore stock + insert movement — correctly idempotent against repeated DELETE since 404 short-circuits ✓",
+    "work_orders.py:424 — DELETE requires admin/pcm/supervisor (excludes tecnico) — intentional per RBAC ✓",
+    "server.py:457-481 — GET /movimentacoes supports all 5 filters (item_id, ativo_id, usuario_id, os_id, tipo) + organization scoping + excludes _id ✓",
+    "App.js:3285-3322 — Materiais section properly conditioned on user role + OS status; data-testids present on all interactive elements ✓",
+    "App.js:3257-3261 — 'Última alteração por' / 'Data alteração' only render when alterado_por_nome present — correct fallback behavior ✓",
+    "RBAC consistency: POST material allows tecnico (correct — operator consumes from stock during work), DELETE restricted to admin/pcm/supervisor (correct — devolução is supervisory action) ✓"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration31_materiais.py",
+    "/app/test_reports/pytest/pytest_iteration31.xml",
+    "/app/test_reports/iteration_31.json"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (6/6 UI checks, with 1 LOW cosmetic finding)"},
+  "test_credentials": "admin@manutrix.com/admin123, pcm@manutrix.com/pcm123, tecnico@manutrix.com/tecnico123 — all working",
+  "seed_data_creation": "Backend pytest created: 1 stock item TEST-MAT-{hex6} (qty 10, R$50/UN), OS 'TEST_ITER31_Materiais' (planejada→em_execucao with 1 material consumption then devolucao), OS 'TEST_ITER31_AlteradoPor'. Frontend Playwright created: stock UI-MAT-BCAA7 (qty 20, R$10) + OS #2026-00106 'TEST_ITER31_UI_OS_Mat' with 1 material consumption (2 UN) + alterado_por=PCM Tessio.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bloco 3 (Materiais + Movimentações + alterado_por) fully validated. Re-run: `REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_iteration31_materiais.py -v`. NOTE 1: OS POST requires fields: titulo, descricao, ativo_id, tipo, prioridade, disciplina (disciplina was the missing field). NOTE 2: POST /api/ordens-servico/{id}/materiais accepts tecnico but DELETE requires admin/pcm/supervisor. NOTE 3: Stock movements use organization_id from item (not user), so /api/movimentacoes filter works only if user has same org_id (admin in seed has organization_id='' empty → matches all empty-org items; if multiplant org isolation tightens, this may need revisiting). NOTE 4: GET /api/ordens-servico/{id} now returns alterado_por_nome enriched via lookup at routes/work_orders.py:144. NOTE 5: Frontend add-material-btn is hidden when status in (concluida, cancelada) and for gerente role — keep OS in em_execucao for UI test. NOTE 6: Minor cosmetic — local_estoque renders 'None None' when prateleira/posicao are null (work_orders.py:381 needs filter(None,…) coercion).",
+  "rca of the issue": "N/A — feature working as specified. One LOW-priority cosmetic issue identified (local_estoque 'None None' rendering when stock item lacks prateleira/posicao). RCA: Python f-string substitution of dict.get('key', default) returns None — not the default — when key exists with value None; recommended fix is to use ' '.join(filter(None, [...])) or coalesce with `or ''`."
+}

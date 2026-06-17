@@ -454,6 +454,34 @@ async def delete_estoque(item_id: str, user: Dict = Depends(get_current_user)):
     return {"success": True, "message": "Item excluído com sucesso"}
 
 
+@api_router.get("/movimentacoes")
+async def list_movimentacoes(
+    item_id: Optional[str] = None,
+    ativo_id: Optional[str] = None,
+    usuario_id: Optional[str] = None,
+    os_id: Optional[str] = None,
+    tipo: Optional[str] = None,
+    limit: int = 200,
+    user: Dict = Depends(get_current_user)
+):
+    """List stock movements with filters (by item, equipment, user, OS, type)"""
+    query = {"organization_id": user.get('organization_id', '')} if user.get('organization_id') else {}
+    if item_id:
+        query['item_id'] = item_id
+    if ativo_id:
+        query['ativo_id'] = ativo_id
+    if usuario_id:
+        query['usuario_id'] = usuario_id
+    if os_id:
+        query['os_id'] = os_id
+    if tipo:
+        query['tipo'] = tipo
+    
+    movs = await db.movimentacoes_estoque.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return movs
+
+
+
 @api_router.post("/estoque/{item_id}/movimentacao")
 async def criar_movimentacao(
     item_id: str,
@@ -748,7 +776,7 @@ async def get_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user))
     if insp.get('os_gerada_id'):
         insp['os_gerada'] = await db.ordens_servico.find_one({"id": insp['os_gerada_id']}, {"_id": 0})
     # Enrich actor names
-    for field in ['criado_por', 'iniciado_por', 'concluido_por']:
+    for field in ['criado_por', 'iniciado_por', 'concluido_por', 'alterado_por']:
         uid = insp.get(field)
         if uid:
             u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1})
@@ -932,6 +960,7 @@ async def update_inspecao(inspecao_id: str, data: InspecaoUpdate, user: Dict = D
     
     update_data = {k: v.value if isinstance(v, Enum) else v for k, v in data.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    update_data['alterado_por'] = user.get('id')
     
     await db.inspecoes.update_one({"id": inspecao_id}, {"$set": update_data})
     return await db.inspecoes.find_one({"id": inspecao_id}, {"_id": 0})
@@ -2104,6 +2133,12 @@ async def get_anomalia(anomalia_id: str, user: Dict = Depends(get_current_user))
     if ativo and ativo.get('sector_id'):
         ativo['sector'] = await db.sectors.find_one({"id": ativo['sector_id']}, {"_id": 0, "nome": 1})
     a['ativo'] = ativo
+    # Enrich actor names
+    for field in ['criado_por', 'resolvido_por', 'encerrado_por', 'alterado_por']:
+        uid = a.get(field)
+        if uid:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1})
+            a[f'{field}_nome'] = u.get('nome') if u else uid
     a['comentarios'] = await db.anomalia_comentarios.find({"anomalia_id": anomalia_id}, {"_id": 0}).sort("created_at", 1).to_list(100)
     # Resolve user names for comments
     for c in a['comentarios']:
@@ -2118,7 +2153,7 @@ async def update_anomalia(anomalia_id: str, body: dict, user: Dict = Depends(get
     a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
     if not a:
         raise HTTPException(status_code=404, detail="Anomalia não encontrada")
-    update = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    update = {"updated_at": datetime.now(timezone.utc).isoformat(), "alterado_por": user.get('id')}
     for field in ['descricao', 'severidade']:
         if field in body: update[field] = body[field]
     await db.anomalias.update_one({"id": anomalia_id}, {"$set": update})

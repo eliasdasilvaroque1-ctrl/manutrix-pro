@@ -141,7 +141,7 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
     if os.get('responsavel_id'):
         os['responsavel'] = await db.users.find_one({"id": os['responsavel_id']}, {"_id": 0, "nome": 1, "email": 1, "telefone": 1})
     # Enrich actor names
-    for field in ['criado_por', 'planejado_por', 'iniciado_por', 'concluido_por']:
+    for field in ['criado_por', 'planejado_por', 'iniciado_por', 'concluido_por', 'alterado_por']:
         uid = os.get(field)
         if uid:
             u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1})
@@ -211,6 +211,7 @@ async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current
 
     update_data = {k: v.value if isinstance(v, Enum) else v for k, v in data.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    update_data['alterado_por'] = user.get('id')
 
     if 'custo_pecas' in update_data or 'custo_mao_obra' in update_data:
         pecas = update_data.get('custo_pecas', existing.get('custo_pecas', 0))
@@ -238,7 +239,7 @@ async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
     os = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os:
         raise HTTPException(status_code=404, detail="OS não encontrada")
-    await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "em_execucao", "data_inicio": datetime.now(timezone.utc).isoformat(), "iniciado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}})
+    await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "em_execucao", "data_inicio": datetime.now(timezone.utc).isoformat(), "iniciado_por": user.get('id'), "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}})
     await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os.get('numero')} → em_execucao")
     return {"success": True, "message": "OS iniciada"}
 
@@ -247,7 +248,7 @@ async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
 async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
     check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
-    await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "pausada", "updated_at": datetime.now(timezone.utc).isoformat()}})
+    await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "pausada", "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}})
     if os_doc:
         await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → pausada")
     return {"success": True, "message": "OS pausada"}
@@ -265,7 +266,7 @@ async def update_os_status(os_id: str, body: KanbanMoveBody, user: Dict = Depend
         raise HTTPException(status_code=404, detail="OS não encontrada")
     if os_doc.get('status') == 'concluida':
         raise HTTPException(status_code=400, detail="OS concluída não pode ser reaberta via Kanban")
-    update = {"status": body.new_status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    update = {"status": body.new_status, "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}
     if body.new_status == 'planejada' and not os_doc.get('planejado_por'):
         update['planejado_por'] = user.get('id')
         update['data_planejamento'] = datetime.now(timezone.utc).isoformat()
@@ -299,7 +300,7 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
     await db.ordens_servico.update_one({"id": os_id}, {"$set": {
         "status": "concluida", "data_conclusao": datetime.now(timezone.utc).isoformat(),
         "tempo_execucao_minutos": tempo, "descricao_servico": descricao,
-        "concluido_por": user.get('id'),
+        "concluido_por": user.get('id'), "alterado_por": user.get('id'),
         "observacoes": body.observacoes, "updated_at": datetime.now(timezone.utc).isoformat()
     }})
     await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → concluida (tempo: {tempo}min)")
@@ -314,3 +315,152 @@ async def get_os_historico(os_id: str, user: Dict = Depends(get_current_user)):
         {"_id": 0}
     ).sort("created_at", -1).to_list(100)
     return logs
+
+
+
+# ============== MATERIAIS UTILIZADOS NA OS ==============
+
+@router.get("/ordens-servico/{os_id}/materiais")
+async def list_os_materiais(os_id: str, user: Dict = Depends(get_current_user)):
+    """List materials consumed in a work order"""
+    materiais = await db.os_materiais.find(
+        {"os_id": os_id, "deleted_at": None}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return materiais
+
+
+@router.post("/ordens-servico/{os_id}/materiais")
+async def add_os_material(os_id: str, body: dict, user: Dict = Depends(get_current_user)):
+    """Add consumed material to OS — deducts from stock automatically"""
+    check_write_permission(user, ['admin', 'pcm', 'supervisor', 'tecnico'])
+    
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+    
+    item_estoque_id = body.get('item_estoque_id')
+    quantidade = body.get('quantidade', 0)
+    
+    if not item_estoque_id:
+        raise HTTPException(status_code=400, detail="Item de estoque é obrigatório")
+    if quantidade <= 0:
+        raise HTTPException(status_code=400, detail="Quantidade deve ser maior que zero")
+    
+    # Get stock item
+    item = await db.itens_estoque.find_one({"id": item_estoque_id, "deleted_at": None}, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item de estoque não encontrado")
+    
+    # Block negative stock
+    current_qty = item.get('quantidade', 0)
+    if quantidade > current_qty:
+        raise HTTPException(status_code=400, detail=f"Estoque insuficiente. Disponível: {current_qty} {item.get('unidade','UN')}")
+    
+    # Get ativo info
+    ativo = await db.ativos.find_one({"id": os_doc.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
+    
+    # Deduct from stock
+    new_qty = current_qty - quantidade
+    cost = item.get('custo_unitario', 0)
+    await db.itens_estoque.update_one(
+        {"id": item_estoque_id},
+        {"$set": {"quantidade": new_qty, "valor_total": new_qty * cost, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Record material in OS
+    mat_id = str(uuid.uuid4())
+    mat_doc = {
+        "id": mat_id,
+        "os_id": os_id,
+        "os_numero": os_doc.get('numero'),
+        "item_estoque_id": item_estoque_id,
+        "codigo": item.get('sku', ''),
+        "descricao": item.get('nome', ''),
+        "quantidade": quantidade,
+        "unidade": item.get('unidade', 'UN'),
+        "local_estoque": f"{item.get('almoxarifado', '')} {item.get('prateleira', '')} {item.get('posicao', '')}".strip(),
+        "custo_unitario": cost,
+        "custo_total": quantidade * cost,
+        "ativo_id": os_doc.get('ativo_id'),
+        "ativo_tag": ativo.get('tag', '') if ativo else '',
+        "usuario_id": user.get('id'),
+        "usuario_nome": user.get('nome', user.get('email', '')),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.os_materiais.insert_one(mat_doc)
+    
+    # Record stock movement
+    mov_doc = {
+        "id": str(uuid.uuid4()),
+        "item_id": item_estoque_id,
+        "item_codigo": item.get('sku', ''),
+        "item_descricao": item.get('nome', ''),
+        "tipo": "saida",
+        "quantidade": -quantidade,
+        "custo_unitario": cost,
+        "motivo": f"Consumo em OS #{os_doc.get('numero','')}",
+        "os_id": os_id,
+        "os_numero": os_doc.get('numero'),
+        "ativo_id": os_doc.get('ativo_id'),
+        "ativo_tag": ativo.get('tag', '') if ativo else '',
+        "usuario_id": user.get('id'),
+        "usuario_nome": user.get('nome', user.get('email', '')),
+        "organization_id": item.get('organization_id', ''),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.movimentacoes_estoque.insert_one(mov_doc)
+    
+    await audit_log("material_consumo", "ordens_servico", os_id, user,
+        f"Material: {item.get('sku','')} {item.get('nome','')} x{quantidade} na OS #{os_doc.get('numero','')}")
+    
+    mat_doc.pop('_id', None)
+    return mat_doc
+
+
+@router.delete("/ordens-servico/{os_id}/materiais/{material_id}")
+async def remove_os_material(os_id: str, material_id: str, user: Dict = Depends(get_current_user)):
+    """Remove/return material from OS — restores stock"""
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
+    
+    mat = await db.os_materiais.find_one({"id": material_id, "os_id": os_id, "deleted_at": None}, {"_id": 0})
+    if not mat:
+        raise HTTPException(status_code=404, detail="Material não encontrado nesta OS")
+    
+    # Restore stock
+    item = await db.itens_estoque.find_one({"id": mat['item_estoque_id']}, {"_id": 0})
+    if item:
+        new_qty = item.get('quantidade', 0) + mat['quantidade']
+        cost = item.get('custo_unitario', 0)
+        await db.itens_estoque.update_one(
+            {"id": mat['item_estoque_id']},
+            {"$set": {"quantidade": new_qty, "valor_total": new_qty * cost, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        # Record return movement
+        mov_doc = {
+            "id": str(uuid.uuid4()),
+            "item_id": mat['item_estoque_id'],
+            "item_codigo": mat.get('codigo', ''),
+            "item_descricao": mat.get('descricao', ''),
+            "tipo": "devolucao",
+            "quantidade": mat['quantidade'],
+            "custo_unitario": cost,
+            "motivo": f"Devolução da OS #{mat.get('os_numero','')}",
+            "os_id": os_id,
+            "os_numero": mat.get('os_numero'),
+            "ativo_id": mat.get('ativo_id'),
+            "ativo_tag": mat.get('ativo_tag', ''),
+            "usuario_id": user.get('id'),
+            "usuario_nome": user.get('nome', user.get('email', '')),
+            "organization_id": item.get('organization_id', ''),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.movimentacoes_estoque.insert_one(mov_doc)
+    
+    # Soft delete
+    await db.os_materiais.update_one({"id": material_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    
+    await audit_log("material_devolucao", "ordens_servico", os_id, user,
+        f"Devolvido: {mat.get('codigo','')} {mat.get('descricao','')} x{mat['quantidade']} da OS #{mat.get('os_numero','')}")
+    
+    return {"success": True}
