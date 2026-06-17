@@ -4,6 +4,7 @@
 | Role | Email | Senha |
 |------|-------|-------|
 | Admin | admin@manutrix.com | admin123 |
+| PCM | pcm@manutrix.com | pcm123 |
 | Supervisor | supervisor@manutrix.com | supervisor123 |
 | Tecnico | tecnico@manutrix.com | tecnico123 |
 | Tecnico 2 | pedro@manutrix.com | pedro123 |

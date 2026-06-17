@@ -10,41 +10,64 @@ Sistema CMMS/EAM industrial simplificado para manutenção em campo. Hierarquia 
 - **Auth:** Supabase (primário) + MongoDB bcrypt (fallback)
 - **Roles:** Admin, PCM, Técnico, Gerente (Supervisor)
 
-## FASE 1 — Segurança, Auditoria e Perfis (CONCLUÍDA — Aguardando aprovação)
-- [x] Rastreabilidade (criado_por, concluido_por, data) em OS, Anomalias, Inspeções
-- [x] RBAC backend: check_write_permission, check_admin_only, check_pcm_or_admin
-- [x] RBAC frontend: botões ocultos por role
-- [x] Sistema de Auditoria completo (login, logout, 403, CRUD) + página UI
-- [x] Duplicar Ativo
-- [x] Templates de Inspeção vinculados a Tipo de Equipamento
-- [x] Workflow de Anomalias (Aberta -> Em análise -> OS -> Corrigida -> Encerrada)
-- [x] BOM/Lista Técnica em Ativos
-- [x] SKU renomeado para "Código"
-- [x] **FIX: Sobressalentes Edit/Delete** — Botões visíveis e funcionais (2026-06-15)
-  - Causa: CSS `group` ausente + `hidden group-hover:flex` + permissão `=== 'admin'`
-  - Fix: Botões always visible, permissão `['admin','pcm']`, data-testid adicionado
-- [x] **FIX: QR Code dos equipamentos** — Codifica URL completa (2026-06-16)
-  - Causa: QR codificava UUID aleatório (`qr_code` field) em vez de URL navegável
-  - Fix: QRCodeSVG agora usa `${origin}/ativos/${id}` — funciona com scanner externo e interno
-  - Fix adicional: Input manual do scanner removia case sensitivity (toUpperCase) quebrando UUIDs
+## FASE 1 — Segurança, Auditoria e Perfis (CONCLUÍDA)
+- [x] Rastreabilidade completa
+- [x] RBAC backend + frontend
+- [x] Sistema de Auditoria
+- [x] Duplicar Ativo, Templates, Anomalias, BOM, SKU→Código
+- [x] FIX: Sobressalentes Edit/Delete
+- [x] FIX: QR Code URL format
 
-## FASE 2 — Experiência Visual (PENDENTE — Aguardando aprovação FASE 1)
-- [ ] Bloco 3: Quick indicators em Ativos (TAG, Nome, Área, Tipo, OS abertas, Anomalias abertas, foto 60x60)
-- [ ] Bloco 4: Quick indicators em Estoque (Código, Categoria, Qtd, Status: Normal/Atenção/Crítico, Filtros)
-- [ ] Bloco 5: Quick indicators em Sobressalentes (Foto, Status formatado)
+## FASE OPERACIONAL — Rastreabilidade e Execução (EM ANDAMENTO)
 
-## FASE 3 — Estoque e Sobressalentes (FUTURA)
-- [ ] Bloco 6-7: Export Excel/PDF + timeline histórica por sobressalente
-- [ ] Bloco 8: Movimentação de Estoque (Fornecedor, NF, Data NF, bloqueio estoque negativo)
-- [ ] Bloco 9: Controle de Sobressalentes (Garantia, NF, Empresa Reparadora, Anexos, Histórico Reformas)
+### Bloco 1: Poderes do PCM ✅ (2026-06-17)
+**PCM PODE:**
+- [x] Visualizar OS e Inspeções
+- [x] Criar OS
+- [x] Editar OS (prioridade, datas, responsável, equipe)
+- [x] Editar Inspeções (observações, responsável, data planejada)
+- [x] Mover OS no Kanban
+- [x] Exportar relatórios
 
-## FASE 4 — Planejamento e Indicadores (FUTURA)
-- [ ] Bloco 10: Paradas Programadas (Scheduling, OS linking, duração, resultados)
-- [ ] Bloco 11: Indicadores Gerenciais (MTBF, MTTR, Disponibilidade, OS por Área)
+**PCM NÃO PODE:**
+- [x] Iniciar OS → 403
+- [x] Concluir OS → 403
+- [x] Pausar OS → 403
+- [x] Excluir OS → 403
+- [x] Iniciar Inspeção → 403
+- [x] Concluir Inspeção → 403
+- [x] Excluir Inspeção → 403
 
-## FASE 5 — Ficha Técnica e Polimento (FUTURA)
-- [ ] Bloco 12: Ficha Técnica Completa (Timeline unificada de eventos do Ativo)
-- [ ] Bloco 13: Polimento Visual (Padronizar cards, badges, cores)
+**Arquivos alterados:** `routes/work_orders.py`, `server.py`, `App.js`
+**Testes:** iteration_29 — Backend 14/14, Frontend 4/4
+
+### Bloco 2: Executantes em OS e Inspeções (PRÓXIMO)
+- [ ] Adicionar: Planejado por, Executado por, Concluído por em OS
+- [ ] Executantes múltiplos em OS e Inspeções
+- [ ] Registrar no histórico
+
+### Bloco 3: Materiais Utilizados + Movimentação de Estoque
+- [ ] Coleção os_materiais
+- [ ] Dedução automática de estoque ao concluir OS
+- [ ] Tabela de movimentação
+
+### Bloco 4: Auditoria Detalhada
+- [ ] Registrar alterações campo-a-campo (ex: "Prioridade: Média → Alta")
+
+### Bloco 5: Histórico do Equipamento com Filtros
+- [ ] Filtros: data, tipo, status, usuário
+
+### Bloco 6: Detalhamento Completo da OS
+- [ ] Todos os campos obrigatórios visíveis
+
+### Bloco 7: Detalhamento Completo da Inspeção
+- [ ] Todos os campos obrigatórios visíveis
+
+## Fases Futuras
+- FASE 2: Experiência Visual
+- FASE 3: Estoque e Sobressalentes avançado
+- FASE 4: Planejamento e Indicadores
+- FASE 5: Ficha Técnica e Polimento
 
 ## Regra de Ouro
-> Ao concluir cada fase: Parar imediatamente. Entregar evidências. Aguardar aprovação. Somente após aprovação iniciar a próxima fase.
+> Parar após cada bloco. Entregar evidências. Aguardar aprovação.
