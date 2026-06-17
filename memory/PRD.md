@@ -1,54 +1,41 @@
 # MANUTRIX OMNI — Product Requirements Document
 
-## Problema Original
-Sistema CMMS/EAM industrial simplificado para manutenção em campo.
+## FASE OPERACIONAL — Rastreabilidade e Execução
 
-## Arquitetura
-- **Frontend:** React PWA — `/app/frontend/src/App.js`
-- **Backend:** FastAPI — `/app/backend/server.py` + `/app/backend/routes/`
-- **Banco:** MongoDB
-- **Auth:** Supabase + MongoDB bcrypt fallback
-- **Roles:** Admin, PCM, Técnico, Gerente (Supervisor)
+### Bloco 1: Poderes do PCM ✅
+### Bloco 2: Executantes + Rastreabilidade ✅
 
-## FASE 1 — Segurança, Auditoria e Perfis ✅
+### Bloco 3: Materiais Utilizados + Movimentação de Estoque ✅ (2026-06-17)
 
-## FASE OPERACIONAL — Rastreabilidade e Execução (EM ANDAMENTO)
+**Pré-requisito (Última alteração por):**
+- [x] `alterado_por` + `updated_at` em OS, Inspeções, Anomalias
+- [x] Enriquecido com nome no GET de cada entidade
 
-### Bloco 1: Poderes do PCM ✅ (2026-06-17)
-PCM pode: criar/editar OS e inspeções, kanban, exportar.
-PCM não pode: iniciar/concluir/pausar/excluir OS/inspeções.
+**Materiais na OS:**
+- [x] POST /api/ordens-servico/{id}/materiais — Adiciona material, deduz estoque
+- [x] GET /api/ordens-servico/{id}/materiais — Lista materiais consumidos
+- [x] DELETE /api/ordens-servico/{id}/materiais/{mat_id} — Devolve ao estoque
 
-### Bloco 2: Executantes + Rastreabilidade ✅ (2026-06-17)
-**Campos de rastreabilidade na OS:**
-- [x] Criado por + Data abertura
-- [x] Planejado por + Data planejamento (set on kanban → planejada)
-- [x] Executado por + Data execução (= iniciado_por + data_inicio)
-- [x] Concluído por + Data conclusão
-- [x] Executantes múltiplos (campo equipe com nomes enriquecidos)
+**Movimentação de Estoque:**
+- [x] GET /api/movimentacoes — Histórico global com filtros
+- [x] Filtros: item_id, ativo_id, usuario_id, os_id, tipo
+- [x] Campos: data, hora, usuario, codigo, descricao, quantidade, OS, equipamento, tipo
 
-**Campos de rastreabilidade na Inspeção:**
-- [x] Criado por + Data criação
-- [x] Iniciado por + Data início
-- [x] Concluído por + Data conclusão
-- [x] Executantes múltiplos (novo campo com nomes enriquecidos)
+**Bloqueios:**
+- [x] Estoque negativo → HTTP 400
+- [x] Consumo sem item_estoque_id → HTTP 400
+- [x] Consumo com quantidade ≤ 0 → HTTP 400
 
 **Frontend:**
-- [x] OS detail: seção Rastreabilidade com 8 campos + Executantes
-- [x] Inspeção detail: seção Rastreabilidade com 6 campos + Executantes
-- [x] Form de inspeção: seletor de executantes
+- [x] Seção "Materiais Utilizados" no detalhe da OS
+- [x] Botão "Adicionar" com modal de seleção
+- [x] Botão "Devolver" para admin/pcm/supervisor
+- [x] Total de custo exibido
+- [x] "Última alteração por" na rastreabilidade
 
-**Testes:** iteration_30 — Backend 9/9, Frontend 15/15
+**Testes:** iteration_31 — Backend 12/12, Frontend 6/6
 
-### Bloco 3: Materiais Utilizados + Movimentação de Estoque (PRÓXIMO)
-- [ ] Coleção os_materiais (código, descrição, quantidade, unidade, local_estoque)
-- [ ] Adicionar/remover materiais durante execução da OS
-- [ ] Ao concluir OS: dedução automática do estoque
-- [ ] Tabela de movimentação de estoque
-- [ ] Registrar: material, quantidade, usuário, data/hora, OS vinculada
-
-### Bloco 4: Auditoria Detalhada
-- [ ] Registrar alterações campo-a-campo (ex: "Prioridade: Média → Alta")
-
+### Bloco 4: Auditoria Detalhada (PRÓXIMO)
 ### Bloco 5: Histórico do Equipamento com Filtros
 ### Bloco 6: Detalhamento Completo da OS
 ### Bloco 7: Detalhamento Completo da Inspeção

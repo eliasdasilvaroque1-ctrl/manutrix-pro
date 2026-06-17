@@ -378,7 +378,7 @@ async def add_os_material(os_id: str, body: dict, user: Dict = Depends(get_curre
         "descricao": item.get('nome', ''),
         "quantidade": quantidade,
         "unidade": item.get('unidade', 'UN'),
-        "local_estoque": f"{item.get('almoxarifado', '')} {item.get('prateleira', '')} {item.get('posicao', '')}".strip(),
+        "local_estoque": ' '.join(filter(None, [item.get('almoxarifado'), item.get('prateleira'), item.get('posicao')])),
         "custo_unitario": cost,
         "custo_total": quantidade * cost,
         "ativo_id": os_doc.get('ativo_id'),
