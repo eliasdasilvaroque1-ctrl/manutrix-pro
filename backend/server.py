@@ -774,7 +774,27 @@ async def get_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user))
     if insp.get('rota_id'):
         insp['rota'] = await db.rotas_inspecao.find_one({"id": insp['rota_id']}, {"_id": 0})
     if insp.get('os_gerada_id'):
-        insp['os_gerada'] = await db.ordens_servico.find_one({"id": insp['os_gerada_id']}, {"_id": 0})
+        os_gerada = await db.ordens_servico.find_one({"id": insp['os_gerada_id']}, {"_id": 0, "id": 1, "numero": 1, "status": 1, "titulo": 1, "responsavel_id": 1})
+        if os_gerada and os_gerada.get('responsavel_id'):
+            resp = await db.users.find_one({"id": os_gerada['responsavel_id']}, {"_id": 0, "nome": 1})
+            os_gerada['responsavel_nome'] = resp.get('nome') if resp else None
+        insp['os_gerada'] = os_gerada
+    # Also find all OS linked to this inspection (via inspecao_origem_id)
+    os_vinculadas = await db.ordens_servico.find(
+        {"inspecao_origem_id": inspecao_id, "deleted_at": None},
+        {"_id": 0, "id": 1, "numero": 1, "status": 1, "titulo": 1, "responsavel_id": 1}
+    ).to_list(50)
+    for os_v in os_vinculadas:
+        if os_v.get('responsavel_id'):
+            resp = await db.users.find_one({"id": os_v['responsavel_id']}, {"_id": 0, "nome": 1})
+            os_v['responsavel_nome'] = resp.get('nome') if resp else None
+    insp['os_vinculadas'] = os_vinculadas
+    # Anomalias vinculadas ao ativo (from this inspection period)
+    # Histórico (audit log)
+    insp['historico'] = await db.audit_logs.find(
+        {"entity_type": "inspecoes", "entity_id": inspecao_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
     # Enrich actor names
     for field in ['criado_por', 'iniciado_por', 'concluido_por', 'alterado_por']:
         uid = insp.get(field)

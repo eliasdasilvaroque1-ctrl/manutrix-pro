@@ -3929,9 +3929,12 @@ const InspecaoDetailPage = () => {
   if (!inspecao) return null;
   
   const isFinished = ['concluida', 'com_pendencias'].includes(inspecao.status);
+  const naoConformes = checklist.filter(i => i.conforme === false);
+  const conformes = checklist.filter(i => i.conforme === true);
   
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24" data-testid="inspecao-detail-page">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => navigate('/inspecoes')} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg">
           <ArrowLeft size={20} className="text-slate-400" />
@@ -3956,6 +3959,21 @@ const InspecaoDetailPage = () => {
             <span className="text-xs px-2 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded">Lubrificação</span>
           )}
           <StatusBadge status={inspecao.status} />
+          {inspecao.resultado && inspecao.resultado !== 'pendente' && <StatusBadge status={inspecao.resultado} />}
+        </div>
+      </div>
+
+      {/* Dados Gerais */}
+      <div className="glass-card p-4" data-testid="inspecao-dados-gerais">
+        <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider mb-2">Dados Gerais</p>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div><span className="text-slate-500">Tipo:</span> <span className="text-slate-200 capitalize">{inspecao.tipo}</span></div>
+          {inspecao.frequencia && <div><span className="text-slate-500">Frequência:</span> <span className="text-slate-200 capitalize">{inspecao.frequencia}</span></div>}
+          {inspecao.ativo?.tipo_equipamento && <div><span className="text-slate-500">Tipo Equip.:</span> <span className="text-slate-200">{inspecao.ativo.tipo_equipamento}</span></div>}
+          {inspecao.ativo?.fabricante && <div><span className="text-slate-500">Fabricante:</span> <span className="text-slate-200">{inspecao.ativo.fabricante}</span></div>}
+          {inspecao.ativo?.modelo && <div><span className="text-slate-500">Modelo:</span> <span className="text-slate-200">{inspecao.ativo.modelo}</span></div>}
+          {inspecao.ativo?.numero_serie && <div><span className="text-slate-500">Série:</span> <span className="text-slate-200 font-mono">{inspecao.ativo.numero_serie}</span></div>}
+          {inspecao.duracao_minutos && <div><span className="text-slate-500">Duração:</span> <span className="text-emerald-400 font-semibold">{inspecao.duracao_minutos} min</span></div>}
         </div>
       </div>
       
@@ -3964,22 +3982,12 @@ const InspecaoDetailPage = () => {
         <div className="glass-card p-4 space-y-2 border-amber-500/30">
           <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2"><Droplet size={16} /> Dados da Lubrificação</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
-            {inspecao.tipo_lubrificante && (
-              <div><span className="text-slate-500">Lubrificante:</span> <span className="text-slate-200 capitalize">{inspecao.tipo_lubrificante.replace(/_/g, ' ')}</span></div>
-            )}
-            {inspecao.quantidade_lubrificante && (
-              <div><span className="text-slate-500">Quantidade:</span> <span className="text-slate-200">{inspecao.quantidade_lubrificante}</span></div>
-            )}
-            {inspecao.ponto_lubrificacao && (
-              <div><span className="text-slate-500">Ponto:</span> <span className="text-slate-200">{inspecao.ponto_lubrificacao}</span></div>
-            )}
-            {inspecao.metodo_aplicacao && (
-              <div><span className="text-slate-500">Método:</span> <span className="text-slate-200 capitalize">{inspecao.metodo_aplicacao}</span></div>
-            )}
+            {inspecao.tipo_lubrificante && <div><span className="text-slate-500">Lubrificante:</span> <span className="text-slate-200 capitalize">{inspecao.tipo_lubrificante.replace(/_/g, ' ')}</span></div>}
+            {inspecao.quantidade_lubrificante && <div><span className="text-slate-500">Quantidade:</span> <span className="text-slate-200">{inspecao.quantidade_lubrificante}</span></div>}
+            {inspecao.ponto_lubrificacao && <div><span className="text-slate-500">Ponto:</span> <span className="text-slate-200">{inspecao.ponto_lubrificacao}</span></div>}
+            {inspecao.metodo_aplicacao && <div><span className="text-slate-500">Método:</span> <span className="text-slate-200 capitalize">{inspecao.metodo_aplicacao}</span></div>}
           </div>
-          {inspecao.observacoes_lubrificacao && (
-            <p className="text-xs text-slate-400 mt-2">{inspecao.observacoes_lubrificacao}</p>
-          )}
+          {inspecao.observacoes_lubrificacao && <p className="text-xs text-slate-400 mt-2">{inspecao.observacoes_lubrificacao}</p>}
         </div>
       )}
       
@@ -4017,6 +4025,14 @@ const InspecaoDetailPage = () => {
         </div>
       </div>
       
+      {/* Observações */}
+      {inspecao.observacoes && (
+        <div className="glass-card p-4" data-testid="inspecao-observacoes">
+          <p className="text-xs text-slate-500 mb-1">Observações</p>
+          <p className="text-slate-200 whitespace-pre-wrap">{inspecao.observacoes}</p>
+        </div>
+      )}
+
       {inspecao.status === 'pendente' && !['pcm','gerente'].includes(user?.role) && (
         <button onClick={handleIniciar} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="inspecao-iniciar-btn">
           <Play size={20} /> Iniciar Inspeção
@@ -4028,12 +4044,14 @@ const InspecaoDetailPage = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm text-slate-400">Checklist</h3>
-            <span className="text-xs text-slate-500">
-              {checklist.filter(i => {
+            <div className="flex items-center gap-3 text-xs text-slate-500">
+              {isFinished && <span className="text-emerald-400">{conformes.length} conforme(s)</span>}
+              {isFinished && naoConformes.length > 0 && <span className="text-red-400">{naoConformes.length} não conforme(s)</span>}
+              <span>{checklist.filter(i => {
                 const t = i.tipo || 'boolean';
                 return t === 'boolean' ? (i.conforme !== null && i.conforme !== undefined) : (i.resultado !== null && i.resultado !== undefined && i.resultado !== '');
-              }).length}/{checklist.length} respondidos
-            </span>
+              }).length}/{checklist.length} respondidos</span>
+            </div>
           </div>
           
           {checklist.map((item, idx) => {
@@ -4133,13 +4151,17 @@ const InspecaoDetailPage = () => {
                       {isNumeric && item.resultado !== undefined && (
                         <span className={`text-sm ${item.conforme ? 'text-emerald-400' : 'text-red-400'}`}>
                           {item.resultado} {item.unidade}
+                          {item.tolerancia_min !== undefined && <span className="text-xs text-slate-500 ml-2">(Faixa: {item.tolerancia_min} - {item.tolerancia_max})</span>}
                         </span>
                       )}
                       {isOption && item.resultado && (
                         <span className={`text-sm px-2 py-1 rounded ${item.conforme ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>{item.resultado}</span>
                       )}
                       {isText && item.resultado && (
-                        <p className="text-sm text-slate-300">{item.resultado}</p>
+                        <p className="text-sm text-slate-300 bg-slate-800/50 rounded p-2 mt-1">{item.resultado}</p>
+                      )}
+                      {item.observacao && (
+                        <p className="text-xs text-red-400/80 mt-1 bg-red-500/5 rounded p-2 border border-red-500/20">{item.observacao}</p>
                       )}
                     </div>
                   )}
@@ -4182,12 +4204,26 @@ const InspecaoDetailPage = () => {
         </div>
       )}
       
-      {inspecao.os_gerada && (
-        <div className="glass-card p-4 border-amber-500/50 cursor-pointer" onClick={() => navigate(`/os/${inspecao.os_gerada.id}`)}>
-          <p className="text-xs text-slate-500">OS Gerada</p>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-amber-400">#{inspecao.os_gerada.numero}</span>
-            <ChevronRight className="text-slate-600" />
+      {/* OS Geradas */}
+      {(inspecao.os_vinculadas?.length > 0 || inspecao.os_gerada) && (
+        <div className="glass-card p-4" data-testid="inspecao-os-geradas">
+          <h3 className="text-sm font-semibold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <Wrench size={16} /> OS Geradas ({inspecao.os_vinculadas?.length || (inspecao.os_gerada ? 1 : 0)})
+          </h3>
+          <div className="space-y-2">
+            {(inspecao.os_vinculadas || (inspecao.os_gerada ? [inspecao.os_gerada] : [])).map(os => (
+              <div key={os.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3 cursor-pointer hover:bg-slate-800" onClick={() => navigate(`/os/${os.id}`)}>
+                <div>
+                  <span className="font-mono text-amber-400">#{os.numero}</span>
+                  <span className="text-slate-300 text-sm ml-2">{os.titulo}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {os.responsavel_nome && <span className="text-xs text-slate-500">{os.responsavel_nome}</span>}
+                  <StatusBadge status={os.status} size="sm" />
+                  <ChevronRight size={16} className="text-slate-600" />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -4204,6 +4240,25 @@ const InspecaoDetailPage = () => {
         </div>
       )}
       
+      {/* Histórico Completo */}
+      {inspecao.historico?.length > 0 && (
+        <div className="glass-card p-4" data-testid="inspecao-historico">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Activity size={16} /> Histórico ({inspecao.historico.length})
+          </h3>
+          <div className="space-y-2">
+            {inspecao.historico.map((h, idx) => (
+              <div key={idx} className="flex items-start gap-3 text-sm border-l-2 border-slate-700 pl-3 py-1.5">
+                <div className="flex-1">
+                  <p className="text-slate-300">{h.details}</p>
+                  <p className="text-xs text-slate-500">{h.user_name} · {new Date(h.created_at).toLocaleString('pt-BR')}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Action */}
       {inspecao.status === 'em_andamento' && !['pcm','gerente'].includes(user?.role) && (
         <div className="fixed bottom-16 left-0 right-0 p-4 bg-slate-950/95 backdrop-blur-sm border-t border-slate-800 md:bottom-0">
