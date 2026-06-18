@@ -1,0 +1,66 @@
+{
+  "summary": "Iteration 33 - Bloco 6 OS Detalhamento Completo VALIDATED. Backend pytest 13/13 PASS for GET /api/ordens-servico/{id} returning all enriched fields (origem, causa_falha, equipamento_parado, custo_pecas, custo_mao_obra, custo_total, ativo with sector, responsavel, criado_por_nome, planejado_por_nome, iniciado_por_nome, concluido_por_nome, alterado_por_nome, equipe_nomes map, materiais_sugeridos). Frontend Playwright on OS #2026-00107 (concluida) verified ALL data-testids: os-detail-page, os-ativo-card (shows PLANTA-03 / PV-03 / PHF), os-info-card (Tipo Corretiva / Disciplina Mecanica / Origem Manual + Responsavel Elias Roque + 5 Executantes chips + full Rastreabilidade with 4 actors + dates + última alteração + Tempo 4h 0min), os-servico-executado (green border, 'REALIZADO A SUBSTITUIÇÃO...'), os-causa-falha (red border, '1000 HORAS DE TROCA'), os-materiais-section (3 items, Total R$ 650.00), os-historico (5 events, NO max-h-48 class anywhere). Foto Antes/Depois sections render with PhotoUploader. Header shows #2026-00107 + Concluída badge + Alta priority badge + título.",
+  "pass_fail_matrix": {
+    "BACKEND GET /api/ordens-servico/{id} returns 200": "PASS",
+    "BACKEND OS has core fields (numero, status, prioridade, tipo, disciplina, titulo)": "PASS",
+    "BACKEND OS has origem field": "PASS",
+    "BACKEND ativo enriched with sector.nome when sector_id present": "PASS",
+    "BACKEND responsavel enriched with nome/email/telefone": "PASS",
+    "BACKEND equipe_nomes map enriched for executantes": "PASS",
+    "BACKEND rastreabilidade actor names (criado_por_nome, planejado_por_nome, iniciado_por_nome, concluido_por_nome)": "PASS",
+    "BACKEND custo_pecas / custo_mao_obra / custo_total fields present": "PASS",
+    "BACKEND observacoes / causa_falha / descricao_servico / equipamento_parado / tempo_execucao_minutos present": "PASS",
+    "BACKEND materiais_sugeridos array returned": "PASS",
+    "BACKEND no _id (ObjectId) leaked in response or nested ativo": "PASS",
+    "BACKEND /historico endpoint returns 200 list": "PASS",
+    "BACKEND OS #2026-00107 has causa_falha + descricao_servico + 5 executantes + equipe_nomes enriched": "PASS",
+    "FRONTEND header shows numero #2026-00107 + Concluída badge + Alta priority": "PASS",
+    "FRONTEND os-ativo-card shows sector.nome (PLANTA-03), TAG (PV-03), equipment name (PHF)": "PASS",
+    "FRONTEND os-info-card shows Tipo/Disciplina/Origem (Corretiva/Mecanica/Manual)": "PASS",
+    "FRONTEND Responsável (Elias Roque) and Executantes chips (5 names)": "PASS",
+    "FRONTEND Rastreabilidade with 8 fields + última alteração + dates": "PASS",
+    "FRONTEND Tempo de Execução (4h 0min) shown in Execução block": "PASS",
+    "FRONTEND os-servico-executado renders when concluida (green border)": "PASS",
+    "FRONTEND os-causa-falha renders with content '1000 HORAS DE TROCA' (red border)": "PASS",
+    "FRONTEND os-materiais-section shows 3 items with Total R$ 650.00": "PASS",
+    "FRONTEND Foto Antes / Foto Depois PhotoUploader sections render": "PASS",
+    "FRONTEND os-historico has NO max-h-48 class anywhere (outer + inner)": "PASS",
+    "FRONTEND os-observacoes NOT rendered when empty (expected)": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "OSDetailPage info-card grid", "issues": ["Tipo/Disciplina/Origem use float-right inside grid cells which can break alignment on narrow viewports — works on desktop but consider flex justify-between for mobile responsiveness (LOW priority advisory)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration33_os_detalhamento.py",
+    "/app/test_reports/pytest/pytest_iteration33.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/work_orders.py:134-156 — get_os correctly enriches: ativo with sector (id+nome only), responsavel (nome/email/telefone), actor names for all 5 traceability fields (criado_por, planejado_por, iniciado_por, concluido_por, alterado_por), equipe_nomes as id→nome map, materiais_sugeridos from ativo BOM. All _id excluded via projection. ✓",
+    "App.js:3284-3297 — os-ativo-card uses os.ativo.sector.nome OR fallback os.ativo.sector_nome, robust ✓",
+    "App.js:3300-3355 — os-info-card uses compact 2-column grid for Tipo/Disciplina/Origem/Data Planejada with conditional EQUIPAMENTO PARADO red banner spanning 2 cols ✓",
+    "App.js:3344 — Execução block conditional on (tempo_execucao_minutos || custo_pecas>0 || custo_mao_obra>0) — works for current OS (only tempo) but if all are 0/null block is hidden; could use OR'd null-check for cleaner intent ✓",
+    "App.js:3476-3494 — os-historico no longer has max-h-48 or overflow-y-auto — confirmed via DOM inspection, renders all 5 events without scroll constraint ✓",
+    "App.js:3302-3304 — Tipo/Disciplina/Origem use capitalize CSS class to title-case backend lowercase enum values — works correctly for 'corretiva'→'Corretiva', 'mecanica'→'Mecanica', 'manual'→'Manual' ✓",
+    "App.js:3315-3316 — Executante chips display nome from equipe_nomes map with uid fallback — correct pattern ✓",
+    "App.js:3358-3361 — Descrição section conditional on os.descricao; in tested OS this block was not rendered because OS #2026-00107 has no descricao (only descricao_servico) — expected behavior",
+    "App.js:3306 — Equipamento Parado banner inline with col-span-2 — readable, distinct red styling with AlertTriangle ✓"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration33_os_detalhamento.py",
+    "/app/test_reports/pytest/pytest_iteration33.xml",
+    "/app/test_reports/iteration_33.json"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (all data-testids + content + max-h-48 removal verified via Playwright + screenshot)"},
+  "test_credentials": "admin@manutrix.com/admin123 — working via /api/auth/login (200 with access_token)",
+  "seed_data_creation": "No seed data created. Reused OS #2026-00107 (status=concluida) which has rich data: causa_falha='1000 HORAS DE TROCA', descricao_servico='REALIZADO A SUBSTITUIÇÃO DOS FILTRO DE RETORNO TELAS E ROLAMENTOS', 5 executantes, responsavel Elias Roque, all 4 rastreabilidade actors filled, 3 materials totaling R$650, foto_antes + foto_depois uploaded.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bloco 6 (OS Detalhamento Completo) fully validated. To re-run backend: `REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_iteration33_os_detalhamento.py -v`. NOTE 1: The auth response uses key 'access_token' (not 'token') — tests handle both via fallback. NOTE 2: Conditional sections (os-observacoes, os-causa-falha, os-servico-executado, Execução block, Descrição block, Equipamento Parado banner) render only when respective fields are truthy — this is correct behavior. NOTE 3: Rastreabilidade label is rendered uppercase via CSS — DOM inner_text returns 'RASTREABILIDADE' not 'Rastreabilidade' (used capitalize/uppercase Tailwind classes). NOTE 4: The Histórico Completo no longer has max-h-48 / overflow-y-auto — confirmed via DOM evaluate on inner HTML.",
+  "rca of the issue": "N/A — All Bloco 6 requirements implemented correctly. No bugs found."
+}

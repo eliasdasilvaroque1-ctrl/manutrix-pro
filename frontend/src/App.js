@@ -3298,13 +3298,18 @@ const OSDetailPage = () => {
       
       {/* Info */}
       <div className="glass-card p-4 space-y-3" data-testid="os-info-card">
-        <div className="flex justify-between text-sm"><span className="text-slate-500">Tipo</span><span className="text-slate-200 capitalize">{os.tipo}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-slate-500">Disciplina</span><span className="text-slate-200 capitalize">{os.disciplina}</span></div>
-        {os.responsavel && <div className="flex justify-between text-sm"><span className="text-slate-500">Responsável</span><span className="text-slate-200">{os.responsavel.nome}</span></div>}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <div><span className="text-slate-500">Tipo</span><span className="text-slate-200 capitalize float-right">{os.tipo}</span></div>
+          <div><span className="text-slate-500">Disciplina</span><span className="text-slate-200 capitalize float-right">{os.disciplina}</span></div>
+          <div><span className="text-slate-500">Origem</span><span className="text-slate-200 capitalize float-right">{os.origem || 'manual'}</span></div>
+          {os.data_planejada && <div><span className="text-slate-500">Data Planejada</span><span className="text-slate-200 float-right">{new Date(os.data_planejada + 'T00:00:00').toLocaleDateString('pt-BR')}</span></div>}
+          {os.equipamento_parado && <div className="col-span-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 flex items-center gap-2"><AlertTriangle size={14} className="text-red-400" /><span className="text-red-400 text-xs font-semibold">EQUIPAMENTO PARADO</span>{os.horas_parada && <span className="text-red-300 text-xs ml-auto">{os.horas_parada}h de parada</span>}</div>}
+        </div>
         
-        {/* Executantes */}
+        {/* Responsável + Executantes */}
+        {os.responsavel && <div className="flex justify-between text-sm border-t border-slate-800 pt-2"><span className="text-slate-500">Responsável</span><span className="text-slate-200">{os.responsavel.nome}</span></div>}
         {(os.equipe?.length > 0) && (
-          <div className="text-sm border-t border-slate-800 pt-2">
+          <div className="text-sm">
             <span className="text-slate-500 block mb-1">Executantes</span>
             <div className="flex flex-wrap gap-1">
               {os.equipe.map(uid => (
@@ -3335,7 +3340,18 @@ const OSDetailPage = () => {
           </div>
         </div>
         
-        {os.tempo_execucao_minutos && <div className="flex justify-between text-sm border-t border-slate-800 pt-2"><span className="text-slate-500">Tempo Execução</span><span className="text-emerald-400 font-semibold">{Math.floor(os.tempo_execucao_minutos / 60)}h {os.tempo_execucao_minutos % 60}min</span></div>}
+        {/* Execução */}
+        {(os.tempo_execucao_minutos || os.custo_pecas > 0 || os.custo_mao_obra > 0) && (
+          <div className="border-t border-slate-800 pt-2 space-y-1">
+            <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Execução</p>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {os.tempo_execucao_minutos && <div><span className="text-slate-500">Tempo:</span> <span className="text-emerald-400 font-semibold">{Math.floor(os.tempo_execucao_minutos / 60)}h {os.tempo_execucao_minutos % 60}min</span></div>}
+              {os.custo_pecas > 0 && <div><span className="text-slate-500">Custo Peças:</span> <span className="text-slate-300">R$ {os.custo_pecas.toFixed(2)}</span></div>}
+              {os.custo_mao_obra > 0 && <div><span className="text-slate-500">Custo M.O.:</span> <span className="text-slate-300">R$ {os.custo_mao_obra.toFixed(2)}</span></div>}
+              {(os.custo_pecas > 0 || os.custo_mao_obra > 0) && <div><span className="text-slate-500">Custo Total:</span> <span className="text-slate-200 font-semibold">R$ {((os.custo_pecas || 0) + (os.custo_mao_obra || 0)).toFixed(2)}</span></div>}
+            </div>
+          </div>
+        )}
       </div>
       
       {os.descricao && (
@@ -3350,6 +3366,22 @@ const OSDetailPage = () => {
         <div className="glass-card p-4 border-l-4 border-emerald-500" data-testid="os-servico-executado">
           <p className="text-xs text-emerald-400 font-semibold uppercase mb-1">Serviço Executado</p>
           <p className="text-slate-200 whitespace-pre-wrap">{os.descricao_servico}</p>
+        </div>
+      )}
+
+      {/* Observações */}
+      {os.observacoes && (
+        <div className="glass-card p-4" data-testid="os-observacoes">
+          <p className="text-xs text-slate-500 mb-1">Observações</p>
+          <p className="text-slate-200 whitespace-pre-wrap">{os.observacoes}</p>
+        </div>
+      )}
+
+      {/* Causa da Falha */}
+      {os.causa_falha && (
+        <div className="glass-card p-4 border-l-4 border-red-500" data-testid="os-causa-falha">
+          <p className="text-xs text-red-400 font-semibold uppercase mb-1">Causa da Falha</p>
+          <p className="text-slate-200 whitespace-pre-wrap">{os.causa_falha}</p>
         </div>
       )}
       
@@ -3440,24 +3472,26 @@ const OSDetailPage = () => {
         </div>
       </div>
       
-      {/* Histórico de Transições */}
-      {historico.length > 0 && (
-        <div className="glass-card p-4" data-testid="os-historico">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <Activity size={16} /> Histórico de Transições
-          </h3>
-          <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+      {/* Histórico Completo */}
+      <div className="glass-card p-4" data-testid="os-historico">
+        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <Activity size={16} /> Histórico Completo ({historico.length})
+        </h3>
+        {historico.length > 0 ? (
+          <div className="space-y-2">
             {historico.map((h, idx) => (
-              <div key={idx} className="flex items-start gap-3 text-sm border-l-2 border-slate-700 pl-3 py-1">
+              <div key={idx} className="flex items-start gap-3 text-sm border-l-2 border-slate-700 pl-3 py-1.5">
                 <div className="flex-1">
                   <p className="text-slate-300">{h.details}</p>
-                  <p className="text-xs text-slate-600">{h.user_nome} ({h.user_role}) &middot; {new Date(h.created_at).toLocaleString('pt-BR')}</p>
+                  <p className="text-xs text-slate-500">{h.user_nome} ({h.user_role}) · {new Date(h.created_at).toLocaleString('pt-BR')}</p>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-xs text-slate-600 text-center py-3">Nenhuma transição registrada</p>
+        )}
+      </div>
       
       {/* Actions — OS Detail */}
       {!['concluida', 'cancelada'].includes(os.status) && !['pcm','gerente'].includes(user?.role) && (
