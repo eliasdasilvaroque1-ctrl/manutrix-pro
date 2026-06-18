@@ -2373,6 +2373,47 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         wb.save(buf)
         buf.seek(0)
         return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=sobressalentes_manutrix.xlsx"})
+    
+    elif format == "pdf":
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=15*mm, bottomMargin=15*mm, leftMargin=10*mm, rightMargin=10*mm)
+        styles = getSampleStyleSheet()
+        elements = []
+        elements.append(Paragraph("MANUTRIX — Sobressalentes", styles['Title']))
+        elements.append(Paragraph(f"Total: {len(spares)} registro(s) — {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
+        elements.append(Spacer(1, 6*mm))
+        
+        data = [["Código", "Descrição", "Modelo", "Fabricante", "Status", "Localização", "Custo"]]
+        for s in spares:
+            custo = f"R$ {s['custo']:.2f}" if s.get('custo') else ""
+            data.append([
+                s.get('tag',''), s.get('descricao','')[:40], s.get('modelo','') or '',
+                s.get('fabricante','') or '', s.get('status',''),
+                s.get('localizacao','') or '', custo
+            ])
+        
+        table = Table(data, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e293b')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTSIZE', (0,0), (-1,0), 8),
+            ('FONTSIZE', (0,1), (-1,-1), 7),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#334155')),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#f8fafc'), colors.white]),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LEFTPADDING', (0,0), (-1,-1), 4),
+            ('RIGHTPADDING', (0,0), (-1,-1), 4),
+        ]))
+        elements.append(table)
+        doc.build(elements)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=sobressalentes_manutrix.pdf"})
 
 # ============== POWER BI DATA ENDPOINTS ==============
 

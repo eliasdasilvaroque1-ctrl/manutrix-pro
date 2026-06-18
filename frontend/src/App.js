@@ -5036,6 +5036,8 @@ const SobressalentesPage = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-100">Sobressalentes</h1>
         <div className="flex gap-2">
+          <button onClick={() => handleExport('excel')} className="btn-secondary flex items-center gap-2 text-sm" data-testid="spare-export-excel"><Download size={16} /> Excel</button>
+          <button onClick={() => handleExport('pdf')} className="btn-secondary flex items-center gap-2 text-sm" data-testid="spare-export-pdf"><FileText size={16} /> PDF</button>
           {['admin','pcm'].includes(user?.role) && (
             <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-spare-btn"><Plus size={20} /> Novo</button>
           )}
