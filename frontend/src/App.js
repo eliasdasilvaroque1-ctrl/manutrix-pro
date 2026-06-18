@@ -2444,6 +2444,8 @@ const AtivoDetailPage = () => {
   const [dupForm, setDupForm] = useState({ sector_id: '', tag: '', numero_serie: '' });
   const [dupSectors, setDupSectors] = useState([]);
   const [dupSaving, setDupSaving] = useState(false);
+  const [histFilters, setHistFilters] = useState({ tipo: '', status: '', usuario_id: '', data_inicio: '', data_fim: '' });
+  const [tecnicos, setTecnicos] = useState([]);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -2466,7 +2468,20 @@ const AtivoDetailPage = () => {
     }
   };
 
-  useEffect(() => { fetchAtivo(); }, [id]);
+  const fetchHistorico = async (filters = histFilters) => {
+    try {
+      const params = {};
+      if (filters.tipo) params.tipo = filters.tipo;
+      if (filters.status) params.status = filters.status;
+      if (filters.usuario_id) params.usuario_id = filters.usuario_id;
+      if (filters.data_inicio) params.data_inicio = filters.data_inicio;
+      if (filters.data_fim) params.data_fim = filters.data_fim;
+      const res = await api.get(`/ativos/${id}/historico`, { params });
+      setHistorico(res.data);
+    } catch { }
+  };
+
+  useEffect(() => { fetchAtivo(); api.get('/users/tecnicos').then(r => setTecnicos(r.data)).catch(() => {}); }, [id]);
   
   const handleUploadManual = async (e) => {
     const file = e.target.files[0];
@@ -2514,6 +2529,7 @@ const AtivoDetailPage = () => {
     os: { color: 'text-blue-400', bg: 'bg-blue-500/10', icon: Wrench, label: 'OS' },
     inspecao: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', icon: ClipboardCheck, label: 'Inspeção' },
     anomalia: { color: 'text-red-400', bg: 'bg-red-500/10', icon: AlertTriangle, label: 'Anomalia' },
+    material: { color: 'text-amber-400', bg: 'bg-amber-500/10', icon: Package, label: 'Material' },
   };
   
   return (
@@ -2678,32 +2694,88 @@ const AtivoDetailPage = () => {
 
       {/* TAB: Histórico (Prontuário) */}
       {activeTab === 'historico' && (
-        <div className="space-y-2" data-testid="ativo-historico">
-          {historico.length > 0 ? historico.map((ev, idx) => {
-            const cfg = tipoEventoConfig[ev.tipo_evento] || tipoEventoConfig.os;
-            return (
-              <div key={`${ev.tipo_evento}-${ev.id}-${idx}`} className="glass-card p-4 flex items-start gap-3" data-testid={`historico-item-${idx}`}>
-                <div className={`p-2 rounded-lg ${cfg.bg} mt-0.5`}><cfg.icon size={16} className={cfg.color} /></div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className={`text-xs font-semibold uppercase ${cfg.color}`}>{cfg.label}</span>
-                    {ev.status && <span className="text-xs px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded">{ev.status}</span>}
-                  </div>
-                  <p className="text-sm text-slate-200 font-medium">{ev.titulo}</p>
-                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{ev.descricao}</p>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-600">
-                    <span>{ev.data ? new Date(ev.data).toLocaleDateString('pt-BR') : ''}</span>
-                    {ev.responsavel && <span>• {ev.responsavel}</span>}
-                    {ev.tempo_minutos && <span>• {ev.tempo_minutos}min</span>}
-                  </div>
-                </div>
+        <div className="space-y-3" data-testid="ativo-historico">
+          {/* Filters */}
+          <div className="glass-card p-4 space-y-3" data-testid="historico-filtros">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Tipo</label>
+                <select value={histFilters.tipo} onChange={e => { const f = {...histFilters, tipo: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-tipo">
+                  <option value="">Todos</option>
+                  <option value="os">OS</option>
+                  <option value="inspecao">Inspeção</option>
+                  <option value="anomalia">Anomalia</option>
+                  <option value="material">Material</option>
+                </select>
               </div>
-            );
-          }) : (
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Status</label>
+                <select value={histFilters.status} onChange={e => { const f = {...histFilters, status: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-status">
+                  <option value="">Todos</option>
+                  <option value="aberta">Aberta</option>
+                  <option value="em_execucao">Em Execução</option>
+                  <option value="concluida">Concluída</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="em_andamento">Em Andamento</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Usuário</label>
+                <select value={histFilters.usuario_id} onChange={e => { const f = {...histFilters, usuario_id: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-usuario">
+                  <option value="">Todos</option>
+                  {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Data Inicial</label>
+                <input type="date" value={histFilters.data_inicio} onChange={e => { const f = {...histFilters, data_inicio: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-data-inicio" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Data Final</label>
+                <input type="date" value={histFilters.data_fim} onChange={e => { const f = {...histFilters, data_fim: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-data-fim" />
+              </div>
+            </div>
+            {(histFilters.tipo || histFilters.status || histFilters.usuario_id || histFilters.data_inicio || histFilters.data_fim) && (
+              <button onClick={() => { const f = { tipo: '', status: '', usuario_id: '', data_inicio: '', data_fim: '' }; setHistFilters(f); fetchHistorico(f); }} className="text-xs text-slate-400 hover:text-emerald-400" data-testid="limpar-filtros">
+                Limpar filtros
+              </button>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-500">{historico.length} registro(s)</p>
+
+          {/* Timeline */}
+          {historico.length > 0 ? (
+            <div className="space-y-2">
+              {historico.map((ev, idx) => {
+                const cfg = tipoEventoConfig[ev.tipo_evento] || tipoEventoConfig.os;
+                return (
+                  <div key={`${ev.tipo_evento}-${ev.id}-${idx}`} className="glass-card p-4 flex items-start gap-3" data-testid={`historico-item-${idx}`}>
+                    <div className={`p-2 rounded-lg ${cfg.bg} mt-0.5 shrink-0`}><cfg.icon size={16} className={cfg.color} /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        <span className={`text-xs font-semibold uppercase ${cfg.color}`}>{cfg.label}</span>
+                        {ev.status && <span className="text-xs px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded">{ev.status}</span>}
+                        {ev.prioridade && <span className="text-xs px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded">{ev.prioridade}</span>}
+                      </div>
+                      <p className="text-sm text-slate-200 font-medium">{ev.titulo}</p>
+                      <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{ev.descricao}</p>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+                        {ev.data && <span>{new Date(ev.data).toLocaleString('pt-BR')}</span>}
+                        {ev.usuario && <span>• {ev.usuario}</span>}
+                        {ev.concluido_por && ev.concluido_por !== ev.usuario && <span>• Concl: {ev.concluido_por}</span>}
+                        {ev.tempo_minutos && <span>• {ev.tempo_minutos}min</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
             <div className="text-center py-12 text-slate-500">
               <Clock size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Nenhum registro no histórico</p>
-              <p className="text-xs mt-1">Inspeções, OS e anomalias aparecerão aqui</p>
+              <p className="text-sm">Nenhum registro encontrado</p>
+              <p className="text-xs mt-1">Ajuste os filtros ou aguarde eventos neste equipamento</p>
             </div>
           )}
         </div>

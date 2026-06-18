@@ -350,75 +350,147 @@ async def update_ativo_material(ativo_id: str, material_id: str, data: AtivoMate
 # ============== HISTÓRICO DO ATIVO (PRONTUÁRIO) ==============
 
 @router.get("/ativos/{ativo_id}/historico")
-async def get_ativo_historico(ativo_id: str, user: Dict = Depends(get_current_user)):
-    """Full asset history: OS + Inspections + Anomalies, sorted by date"""
+async def get_ativo_historico(
+    ativo_id: str,
+    tipo: Optional[str] = None,
+    status: Optional[str] = None,
+    usuario_id: Optional[str] = None,
+    data_inicio: Optional[str] = None,
+    data_fim: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    """Full asset history: OS + Inspections + Anomalies + Material Consumption, with filters"""
     ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
 
     eventos = []
 
+    # Helper to resolve user name
+    user_cache = {}
+    async def get_user_name(uid):
+        if not uid:
+            return None
+        if uid not in user_cache:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1})
+            user_cache[uid] = u.get('nome') if u else uid
+        return user_cache[uid]
+
     # OS
-    oss = await db.ordens_servico.find(
-        {"ativo_id": ativo_id, "deleted_at": None},
-        {"_id": 0, "id": 1, "numero": 1, "tipo": 1, "status": 1, "titulo": 1,
-         "descricao_servico": 1, "responsavel_id": 1, "data_abertura": 1,
-         "data_conclusao": 1, "tempo_execucao_minutos": 1, "created_at": 1}
-    ).sort("created_at", -1).to_list(200)
-    for o in oss:
-        resp = None
-        if o.get('responsavel_id'):
-            resp = await db.users.find_one({"id": o['responsavel_id']}, {"_id": 0, "nome": 1})
-        eventos.append({
-            "tipo_evento": "os",
-            "id": o['id'],
-            "data": o.get('data_conclusao') or o.get('data_abertura') or o.get('created_at'),
-            "titulo": f"OS {o.get('tipo','').capitalize()} #{o.get('numero','')}",
-            "descricao": o.get('descricao_servico') or o.get('titulo', ''),
-            "status": o.get('status'),
-            "responsavel": resp.get('nome') if resp else None,
-            "tempo_minutos": o.get('tempo_execucao_minutos'),
-        })
+    if not tipo or tipo == 'os':
+        os_query = {"ativo_id": ativo_id, "deleted_at": None}
+        if status:
+            os_query['status'] = status
+        oss = await db.ordens_servico.find(
+            os_query,
+            {"_id": 0, "id": 1, "numero": 1, "tipo": 1, "status": 1, "titulo": 1,
+             "descricao_servico": 1, "descricao": 1, "responsavel_id": 1, "criado_por": 1,
+             "iniciado_por": 1, "concluido_por": 1, "data_abertura": 1,
+             "data_conclusao": 1, "data_inicio": 1, "tempo_execucao_minutos": 1, "created_at": 1,
+             "equipe": 1, "prioridade": 1}
+        ).sort("created_at", -1).to_list(500)
+        for o in oss:
+            resp_nome = await get_user_name(o.get('responsavel_id'))
+            criado_nome = await get_user_name(o.get('criado_por'))
+            concluido_nome = await get_user_name(o.get('concluido_por'))
+            ev_date = o.get('data_conclusao') or o.get('data_abertura') or o.get('created_at')
+            if usuario_id and o.get('criado_por') != usuario_id and o.get('responsavel_id') != usuario_id and o.get('iniciado_por') != usuario_id and o.get('concluido_por') != usuario_id and usuario_id not in (o.get('equipe') or []):
+                continue
+            eventos.append({
+                "tipo_evento": "os",
+                "id": o['id'],
+                "data": ev_date,
+                "titulo": f"OS {o.get('tipo','').capitalize()} #{o.get('numero','')}",
+                "descricao": o.get('descricao_servico') or o.get('titulo', ''),
+                "status": o.get('status'),
+                "prioridade": o.get('prioridade'),
+                "usuario": resp_nome or criado_nome,
+                "criado_por": criado_nome,
+                "concluido_por": concluido_nome,
+                "tempo_minutos": o.get('tempo_execucao_minutos'),
+            })
 
     # Inspections
-    insps = await db.inspecoes.find(
-        {"ativo_id": ativo_id, "deleted_at": None},
-        {"_id": 0, "id": 1, "tipo": 1, "status": 1, "resultado": 1,
-         "responsavel_id": 1, "data_conclusao": 1, "created_at": 1}
-    ).sort("created_at", -1).to_list(200)
-    for i in insps:
-        resp = None
-        if i.get('responsavel_id'):
-            resp = await db.users.find_one({"id": i['responsavel_id']}, {"_id": 0, "nome": 1})
-        eventos.append({
-            "tipo_evento": "inspecao",
-            "id": i['id'],
-            "data": i.get('data_conclusao') or i.get('created_at'),
-            "titulo": f"Inspeção {i.get('tipo','').capitalize()}",
-            "descricao": i.get('resultado', 'pendente'),
-            "status": i.get('status'),
-            "responsavel": resp.get('nome') if resp else None,
-        })
+    if not tipo or tipo == 'inspecao':
+        insp_query = {"ativo_id": ativo_id, "deleted_at": None}
+        if status:
+            insp_query['status'] = status
+        insps = await db.inspecoes.find(
+            insp_query,
+            {"_id": 0, "id": 1, "tipo": 1, "status": 1, "resultado": 1,
+             "responsavel_id": 1, "criado_por": 1, "concluido_por": 1,
+             "data_conclusao": 1, "data_inicio": 1, "created_at": 1, "duracao_minutos": 1}
+        ).sort("created_at", -1).to_list(500)
+        for i in insps:
+            resp_nome = await get_user_name(i.get('responsavel_id'))
+            criado_nome = await get_user_name(i.get('criado_por'))
+            concluido_nome = await get_user_name(i.get('concluido_por'))
+            ev_date = i.get('data_conclusao') or i.get('created_at')
+            if usuario_id and i.get('criado_por') != usuario_id and i.get('responsavel_id') != usuario_id and i.get('concluido_por') != usuario_id:
+                continue
+            eventos.append({
+                "tipo_evento": "inspecao",
+                "id": i['id'],
+                "data": ev_date,
+                "titulo": f"Inspeção {i.get('tipo','').capitalize()}",
+                "descricao": f"Resultado: {i.get('resultado', 'pendente')}",
+                "status": i.get('status'),
+                "usuario": resp_nome or criado_nome,
+                "concluido_por": concluido_nome,
+                "tempo_minutos": i.get('duracao_minutos'),
+            })
 
     # Anomalies
-    anoms = await db.anomalias.find(
-        {"ativo_id": ativo_id, "deleted_at": None},
-        {"_id": 0, "id": 1, "descricao": 1, "severidade": 1, "status": 1,
-         "created_by": 1, "created_at": 1}
-    ).sort("created_at", -1).to_list(200)
-    for a in anoms:
-        resp = None
-        if a.get('created_by'):
-            resp = await db.users.find_one({"id": a['created_by']}, {"_id": 0, "nome": 1})
-        eventos.append({
-            "tipo_evento": "anomalia",
-            "id": a['id'],
-            "data": a.get('created_at'),
-            "titulo": f"Anomalia ({a.get('severidade','media')})",
-            "descricao": a.get('descricao', ''),
-            "status": a.get('status', 'aberta'),
-            "responsavel": resp.get('nome') if resp else None,
-        })
+    if not tipo or tipo == 'anomalia':
+        anom_query = {"ativo_id": ativo_id, "deleted_at": None}
+        if status:
+            anom_query['status'] = status
+        anoms = await db.anomalias.find(
+            anom_query,
+            {"_id": 0, "id": 1, "descricao": 1, "severidade": 1, "status": 1,
+             "criado_por": 1, "resolvido_por": 1, "encerrado_por": 1, "created_at": 1}
+        ).sort("created_at", -1).to_list(500)
+        for a in anoms:
+            criado_nome = await get_user_name(a.get('criado_por'))
+            encerrado_nome = await get_user_name(a.get('encerrado_por'))
+            if usuario_id and a.get('criado_por') != usuario_id and a.get('resolvido_por') != usuario_id and a.get('encerrado_por') != usuario_id:
+                continue
+            eventos.append({
+                "tipo_evento": "anomalia",
+                "id": a['id'],
+                "data": a.get('created_at'),
+                "titulo": f"Anomalia ({a.get('severidade','media')})",
+                "descricao": a.get('descricao', ''),
+                "status": a.get('status', 'aberta'),
+                "usuario": criado_nome,
+                "encerrado_por": encerrado_nome,
+            })
+
+    # Material Consumption
+    if not tipo or tipo == 'material':
+        mat_query = {"ativo_id": ativo_id, "deleted_at": None}
+        mats = await db.os_materiais.find(mat_query, {"_id": 0}).sort("created_at", -1).to_list(500)
+        for m in mats:
+            if usuario_id and m.get('usuario_id') != usuario_id:
+                continue
+            eventos.append({
+                "tipo_evento": "material",
+                "id": m['id'],
+                "data": m.get('created_at'),
+                "titulo": f"Material Consumido: {m.get('codigo','')}",
+                "descricao": f"{m.get('descricao','')} — {m.get('quantidade',0)} {m.get('unidade','UN')} — OS #{m.get('os_numero','')}",
+                "status": None,
+                "usuario": m.get('usuario_nome'),
+                "os_numero": m.get('os_numero'),
+                "quantidade": m.get('quantidade'),
+                "codigo": m.get('codigo'),
+            })
+
+    # Apply date filters
+    if data_inicio:
+        eventos = [e for e in eventos if (e.get('data') or '') >= data_inicio]
+    if data_fim:
+        eventos = [e for e in eventos if (e.get('data') or '') <= data_fim + 'T23:59:59']
 
     # Sort all by date descending
     eventos.sort(key=lambda x: x.get('data', '') or '', reverse=True)

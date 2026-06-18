@@ -1,0 +1,63 @@
+{
+  "summary": "Iteration 32 - Bloco 5 (Histórico do Equipamento com Filtros) VALIDATED. Backend pytest 14/14 PASS for GET /api/ativos/{id}/historico with filters tipo (os|inspecao|anomalia|material), status, usuario_id, data_inicio, data_fim. Each event has required fields tipo_evento, data, titulo, descricao, status, usuario. Material events include codigo, quantidade, and 'OS #' reference in descricao. Events are sorted by date descending. Frontend Histórico tab renders all filter controls (data-testid: historico-filtros, filtro-tipo, filtro-status, filtro-usuario, filtro-data-inicio, filtro-data-fim) and limpar-filtros button appears/disappears correctly. Material event renders with amber Package icon, 'MATERIAL' badge, full datetime (toLocaleString pt-BR), user name and OS-referenced description — verified via screenshot.",
+  "pass_fail_matrix": {
+    "BACKEND historico returns list with events": "PASS",
+    "BACKEND each event has tipo_evento, data, titulo, descricao, status, usuario": "PASS",
+    "BACKEND events sorted by data descending": "PASS",
+    "BACKEND multiple tipo_evento types coexist in default response": "PASS",
+    "BACKEND filter tipo=os returns only OS events": "PASS",
+    "BACKEND filter tipo=inspecao returns only Inspection events": "PASS",
+    "BACKEND filter tipo=anomalia returns only Anomaly events": "PASS",
+    "BACKEND filter tipo=material returns only Material events": "PASS",
+    "BACKEND material event has codigo + quantidade + 'OS #' in descricao": "PASS",
+    "BACKEND filter status=concluida correctly applied to os/inspecao": "PASS",
+    "BACKEND filter data_inicio/data_fim narrows results": "PASS",
+    "BACKEND distant past date filter returns empty []": "PASS",
+    "BACKEND filter usuario_id accepted (200 list)": "PASS",
+    "BACKEND 404 for invalid ativo_id": "PASS",
+    "FRONTEND ativo-historico container visible after click Histórico tab": "PASS",
+    "FRONTEND historico-filtros card visible": "PASS",
+    "FRONTEND filtro-tipo, filtro-status, filtro-usuario visible": "PASS",
+    "FRONTEND filtro-data-inicio, filtro-data-fim visible": "PASS",
+    "FRONTEND timeline renders events on initial load (3 children incl. filter+count)": "PASS",
+    "FRONTEND tipo=material shows amber Package icon + 'MATERIAL' badge (verified via screenshot)": "PASS",
+    "FRONTEND Material item shows datetime via toLocaleString pt-BR (17/06/2026, 15:50:28)": "PASS",
+    "FRONTEND Material descricao includes OS reference (#2026-00106)": "PASS",
+    "FRONTEND Material event shows user (Administrador)": "PASS",
+    "FRONTEND limpar-filtros visible only when filter active": "PASS",
+    "FRONTEND limpar-filtros hidden after Clear": "PASS",
+    "FRONTEND date range 1990 yields only filter card (no events)": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration32_historico.py",
+    "/app/test_reports/pytest/pytest_iteration32.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/assets.py:352-497 — get_ativo_historico aggregates OS + Inspections + Anomalies + Material Consumption with proper deleted_at exclusion and per-collection status filter; ev_date fallback chain is sensible (data_conclusao -> data_abertura/created_at) ✓",
+    "routes/assets.py:489-493 — date_fim comparison appends 'T23:59:59' to make day-inclusive; works for ISO-format strings only (current standard) — would silently fail on non-ISO date strings, but all stored dates are ISO ✓",
+    "routes/assets.py:496 — final in-Python sort guarantees cross-source desc ordering ✓",
+    "routes/assets.py:482 — Material events return status=None — frontend status filter could falsely exclude them when 'concluida' selected; current backend behavior is intentional (material has no status) and frontend should disable status filter for tipo=material if desired (LOW-priority UX consideration, not a bug)",
+    "App.js:2447,2471,2697-2746 — Filter state updates trigger fetchHistorico(f) on change with debouncing via fresh state object — correct pattern; limpar-filtros button correctly only renders when any filter active ✓",
+    "App.js:2528-2533 — tipoEventoConfig includes 'material' with amber color + Package icon as required ✓",
+    "App.js:2697 — Date filters use native <input type='date'> (browser default picker) — consider replacing with shadcn Calendar/DatePicker for design consistency across CMMS (advisory, matches global system prompt guideline)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration32_historico.py",
+    "/app/test_reports/pytest/pytest_iteration32.xml",
+    "/app/test_reports/iteration_32.json"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (all data-testids + flows verified via Playwright + screenshot)"},
+  "test_credentials": "admin@manutrix.com/admin123 — working (UI login flow used; direct /api/auth/login from external IP was briefly returning 403 likely due to brute-force lockout from prior iterations, login via UI form works fine)",
+  "seed_data_creation": "No new seed data created. Reused AV-01 ativo which has 33+ historical events (OS, inspections, anomalies, and the UI-MAT-BCAA7 material consumption from iteration_31).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bloco 5 (Histórico do Equipamento com Filtros) fully validated. Re-run backend: `REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_iteration32_historico.py -v`. NOTE 1: Login route after success goes to '/' (root) not '/dashboard' — wait for sessionStorage.manutrix_token instead of URL match. NOTE 2: Inside [data-testid='ativo-historico'], children layout is [0]=historico-filtros card, [1]=count label 'N registro(s)', [2..]=timeline event cards — use slice(2) (not slice(1)) when iterating event cards via DOM. NOTE 3: Material events have status=None — backend status filter excludes them when status=concluida is set; this is by design. NOTE 4: Date filter input is native browser date picker (not shadcn Calendar) — if global design system prefers shadcn DatePicker, this is a UX improvement candidate.",
+  "rca of the issue": "N/A — Bloco 5 feature working as specified. No bugs found. One advisory observation: frontend uses native <input type='date'> for date filter — consider migrating to shadcn Calendar/DatePicker for design consistency (low priority)."
+}
