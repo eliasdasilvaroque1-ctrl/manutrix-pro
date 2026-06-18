@@ -4,39 +4,22 @@
 
 ### Bloco 1: Poderes do PCM ✅
 ### Bloco 2: Executantes + Rastreabilidade ✅
+### Bloco 3: Materiais Utilizados + Movimentação de Estoque ✅
 
-### Bloco 3: Materiais Utilizados + Movimentação de Estoque ✅ (2026-06-17)
+### Bloco 5: Histórico do Equipamento com Filtros ✅ (2026-06-18)
 
-**Pré-requisito (Última alteração por):**
-- [x] `alterado_por` + `updated_at` em OS, Inspeções, Anomalias
-- [x] Enriquecido com nome no GET de cada entidade
+**Prontuário completo do equipamento na aba Histórico:**
+- [x] Eventos: OS, Inspeções, Anomalias, Consumo de Material
+- [x] Filtros: Tipo, Status, Usuário, Data Inicial, Data Final
+- [x] Timeline: Data/Hora, Evento, Usuário, Descrição
+- [x] Botão "Limpar filtros"
+- [x] Contagem de registros
+- [x] Ícone específico por tipo (OS=azul, Inspeção=verde, Anomalia=vermelho, Material=âmbar)
+- [x] Ordenação: mais recente primeiro
 
-**Materiais na OS:**
-- [x] POST /api/ordens-servico/{id}/materiais — Adiciona material, deduz estoque
-- [x] GET /api/ordens-servico/{id}/materiais — Lista materiais consumidos
-- [x] DELETE /api/ordens-servico/{id}/materiais/{mat_id} — Devolve ao estoque
-
-**Movimentação de Estoque:**
-- [x] GET /api/movimentacoes — Histórico global com filtros
-- [x] Filtros: item_id, ativo_id, usuario_id, os_id, tipo
-- [x] Campos: data, hora, usuario, codigo, descricao, quantidade, OS, equipamento, tipo
-
-**Bloqueios:**
-- [x] Estoque negativo → HTTP 400
-- [x] Consumo sem item_estoque_id → HTTP 400
-- [x] Consumo com quantidade ≤ 0 → HTTP 400
-
-**Frontend:**
-- [x] Seção "Materiais Utilizados" no detalhe da OS
-- [x] Botão "Adicionar" com modal de seleção
-- [x] Botão "Devolver" para admin/pcm/supervisor
-- [x] Total de custo exibido
-- [x] "Última alteração por" na rastreabilidade
-
-**Testes:** iteration_31 — Backend 12/12, Frontend 6/6
+**Testes:** iteration_32 — Backend 14/14, Frontend 100%
 
 ### Bloco 4: Auditoria Detalhada (PRÓXIMO)
-### Bloco 5: Histórico do Equipamento com Filtros
 ### Bloco 6: Detalhamento Completo da OS
 ### Bloco 7: Detalhamento Completo da Inspeção
 
