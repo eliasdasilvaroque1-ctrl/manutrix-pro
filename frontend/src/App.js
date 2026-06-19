@@ -4952,6 +4952,21 @@ const PhotoUploader = ({ entityType, entityId, categoria = 'foto', label = 'Foto
 
 // ============== SOBRESSALENTES PAGE ==============
 
+const CONDICAO_CONFIG = {
+  novo: { label: 'Novo', class: 'text-emerald-400 bg-emerald-500/10' },
+  reformado: { label: 'Reformado', class: 'text-blue-400 bg-blue-500/10' },
+  em_reforma: { label: 'Em Reforma', class: 'text-amber-400 bg-amber-500/10' },
+  reservado: { label: 'Reservado', class: 'text-purple-400 bg-purple-500/10' },
+  instalado: { label: 'Instalado', class: 'text-cyan-400 bg-cyan-500/10' },
+  descartado: { label: 'Descartado', class: 'text-red-400 bg-red-500/10' },
+};
+const ORIGEM_OPTIONS = [
+  { value: 'compra_nova', label: 'Compra Nova' },
+  { value: 'reforma_interna', label: 'Reforma Interna' },
+  { value: 'reforma_externa', label: 'Reforma Externa' },
+  { value: 'transferencia', label: 'Transferência' },
+];
+
 const SobressalentesPage = () => {
   const [spares, setSpares] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4959,8 +4974,11 @@ const SobressalentesPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
-  const [form, setForm] = useState({ descricao: '', modelo: '', fabricante: '', status: 'estoque', localizacao: '', custo: '' });
+  const [form, setForm] = useState({ descricao: '', modelo: '', fabricante: '', status: 'estoque', localizacao: '', custo: '', origem: '', condicoes: { novo: 0, reformado: 0, em_reforma: 0, reservado: 0, instalado: 0, descartado: 0 } });
   const [saving, setSaving] = useState(false);
+  const [showReformaModal, setShowReformaModal] = useState(null);
+  const [reformaForm, setReformaForm] = useState({ empresa_reparadora: '', data_envio: '', data_retorno: '', observacao: '', valor: '' });
+  const [reformas, setReformas] = useState([]);
   const { user } = useAuth();
 
   const fetchData = async () => {
@@ -4977,16 +4995,17 @@ const SobressalentesPage = () => {
     if (!form.descricao) { toast.error('Descrição é obrigatória'); return; }
     setSaving(true);
     try {
+      const payload = { ...form, custo: form.custo ? parseFloat(form.custo) : null };
       if (editItem) {
-        await api.put(`/sobressalentes/${editItem.id}`, { ...form, custo: form.custo ? parseFloat(form.custo) : null });
+        await api.put(`/sobressalentes/${editItem.id}`, payload);
         toast.success('Sobressalente atualizado!');
       } else {
-        await api.post('/sobressalentes', { ...form, custo: form.custo ? parseFloat(form.custo) : null });
+        await api.post('/sobressalentes', payload);
         toast.success('Sobressalente criado!');
       }
       setShowModal(false);
       setEditItem(null);
-      setForm({ descricao: '', modelo: '', fabricante: '', status: 'estoque', localizacao: '', custo: '' });
+      setForm({ descricao: '', modelo: '', fabricante: '', status: 'estoque', localizacao: '', custo: '', origem: '', condicoes: { novo: 0, reformado: 0, em_reforma: 0, reservado: 0, instalado: 0, descartado: 0 } });
       fetchData();
     } catch (e) { toast.error(normalizeError(e)); }
     finally { setSaving(false); }
@@ -5018,9 +5037,43 @@ const SobressalentesPage = () => {
 
   const handleEdit = (sp) => {
     setEditItem(sp);
-    setForm({ descricao: sp.descricao, modelo: sp.modelo || '', fabricante: sp.fabricante || '', status: sp.status, localizacao: sp.localizacao || '', custo: sp.custo ? String(sp.custo) : '' });
+    setForm({
+      descricao: sp.descricao || '', modelo: sp.modelo || '', fabricante: sp.fabricante || '',
+      status: sp.status || 'estoque', localizacao: sp.localizacao || '', custo: sp.custo ? String(sp.custo) : '',
+      origem: sp.origem || '',
+      condicoes: sp.condicoes || { novo: 0, reformado: 0, em_reforma: 0, reservado: 0, instalado: 0, descartado: 0 }
+    });
     setShowModal(true);
   };
+
+  const handleOpenReformas = async (sp) => {
+    setShowReformaModal(sp);
+    setReformaForm({ empresa_reparadora: '', data_envio: '', data_retorno: '', observacao: '', valor: '' });
+    try {
+      const res = await api.get(`/sobressalentes/${sp.id}/reformas`);
+      setReformas(res.data);
+    } catch { setReformas([]); }
+  };
+
+  const handleAddReforma = async () => {
+    if (!reformaForm.empresa_reparadora) { toast.error('Empresa reparadora é obrigatória'); return; }
+    try {
+      await api.post(`/sobressalentes/${showReformaModal.id}/reformas`, {
+        ...reformaForm, valor: reformaForm.valor ? parseFloat(reformaForm.valor) : null
+      });
+      toast.success('Reforma registrada!');
+      setReformaForm({ empresa_reparadora: '', data_envio: '', data_retorno: '', observacao: '', valor: '' });
+      const res = await api.get(`/sobressalentes/${showReformaModal.id}/reformas`);
+      setReformas(res.data);
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const updateCondicao = (key, val) => {
+    const v = Math.max(0, parseInt(val) || 0);
+    setForm(prev => ({ ...prev, condicoes: { ...prev.condicoes, [key]: v } }));
+  };
+
+  const totalCondicoes = Object.values(form.condicoes || {}).reduce((s, v) => s + (v || 0), 0);
 
   const filtered = search ? spares.filter(s => s.descricao?.toLowerCase().includes(search.toLowerCase()) || s.tag?.toLowerCase().includes(search.toLowerCase())) : spares;
 
@@ -5049,35 +5102,55 @@ const SobressalentesPage = () => {
       </div>
       {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
         <div className="space-y-2">
-          {filtered.map((sp) => (
+          {filtered.map((sp) => {
+            const conds = sp.condicoes || {};
+            const qtTotal = sp.quantidade_total || Object.values(conds).reduce((s, v) => s + (v || 0), 0);
+            const activeConditions = Object.entries(conds).filter(([, v]) => v > 0);
+            const origemLabel = ORIGEM_OPTIONS.find(o => o.value === sp.origem)?.label;
+            return (
             <div key={sp.id} className="glass-card p-4 hover:border-slate-600 transition-all" data-testid={`spare-card-${sp.id}`}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-mono text-emerald-400 text-sm">{sp.tag || sp.codigo}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded ${statusConfig[sp.status]?.class || ''}`}>{statusConfig[sp.status]?.label || sp.status}</span>
+                    {origemLabel && <span className="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{origemLabel}</span>}
+                    {qtTotal > 0 && <span className="text-xs font-semibold text-slate-200 bg-slate-700 px-1.5 py-0.5 rounded">Qtd: {qtTotal}</span>}
                   </div>
-                  <p className="text-slate-100">{sp.descricao}</p>
-                  <p className="text-xs text-slate-500">{[sp.fabricante, sp.modelo, sp.localizacao].filter(Boolean).join(' • ')}</p>
-                  {sp.ativo_vinculado && <p className="text-xs text-blue-400 mt-1">Ativo: {sp.ativo_vinculado.tag} - {sp.ativo_vinculado.nome}</p>}
+                  <p className="text-slate-100 font-medium">{sp.descricao}</p>
+                  <p className="text-xs text-slate-500">{[sp.fabricante, sp.modelo, sp.localizacao].filter(Boolean).join(' · ')}</p>
+                  {sp.ativo_vinculado && <p className="text-xs text-blue-400 mt-0.5">Ativo: {sp.ativo_vinculado.tag} - {sp.ativo_vinculado.nome}</p>}
+                  {/* Condições breakdown */}
+                  {activeConditions.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {activeConditions.map(([k, v]) => (
+                        <span key={k} className={`text-xs px-1.5 py-0.5 rounded ${CONDICAO_CONFIG[k]?.class || 'text-slate-400 bg-slate-800'}`}>
+                          {CONDICAO_CONFIG[k]?.label || k}: {v}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {sp.custo && <p className="text-lg font-bold text-slate-200 mx-3">R$ {sp.custo.toFixed(2)}</p>}
-                {['admin','pcm'].includes(user?.role) && (
-                  <div className="flex items-center gap-1 ml-2">
-                    <button onClick={() => handleEdit(sp)} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar" data-testid={`edit-spare-${sp.id}`}><Edit3 size={15} className="text-blue-400" /></button>
-                    <button onClick={() => setDeleteItem(sp)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir" data-testid={`delete-spare-${sp.id}`}><Trash2 size={15} className="text-red-400" /></button>
-                  </div>
-                )}
+                <div className="flex flex-col items-end gap-1">
+                  {sp.custo > 0 && <p className="text-lg font-bold text-slate-200">R$ {sp.custo.toFixed(2)}</p>}
+                  {['admin','pcm'].includes(user?.role) && (
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => handleOpenReformas(sp)} className="p-2 hover:bg-amber-500/10 rounded-lg" title="Reformas" data-testid={`reforma-spare-${sp.id}`}><Wrench size={15} className="text-amber-400" /></button>
+                      <button onClick={() => handleEdit(sp)} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar" data-testid={`edit-spare-${sp.id}`}><Edit3 size={15} className="text-blue-400" /></button>
+                      <button onClick={() => setDeleteItem(sp)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir" data-testid={`delete-spare-${sp.id}`}><Trash2 size={15} className="text-red-400" /></button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : <EmptyState icon={Cog} title="Nenhum sobressalente" description="Cadastre sobressalentes." />}
 
-      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? "Editar Sobressalente" : "Novo Sobressalente"} size="md">
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? "Editar Sobressalente" : "Novo Sobressalente"} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <FormInput label="Descrição" required>
-            <input value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Rolamento 6205-2RS" required />
+            <input value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Redutor Falk 500" required />
           </FormInput>
           <div className="grid grid-cols-2 gap-4">
             <FormInput label="Fabricante"><input value={form.fabricante} onChange={(e) => setForm({...form, fabricante: e.target.value})} className="input-industrial w-full px-4" /></FormInput>
@@ -5085,14 +5158,79 @@ const SobressalentesPage = () => {
             <FormInput label="Localização"><input value={form.localizacao} onChange={(e) => setForm({...form, localizacao: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Almox A-01" /></FormInput>
             <FormInput label="Custo (R$)"><input type="number" step="0.01" value={form.custo} onChange={(e) => setForm({...form, custo: e.target.value})} className="input-industrial w-full px-4" /></FormInput>
           </div>
-          <FormInput label="Status">
-            <Select value={form.status} onChange={(v) => setForm({...form, status: v})} options={[{value:'estoque',label:'Em Estoque'},{value:'em_uso',label:'Em Uso'},{value:'em_reforma',label:'Em Reforma'}]} />
+          <FormInput label="Origem">
+            <select value={form.origem} onChange={(e) => setForm({...form, origem: e.target.value})} className="input-industrial w-full px-4">
+              <option value="">Selecione...</option>
+              {ORIGEM_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </FormInput>
+          {/* Condições por quantidade */}
+          <div className="border-t border-slate-800 pt-3">
+            <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider mb-2">Quantidade por Condição <span className="text-slate-300 normal-case">(Total: {totalCondicoes})</span></p>
+            <div className="grid grid-cols-3 gap-2">
+              {Object.entries(CONDICAO_CONFIG).map(([key, cfg]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <span className={`text-xs w-20 truncate ${cfg.class.split(' ')[0]}`}>{cfg.label}</span>
+                  <input type="number" min="0" value={form.condicoes?.[key] || 0} onChange={(e) => updateCondicao(key, e.target.value)}
+                    className="input-industrial w-16 px-2 text-center text-sm" data-testid={`condicao-${key}`} />
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
             <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Salvando...' : 'Salvar'}</button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal Histórico de Reformas */}
+      <Modal isOpen={!!showReformaModal} onClose={() => setShowReformaModal(null)} title={`Reformas — ${showReformaModal?.tag || ''}`} size="lg">
+        <div className="space-y-4">
+          {['admin','pcm'].includes(user?.role) && (
+            <div className="glass-card p-3 space-y-3">
+              <p className="text-xs text-slate-500 uppercase font-semibold">Registrar Reforma</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormInput label="Empresa Reparadora" required>
+                  <input value={reformaForm.empresa_reparadora} onChange={e => setReformaForm({...reformaForm, empresa_reparadora: e.target.value})} className="input-industrial w-full px-3 text-sm" data-testid="reforma-empresa" />
+                </FormInput>
+                <FormInput label="Valor (R$)">
+                  <input type="number" step="0.01" value={reformaForm.valor} onChange={e => setReformaForm({...reformaForm, valor: e.target.value})} className="input-industrial w-full px-3 text-sm" />
+                </FormInput>
+                <FormInput label="Data Envio">
+                  <input type="date" value={reformaForm.data_envio} onChange={e => setReformaForm({...reformaForm, data_envio: e.target.value})} className="input-industrial w-full px-3 text-sm" />
+                </FormInput>
+                <FormInput label="Data Retorno">
+                  <input type="date" value={reformaForm.data_retorno} onChange={e => setReformaForm({...reformaForm, data_retorno: e.target.value})} className="input-industrial w-full px-3 text-sm" />
+                </FormInput>
+              </div>
+              <FormInput label="Observação">
+                <textarea value={reformaForm.observacao} onChange={e => setReformaForm({...reformaForm, observacao: e.target.value})} className="input-industrial w-full px-3 text-sm" rows={2} />
+              </FormInput>
+              <button onClick={handleAddReforma} className="btn-primary text-sm" data-testid="reforma-submit">Registrar</button>
+            </div>
+          )}
+          {reformas.length > 0 ? (
+            <div className="space-y-2">
+              {reformas.map(r => (
+                <div key={r.id} className="glass-card p-3 text-sm" data-testid={`reforma-item-${r.id}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-slate-200 font-medium">{r.empresa_reparadora}</p>
+                      <div className="flex gap-3 text-xs text-slate-500 mt-0.5">
+                        {r.data_envio && <span>Envio: {new Date(r.data_envio + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
+                        {r.data_retorno && <span>Retorno: {new Date(r.data_retorno + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
+                        {r.valor && <span className="text-emerald-400">R$ {r.valor.toFixed(2)}</span>}
+                      </div>
+                      {r.observacao && <p className="text-xs text-slate-400 mt-1">{r.observacao}</p>}
+                      <p className="text-xs text-slate-600 mt-0.5">{r.usuario_nome} · {new Date(r.created_at).toLocaleString('pt-BR')}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-xs text-slate-600 text-center py-4">Nenhuma reforma registrada</p>}
+        </div>
       </Modal>
 
       <ConfirmDialog

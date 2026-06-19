@@ -1956,6 +1956,7 @@ async def get_spare(spare_id: str, user: Dict = Depends(get_current_user)):
     
     sp['movimentacoes'] = await db.spare_movements.find({"spare_id": spare_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
     sp['attachments'] = await db.attachments.find({"entity_type": "spare_asset", "entity_id": spare_id}, {"_id": 0}).to_list(50)
+    sp['reformas'] = await db.spare_reformas.find({"spare_id": spare_id, "deleted_at": None}, {"_id": 0}).sort("created_at", -1).to_list(50)
     
     if sp.get('ativo_vinculado_id'):
         sp['ativo_vinculado'] = await db.ativos.find_one({"id": sp['ativo_vinculado_id']}, {"_id": 0, "tag": 1, "nome": 1})
@@ -1982,6 +1983,9 @@ async def create_spare(data: SpareAssetCreate, user: Dict = Depends(get_current_
         "ativo_vinculado_id": data.ativo_vinculado_id,
         "custo": data.custo,
         "observacoes": data.observacoes,
+        "origem": data.origem,
+        "condicoes": data.condicoes or {"novo": 0, "reformado": 0, "em_reforma": 0, "reservado": 0, "instalado": 0, "descartado": 0},
+        "quantidade_total": sum((data.condicoes or {}).values()) if data.condicoes else 0,
         "organization_id": org_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -2001,8 +2005,11 @@ async def update_spare(spare_id: str, data: SpareAssetUpdate, user: Dict = Depen
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    update_data['alterado_por'] = user.get('id')
+    if 'condicoes' in update_data and update_data['condicoes']:
+        update_data['quantidade_total'] = sum(update_data['condicoes'].values())
     await db.spare_assets.update_one({"id": spare_id}, {"$set": update_data})
-    await audit_log("update", "sobressalentes", spare_id, user, f"Sobressalente editado: {existing.get('tag','')} {existing.get('nome','')}")
+    await audit_log("update", "sobressalentes", spare_id, user, f"Sobressalente editado: {existing.get('tag','')} {existing.get('descricao','')}")
     return await db.spare_assets.find_one({"id": spare_id}, {"_id": 0})
 
 @api_router.delete("/sobressalentes/{spare_id}")
@@ -2010,7 +2017,50 @@ async def delete_spare(spare_id: str, user: Dict = Depends(get_current_user)):
     check_write_permission(user, ['admin', 'pcm'])
     existing = await db.spare_assets.find_one({"id": spare_id, "deleted_at": None}, {"_id": 0})
     await db.spare_assets.update_one({"id": spare_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
-    await audit_log("delete", "sobressalentes", spare_id, user, f"Sobressalente excluído: {(existing or {}).get('tag','')} {(existing or {}).get('nome','')}")
+    await audit_log("delete", "sobressalentes", spare_id, user, f"Sobressalente excluído: {(existing or {}).get('tag','')} {(existing or {}).get('descricao','')}")
+    return {"success": True}
+
+# ============== HISTÓRICO DE REFORMA ==============
+
+@api_router.get("/sobressalentes/{spare_id}/reformas")
+async def list_spare_reformas(spare_id: str, user: Dict = Depends(get_current_user)):
+    reformas = await db.spare_reformas.find(
+        {"spare_id": spare_id, "deleted_at": None}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return reformas
+
+@api_router.post("/sobressalentes/{spare_id}/reformas")
+async def create_spare_reforma(spare_id: str, body: dict, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    spare = await db.spare_assets.find_one({"id": spare_id, "deleted_at": None}, {"_id": 0})
+    if not spare:
+        raise HTTPException(status_code=404, detail="Sobressalente não encontrado")
+    
+    reforma_doc = {
+        "id": str(uuid.uuid4()),
+        "spare_id": spare_id,
+        "spare_tag": spare.get('tag', ''),
+        "empresa_reparadora": body.get('empresa_reparadora', ''),
+        "data_envio": body.get('data_envio'),
+        "data_retorno": body.get('data_retorno'),
+        "observacao": body.get('observacao', ''),
+        "valor": body.get('valor'),
+        "usuario_id": user.get('id'),
+        "usuario_nome": user.get('nome', user.get('email', '')),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.spare_reformas.insert_one(reforma_doc)
+    await audit_log("create", "spare_reforma", reforma_doc['id'], user,
+        f"Reforma registrada: {spare.get('tag','')} — {body.get('empresa_reparadora','')}")
+    reforma_doc.pop('_id', None)
+    return reforma_doc
+
+@api_router.delete("/sobressalentes/{spare_id}/reformas/{reforma_id}")
+async def delete_spare_reforma(spare_id: str, reforma_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    await db.spare_reformas.update_one({"id": reforma_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    await audit_log("delete", "spare_reforma", reforma_id, user, f"Reforma excluída do sobressalente {spare_id}")
     return {"success": True}
 
 @api_router.post("/sobressalentes/movimentacao")

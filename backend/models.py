@@ -368,6 +368,8 @@ class SpareAssetCreate(BaseModel):
     status: Optional[str] = "disponivel"
     ativo_vinculado_id: Optional[str] = None
     observacoes: Optional[str] = None
+    origem: Optional[str] = None
+    condicoes: Optional[dict] = None
 
 class SpareAssetUpdate(BaseModel):
     nome: Optional[str] = None
@@ -384,6 +386,8 @@ class SpareAssetUpdate(BaseModel):
     status: Optional[str] = None
     ativo_vinculado_id: Optional[str] = None
     observacoes: Optional[str] = None
+    origem: Optional[str] = None
+    condicoes: Optional[dict] = None
 
 class SpareMovementCreate(BaseModel):
     spare_id: str
