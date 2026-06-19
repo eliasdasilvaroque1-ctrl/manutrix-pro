@@ -1435,7 +1435,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
         {checklist.length > 0 && (
           <div className="glass-card p-4 space-y-3">
             <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-              Checklist — {templates[tipoTab]?.nome || tipoTab} ({checklist.length} itens)
+              Checklist — {({mecanica:'Mecânica',eletrica:'Elétrica',lubrificacao:'Lubrificação'})[tipoTab] || tipoTab} ({checklist.length} itens)
             </h3>
             <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
               {checklist.map((item, idx) => (
@@ -1457,7 +1457,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
           <button type="submit" disabled={loading} className="btn-primary" data-testid="submit-inspecao">
-            {loading ? 'Salvando...' : `Criar Inspeção ${templates[tipoTab]?.nome || ''}`}
+            {loading ? 'Salvando...' : `Criar Inspeção ${({mecanica:'Mecânica',eletrica:'Elétrica',lubrificacao:'Lubrificação'})[tipoTab] || ''}`}
           </button>
         </div>
       </form>
@@ -1502,14 +1502,14 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       label: 'ADMIN',
       items: [
         { icon: Users, label: 'Usuários', path: '/admin/usuarios' },
-        { icon: ClipboardCheck, label: 'Templates', path: '/admin/templates' },
+        { icon: ClipboardCheck, label: 'Planos de Inspeção', path: '/admin/templates' },
         { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
       ]
     }] : []),
     ...(role === 'pcm' ? [{
       label: 'ADMIN',
       items: [
-        { icon: ClipboardCheck, label: 'Templates', path: '/admin/templates' },
+        { icon: ClipboardCheck, label: 'Planos de Inspeção', path: '/admin/templates' },
         { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
       ]
     }] : []),
@@ -5660,12 +5660,12 @@ const AdminTemplatesPage = () => {
   const fetchData = async () => {
     try {
       const [tRes, eRes] = await Promise.all([
-        api.get('/inspection-templates'),
+        api.get('/planos-inspecao'),
         api.get('/equipment-types').catch(() => ({ data: [] }))
       ]);
       setTemplates(tRes.data);
       setEquipTypes(eRes.data);
-    } catch { toast.error('Erro ao carregar templates'); }
+    } catch { toast.error('Erro ao carregar planos'); }
     finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); }, []);
@@ -5682,16 +5682,16 @@ const AdminTemplatesPage = () => {
 
   const handleDuplicate = async (t) => {
     try {
-      await api.post(`/inspection-templates/${t.id}/duplicate`);
-      toast.success('Template duplicado!');
+      await api.post(`/planos-inspecao`, { ...t, nome: `${t.nome} (Cópia)`, perguntas: t.perguntas || [] });
+      toast.success('Plano duplicado!');
       fetchData();
     } catch { toast.error('Erro ao duplicar'); }
   };
 
   const handleDelete = async () => {
     try {
-      await api.delete(`/inspection-templates/${deleteItem.id}`);
-      toast.success('Template excluído!');
+      await api.delete(`/planos-inspecao/${deleteItem.id}`);
+      toast.success('Plano excluído!');
       setDeleteItem(null);
       fetchData();
     } catch { toast.error('Erro ao excluir'); }
@@ -5711,15 +5711,20 @@ const AdminTemplatesPage = () => {
 
   const handleSave = async () => {
     if (!form.nome || !form.tipo_equipamento) { toast.error('Preencha nome e tipo de equipamento'); return; }
-    if (form.itens.length === 0) { toast.error('Adicione pelo menos um item ao checklist'); return; }
+    if (form.itens.length === 0) { toast.error('Adicione pelo menos uma pergunta'); return; }
     setSaving(true);
     try {
+      const payload = { nome: form.nome, tipo_equipamento: form.tipo_equipamento, categoria: form.categoria || 'mecanica', perguntas: form.itens.map(it => ({
+        descricao: it.descricao, tipo: it.tipo, obrigatorio: it.obrigatorio, unidade: it.unidade,
+        limite_normal: it.tolerancia_max || it.limite_normal, limite_alerta: it.limite_alerta, limite_critico: it.limite_critico,
+        periodicidade: it.periodicidade, foto_obrigatoria_nc: it.foto_obrigatoria_nc || false, opcoes: it.opcoes, ordem: 0
+      })) };
       if (editing === 'new') {
-        await api.post('/inspection-templates', form);
-        toast.success('Template criado!');
+        await api.post('/planos-inspecao', payload);
+        toast.success('Plano criado!');
       } else {
-        await api.put(`/inspection-templates/${editing.id}`, form);
-        toast.success('Template atualizado!');
+        await api.put(`/planos-inspecao/${editing.id}`, { nome: payload.nome, perguntas: payload.perguntas });
+        toast.success('Plano atualizado!');
       }
       setEditing(null);
       fetchData();
@@ -5734,12 +5739,12 @@ const AdminTemplatesPage = () => {
     <div className="space-y-4" data-testid="template-editor">
       <div className="flex items-center gap-3">
         <button onClick={() => setEditing(null)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg"><ArrowLeft size={20} className="text-slate-400" /></button>
-        <h1 className="text-xl font-bold text-slate-100">{editing === 'new' ? 'Novo Template' : 'Editar Template'}</h1>
+        <h1 className="text-xl font-bold text-slate-100">{editing === 'new' ? 'Novo Plano de Inspeção' : 'Editar Plano de Inspeção'}</h1>
       </div>
 
       <div className="glass-card p-4 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormInput label="Nome do Template" required>
+          <FormInput label="Nome do Plano" required>
             <input value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Inspeção Alimentador Vibratório" data-testid="template-nome" />
           </FormInput>
           <FormInput label="Tipo de Equipamento" required>
@@ -5792,7 +5797,7 @@ const AdminTemplatesPage = () => {
         <button onClick={() => setEditing(null)} className="btn-secondary">Cancelar</button>
         <button onClick={handleSave} disabled={saving} className="btn-primary flex items-center gap-2" data-testid="save-template">
           {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-          {saving ? 'Salvando...' : 'Salvar Template'}
+          {saving ? 'Salvando...' : 'Salvar Plano'}
         </button>
       </div>
     </div>
@@ -5803,10 +5808,10 @@ const AdminTemplatesPage = () => {
     <div className="space-y-4" data-testid="templates-page">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Templates de Inspeção</h1>
-          <p className="text-sm text-slate-500">Gerenciar checklists por tipo de equipamento</p>
+          <h1 className="text-2xl font-bold text-slate-100">Planos de Inspeção</h1>
+          <p className="text-sm text-slate-500">Gerenciar perguntas por tipo de equipamento e por ativo</p>
         </div>
-        <button onClick={openNew} className="btn-primary flex items-center gap-2" data-testid="new-template-btn"><Plus size={20} /> Novo Template</button>
+        <button onClick={openNew} className="btn-primary flex items-center gap-2" data-testid="new-template-btn"><Plus size={20} /> Novo Plano</button>
       </div>
 
       {templates.length > 0 ? (
@@ -5834,9 +5839,9 @@ const AdminTemplatesPage = () => {
           ))}
         </div>
       ) : (
-        <EmptyState icon={ClipboardCheck} title="Nenhum template" description="Crie templates de inspeção para cada tipo de equipamento" actionLabel="Novo Template" onAction={openNew} />
+        <EmptyState icon={ClipboardCheck} title="Nenhum plano" description="Crie planos de inspeção para cada tipo de equipamento" actionLabel="Novo Plano" onAction={openNew} />
       )}
-      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Template" message={`Excluir "${deleteItem?.nome}"?`} confirmText="Excluir" danger />
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Plano" message={`Excluir "${deleteItem?.nome}"?`} confirmText="Excluir" danger />
     </div>
   );
 };

@@ -834,8 +834,8 @@ async def resolver_plano_inspecao(ativo_id: str, categoria: str, user: Dict = De
             perguntas.append({"id": str(uuid.uuid4()), **item, "origem": "padrao", "plano_id": None,
                 "periodicidade": None, "foto_obrigatoria_nc": False, "limite_normal": None, "limite_alerta": None, "limite_critico": None, "opcoes": None, "ordem": 0})
     
-    # Sort by ordem
-    perguntas.sort(key=lambda x: x.get('ordem', 0))
+    # Sort: Level 1 first (by ordem), then Level 2 (by ordem)
+    perguntas.sort(key=lambda x: (0 if x.get('origem') == 'tipo_equipamento' else 1 if x.get('origem') == 'padrao' else 2, x.get('ordem', 0)))
     
     return {
         "ativo_id": ativo_id,
