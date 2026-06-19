@@ -720,6 +720,219 @@ async def list_equipment_types(user: Dict = Depends(get_current_user)):
     types = await db.ativos.distinct("tipo_equipamento", {"organization_id": org_id, "deleted_at": None})
     return [t for t in types if t]
 
+# ============== PLANOS DE INSPEÇÃO (Novo Sistema) ==============
+
+@api_router.get("/planos-inspecao")
+async def list_planos_inspecao(
+    tipo_equipamento: Optional[str] = None,
+    ativo_id: Optional[str] = None,
+    categoria: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    org_id = user.get('organization_id', '')
+    query = {"organization_id": org_id, "deleted_at": None}
+    if tipo_equipamento:
+        query['tipo_equipamento'] = tipo_equipamento
+    if ativo_id:
+        query['ativo_id'] = ativo_id
+    if categoria:
+        query['categoria'] = categoria
+    planos = await db.planos_inspecao.find(query, {"_id": 0}).sort("categoria", 1).to_list(500)
+    return planos
+
+@api_router.post("/planos-inspecao")
+async def create_plano_inspecao(data: PlanoInspecaoCreate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    org_id = user.get('organization_id', '')
+    perguntas = []
+    for i, p in enumerate(data.perguntas):
+        d = p.model_dump()
+        d['id'] = str(uuid.uuid4())
+        d['ordem'] = d.get('ordem', 0) or i
+        perguntas.append(d)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "organization_id": org_id,
+        "tipo_equipamento": data.tipo_equipamento,
+        "ativo_id": data.ativo_id,
+        "categoria": data.categoria,
+        "nome": data.nome,
+        "perguntas": perguntas,
+        "created_by": user.get('id'),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.planos_inspecao.insert_one(doc)
+    await audit_log("create", "plano_inspecao", doc['id'], user, f"Plano: {data.nome} ({data.categoria})")
+    doc.pop('_id', None)
+    return doc
+
+@api_router.put("/planos-inspecao/{plano_id}")
+async def update_plano_inspecao(plano_id: str, data: PlanoInspecaoUpdate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    existing = await db.planos_inspecao.find_one({"id": plano_id, "deleted_at": None}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Plano não encontrado")
+    update = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.nome is not None:
+        update['nome'] = data.nome
+    if data.perguntas is not None:
+        perguntas = []
+        for i, p in enumerate(data.perguntas):
+            d = p.model_dump()
+            if not d.get('id'):
+                d['id'] = str(uuid.uuid4())
+            d['ordem'] = d.get('ordem', 0) or i
+            perguntas.append(d)
+        update['perguntas'] = perguntas
+    await db.planos_inspecao.update_one({"id": plano_id}, {"$set": update})
+    await audit_log("update", "plano_inspecao", plano_id, user, f"Plano editado: {existing.get('nome','')}")
+    return await db.planos_inspecao.find_one({"id": plano_id}, {"_id": 0})
+
+@api_router.delete("/planos-inspecao/{plano_id}")
+async def delete_plano_inspecao(plano_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    await db.planos_inspecao.update_one({"id": plano_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    await audit_log("delete", "plano_inspecao", plano_id, user, "Plano excluído")
+    return {"success": True}
+
+@api_router.get("/planos-inspecao/resolver")
+async def resolver_plano_inspecao(ativo_id: str, categoria: str, user: Dict = Depends(get_current_user)):
+    """Resolve inspection plan: merges equipment-type plan (Level 1) + asset-specific plan (Level 2)"""
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    
+    org_id = user.get('organization_id', '')
+    tipo_equip = ativo.get('tipo_equipamento', '')
+    
+    # Level 1: Plan by equipment type
+    plano_tipo = await db.planos_inspecao.find_one(
+        {"organization_id": org_id, "tipo_equipamento": tipo_equip, "ativo_id": None, "categoria": categoria, "deleted_at": None},
+        {"_id": 0}
+    )
+    
+    # Level 2: Asset-specific plan  
+    plano_ativo = await db.planos_inspecao.find_one(
+        {"organization_id": org_id, "ativo_id": ativo_id, "categoria": categoria, "deleted_at": None},
+        {"_id": 0}
+    )
+    
+    # Merge questions
+    perguntas = []
+    if plano_tipo:
+        for p in plano_tipo.get('perguntas', []):
+            perguntas.append({**p, "origem": "tipo_equipamento", "plano_id": plano_tipo['id']})
+    if plano_ativo:
+        for p in plano_ativo.get('perguntas', []):
+            perguntas.append({**p, "origem": "ativo_especifico", "plano_id": plano_ativo['id']})
+    
+    # Fallback to default checklists if no plans exist
+    if not perguntas and categoria in DEFAULT_CHECKLISTS:
+        for item in DEFAULT_CHECKLISTS[categoria]['itens']:
+            perguntas.append({"id": str(uuid.uuid4()), **item, "origem": "padrao", "plano_id": None,
+                "periodicidade": None, "foto_obrigatoria_nc": False, "limite_normal": None, "limite_alerta": None, "limite_critico": None, "opcoes": None, "ordem": 0})
+    
+    # Sort by ordem
+    perguntas.sort(key=lambda x: x.get('ordem', 0))
+    
+    return {
+        "ativo_id": ativo_id,
+        "ativo_tag": ativo.get('tag'),
+        "tipo_equipamento": tipo_equip,
+        "categoria": categoria,
+        "plano_tipo": plano_tipo.get('id') if plano_tipo else None,
+        "plano_ativo": plano_ativo.get('id') if plano_ativo else None,
+        "perguntas": perguntas,
+        "total_perguntas": len(perguntas)
+    }
+
+@api_router.post("/planos-inspecao/migrar")
+async def migrar_templates_para_planos(user: Dict = Depends(get_current_user)):
+    """Migrate DEFAULT_CHECKLISTS and existing inspection_templates to planos_inspecao"""
+    check_write_permission(user, ['admin'])
+    org_id = user.get('organization_id', '')
+    migrated = 0
+    
+    # Migrate DEFAULT_CHECKLISTS as universal plans (no tipo_equipamento)
+    for cat, template in DEFAULT_CHECKLISTS.items():
+        existing = await db.planos_inspecao.find_one(
+            {"organization_id": org_id, "categoria": cat, "tipo_equipamento": None, "ativo_id": None, "deleted_at": None}
+        )
+        if not existing:
+            perguntas = []
+            for i, item in enumerate(template['itens']):
+                perguntas.append({
+                    "id": str(uuid.uuid4()), "descricao": item['descricao'], "tipo": item.get('tipo', 'boolean'),
+                    "obrigatorio": item.get('obrigatorio', True), "unidade": item.get('unidade'),
+                    "limite_normal": item.get('tolerancia_max'), "limite_alerta": None, "limite_critico": None,
+                    "periodicidade": None, "foto_obrigatoria_nc": False,
+                    "opcoes": None, "ordem": i
+                })
+            doc = {
+                "id": str(uuid.uuid4()), "organization_id": org_id,
+                "tipo_equipamento": None, "ativo_id": None,
+                "categoria": cat, "nome": template['nome'],
+                "perguntas": perguntas,
+                "created_by": user.get('id'),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "deleted_at": None
+            }
+            await db.planos_inspecao.insert_one(doc)
+            migrated += 1
+    
+    # Migrate existing inspection_templates
+    old_templates = await db.inspection_templates.find({"organization_id": org_id, "deleted_at": None}, {"_id": 0}).to_list(200)
+    for tmpl in old_templates:
+        perguntas = []
+        for i, item in enumerate(tmpl.get('itens', [])):
+            perguntas.append({
+                "id": item.get('id', str(uuid.uuid4())), "descricao": item.get('descricao', ''),
+                "tipo": item.get('tipo', 'boolean'), "obrigatorio": item.get('obrigatorio', True),
+                "unidade": item.get('unidade'), "limite_normal": item.get('tolerancia_max'),
+                "limite_alerta": None, "limite_critico": None,
+                "periodicidade": None, "foto_obrigatoria_nc": False,
+                "opcoes": item.get('opcoes'), "ordem": i
+            })
+        doc = {
+            "id": str(uuid.uuid4()), "organization_id": org_id,
+            "tipo_equipamento": tmpl.get('tipo_equipamento'), "ativo_id": None,
+            "categoria": tmpl.get('categoria', 'mecanica'), "nome": tmpl.get('nome', ''),
+            "perguntas": perguntas,
+            "created_by": user.get('id'),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "deleted_at": None
+        }
+        await db.planos_inspecao.insert_one(doc)
+        migrated += 1
+    
+    await audit_log("migrate", "plano_inspecao", "all", user, f"Migração: {migrated} planos criados")
+    return {"migrated": migrated}
+
+@api_router.get("/planos-inspecao/categorias-disponiveis")
+async def categorias_disponiveis(ativo_id: str, user: Dict = Depends(get_current_user)):
+    """List which inspection categories are available for an asset (has plans configured)"""
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        return []
+    org_id = user.get('organization_id', '')
+    tipo_equip = ativo.get('tipo_equipamento', '')
+    
+    result = []
+    for cat in ['mecanica', 'eletrica', 'lubrificacao']:
+        has_plan = await db.planos_inspecao.find_one(
+            {"organization_id": org_id, "deleted_at": None, "categoria": cat,
+             "$or": [{"tipo_equipamento": tipo_equip, "ativo_id": None}, {"ativo_id": ativo_id}]},
+            {"_id": 0, "id": 1}
+        )
+        # Also check defaults
+        has_default = cat in DEFAULT_CHECKLISTS
+        result.append({"categoria": cat, "disponivel": bool(has_plan) or has_default})
+    return result
+
 @api_router.get("/inspecoes")
 async def list_inspecoes(
     status: Optional[InspecaoStatus] = None,

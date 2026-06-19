@@ -1,0 +1,71 @@
+{
+  "summary": "Iteration 37 - Bloco B (Planos de Inspeção replacing templates). BACKEND 15/15 PASS (CRUD + resolver + migrar + categorias-disponiveis + RBAC + audit). FRONTEND CRITICAL FAILURE: ModalNovaInspecao throws ReferenceError 'templates is not defined' on render (App.js lines 1438 and 1460 still reference the removed `templates` state). The component is completely broken — page shows React 'Uncaught runtime errors' overlay and the modal never renders. Users cannot create new inspections at all.",
+  "pass_fail_matrix": {
+    "BACKEND POST /api/planos-inspecao/migrar idempotent (defaults not duplicated)": "PASS",
+    "BACKEND GET /api/planos-inspecao returns id/categoria/tipo_equipamento/ativo_id/perguntas/nome": "PASS",
+    "BACKEND GET filter by categoria works": "PASS",
+    "BACKEND POST /api/planos-inspecao creates plan with full perguntas (tipo/obrigatorio/periodicidade/foto_obrigatoria_nc/limites)": "PASS",
+    "BACKEND GET persists in list after create (tipo_equipamento filter)": "PASS",
+    "BACKEND PUT /api/planos-inspecao/{id} updates nome+perguntas": "PASS",
+    "BACKEND DELETE /api/planos-inspecao/{id} soft-deletes (excluded from list)": "PASS",
+    "BACKEND POST as tecnico returns 403 (RBAC enforced)": "PASS",
+    "BACKEND GET /api/planos-inspecao/resolver merges Level1+Level2 with origem field": "PASS",
+    "BACKEND Resolver fallback to DEFAULT_CHECKLISTS when no plans (origem=padrao)": "PASS",
+    "BACKEND Resolver returns 404 for invalid ativo_id": "PASS",
+    "BACKEND GET /api/planos-inspecao/categorias-disponiveis returns mecanica/eletrica/lubrificacao with disponivel bool": "PASS",
+    "BACKEND Audit log records plano_inspecao create+delete actions": "PASS",
+    "FRONTEND ModalNovaInspecao renders without errors": "FAIL — ReferenceError: templates is not defined",
+    "FRONTEND Modal does NOT show 'Template' text": "BLOCKED — component cannot render",
+    "FRONTEND Mecânica/Elétrica/Lubrificação tabs visible": "BLOCKED — component cannot render",
+    "FRONTEND Selecting ativo auto-loads questions from resolver": "BLOCKED — component cannot render",
+    "FRONTEND Plan info shows question count and source badges": "BLOCKED — component cannot render"
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/planos-inspecao/resolver", "issue": "Uses find_one for plano_tipo and plano_ativo — if multiple plans exist with the same tipo_equipamento+categoria (or same ativo_id+categoria), only the first match is merged; the others are silently ignored. Recommend using find().to_list() and merging all matches, OR enforce uniqueness via index."},
+      {"endpoint": "POST /api/planos-inspecao/migrar", "issue": "Idempotent for DEFAULT_CHECKLISTS only. The legacy inspection_templates loop (line 887-910) does NOT check for an existing migrated copy — running migrar twice will duplicate any legacy templates. Add an existing-check by tipo_equipamento+categoria+nome before insert_one."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ModalNovaInspecao (App.js line 1273-1466)", "issue": "References undefined variable `templates` at line 1438 (`templates[tipoTab]?.nome || tipoTab`) and line 1460 (`templates[tipoTab]?.nome || ''`). Throws ReferenceError on render → React error overlay → modal never appears → users cannot create new inspections. Fix: replace `templates[tipoTab]?.nome` with `resolvedPlan?.categoria || tipoTab` or with a static category label map.", "selector": "[role='dialog']", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Nova Inspeção creation", "issue": "Cannot test — modal blocked by ReferenceError. Resolver API call (loadPlan) is wired correctly in code but unreachable.", "affected_selectors": ["[data-testid='tab-mecanica']", "[data-testid='tab-eletrica']", "[data-testid='tab-lubrificacao']", "[data-testid='submit-inspecao']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration37_planos_inspecao.py",
+    "/app/test_reports/pytest/pytest_iteration37.xml"
+  ],
+  "action_items": [
+    "CRITICAL: App.js lines 1438 & 1460 — remove `templates[tipoTab]?.nome` references. The `templates` state was removed when migrating to the resolver-based flow but two leftover references remained. Suggested replacement: line 1438 → `Checklist — {tipoTab} ({checklist.length} itens)` or use a CATEGORIA_LABELS={mecanica:'Mecânica',eletrica:'Elétrica',lubrificacao:'Lubrificação'} map. Line 1460 → `Criar Inspeção ${CATEGORIA_LABELS[tipoTab]||''}`.",
+    "Improve resolver to merge ALL plans matching tipo_equipamento+categoria (and ativo_id+categoria) instead of find_one — current behavior silently drops additional plans.",
+    "Add idempotency to legacy inspection_templates migration (existing-check) so /api/planos-inspecao/migrar can be safely re-run."
+  ],
+  "critical_code_review_comments": [
+    "App.js:1438,1460 — references to undefined `templates` (REGRESSION introduced when removing template selection UI). Component crashes on mount.",
+    "App.js:1273-1466 — ModalNovaInspecao does NOT contain the word 'Template' or 'Selecionar Template' in any visible text — Bloco B intent is preserved in the code; only the unresolved variable name remains.",
+    "App.js:1296 — resolver call uses correct params (ativo_id, categoria) ✓",
+    "App.js:1298-1300 — checklist mapping preserves all pergunta fields and seeds conforme/resultado/observacao as null ✓",
+    "App.js:1428-1434 — Plan info banner uses resolvedPlan.total_perguntas + plano_tipo/plano_ativo badges (good).",
+    "server.py:740 — sort by categoria ascending. Consider also sorting by created_at desc as secondary so newest first within a category.",
+    "server.py:838 — perguntas.sort by ordem. But when merging L1+L2, both may use overlapping ordem values (e.g. both start at 0); they get interleaved. Consider preserving L1-then-L2 by offsetting L2 ordem or adding a stable secondary key (origem).",
+    "server.py:854 — check_write_permission for migrar requires 'admin' only (PCM cannot migrate). Confirm this is intentional; spec says PCM creates/edits plans but migration is admin-only.",
+    "server.py:801 — resolver does not propagate organization scoping into the ativo lookup ({'id': ativo_id, 'deleted_at': None}). Cross-org ativo IDs could leak. Add 'organization_id': org_id to the ativo find."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration37_planos_inspecao.py",
+    "/app/test_reports/pytest/pytest_iteration37.xml",
+    "/app/test_reports/iteration_37.json"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "0% — blocked by ReferenceError in ModalNovaInspecao"},
+  "test_credentials": "admin@manutrix.com/admin123, pcm@manutrix.com/pcm123, tecnico@manutrix.com/tecnico123",
+  "seed_data_creation": "Tests create+delete TEST_iter37_* plans inside /api/planos-inspecao. Cleanup performed in TestResolver.test_cleanup. TestAuditLog leaves one soft-deleted plano_inspecao with name 'TEST_iter37 audit check'. No production data modified.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is solid — re-run: REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_iteration37_planos_inspecao.py -v. After main agent fixes the `templates` ReferenceError in App.js (lines 1438 & 1460), retest frontend: navigate to /inspecoes, click 'Nova Inspeção', verify (a) modal opens without console error, (b) tabs tab-mecanica/tab-eletrica/tab-lubrificacao exist, (c) modal text does NOT contain 'Template' or 'Selecionar Template', (d) selecting an ativo from the combobox auto-populates checklist via /api/planos-inspecao/resolver, (e) plan info badge shows 'N perguntas carregadas' + 'Plano: {tipo_equipamento}' + '+ Específico {ativo_tag}'.",
+  "rca of the issue": "Root cause (frontend): During the Bloco B refactor, the ModalNovaInspecao component was rewritten to use the new /api/planos-inspecao/resolver endpoint and the local `templates` state was removed. However, TWO render-time references to `templates[tipoTab]?.nome` were left behind: (1) App.js line 1438 inside the conditional checklist banner — `Checklist — {templates[tipoTab]?.nome || tipoTab} ({checklist.length} itens)`, and (2) App.js line 1460 inside the submit button label — `Criar Inspeção ${templates[tipoTab]?.nome || ''}`. Since `templates` is not declared in the component scope (and is not a global), JavaScript throws ReferenceError when React evaluates this JSX during render. The error is thrown immediately when the Inspecoes page mounts (because the modal element is in the tree, even if `isOpen=false` it depends on the Modal implementation), producing a full-page React DevServer error overlay. Reproduction: 1) Login as admin@manutrix.com / admin123. 2) Navigate to /inspecoes. 3) Either the page itself crashes with the overlay, or click 'Nova Inspeção' to trigger. Mitigation: Replace both `templates[tipoTab]?.nome` references with a static label map e.g. `const CAT_LABEL = {mecanica:'Mecânica', eletrica:'Elétrica', lubrificacao:'Lubrificação'}` and use `CAT_LABEL[tipoTab]`. Backend has no issue."
+}

@@ -412,7 +412,34 @@ class KnowledgeBaseCreate(BaseModel):
     categoria: str = "geral"
 
 
-# ============== TEMPLATES DE INSPEÇÃO ==============
+# ============== PLANOS DE INSPEÇÃO ==============
+
+class PlanoPerguntaCreate(BaseModel):
+    descricao: str
+    tipo: str = "boolean"  # boolean, numerico, texto, lista, foto, observacao
+    obrigatorio: bool = True
+    periodicidade: Optional[str] = None  # diaria, semanal, mensal, trimestral, semestral, anual
+    foto_obrigatoria_nc: bool = False
+    unidade: Optional[str] = None
+    limite_normal: Optional[float] = None
+    limite_alerta: Optional[float] = None
+    limite_critico: Optional[float] = None
+    opcoes: Optional[List[str]] = None
+    ordem: int = 0
+
+class PlanoInspecaoCreate(BaseModel):
+    tipo_equipamento: Optional[str] = None
+    ativo_id: Optional[str] = None
+    categoria: str  # mecanica, eletrica, lubrificacao
+    nome: str
+    perguntas: List[PlanoPerguntaCreate] = []
+
+class PlanoInspecaoUpdate(BaseModel):
+    nome: Optional[str] = None
+    perguntas: Optional[List[PlanoPerguntaCreate]] = None
+
+
+# ============== TEMPLATES DE INSPEÇÃO (legacy) ==============
 
 class TemplateItemCreate(BaseModel):
     descricao: str

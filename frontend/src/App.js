@@ -1273,10 +1273,8 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
 const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = [], tecnicos = [], preSelectedAtivoId = null }) => {
   const [loading, setLoading] = useState(false);
   const [tipoTab, setTipoTab] = useState('mecanica');
-  const [templates, setTemplates] = useState({});
-  const [equipTemplates, setEquipTemplates] = useState([]);
-  const [selectedEquipTemplate, setSelectedEquipTemplate] = useState(null);
   const [checklist, setChecklist] = useState([]);
+  const [resolvedPlan, setResolvedPlan] = useState(null);
   const [form, setForm] = useState({
     ativo_id: '', responsavel_id: '', executantes: [], data_planejada: '', observacoes: ''
   });
@@ -1285,51 +1283,36 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   useEffect(() => {
     if (isOpen) {
       setTipoTab('mecanica');
-      setSelectedEquipTemplate(null);
-      setEquipTemplates([]);
+      setChecklist([]);
+      setResolvedPlan(null);
       setForm({ ativo_id: preSelectedAtivoId || '', responsavel_id: user?.id || '', executantes: [], data_planejada: '', observacoes: '' });
-      api.get('/checklists/templates').then(r => {
-        setTemplates(r.data);
-        if (r.data.mecanica) setChecklist(r.data.mecanica.itens || []);
-      }).catch(() => {});
     }
   }, [isOpen, user, preSelectedAtivoId]);
 
-  // Fetch equipment-specific templates when ativos are loaded
-  useEffect(() => {
-    const ativoId = preSelectedAtivoId || form.ativo_id;
-    if (!ativoId || ativos.length === 0) return;
-    const ativo = ativos.find(a => a.id === ativoId);
-    if (ativo?.tipo_equipamento) {
-      api.get('/inspection-templates', { params: { tipo_equipamento: ativo.tipo_equipamento } })
-        .then(r => setEquipTemplates(r.data || []))
-        .catch(() => {});
-    }
-  }, [ativos, preSelectedAtivoId, form.ativo_id]);
-
-  // When ativo changes, load equipment-specific templates
-  const handleAtivoChange = (ativoId) => {
-    setForm(prev => ({...prev, ativo_id: ativoId}));
-    setSelectedEquipTemplate(null);
-    setEquipTemplates([]);
-    const ativo = ativos.find(a => a.id === ativoId);
-    if (ativo?.tipo_equipamento) {
-      api.get('/inspection-templates', { params: { tipo_equipamento: ativo.tipo_equipamento } })
-        .then(r => setEquipTemplates(r.data || []))
-        .catch(() => {});
+  // Auto-load plan when ativo + categoria change
+  const loadPlan = async (ativoId, categoria) => {
+    if (!ativoId) return;
+    try {
+      const res = await api.get('/planos-inspecao/resolver', { params: { ativo_id: ativoId, categoria } });
+      setResolvedPlan(res.data);
+      setChecklist((res.data.perguntas || []).map(p => ({
+        ...p, id: p.id || String(Date.now()), conforme: null, resultado: null, observacao: null
+      })));
+    } catch {
+      setResolvedPlan(null);
+      setChecklist([]);
     }
   };
-  
+
   useEffect(() => {
-    if (selectedEquipTemplate) {
-      const t = equipTemplates.find(et => et.id === selectedEquipTemplate);
-      if (t) {
-        setChecklist(t.itens.map(i => ({ ...i, id: i.id || String(Date.now()), conforme: null, resultado: null, observacao: null })));
-      }
-    } else if (templates[tipoTab]) {
-      setChecklist(templates[tipoTab].itens || []);
-    }
-  }, [tipoTab, templates, selectedEquipTemplate]);
+    const ativoId = preSelectedAtivoId || form.ativo_id;
+    if (ativoId && isOpen) loadPlan(ativoId, tipoTab);
+  }, [tipoTab, form.ativo_id, preSelectedAtivoId, isOpen]);
+
+  const handleAtivoChange = (ativoId) => {
+    setForm(prev => ({...prev, ativo_id: ativoId}));
+    if (ativoId) loadPlan(ativoId, tipoTab);
+  };
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1342,7 +1325,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
     try {
       const payload = {
         ativo_id: form.ativo_id,
-        tipo: selectedEquipTemplate ? 'personalizada' : tipoTab,
+        tipo: tipoTab,
         responsavel_id: form.responsavel_id || null,
         executantes: form.executantes || [],
         checklist: checklist,
@@ -1371,44 +1354,22 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Nova Inspeção" size="lg">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Tipo de Inspeção — Padrão ou Template por Equipamento */}
-        {equipTemplates.length > 0 && (
-          <div className="glass-card p-4 space-y-3" data-testid="equip-template-section">
-            <h3 className="text-sm font-semibold text-amber-400">Templates para {selectedAtivo?.tipo_equipamento}</h3>
-            <div className="flex gap-2 flex-wrap">
-              <button type="button" onClick={() => setSelectedEquipTemplate(null)}
-                className={`px-3 py-2 rounded-lg text-sm border transition-all ${!selectedEquipTemplate ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'border-slate-700 text-slate-400'}`}>
-                Padrão (Mec/Elé/Lub)
-              </button>
-              {equipTemplates.map(et => (
-                <button key={et.id} type="button" onClick={() => setSelectedEquipTemplate(et.id)}
-                  className={`px-3 py-2 rounded-lg text-sm border transition-all ${selectedEquipTemplate === et.id ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'border-slate-700 text-slate-400'}`}
-                  data-testid={`equip-template-${et.id}`}>
-                  {et.nome} ({et.itens?.length || 0} itens)
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Tabs — Tipo Padrão (only when no equip template selected) */}
-        {!selectedEquipTemplate && (
-          <div className="flex bg-slate-800/50 rounded-lg p-1 gap-1">
-            {[
-              { key: 'mecanica', label: 'Mecânica', icon: Cog, color: 'emerald' },
-              { key: 'eletrica', label: 'Elétrica', icon: Zap, color: 'blue' },
-              { key: 'lubrificacao', label: 'Lubrificação', icon: Droplet, color: 'amber' },
-            ].map(tab => (
-              <button key={tab.key} type="button" onClick={() => { setTipoTab(tab.key); setSelectedEquipTemplate(null); }}
-                className={`flex-1 py-2.5 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                  tipoTab === tab.key ? `bg-${tab.color}-500/20 text-${tab.color}-400 border border-${tab.color}-500/30` : 'text-slate-400 hover:text-slate-200'
-                }`} data-testid={`tab-${tab.key}`}
-              >
-                <tab.icon size={16} /> {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Tipo de Inspeção */}
+        <div className="flex bg-slate-800/50 rounded-lg p-1 gap-1">
+          {[
+            { key: 'mecanica', label: 'Mecânica', icon: Cog, color: 'emerald' },
+            { key: 'eletrica', label: 'Elétrica', icon: Zap, color: 'blue' },
+            { key: 'lubrificacao', label: 'Lubrificação', icon: Droplet, color: 'amber' },
+          ].map(tab => (
+            <button key={tab.key} type="button" onClick={() => setTipoTab(tab.key)}
+              className={`flex-1 py-2.5 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                tipoTab === tab.key ? `bg-${tab.color}-500/20 text-${tab.color}-400 border border-${tab.color}-500/30` : 'text-slate-400 hover:text-slate-200'
+              }`} data-testid={`tab-${tab.key}`}
+            >
+              <tab.icon size={16} /> {tab.label}
+            </button>
+          ))}
+        </div>
 
         {/* Equipamento + Responsável */}
         <div className="glass-card p-4 space-y-4">
@@ -1463,7 +1424,14 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
           </FormInput>
         </div>
 
-        {/* Checklist Preview */}
+        {/* Plan info & Checklist Preview */}
+        {resolvedPlan && (
+          <div className="text-xs text-slate-500 flex items-center gap-2">
+            <span>{resolvedPlan.total_perguntas} perguntas carregadas</span>
+            {resolvedPlan.plano_tipo && <span className="bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded">Plano: {resolvedPlan.tipo_equipamento}</span>}
+            {resolvedPlan.plano_ativo && <span className="bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded">+ Específico {resolvedPlan.ativo_tag}</span>}
+          </div>
+        )}
         {checklist.length > 0 && (
           <div className="glass-card p-4 space-y-3">
             <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
