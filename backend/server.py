@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Form, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -33,16 +33,25 @@ from deps import (
     logger
 )
 from models import *
+import storage as objstore
 
 # Import route modules
 from routes.dashboard import router as dashboard_router
 from routes.assets import router as assets_router
 from routes.work_orders import router as work_orders_router
 
-app = FastAPI(title="MANUTRIX API", version="3.1.0")
+app = FastAPI(title="MANUTRIX API", version="3.2.0")
 api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Initialize object storage at startup
+@app.on_event("startup")
+async def startup_init_storage():
+    try:
+        objstore.init_storage()
+    except Exception as e:
+        logger.warning(f"Object storage init deferred: {e}")
 
 # Include modularized routers
 app.include_router(dashboard_router, prefix="/api")
@@ -279,14 +288,19 @@ async def upload_file(file: UploadFile = File(...), user: Dict = Depends(get_cur
     if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf']:
         raise HTTPException(status_code=400, detail="Tipo de arquivo não permitido")
     
+    content = await file.read()
+    
+    # Upload to object storage
+    if objstore.is_available():
+        storage_path = objstore.upload_file("general", user.get('id', 'anon'), file.filename, content, file.content_type or "application/octet-stream")
+        return {"url": f"/api/storage/{storage_path}", "filename": file.filename, "storage": "cloud"}
+    
+    # Fallback to local disk
     filename = f"{uuid.uuid4()}{ext}"
     filepath = UPLOAD_DIR / filename
-    
     async with aiofiles.open(filepath, 'wb') as f:
-        content = await file.read()
         await f.write(content)
-    
-    return {"url": f"/api/uploads/{filename}", "filename": filename}
+    return {"url": f"/api/uploads/{filename}", "filename": filename, "storage": "local"}
 
 @api_router.get("/uploads/{filename}")
 async def get_upload(filename: str):
@@ -294,6 +308,23 @@ async def get_upload(filename: str):
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     return FileResponse(filepath)
+
+@api_router.get("/uploads/manuals/{filename}")
+async def get_manual_file(filename: str):
+    filepath = MANUALS_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    return FileResponse(filepath, media_type="application/pdf")
+
+@api_router.get("/storage/{path:path}")
+async def serve_storage_file(path: str):
+    """Serve files from object storage (cloud). Backward-compatible proxy."""
+    try:
+        data, content_type = objstore.get_file(path)
+        return Response(content=data, media_type=content_type)
+    except Exception as e:
+        logger.warning(f"Storage file not found: {path} — {e}")
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 
 # ============== ESTOQUE - CRUD COMPLETO ==============
 
@@ -1850,18 +1881,13 @@ async def upload_manual(ativo_id: str, file: UploadFile = File(...), user: Dict 
     if ext != '.pdf':
         raise HTTPException(status_code=400, detail="Apenas arquivos PDF são permitidos")
     
-    filename = f"{ativo_id}_{uuid.uuid4().hex[:8]}{ext}"
-    filepath = MANUALS_DIR / filename
+    content = await file.read()
     
-    async with aiofiles.open(filepath, 'wb') as f:
-        content = await file.read()
-        await f.write(content)
-    
-    # Extract text from PDF for AI context
+    # Extract text from PDF for AI context (from bytes in memory)
     extracted_text = ""
     try:
         from PyPDF2 import PdfReader
-        reader = PdfReader(str(filepath))
+        reader = PdfReader(io.BytesIO(content))
         for page in reader.pages:
             text = page.extract_text()
             if text:
@@ -1869,13 +1895,25 @@ async def upload_manual(ativo_id: str, file: UploadFile = File(...), user: Dict 
     except Exception as e:
         logger.warning(f"PDF text extraction failed: {e}")
     
+    # Upload to object storage
+    if objstore.is_available():
+        storage_path = objstore.upload_file("manuals", ativo_id, file.filename, content, "application/pdf")
+        file_url = f"/api/storage/{storage_path}"
+    else:
+        # Fallback to local disk
+        filename = f"{ativo_id}_{uuid.uuid4().hex[:8]}{ext}"
+        filepath = MANUALS_DIR / filename
+        async with aiofiles.open(filepath, 'wb') as f:
+            await f.write(content)
+        file_url = f"/api/uploads/manuals/{filename}"
+    
     manual_doc = {
         "id": str(uuid.uuid4()),
         "ativo_id": ativo_id,
         "filename": file.filename,
-        "filepath": str(filepath),
-        "url": f"/api/uploads/manuals/{filename}",
-        "extracted_text": extracted_text[:50000],  # Limit to 50k chars
+        "filepath": file_url,
+        "url": file_url,
+        "extracted_text": extracted_text[:50000],
         "size_bytes": len(content),
         "uploaded_by": user['id'],
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -1883,7 +1921,6 @@ async def upload_manual(ativo_id: str, file: UploadFile = File(...), user: Dict 
     await db.manuais.insert_one(manual_doc)
     manual_doc.pop('_id', None)
     
-    # Update ativo with manual ref
     await db.ativos.update_one({"id": ativo_id}, {"$set": {"manual_url": manual_doc['url'], "updated_at": datetime.now(timezone.utc).isoformat()}})
     
     return {"success": True, "manual": {k: v for k, v in manual_doc.items() if k != 'extracted_text'}}
@@ -1905,13 +1942,6 @@ async def delete_manual(manual_id: str, user: Dict = Depends(get_current_user)):
         pass
     await db.manuais.delete_one({"id": manual_id})
     return {"success": True}
-
-@api_router.get("/uploads/manuals/{filename}")
-async def get_manual_file(filename: str):
-    filepath = MANUALS_DIR / filename
-    if not filepath.exists():
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-    return FileResponse(filepath, media_type="application/pdf")
 
 # ============== AI ASSISTANT ==============
 
@@ -2221,12 +2251,19 @@ async def upload_attachment(
     if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf']:
         raise HTTPException(status_code=400, detail="Tipo de arquivo não permitido")
     
-    filename = f"{entity_type}_{entity_id}_{uuid.uuid4().hex[:8]}{ext}"
-    filepath = UPLOAD_DIR / filename
+    content = await file.read()
     
-    async with aiofiles.open(filepath, 'wb') as f:
-        content = await file.read()
-        await f.write(content)
+    # Upload to object storage
+    if objstore.is_available():
+        storage_path = objstore.upload_file(entity_type, entity_id, file.filename, content, file.content_type or "application/octet-stream")
+        file_url = f"/api/storage/{storage_path}"
+    else:
+        # Fallback to local disk
+        filename = f"{entity_type}_{entity_id}_{uuid.uuid4().hex[:8]}{ext}"
+        filepath = UPLOAD_DIR / filename
+        async with aiofiles.open(filepath, 'wb') as f:
+            await f.write(content)
+        file_url = f"/api/uploads/{filename}"
     
     attach_doc = {
         "id": str(uuid.uuid4()),
@@ -2234,7 +2271,7 @@ async def upload_attachment(
         "entity_id": entity_id,
         "categoria": categoria,
         "filename": file.filename,
-        "file_url": f"/api/uploads/{filename}",
+        "file_url": file_url,
         "size_bytes": len(content),
         "mime_type": file.content_type,
         "uploaded_by": user['id'],

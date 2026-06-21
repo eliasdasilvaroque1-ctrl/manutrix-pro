@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 42 - Storage migration validation (local disk -> Emergent Object Storage). Backend pytest suite (16 tests) and frontend regression all PASS. New uploads (POST /api/upload, /api/attachments, /api/ativos/{id}/manual) correctly route to cloud and return file_url starting with /api/storage/. Proxy endpoint GET /api/storage/{path} serves files with correct Content-Type (image/jpeg, application/pdf) and returns 404 for unknown paths. Verified globally across 30 OS and 47 ativos: 0 attachments and 0 manuais still pointing to /api/uploads/ — full migration confirmed. Regression: Login (admin + tecnico), Dashboard (/api/dashboard/stats), OS Kanban (/api/ordens-servico), Ativos, Inspeções all return 200 and render correctly in the UI with prior testids intact. Logout works.",
+  "pass_fail_matrix": {
+    "POST /api/upload returns /api/storage/ URL (cloud)": "PASS",
+    "POST /api/attachments (work_order photo) -> cloud URL": "PASS",
+    "POST /api/attachments (inspection photo) -> cloud URL": "PASS",
+    "POST /api/attachments (anomalia photo) -> cloud URL": "PASS",
+    "POST /api/ativos/{id}/manual (PDF) -> cloud URL": "PASS",
+    "GET /api/storage/{path} (attachment) -> 200 + image/jpeg": "PASS",
+    "GET /api/storage/{path} (manual) -> 200 + application/pdf": "PASS",
+    "GET /api/storage/{nonexistent} -> 404": "PASS",
+    "Migrated attachments: 0 local across 30 OS": "PASS",
+    "Migrated manuais: 0 local across 47 ativos": "PASS",
+    "Regression: Login admin & tecnico": "PASS",
+    "Regression: /api/dashboard/stats": "PASS",
+    "Regression: /api/ordens-servico": "PASS",
+    "Regression: /api/ativos & /api/inspecoes": "PASS",
+    "Frontend: Dashboard, Ativos (47 rows), OS Kanban (search), Inspeções (5 filters) load": "PASS",
+    "Frontend: Logout returns to /login": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts 'width(-1)/height(-1)' warnings on initial render — pre-existing cosmetic issue documented in iteration 41; charts render correctly after layout settles."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration42_storage.py",
+    "/app/test_reports/pytest/iteration42_storage.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "storage.py:62 - global declaration ordering: `storage_key = None; key = init_storage()` uses module-level `storage_key` before global declaration in same function on retry path inside put_object/get_object. Works because storage_key is module-level, but consider explicit global hoisting at function top for clarity. Not a bug.",
+    "server.py:319 - GET /api/storage/{path:path} is unauthenticated. Files are reachable by anyone with the URL (UUID-based path provides obscurity but not authorization). If file confidentiality matters (manuals/anomalies may contain sensitive info), add auth dependency or signed URLs. Acceptable for current scope since URLs are random UUIDs but should be documented as a risk.",
+    "server.py:307-317 - Legacy /api/uploads/{filename} and /api/uploads/manuals/{filename} routes still exist. Since DB no longer references them (verified by tests), they're dead code unless used by external tools. Consider removing or keeping as documented fallback.",
+    "server.py:2266 - Local fallback file_url uses /api/uploads/{filename} but Manual fallback at 1908 uses /api/uploads/manuals/{filename}. Asymmetry is OK but worth a comment so future devs don't confuse paths.",
+    "storage.py is well-isolated and uses requests (sync) inside async FastAPI handlers. For large files this can block the event loop. Consider httpx.AsyncClient or running put_object in a threadpool (anyio.to_thread.run_sync) for better concurrency."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration42_storage.py (new)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% (6/6 UI checks)"},
+  "test_credentials": "admin@manutrix.com / admin123 (verified); tecnico@manutrix.com / tecnico123 (verified)",
+  "seed_data_creation": "Test uploads tagged with TEST_*.jpg/TEST_manual.pdf prefix. No cleanup endpoint invoked — small number of test uploads (~7 files) acceptable. Manual cleanup possible via attachments DELETE endpoint if needed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Storage migration is fully validated. New uploads go to Emergent Object Storage via storage.py; URLs are /api/storage/manutrix/{entity}/{id}/{8hex}.{ext}. Proxy endpoint reads from cloud and 404s otherwise. Legacy /api/uploads/* routes still exist but DB no longer references them. To re-test, run: `pytest /app/backend/tests/test_iteration42_storage.py -v`. Endpoints in app: /api/ordens-servico (NOT /work-orders), /api/dashboard/stats (NOT /dashboard).",
+  "rca of the issue": "N/A — no defects found. Migration script populated MongoDB correctly and all upload endpoints/proxy work end-to-end."
+}
