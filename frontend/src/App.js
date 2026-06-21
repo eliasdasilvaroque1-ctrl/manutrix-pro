@@ -2252,6 +2252,7 @@ const OSDistChart = ({ data, onBarClick }) => {
 const AtivosPage = () => {
   const [ativos, setAtivos] = useState([]);
   const [sectors, setSectors] = useState([]);
+  const [osList, setOsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterSector, setFilterSector] = useState('');
@@ -2265,17 +2266,32 @@ const AtivosPage = () => {
     try {
       const params = {};
       if (filterSector) params.sector_id = filterSector;
-      const [ativosRes, sectorsRes] = await Promise.all([
+      const [ativosRes, sectorsRes, osRes] = await Promise.all([
         api.get('/ativos', { params }),
-        api.get('/sectors')
+        api.get('/sectors'),
+        api.get('/ordens-servico')
       ]);
       setAtivos(ativosRes.data);
       setSectors(sectorsRes.data);
+      setOsList(osRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
+  };
+  
+  // A1: Compute dynamic status per ativo based on OS
+  const getAtivoStatus = (ativoId) => {
+    const ativoOS = osList.filter(os => os.ativo_id === ativoId && !['concluida','cancelada'].includes(os.status));
+    if (ativoOS.some(os => os.equipamento_parado)) return { label: 'Parado', class: 'text-red-400 bg-red-500/10 border-red-500/30' };
+    if (ativoOS.some(os => os.status === 'em_execucao')) return { label: 'Em Manutenção', class: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
+    return { label: 'Operacional', class: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
+  };
+
+  // A2: Count open OS per ativo
+  const getOsAbertasCount = (ativoId) => {
+    return osList.filter(os => os.ativo_id === ativoId && !['concluida','cancelada'].includes(os.status)).length;
   };
   
   useEffect(() => { fetchData(); }, [filterSector]);
@@ -2347,6 +2363,16 @@ const AtivosPage = () => {
                     {ativo.sector && <p className="text-xs text-slate-500 font-medium uppercase">{ativo.sector.nome}</p>}
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-emerald-400 text-sm">{ativo.tag}</span>
+                      {/* A1: Status dinâmico */}
+                      {(() => { const st = getAtivoStatus(ativo.id); return (
+                        <span className={`${st.class} border text-[10px] px-1.5 py-0.5 rounded font-medium`} data-testid={`ativo-status-${ativo.tag}`}>{st.label}</span>
+                      ); })()}
+                      {/* A2: Contador OS abertas */}
+                      {(() => { const c = getOsAbertasCount(ativo.id); return c > 0 ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 font-medium" data-testid={`ativo-os-count-${ativo.tag}`}>
+                          <Wrench size={10} className="inline mr-0.5" />{c} OS
+                        </span>
+                      ) : null; })()}
                     </div>
                     <p className="text-slate-100">{ativo.nome}</p>
                   </div>
@@ -2970,6 +2996,8 @@ const OSPage = () => {
   const [tecnicos, setTecnicos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [searchOS, setSearchOS] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
@@ -3023,7 +3051,33 @@ const OSPage = () => {
     }
   };
   
-  const filtered = filter ? osList.filter(os => os.status === filter) : osList;
+  const filtered = osList.filter(os => {
+    if (filter && os.status !== filter) return false;
+    if (filterPriority && os.prioridade !== filterPriority) return false;
+    if (searchOS) {
+      const s = searchOS.toLowerCase();
+      const matchNum = os.numero?.toLowerCase().includes(s);
+      const matchTitulo = os.titulo?.toLowerCase().includes(s);
+      const matchTag = os.ativo?.tag?.toLowerCase().includes(s);
+      const matchNome = os.ativo?.nome?.toLowerCase().includes(s);
+      if (!matchNum && !matchTitulo && !matchTag && !matchNome) return false;
+    }
+    return true;
+  });
+
+  // For Kanban, use the filtered list
+  const kanbanItems = osList.filter(os => {
+    if (filterPriority && os.prioridade !== filterPriority) return false;
+    if (searchOS) {
+      const s = searchOS.toLowerCase();
+      const matchNum = os.numero?.toLowerCase().includes(s);
+      const matchTitulo = os.titulo?.toLowerCase().includes(s);
+      const matchTag = os.ativo?.tag?.toLowerCase().includes(s);
+      const matchNome = os.ativo?.nome?.toLowerCase().includes(s);
+      if (!matchNum && !matchTitulo && !matchTag && !matchNome) return false;
+    }
+    return true;
+  });
 
   const kanbanColumns = [
     { id: 'aberta', title: 'Abertas', color: 'border-blue-500/40', bg: 'bg-blue-500/5', badge: 'bg-blue-500' },
@@ -3055,10 +3109,43 @@ const OSPage = () => {
         </div>
       </div>
       
+      {/* OS1 + OS2: Search + Priority Filter */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+          <input
+            type="text"
+            value={searchOS}
+            onChange={(e) => setSearchOS(e.target.value)}
+            placeholder="Buscar por nº, título ou TAG do ativo..."
+            className="input-industrial w-full pl-9 pr-4 text-sm"
+            data-testid="os-search-input"
+          />
+          {searchOS && <button onClick={() => setSearchOS('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={14} /></button>}
+        </div>
+        <div className="flex gap-1">
+          {[
+            { value: '', label: 'Todas', cls: '' },
+            { value: 'emergencia', label: 'Emerg.', cls: 'text-red-400 bg-red-500/10 border-red-500/30' },
+            { value: 'alta', label: 'Alta', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/30' },
+            { value: 'media', label: 'Média', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
+            { value: 'baixa', label: 'Baixa', cls: 'text-slate-400 bg-slate-500/10 border-slate-500/30' },
+          ].map(p => (
+            <button key={p.value} onClick={() => setFilterPriority(p.value)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${filterPriority === p.value ? (p.cls || 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30') : 'border-slate-700 text-slate-500 hover:text-slate-300'}`}
+              data-testid={`os-filter-priority-${p.value || 'all'}`}
+            >{p.label}</button>
+          ))}
+        </div>
+        {(searchOS || filterPriority) && (
+          <button onClick={() => { setSearchOS(''); setFilterPriority(''); }} className="text-xs text-slate-500 hover:text-emerald-400" data-testid="os-clear-filters">Limpar</button>
+        )}
+      </div>
+
       {loading ? <Loading rows={5} /> : viewMode === 'kanban' ? (
         <KanbanBoard
           columns={kanbanColumns}
-          items={osList}
+          items={kanbanItems}
           onMove={handleKanbanMove}
           onCardClick={(os) => navigate(`/os/${os.id}`)}
           onEdit={['admin','pcm'].includes(user?.role) ? (os) => { setEditItem(os); setShowModal(true); } : null}
@@ -3551,6 +3638,9 @@ const EstoquePage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
+  const [expandedItem, setExpandedItem] = useState(null);
+  const [expandedMovs, setExpandedMovs] = useState([]);
+  const [loadingMovs, setLoadingMovs] = useState(false);
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   
@@ -3585,6 +3675,29 @@ const EstoquePage = () => {
   const filtered = search ? items.filter(i => 
     i.nome.toLowerCase().includes(search.toLowerCase()) || (i.sku || '').toLowerCase().includes(search.toLowerCase())
   ) : items;
+
+  // E1: Toggle expand to show movimentações
+  const toggleExpand = async (itemId) => {
+    if (expandedItem === itemId) {
+      setExpandedItem(null);
+      setExpandedMovs([]);
+      return;
+    }
+    setExpandedItem(itemId);
+    setLoadingMovs(true);
+    try {
+      const res = await api.get(`/estoque/${itemId}`);
+      setExpandedMovs(res.data.movimentacoes || []);
+    } catch { setExpandedMovs([]); }
+    finally { setLoadingMovs(false); }
+  };
+
+  const movTipoConfig = {
+    entrada: { label: 'Entrada', class: 'text-emerald-400' },
+    saida: { label: 'Saída', class: 'text-red-400' },
+    devolucao: { label: 'Devolução', class: 'text-blue-400' },
+    ajuste: { label: 'Ajuste', class: 'text-amber-400' },
+  };
   
   return (
     <div className="space-y-4">
@@ -3620,42 +3733,76 @@ const EstoquePage = () => {
       {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
         <div className="space-y-2">
           {filtered.map((item) => (
-            <div key={item.id} className={`glass-card p-4 hover:border-slate-600 transition-all group ${item.is_critico ? 'border-red-500/50' : ''}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${item.is_critico ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
-                    <Package size={20} className={item.is_critico ? 'text-red-400' : 'text-emerald-400'} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-emerald-400 text-sm">{item.sku}</span>
-                      <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-800 rounded capitalize">{item.categoria}</span>
+            <div key={item.id} className={`glass-card hover:border-slate-600 transition-all group ${item.is_critico ? 'border-red-500/50' : ''}`}>
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${item.is_critico ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
+                      <Package size={20} className={item.is_critico ? 'text-red-400' : 'text-emerald-400'} />
                     </div>
-                    <p className="text-slate-100">{item.nome}</p>
-                    {item.prateleira && <p className="text-xs text-slate-500"><MapPin size={12} className="inline mr-1" />{item.almoxarifado} - {item.prateleira}</p>}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-emerald-400 text-sm">{item.sku}</span>
+                        <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-800 rounded capitalize">{item.categoria}</span>
+                      </div>
+                      <p className="text-slate-100">{item.nome}</p>
+                      {item.prateleira && <p className="text-xs text-slate-500"><MapPin size={12} className="inline mr-1" />{item.almoxarifado} - {item.prateleira}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* E1: Expand button */}
+                    <button onClick={() => toggleExpand(item.id)} className="p-2 hover:bg-slate-700 rounded-lg transition-colors" title="Ver movimentações" data-testid={`expand-estoque-${item.id}`}>
+                      {expandedItem === item.id ? <ChevronUp size={16} className="text-emerald-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+                    </button>
+                    {user?.role === 'admin' && (
+                      <div className="hidden group-hover:flex items-center gap-1">
+                        <button onClick={() => { setEditItem(item); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar">
+                          <Edit3 size={15} className="text-blue-400" />
+                        </button>
+                        <button onClick={() => setDeleteItem(item)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir">
+                          <Trash2 size={15} className="text-red-400" />
+                        </button>
+                      </div>
+                    )}
+                    <div className="text-right">
+                      <p className={`text-xl font-bold ${item.is_critico ? 'text-red-400' : 'text-slate-200'}`}>{item.quantidade}</p>
+                      <p className="text-xs text-slate-500">{item.unidade}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {user?.role === 'admin' && (
-                    <div className="hidden group-hover:flex items-center gap-1">
-                      <button onClick={() => { setEditItem(item); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar">
-                        <Edit3 size={15} className="text-blue-400" />
-                      </button>
-                      <button onClick={() => setDeleteItem(item)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir">
-                        <Trash2 size={15} className="text-red-400" />
-                      </button>
-                    </div>
-                  )}
-                  <div className="text-right">
-                    <p className={`text-xl font-bold ${item.is_critico ? 'text-red-400' : 'text-slate-200'}`}>{item.quantidade}</p>
-                    <p className="text-xs text-slate-500">{item.unidade}</p>
+                {item.is_critico && (
+                  <div className="mt-2 flex items-center gap-2 text-red-400 text-xs">
+                    <AlertTriangle size={14} />
+                    Estoque crítico (mín: {item.estoque_minimo})
                   </div>
-                </div>
+                )}
               </div>
-              {item.is_critico && (
-                <div className="mt-2 flex items-center gap-2 text-red-400 text-xs">
-                  <AlertTriangle size={14} />
-                  Estoque crítico (mín: {item.estoque_minimo})
+              {/* E1: Expandable movimentações */}
+              {expandedItem === item.id && (
+                <div className="border-t border-slate-800 px-4 py-3" data-testid={`movs-${item.id}`}>
+                  <p className="text-xs text-slate-500 uppercase font-semibold mb-2">Últimas Movimentações</p>
+                  {loadingMovs ? (
+                    <div className="py-2 text-xs text-slate-600 animate-pulse">Carregando...</div>
+                  ) : expandedMovs.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {expandedMovs.slice(0, 5).map((mov, idx) => {
+                        const cfg = movTipoConfig[mov.tipo] || { label: mov.tipo, class: 'text-slate-400' };
+                        return (
+                          <div key={mov.id || idx} className="flex items-center justify-between text-xs py-1 border-b border-slate-800/50 last:border-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-medium w-16 ${cfg.class}`}>{cfg.label}</span>
+                              <span className="text-slate-300">{mov.quantidade > 0 ? '+' : ''}{mov.quantidade} {item.unidade}</span>
+                              {mov.motivo && <span className="text-slate-600 truncate max-w-[200px]">— {mov.motivo}</span>}
+                            </div>
+                            <span className="text-slate-600 shrink-0">{mov.created_at ? new Date(mov.created_at).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span>
+                          </div>
+                        );
+                      })}
+                      {expandedMovs.length > 5 && <p className="text-xs text-slate-600 text-center pt-1">+{expandedMovs.length - 5} movimentações anteriores</p>}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-600 py-1">Nenhuma movimentação registrada</p>
+                  )}
                 </div>
               )}
             </div>
@@ -3691,9 +3838,12 @@ const InspecoesPage = () => {
   const [ativos, setAtivos] = useState([]);
   const [rotas, setRotas] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
+  const [sectors, setSectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [deleteItem, setDeleteItem] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterArea, setFilterArea] = useState('');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
@@ -3704,16 +3854,18 @@ const InspecoesPage = () => {
   
   const fetchData = async () => {
     try {
-      const [inspRes, ativosRes, rotasRes, tecnicosRes] = await Promise.all([
+      const [inspRes, ativosRes, rotasRes, tecnicosRes, sectorsRes] = await Promise.all([
         api.get('/inspecoes'),
         api.get('/ativos'),
         api.get('/rotas-inspecao'),
-        api.get('/users/tecnicos')
+        api.get('/users/tecnicos'),
+        api.get('/sectors')
       ]);
       setInspecoes(inspRes.data);
       setAtivos(ativosRes.data);
       setRotas(rotasRes.data);
       setTecnicos(tecnicosRes.data);
+      setSectors(sectorsRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
     } finally {
@@ -3733,6 +3885,13 @@ const InspecoesPage = () => {
       toast.error('Erro ao excluir');
     }
   };
+
+  // I1 + I2: Filter logic
+  const filteredInspecoes = inspecoes.filter(insp => {
+    if (filterStatus && insp.status !== filterStatus) return false;
+    if (filterArea && insp.ativo?.sector_id !== filterArea) return false;
+    return true;
+  });
   
   return (
     <div className="space-y-4">
@@ -3745,10 +3904,45 @@ const InspecoesPage = () => {
           <Plus size={20} /> Nova Inspeção
         </button>
       </div>
+
+      {/* I1: Filtro por status + I2: Filtro por área */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex gap-1 overflow-x-auto hide-scrollbar">
+          {[
+            { value: '', label: 'Todas' },
+            { value: 'pendente', label: 'Pendentes' },
+            { value: 'em_andamento', label: 'Em Andamento' },
+            { value: 'concluida', label: 'Concluídas' },
+            { value: 'com_pendencias', label: 'Com Pendências' },
+          ].map(f => (
+            <button key={f.value} onClick={() => setFilterStatus(f.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${filterStatus === f.value ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'border border-slate-700 text-slate-400 hover:text-slate-300'}`}
+              data-testid={`insp-filter-status-${f.value || 'all'}`}
+            >
+              {f.label}
+              {f.value && <span className="ml-1 text-slate-600">({inspecoes.filter(i => i.status === f.value).length})</span>}
+            </button>
+          ))}
+        </div>
+        <select
+          value={filterArea}
+          onChange={(e) => setFilterArea(e.target.value)}
+          className="input-industrial px-3 text-sm"
+          data-testid="insp-filter-area"
+        >
+          <option value="">Todas as Áreas</option>
+          {sectors.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+        </select>
+        {(filterStatus || filterArea) && (
+          <button onClick={() => { setFilterStatus(''); setFilterArea(''); }} className="text-xs text-slate-500 hover:text-emerald-400" data-testid="insp-clear-filters">Limpar</button>
+        )}
+      </div>
+
+      <p className="text-xs text-slate-500">{filteredInspecoes.length} inspeção(ões)</p>
       
-      {loading ? <Loading rows={5} /> : inspecoes.length > 0 ? (
+      {loading ? <Loading rows={5} /> : filteredInspecoes.length > 0 ? (
         <div className="space-y-2">
-          {inspecoes.map((insp) => (
+          {filteredInspecoes.map((insp) => (
             <div key={insp.id} className="glass-card p-4 hover:border-slate-600 transition-all group">
               <div className="flex items-center justify-between">
                 <div className="flex-1 cursor-pointer" onClick={() => navigate(`/inspecoes/${insp.id}`)}>
@@ -3794,7 +3988,7 @@ const InspecoesPage = () => {
           ))}
         </div>
       ) : (
-        <EmptyState icon={ClipboardCheck} title="Nenhuma inspeção" description="Crie uma nova inspeção." action={() => setShowModal(true)} actionLabel="Nova Inspeção" />
+        <EmptyState icon={ClipboardCheck} title="Nenhuma inspeção encontrada" description={filterStatus || filterArea ? "Ajuste os filtros para ver resultados." : "Crie uma nova inspeção."} action={() => { if (!filterStatus && !filterArea) setShowModal(true); else { setFilterStatus(''); setFilterArea(''); } }} actionLabel={filterStatus || filterArea ? "Limpar Filtros" : "Nova Inspeção"} />
       )}
       
       <ModalNovaInspecao
