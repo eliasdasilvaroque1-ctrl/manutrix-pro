@@ -114,6 +114,15 @@ def check_not_gerente(user: Dict):
     if user.get('role') == 'gerente':
         raise HTTPException(status_code=403, detail="Perfil Gerente possui apenas acesso de leitura")
 
+def verify_org_access(user: Dict, document: dict, entity_name: str = "Registro"):
+    """Verify that the user's organization matches the document's organization.
+    Skips check if user has no org (legacy) or document has no org."""
+    user_org = user.get('organization_id', '')
+    doc_org = document.get('organization_id', '')
+    if user_org and doc_org and user_org != doc_org:
+        raise HTTPException(status_code=404, detail=f"{entity_name} não encontrado")
+
+
 def can_export(user: Dict) -> bool:
     return user.get('role') in ['admin', 'pcm', 'gerente', 'supervisor']
 

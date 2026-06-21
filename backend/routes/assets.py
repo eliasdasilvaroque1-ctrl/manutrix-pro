@@ -7,7 +7,7 @@ import uuid
 
 from deps import (
     db, get_current_user, check_admin_only, check_write_permission,
-    audit_log, criar_notificacao, generate_tag
+    audit_log, criar_notificacao, generate_tag, verify_org_access
 )
 from models import (
     SectorCreate, SectorUpdate, AtivoCreate, AtivoUpdate, AtivoMaterialCreate,
@@ -144,6 +144,7 @@ async def get_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
     ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
 
     ativo['sector'] = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0})
     ativo['ordens_servico'] = await db.ordens_servico.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)

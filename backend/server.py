@@ -29,7 +29,7 @@ from deps import (
     hash_password, verify_password, create_token, get_current_user,
     is_admin, check_write_permission, check_admin_only, check_pcm_or_admin, check_not_gerente, can_export, can_view_dashboard,
     generate_tag, generate_sku, generate_os_numero,
-    audit_log, audit_denial, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids,
+    audit_log, audit_denial, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids, verify_org_access,
     logger
 )
 from models import *
@@ -348,6 +348,7 @@ async def get_estoque_item(item_id: str, user: Dict = Depends(get_current_user))
     item = await db.itens_estoque.find_one({"id": item_id, "deleted_at": None}, {"_id": 0})
     if not item:
         raise HTTPException(status_code=404, detail="Item não encontrado")
+    verify_org_access(user, item, "Item de Estoque")
     
     # Get recent movements
     item['movimentacoes'] = await db.movimentacoes_estoque.find(
@@ -978,6 +979,7 @@ async def get_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user))
     insp = await db.inspecoes.find_one({"id": inspecao_id, "deleted_at": None}, {"_id": 0})
     if not insp:
         raise HTTPException(status_code=404, detail="Inspeção não encontrada")
+    verify_org_access(user, insp, "Inspeção")
     
     insp['ativo'] = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0})
     if insp.get('ativo') and insp['ativo'].get('sector_id'):

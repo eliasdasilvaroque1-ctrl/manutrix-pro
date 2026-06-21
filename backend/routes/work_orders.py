@@ -7,7 +7,7 @@ import uuid
 
 from deps import (
     db, get_current_user, check_admin_only, check_write_permission, check_not_gerente,
-    audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids
+    audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids, verify_org_access
 )
 from models import (
     OSCreate, OSUpdate, OSStatus, OSTipo, Prioridade, Disciplina,
@@ -135,6 +135,7 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
     os = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os, "OS")
     os['ativo'] = await db.ativos.find_one({"id": os.get('ativo_id')}, {"_id": 0})
     if os.get('ativo') and os['ativo'].get('sector_id'):
         os['ativo']['sector'] = await db.sectors.find_one({"id": os['ativo']['sector_id']}, {"_id": 0, "nome": 1})

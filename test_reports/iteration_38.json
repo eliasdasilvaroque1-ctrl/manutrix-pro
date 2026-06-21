@@ -1,0 +1,62 @@
+{
+  "summary": "Iteration 38 - Bloco 1: Multiempresa (tenant isolation) for ASTEC / VALE / CSN. 29/29 backend tests PASS. List endpoints correctly scope by organization_id (each org sees exactly its 1 ativo, 1 OS, 1 estoque item, 1 area; ASTEC sees 0 inspections as expected). Self-access works (admin can GET its own ativo/OS/estoque). Cross-org direct GET by id consistently returns 404 (not 403) across ativos, ordens-servico and estoque for all 3 orgs in every cross direction tested. Export /api/export/ativos is also org-scoped (XLSX parsed via openpyxl): contains ASTEC ativo and does NOT leak VALE/CSN names or IDs. verify_org_access() in deps.py correctly returns 404 to prevent info-leak.",
+  "pass_fail_matrix": {
+    "ASTEC list ativos = 1 (BRITADOR ASTEC)": "PASS",
+    "VALE list ativos = 1 (CORREIA VALE)": "PASS",
+    "CSN list ativos = 1 (FORNO CSN)": "PASS",
+    "ASTEC list ordens-servico = 1 (OS ASTEC TESTE)": "PASS",
+    "ASTEC list estoque = 1 (ROL-ASTEC)": "PASS",
+    "ASTEC list sectors = 1 (PLANTA ASTEC-01)": "PASS",
+    "ASTEC list inspecoes = 0": "PASS",
+    "ASTEC GET own ativo/OS/estoque": "PASS",
+    "VALE/CSN GET own ativo": "PASS",
+    "ASTEC GET vale_ativo_id -> 404": "PASS",
+    "ASTEC GET csn_ativo_id -> 404": "PASS",
+    "VALE GET astec_ativo_id -> 404": "PASS",
+    "VALE GET csn_ativo_id -> 404": "PASS",
+    "CSN GET astec_ativo_id -> 404": "PASS",
+    "CSN GET vale_ativo_id -> 404": "PASS",
+    "ASTEC GET vale_os_id -> 404": "PASS",
+    "ASTEC GET csn_os_id -> 404": "PASS",
+    "VALE GET astec_os_id -> 404": "PASS",
+    "VALE GET csn_os_id -> 404": "PASS",
+    "CSN GET astec_os_id -> 404": "PASS",
+    "CSN GET vale_os_id -> 404": "PASS",
+    "ASTEC GET vale_estoque_id -> 404": "PASS",
+    "ASTEC GET csn_estoque_id -> 404": "PASS",
+    "VALE GET astec_estoque_id -> 404": "PASS",
+    "CSN GET astec_estoque_id -> 404": "PASS",
+    "ASTEC export ativos contains only ASTEC data": "PASS"
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration38_multitenant_isolation.py",
+    "/app/test_reports/pytest/pytest_iteration38.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "deps.py:117-123 verify_org_access() correctly returns 404 (not 403) preventing existence leak via status-code differentiation. Good security posture.",
+    "deps.py:121-122 short-circuits if either user_org or doc_org is empty. This is OK for legacy data, but be aware that a user with empty organization_id would bypass isolation. Consider hardening: enforce organization_id on user records and reject tokens missing 'org'.",
+    "Export endpoint /api/export/ativos correctly filters by org (verified via openpyxl parse - no foreign IDs/names leaked).",
+    "List endpoints (/api/ativos, /api/ordens-servico, /api/estoque, /api/sectors, /api/inspecoes) all return strictly org-scoped results - tenant isolation is solid across all CRUD resources tested."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration38_multitenant_isolation.py",
+    "/app/test_reports/pytest/pytest_iteration38.xml",
+    "/app/test_reports/iteration_38.json"
+  ],
+  "success_rate": {"backend": "100% (29/29)", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "admin@astec.com/astec123, admin@vale.com/vale123, admin@csn.com/csn123",
+  "seed_data_creation": "No new seed data created. Test consumes pre-seeded ATIVO/OS/ESTOQUE per org provided by main agent. Test is fully read-only (GET only) and idempotent.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run with: REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_iteration38_multitenant_isolation.py -v . Test is parametrized across 6 cross-org ativos pairs, 6 cross-org OS pairs and 4 cross-org estoque pairs plus self-access and list-isolation suites. All IDs are hardcoded - if main agent reseeds with different IDs, update constants at top of file (ASTEC_ATIVO, VALE_ATIVO, CSN_ATIVO, ASTEC_OS, etc.). Export test parses XLSX via openpyxl (already installed)."
+}
