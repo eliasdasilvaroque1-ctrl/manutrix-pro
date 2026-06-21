@@ -2,30 +2,22 @@
 
 ## FASE FINAL PRÉ-PILOTO
 
-### Bloco 1: Validação Multiempresa ✅ (2026-06-21)
+### Bloco 1: Validação Multiempresa ✅ (iteration_38 — 29/29)
+### Bloco 2: Auditoria Campo-a-Campo ✅ (iteration_39 — 10/10)
+### Bloco 3: Paradas Programadas ✅ (iteration_40 — 13/13 + Frontend 100%)
 
-**Mecanismo:** `organization_id` em todas as entidades (equivalente a tenant_id)
+**Indicadores da Parada:**
+- OS Vinculadas (total), Concluídas, Pendentes
+- Horas Executadas (calculada das OS concluídas)
+- Custo Materiais (somado dos os_materiais)
+- OS detalhes com status e responsável
+- Visível no histórico do equipamento (tipo=parada)
 
-**Proteções implementadas:**
-- [x] `verify_org_access()` em deps.py — verifica org do documento vs org do usuário
-- [x] Aplicado em: GET ativos, GET OS, GET estoque, GET inspeção (retorna 404 se org diferente)
-- [x] List queries filtram por `organization_id` em: sectors, ativos, OS, inspeções, estoque, sobressalentes
-
-**Orgs de teste criadas:**
-- ASTEC (admin@astec.com) — 1 área, 1 ativo, 1 OS, 1 estoque
-- VALE (admin@vale.com) — 1 área, 1 ativo, 1 OS, 1 estoque
-- CSN (admin@csn.com) — 1 área, 1 ativo, 1 OS, 1 estoque
-
-**Testes de isolamento (29/29 PASS):**
-- Listagem: cada org vê apenas seus dados ✅
-- Acesso cruzado por ID: 404 em todas as combinações ✅
-- Export: contém apenas dados da org autenticada ✅
-
-**Testes:** iteration_38 — Backend 29/29
-
-### Bloco 2: Auditoria Campo-a-Campo (PRÓXIMO)
-### Bloco 3: Paradas Programadas
-### Bloco 5: Segurança e Produção
+### Bloco 5: Segurança e Produção (PRÓXIMO)
+- Validar RBAC completo (Técnico/PCM/Gerente)
+- Testar isolamento tenant
+- Validar APIs
+- Relatório final
 
 ## Regra de Ouro
-> Parar após cada bloco. Entregar evidências. Aguardar aprovação.
+> Parar ao final dos blocos. Aguardar aprovação.
