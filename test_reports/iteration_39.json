@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 39 - Bloco 2: Field-level audit logging. 10/10 backend tests PASS. Validated that PUT endpoints for OS (prioridade), Ativo (fabricante), Estoque (quantidade) and Sobressalentes (descricao) create audit_logs with action='field_change' and a structured 'changes' array containing campo, campo_raw, valor_anterior and valor_novo. GET /api/admin/audit-logs?action=field_change returns the changes array with the expected schema. Confirmed: no-op PUT (same value) does NOT create a log; updated_at/alterado_por/deleted_at/organization_id/_id are skipped (never appear in changes); multiple field changes in a single PUT are aggregated into ONE audit entry with multiple change items; logs include user_nome, user_role, entity_type, entity_id, details (human-readable 'Label: old → new') and changes (structured). PCM-authored changes are correctly attributed (user_role='pcm', user_nome populated with PCM identity).",
+  "pass_fail_matrix": {
+    "OS prioridade PUT -> field_change log with Prioridade old/new": "PASS",
+    "Ativo fabricante PUT -> field_change log with Fabricante old/new": "PASS",
+    "Estoque quantidade PUT -> field_change log with Quantidade old/new": "PASS",
+    "Sobressalente descricao PUT -> field_change log with Descrição new": "PASS",
+    "GET /api/admin/audit-logs?action=field_change returns changes[] schema (campo, campo_raw, valor_anterior, valor_novo)": "PASS",
+    "No-op PUT (same value) does NOT create a new field_change log": "PASS",
+    "updated_at / alterado_por / deleted_at / _id / organization_id NEVER appear in changes": "PASS",
+    "Multiple fields in single PUT -> ONE log with multiple change items (Fabricante + Modelo)": "PASS",
+    "Log schema completeness: user_nome, user_role, entity_type, entity_id, details, changes": "PASS",
+    "PCM user PUT estoque -> log attributed user_role='pcm' with user_nome populated": "PASS"
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration39_field_audit.py",
+    "/app/test_reports/pytest/pytest_iteration39.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "deps.py:179-222 audit_field_changes() is well structured: SKIP_AUDIT_FIELDS correctly drops updated_at, alterado_por, deleted_at, _id, id, organization_id, created_at. Float comparison tolerance (0.001) and str() normalization prevent false positives on type drift. Empty 'changes' short-circuits at line 202 (no noise).",
+    "deps.py:163-175 AUDIT_FIELD_LABELS covers main domains but misses some operational fields: 'estoque_maximo', 'ponto_pedido', 'lead_time', 'data_inicio_real', 'data_fim_real', 'horimetro', 'qr_code', 'criticidade'. These will fall back to raw field names in 'details' which is acceptable but the UI may show ugly snake_case labels.",
+    "server.py:2810-2826 audit-logs response correctly excludes _id and normalizes legacy fields (acao->action, entidade->entity_type). Includes 'changes' field as required. Date filter at 2802-2809 mutates query['created_at'] when both date_from and date_to are given which works but is slightly convoluted.",
+    "Log persistence is direct insert_one (no transaction); a crash between db.update and audit insert could leave an update without audit trail. Low priority since field updates are idempotent and re-PUT would re-audit, but worth noting for compliance scenarios.",
+    "user_nome resolves to email when 'nome' is empty (deps.py:216 / :155). OK as fallback but inconsistent for users with empty nome - consider enforcing nome at user creation."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration39_field_audit.py",
+    "/app/test_reports/pytest/pytest_iteration39.xml",
+    "/app/test_reports/iteration_39.json"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "admin@manutrix.com/admin123, pcm@manutrix.com/pcm123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "No new seed data created. Tests mutate first existing OS/Ativo/Estoque/Sobressalente in the org by toggling fields (prioridade, fabricante, modelo, quantidade, descricao). Each run pushes new values but state remains consistent and re-runnable (idempotent in the sense that final state is well-defined).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run with: REACT_APP_BACKEND_URL=https://procure-manutrix.preview.emergentagent.com pytest /app/backend/tests/test_iteration39_field_audit.py -v. Test mutates first item returned by list endpoints; if reseeded with a different first row, behaviour stays identical. entity_type values observed: 'ordens_servico', 'ativos', 'estoque', 'sobressalentes', 'plano_inspecao', 'inspecoes', 'anomalias'. To verify a specific Inspecao/Anomalia/Plano audit trail, follow the same pattern using PUT /api/inspecoes/{id}, /api/anomalias/{id}, /api/planos-inspecao/{id} and filter audit-logs by entity_id - the audit_field_changes() helper is called identically in those handlers (server.py:792, :1202, :2447).",
+  "rca of the issue": "N/A - no issues found. Implementation matches the spec: action='field_change', structured changes[], details human-readable, no-op skipped, system fields filtered, single audit entry per PUT regardless of number of changed fields, correct user attribution across admin/pcm roles."
+}

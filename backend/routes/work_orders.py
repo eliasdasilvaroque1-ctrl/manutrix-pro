@@ -7,7 +7,7 @@ import uuid
 
 from deps import (
     db, get_current_user, check_admin_only, check_write_permission, check_not_gerente,
-    audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids, verify_org_access
+    audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids, verify_org_access, audit_field_changes
 )
 from models import (
     OSCreate, OSUpdate, OSStatus, OSTipo, Prioridade, Disciplina,
@@ -220,6 +220,7 @@ async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current
         update_data['custo_total'] = pecas + mao_obra
 
     await db.ordens_servico.update_one({"id": os_id}, {"$set": update_data})
+    await audit_field_changes("ordens_servico", os_id, f"OS #{existing.get('numero','')}", existing, update_data, user)
     return await db.ordens_servico.find_one({"id": os_id}, {"_id": 0})
 
 

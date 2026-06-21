@@ -156,6 +156,68 @@ async def audit_log(action: str, entity_type: str, entity_id: str, user: Dict, d
         "user_role": user.get('role'),
         "organization_id": user.get('organization_id'),
         "details": details,
+        "changes": None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+AUDIT_FIELD_LABELS = {
+    'prioridade': 'Prioridade', 'status': 'Status', 'titulo': 'Título', 'descricao': 'Descrição',
+    'descricao_servico': 'Serviço Executado', 'observacoes': 'Observações', 'causa_falha': 'Causa da Falha',
+    'responsavel_id': 'Responsável', 'equipe': 'Executantes', 'data_planejada': 'Data Planejada',
+    'tipo': 'Tipo', 'disciplina': 'Disciplina', 'severidade': 'Severidade',
+    'nome': 'Nome', 'tag': 'TAG', 'fabricante': 'Fabricante', 'modelo': 'Modelo',
+    'numero_serie': 'Nº Série', 'tipo_equipamento': 'Tipo Equipamento', 'sector_id': 'Área',
+    'localizacao': 'Localização', 'quantidade': 'Quantidade', 'custo_unitario': 'Custo Unitário',
+    'custo': 'Custo', 'custo_pecas': 'Custo Peças', 'custo_mao_obra': 'Custo M.O.',
+    'origem': 'Origem', 'condicoes': 'Condições', 'categoria': 'Categoria',
+    'sku': 'Código', 'unidade': 'Unidade', 'estoque_minimo': 'Estoque Mínimo',
+    'frequencia': 'Frequência', 'resultado': 'Resultado',
+}
+
+SKIP_AUDIT_FIELDS = {'updated_at', 'alterado_por', 'deleted_at', '_id', 'id', 'organization_id', 'created_at'}
+
+async def audit_field_changes(entity_type: str, entity_id: str, entity_label: str, old_doc: dict, new_data: dict, user: Dict, motivo: str = ""):
+    """Compare old document with new data and log each field change"""
+    changes = []
+    for field, new_val in new_data.items():
+        if field in SKIP_AUDIT_FIELDS:
+            continue
+        old_val = old_doc.get(field)
+        # Normalize for comparison
+        if old_val is None and new_val is None:
+            continue
+        if isinstance(old_val, float) and isinstance(new_val, (int, float)):
+            if abs(old_val - new_val) < 0.001:
+                continue
+        if str(old_val) == str(new_val):
+            continue
+        label = AUDIT_FIELD_LABELS.get(field, field)
+        changes.append({
+            "campo": label,
+            "campo_raw": field,
+            "valor_anterior": old_val,
+            "valor_novo": new_val
+        })
+    
+    if not changes:
+        return
+    
+    details_parts = [f"{c['campo']}: {c['valor_anterior']} → {c['valor_novo']}" for c in changes[:10]]
+    details_text = f"{entity_label} — " + "; ".join(details_parts)
+    if motivo:
+        details_text += f" | Motivo: {motivo}"
+    
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": "field_change",
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "user_id": user.get('id'),
+        "user_nome": user.get('nome') or user.get('email', ''),
+        "user_role": user.get('role'),
+        "organization_id": user.get('organization_id'),
+        "details": details_text,
+        "changes": changes,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
 

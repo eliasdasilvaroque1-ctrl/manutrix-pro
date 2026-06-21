@@ -29,7 +29,7 @@ from deps import (
     hash_password, verify_password, create_token, get_current_user,
     is_admin, check_write_permission, check_admin_only, check_pcm_or_admin, check_not_gerente, can_export, can_view_dashboard,
     generate_tag, generate_sku, generate_os_numero,
-    audit_log, audit_denial, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids, verify_org_access,
+    audit_log, audit_denial, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids, verify_org_access, audit_field_changes,
     logger
 )
 from models import *
@@ -434,6 +434,7 @@ async def update_estoque(item_id: str, data: EstoqueUpdate, user: Dict = Depends
         update_data['valor_total'] = qty * cost
     
     await db.itens_estoque.update_one({"id": item_id}, {"$set": update_data})
+    await audit_field_changes("estoque", item_id, f"Estoque {existing.get('sku','')} {existing.get('nome','')}", existing, update_data, user)
     
     # Check critical stock
     await verificar_estoque_critico(item_id, existing.get('organization_id', ''))
@@ -788,7 +789,7 @@ async def update_plano_inspecao(plano_id: str, data: PlanoInspecaoUpdate, user: 
             perguntas.append(d)
         update['perguntas'] = perguntas
     await db.planos_inspecao.update_one({"id": plano_id}, {"$set": update})
-    await audit_log("update", "plano_inspecao", plano_id, user, f"Plano editado: {existing.get('nome','')}")
+    await audit_field_changes("plano_inspecao", plano_id, f"Plano {existing.get('nome','')}", existing, update, user)
     return await db.planos_inspecao.find_one({"id": plano_id}, {"_id": 0})
 
 @api_router.delete("/planos-inspecao/{plano_id}")
@@ -1198,6 +1199,7 @@ async def update_inspecao(inspecao_id: str, data: InspecaoUpdate, user: Dict = D
     update_data['alterado_por'] = user.get('id')
     
     await db.inspecoes.update_one({"id": inspecao_id}, {"$set": update_data})
+    await audit_field_changes("inspecoes", inspecao_id, f"Inspeção {existing.get('tipo','')}", existing, update_data, user)
     return await db.inspecoes.find_one({"id": inspecao_id}, {"_id": 0})
 
 @api_router.delete("/inspecoes/{inspecao_id}")
@@ -2224,7 +2226,7 @@ async def update_spare(spare_id: str, data: SpareAssetUpdate, user: Dict = Depen
     if 'condicoes' in update_data and update_data['condicoes']:
         update_data['quantidade_total'] = sum(update_data['condicoes'].values())
     await db.spare_assets.update_one({"id": spare_id}, {"$set": update_data})
-    await audit_log("update", "sobressalentes", spare_id, user, f"Sobressalente editado: {existing.get('tag','')} {existing.get('descricao','')}")
+    await audit_field_changes("sobressalentes", spare_id, f"Sobressalente {existing.get('tag','')}", existing, update_data, user)
     return await db.spare_assets.find_one({"id": spare_id}, {"_id": 0})
 
 @api_router.delete("/sobressalentes/{spare_id}")
@@ -2442,6 +2444,7 @@ async def update_anomalia(anomalia_id: str, body: dict, user: Dict = Depends(get
     for field in ['descricao', 'severidade']:
         if field in body: update[field] = body[field]
     await db.anomalias.update_one({"id": anomalia_id}, {"$set": update})
+    await audit_field_changes("anomalias", anomalia_id, f"Anomalia {a.get('descricao','')[:30]}", a, update, user)
     await db.anomalia_historico.insert_one({
         "id": str(uuid.uuid4()), "anomalia_id": anomalia_id,
         "tipo": "edicao", "descricao": f"Anomalia editada por {user.get('nome', user.get('email'))}",
@@ -2817,6 +2820,7 @@ async def get_audit_logs(
             "user_nome": log.get('user_nome', ''),
             "user_role": log.get('user_role', ''),
             "details": log.get('details') or log.get('acao', ''),
+            "changes": log.get('changes'),
             "created_at": log.get('created_at', ''),
         })
     return result

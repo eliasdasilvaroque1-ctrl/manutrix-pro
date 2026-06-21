@@ -7,7 +7,7 @@ import uuid
 
 from deps import (
     db, get_current_user, check_admin_only, check_write_permission,
-    audit_log, criar_notificacao, generate_tag, verify_org_access
+    audit_log, criar_notificacao, generate_tag, verify_org_access, audit_field_changes
 )
 from models import (
     SectorCreate, SectorUpdate, AtivoCreate, AtivoUpdate, AtivoMaterialCreate,
@@ -216,7 +216,9 @@ async def update_ativo(ativo_id: str, data: AtivoUpdate, user: Dict = Depends(ge
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    update_data['alterado_por'] = user.get('id')
     await db.ativos.update_one({"id": ativo_id}, {"$set": update_data})
+    await audit_field_changes("ativos", ativo_id, f"Ativo {existing.get('tag','')}", existing, update_data, user)
     return await db.ativos.find_one({"id": ativo_id}, {"_id": 0})
 
 @router.delete("/ativos/{ativo_id}")
