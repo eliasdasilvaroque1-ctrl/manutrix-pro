@@ -360,7 +360,7 @@ async def get_estoque_item(item_id: str, user: Dict = Depends(get_current_user))
 
 @api_router.post("/estoque")
 async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
+    check_write_permission(user, ['admin', 'pcm'])
     org_id = user.get('organization_id', '')
     
     # Generate SKU if not provided
@@ -419,7 +419,7 @@ async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_u
 
 @api_router.put("/estoque/{item_id}")
 async def update_estoque(item_id: str, data: EstoqueUpdate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
+    check_write_permission(user, ['admin', 'pcm'])
     existing = await db.itens_estoque.find_one({"id": item_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Item não encontrado")

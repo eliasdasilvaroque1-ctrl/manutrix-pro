@@ -214,6 +214,7 @@ async def update_ativo(ativo_id: str, data: AtivoUpdate, user: Dict = Depends(ge
     existing = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, existing, "Ativo")
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     update_data['alterado_por'] = user.get('id')
@@ -366,6 +367,7 @@ async def get_ativo_historico(
     ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
 
     eventos = []
 

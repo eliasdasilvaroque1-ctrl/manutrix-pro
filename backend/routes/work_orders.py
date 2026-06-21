@@ -209,6 +209,7 @@ async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current
     existing = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, existing, "OS")
 
     update_data = {k: v.value if isinstance(v, Enum) else v for k, v in data.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
