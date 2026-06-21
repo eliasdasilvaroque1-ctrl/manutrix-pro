@@ -489,6 +489,29 @@ async def get_ativo_historico(
                 "codigo": m.get('codigo'),
             })
 
+
+    # Paradas Programadas (where area matches this asset's sector)
+    if not tipo or tipo == 'parada':
+        sector_id = ativo.get('sector_id')
+        if sector_id:
+            paradas = await db.paradas_programadas.find(
+                {"area_id": sector_id, "deleted_at": None},
+                {"_id": 0, "id": 1, "numero": 1, "tipo": 1, "status": 1, "descricao": 1,
+                 "data_inicio": 1, "data_fim": 1, "duracao_horas": 1, "responsavel_id": 1, "created_at": 1}
+            ).sort("created_at", -1).to_list(100)
+            for pp in paradas:
+                resp_nome = await get_user_name(pp.get('responsavel_id'))
+                eventos.append({
+                    "tipo_evento": "parada",
+                    "id": pp['id'],
+                    "data": pp.get('data_inicio') or pp.get('created_at'),
+                    "titulo": f"Parada {pp.get('tipo','').replace('_',' ').capitalize()} {pp.get('numero','')}",
+                    "descricao": pp.get('descricao', ''),
+                    "status": pp.get('status'),
+                    "usuario": resp_nome,
+                    "duracao_horas": pp.get('duracao_horas'),
+                })
+
     # Apply date filters
     if data_inicio:
         eventos = [e for e in eventos if (e.get('data') or '') >= data_inicio]

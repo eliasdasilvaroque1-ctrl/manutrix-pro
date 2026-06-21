@@ -438,6 +438,31 @@ class PlanoInspecaoUpdate(BaseModel):
     nome: Optional[str] = None
     perguntas: Optional[List[PlanoPerguntaCreate]] = None
 
+class ParadaProgramadaCreate(BaseModel):
+    area_id: str
+    data_inicio: str
+    data_fim: str
+    duracao_horas: Optional[float] = None
+    tipo: str = "preventiva"  # preventiva, corretiva, grande_parada, parada_geral
+    responsavel_id: Optional[str] = None
+    descricao: Optional[str] = None
+    observacoes: Optional[str] = None
+    os_vinculadas: List[str] = []
+
+class ParadaProgramadaUpdate(BaseModel):
+    data_inicio: Optional[str] = None
+    data_fim: Optional[str] = None
+    duracao_horas: Optional[float] = None
+    tipo: Optional[str] = None
+    responsavel_id: Optional[str] = None
+    descricao: Optional[str] = None
+    observacoes: Optional[str] = None
+    os_vinculadas: Optional[List[str]] = None
+    status: Optional[str] = None
+
+    nome: Optional[str] = None
+    perguntas: Optional[List[PlanoPerguntaCreate]] = None
+
 
 # ============== TEMPLATES DE INSPEÇÃO (legacy) ==============
 

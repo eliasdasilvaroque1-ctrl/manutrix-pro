@@ -456,6 +456,139 @@ async def delete_estoque(item_id: str, user: Dict = Depends(get_current_user)):
     return {"success": True, "message": "Item excluído com sucesso"}
 
 
+
+# ============== PARADAS PROGRAMADAS ==============
+
+@api_router.get("/paradas-programadas")
+async def list_paradas(
+    area_id: Optional[str] = None,
+    status: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    org_id = user.get('organization_id', '')
+    query = {"deleted_at": None}
+    if org_id:
+        query['organization_id'] = org_id
+    if area_id:
+        query['area_id'] = area_id
+    if status:
+        query['status'] = status
+    paradas = await db.paradas_programadas.find(query, {"_id": 0}).sort("data_inicio", -1).to_list(200)
+    # Enrich with area and responsavel names
+    for p in paradas:
+        area = await db.sectors.find_one({"id": p.get('area_id')}, {"_id": 0, "nome": 1, "codigo": 1})
+        p['area'] = area
+        if p.get('responsavel_id'):
+            resp = await db.users.find_one({"id": p['responsavel_id']}, {"_id": 0, "nome": 1})
+            p['responsavel_nome'] = resp.get('nome') if resp else None
+        # Count OS stats
+        os_ids = p.get('os_vinculadas', [])
+        if os_ids:
+            p['os_total'] = len(os_ids)
+            p['os_concluidas'] = await db.ordens_servico.count_documents({"id": {"$in": os_ids}, "status": "concluida"})
+            p['os_pendentes'] = p['os_total'] - p['os_concluidas']
+            # Materiais consumidos
+            mats = await db.os_materiais.find({"os_id": {"$in": os_ids}, "deleted_at": None}, {"_id": 0, "custo_total": 1}).to_list(500)
+            p['custo_materiais'] = sum(m.get('custo_total', 0) for m in mats)
+        else:
+            p['os_total'] = 0
+            p['os_concluidas'] = 0
+            p['os_pendentes'] = 0
+            p['custo_materiais'] = 0
+    return paradas
+
+@api_router.post("/paradas-programadas")
+async def create_parada(data: ParadaProgramadaCreate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    org_id = user.get('organization_id', '')
+    
+    # Generate number
+    count = await db.paradas_programadas.count_documents({"organization_id": org_id})
+    numero = f"P{count + 1:02d}"
+    
+    doc = {
+        "id": str(uuid.uuid4()),
+        "numero": numero,
+        "organization_id": org_id,
+        "area_id": data.area_id,
+        "data_inicio": data.data_inicio,
+        "data_fim": data.data_fim,
+        "duracao_horas": data.duracao_horas,
+        "tipo": data.tipo,
+        "responsavel_id": data.responsavel_id,
+        "descricao": data.descricao,
+        "observacoes": data.observacoes,
+        "os_vinculadas": data.os_vinculadas,
+        "status": "planejada",
+        "criado_por": user.get('id'),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.paradas_programadas.insert_one(doc)
+    await audit_log("create", "parada_programada", doc['id'], user, f"Parada {numero}: {data.descricao or data.tipo}")
+    doc.pop('_id', None)
+    return doc
+
+@api_router.get("/paradas-programadas/{parada_id}")
+async def get_parada(parada_id: str, user: Dict = Depends(get_current_user)):
+    p = await db.paradas_programadas.find_one({"id": parada_id, "deleted_at": None}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Parada não encontrada")
+    verify_org_access(user, p, "Parada")
+    # Enrich
+    area = await db.sectors.find_one({"id": p.get('area_id')}, {"_id": 0, "nome": 1, "codigo": 1})
+    p['area'] = area
+    if p.get('responsavel_id'):
+        resp = await db.users.find_one({"id": p['responsavel_id']}, {"_id": 0, "nome": 1})
+        p['responsavel_nome'] = resp.get('nome') if resp else None
+    # Enrich OS details
+    os_ids = p.get('os_vinculadas', [])
+    os_list = []
+    if os_ids:
+        for oid in os_ids:
+            os_doc = await db.ordens_servico.find_one({"id": oid}, {"_id": 0, "id": 1, "numero": 1, "titulo": 1, "status": 1, "responsavel_id": 1, "tempo_execucao_minutos": 1})
+            if os_doc:
+                if os_doc.get('responsavel_id'):
+                    r = await db.users.find_one({"id": os_doc['responsavel_id']}, {"_id": 0, "nome": 1})
+                    os_doc['responsavel_nome'] = r.get('nome') if r else None
+                os_list.append(os_doc)
+    p['os_detalhes'] = os_list
+    p['os_total'] = len(os_ids)
+    p['os_concluidas'] = sum(1 for o in os_list if o.get('status') == 'concluida')
+    p['os_pendentes'] = p['os_total'] - p['os_concluidas']
+    p['horas_executadas'] = sum(o.get('tempo_execucao_minutos', 0) for o in os_list if o.get('tempo_execucao_minutos')) / 60
+    mats = await db.os_materiais.find({"os_id": {"$in": os_ids}, "deleted_at": None}, {"_id": 0, "custo_total": 1}).to_list(500)
+    p['custo_materiais'] = sum(m.get('custo_total', 0) for m in mats)
+    # Actor names
+    uid = p.get('criado_por')
+    if uid:
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1})
+        p['criado_por_nome'] = u.get('nome') if u else uid
+    return p
+
+@api_router.put("/paradas-programadas/{parada_id}")
+async def update_parada(parada_id: str, data: ParadaProgramadaUpdate, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    existing = await db.paradas_programadas.find_one({"id": parada_id, "deleted_at": None}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Parada não encontrada")
+    verify_org_access(user, existing, "Parada")
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    update_data['alterado_por'] = user.get('id')
+    await db.paradas_programadas.update_one({"id": parada_id}, {"$set": update_data})
+    await audit_field_changes("parada_programada", parada_id, f"Parada {existing.get('numero','')}", existing, update_data, user)
+    return await db.paradas_programadas.find_one({"id": parada_id}, {"_id": 0})
+
+@api_router.delete("/paradas-programadas/{parada_id}")
+async def delete_parada(parada_id: str, user: Dict = Depends(get_current_user)):
+    check_write_permission(user, ['admin', 'pcm'])
+    await db.paradas_programadas.update_one({"id": parada_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    await audit_log("delete", "parada_programada", parada_id, user, "Parada excluída")
+    return {"success": True}
+
+
 @api_router.get("/movimentacoes")
 async def list_movimentacoes(
     item_id: Optional[str] = None,

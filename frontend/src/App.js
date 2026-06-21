@@ -1496,6 +1496,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       items: [
         { icon: Package, label: 'Estoque', path: '/estoque' },
         { icon: Cog, label: 'Sobressalentes', path: '/sobressalentes' },
+        { icon: Calendar, label: 'Paradas', path: '/paradas' },
       ]
     }] : []),
     ...(role === 'admin' ? [{
@@ -2498,6 +2499,7 @@ const AtivoDetailPage = () => {
     inspecao: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', icon: ClipboardCheck, label: 'Inspeção' },
     anomalia: { color: 'text-red-400', bg: 'bg-red-500/10', icon: AlertTriangle, label: 'Anomalia' },
     material: { color: 'text-amber-400', bg: 'bg-amber-500/10', icon: Package, label: 'Material' },
+    parada: { color: 'text-purple-400', bg: 'bg-purple-500/10', icon: Calendar, label: 'Parada' },
   };
   
   return (
@@ -2674,6 +2676,7 @@ const AtivoDetailPage = () => {
                   <option value="inspecao">Inspeção</option>
                   <option value="anomalia">Anomalia</option>
                   <option value="material">Material</option>
+                  <option value="parada">Parada</option>
                 </select>
               </div>
               <div>
@@ -5647,6 +5650,249 @@ const FIELD_TYPES = [
   { value: 'observacao', label: 'Observação' },
 ];
 
+
+// ============== PARADAS PROGRAMADAS ==============
+const PARADA_TIPOS = [
+  { value: 'preventiva', label: 'Preventiva' },
+  { value: 'corretiva', label: 'Corretiva' },
+  { value: 'grande_parada', label: 'Grande Parada' },
+  { value: 'parada_geral', label: 'Parada Geral' },
+];
+
+const ParadasPage = () => {
+  const [paradas, setParadas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [areas, setAreas] = useState([]);
+  const [osList, setOsList] = useState([]);
+  const [tecnicos, setTecnicos] = useState([]);
+  const [form, setForm] = useState({ area_id: '', data_inicio: '', data_fim: '', duracao_horas: '', tipo: 'preventiva', responsavel_id: '', descricao: '', observacoes: '', os_vinculadas: [] });
+  const { user } = useAuth();
+
+  const fetchData = () => {
+    Promise.all([
+      api.get('/paradas-programadas'),
+      api.get('/sectors'),
+      api.get('/ordens-servico'),
+      api.get('/users/tecnicos')
+    ]).then(([pRes, aRes, osRes, tRes]) => {
+      setParadas(pRes.data);
+      setAreas(aRes.data);
+      setOsList(osRes.data);
+      setTecnicos(tRes.data);
+    }).catch(() => {}).finally(() => setLoading(false));
+  };
+  useEffect(() => { fetchData(); }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.area_id || !form.data_inicio) { toast.error('Área e data são obrigatórios'); return; }
+    try {
+      const payload = { ...form, duracao_horas: form.duracao_horas ? parseFloat(form.duracao_horas) : null };
+      if (editItem) {
+        await api.put(`/paradas-programadas/${editItem.id}`, payload);
+        toast.success('Parada atualizada!');
+      } else {
+        await api.post('/paradas-programadas', payload);
+        toast.success('Parada criada!');
+      }
+      setShowModal(false); setEditItem(null);
+      setForm({ area_id: '', data_inicio: '', data_fim: '', duracao_horas: '', tipo: 'preventiva', responsavel_id: '', descricao: '', observacoes: '', os_vinculadas: [] });
+      fetchData();
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleEdit = (p) => {
+    setEditItem(p);
+    setForm({ area_id: p.area_id || '', data_inicio: p.data_inicio?.split('T')[0] || '', data_fim: p.data_fim?.split('T')[0] || '', duracao_horas: p.duracao_horas || '', tipo: p.tipo || 'preventiva', responsavel_id: p.responsavel_id || '', descricao: p.descricao || '', observacoes: p.observacoes || '', os_vinculadas: p.os_vinculadas || [] });
+    setShowModal(true);
+  };
+
+  const handleDelete = async () => {
+    try { await api.delete(`/paradas-programadas/${deleteItem.id}`); toast.success('Excluída!'); setDeleteItem(null); fetchData(); } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const openDetail = async (p) => {
+    try { const res = await api.get(`/paradas-programadas/${p.id}`); setDetail(res.data); } catch { toast.error('Erro'); }
+  };
+
+  const toggleOS = (osId) => {
+    setForm(prev => ({
+      ...prev,
+      os_vinculadas: prev.os_vinculadas.includes(osId) ? prev.os_vinculadas.filter(id => id !== osId) : [...prev.os_vinculadas, osId]
+    }));
+  };
+
+  if (loading) return <Loading rows={4} />;
+
+  // Detail view
+  if (detail) return (
+    <div className="space-y-4 pb-24" data-testid="parada-detail">
+      <div className="flex items-center gap-3">
+        <button onClick={() => setDetail(null)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg"><ArrowLeft size={20} className="text-slate-400" /></button>
+        <div className="flex-1">
+          <h1 className="text-xl font-bold text-slate-100">Parada {detail.numero}</h1>
+          <p className="text-xs text-slate-500">{detail.area?.nome} — {PARADA_TIPOS.find(t => t.value === detail.tipo)?.label || detail.tipo}</p>
+        </div>
+        <StatusBadge status={detail.status} />
+      </div>
+      {/* Info */}
+      <div className="glass-card p-4 space-y-2" data-testid="parada-info">
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div><span className="text-slate-500">Área:</span> <span className="text-slate-200">{detail.area?.nome}</span></div>
+          <div><span className="text-slate-500">Tipo:</span> <span className="text-slate-200 capitalize">{detail.tipo?.replace('_',' ')}</span></div>
+          <div><span className="text-slate-500">Data Início:</span> <span className="text-slate-200">{detail.data_inicio ? new Date(detail.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span></div>
+          <div><span className="text-slate-500">Data Fim:</span> <span className="text-slate-200">{detail.data_fim ? new Date(detail.data_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span></div>
+          <div><span className="text-slate-500">Duração:</span> <span className="text-emerald-400 font-semibold">{detail.duracao_horas ? `${detail.duracao_horas}h` : '—'}</span></div>
+          <div><span className="text-slate-500">Responsável:</span> <span className="text-slate-200">{detail.responsavel_nome || '—'}</span></div>
+          {detail.criado_por_nome && <div><span className="text-slate-500">Criado por:</span> <span className="text-slate-200">{detail.criado_por_nome}</span></div>}
+        </div>
+        {detail.descricao && <p className="text-sm text-slate-300 border-t border-slate-800 pt-2">{detail.descricao}</p>}
+        {detail.observacoes && <p className="text-xs text-slate-400">{detail.observacoes}</p>}
+      </div>
+      {/* Indicadores */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="parada-indicadores">
+        <div className="glass-card p-3 text-center"><p className="text-2xl font-bold text-blue-400">{detail.os_total}</p><p className="text-xs text-slate-500">OS Vinculadas</p></div>
+        <div className="glass-card p-3 text-center"><p className="text-2xl font-bold text-emerald-400">{detail.os_concluidas}</p><p className="text-xs text-slate-500">Concluídas</p></div>
+        <div className="glass-card p-3 text-center"><p className="text-2xl font-bold text-amber-400">{detail.os_pendentes}</p><p className="text-xs text-slate-500">Pendentes</p></div>
+        <div className="glass-card p-3 text-center"><p className="text-2xl font-bold text-slate-200">{detail.horas_executadas?.toFixed(1) || '0'}h</p><p className="text-xs text-slate-500">Horas Executadas</p></div>
+      </div>
+      {detail.custo_materiais > 0 && (
+        <div className="glass-card p-3 text-center"><p className="text-xl font-bold text-emerald-400">R$ {detail.custo_materiais.toFixed(2)}</p><p className="text-xs text-slate-500">Materiais Consumidos</p></div>
+      )}
+      {/* OS List */}
+      {detail.os_detalhes?.length > 0 && (
+        <div className="glass-card p-4" data-testid="parada-os-list">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">OS Vinculadas</h3>
+          <div className="space-y-2">
+            {detail.os_detalhes.map(os => (
+              <div key={os.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                <div><span className="font-mono text-blue-400">#{os.numero}</span> <span className="text-slate-300 text-sm ml-2">{os.titulo}</span></div>
+                <div className="flex items-center gap-2">
+                  {os.responsavel_nome && <span className="text-xs text-slate-500">{os.responsavel_nome}</span>}
+                  <StatusBadge status={os.status} size="sm" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Paradas Programadas</h1>
+          <p className="text-sm text-slate-500">{paradas.length} parada(s)</p>
+        </div>
+        {['admin','pcm'].includes(user?.role) && (
+          <button onClick={() => { setEditItem(null); setForm({ area_id: '', data_inicio: '', data_fim: '', duracao_horas: '', tipo: 'preventiva', responsavel_id: '', descricao: '', observacoes: '', os_vinculadas: [] }); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="new-parada-btn"><Plus size={20} /> Nova Parada</button>
+        )}
+      </div>
+
+      {paradas.length > 0 ? (
+        <div className="space-y-2">
+          {paradas.map(p => (
+            <div key={p.id} className="glass-card p-4 cursor-pointer hover:border-slate-600" onClick={() => openDetail(p)} data-testid={`parada-card-${p.id}`}>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-mono text-amber-400 font-semibold">{p.numero}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 capitalize">{p.tipo?.replace('_',' ')}</span>
+                    <StatusBadge status={p.status} size="sm" />
+                  </div>
+                  <p className="text-slate-200">{p.descricao || p.area?.nome}</p>
+                  <div className="flex items-center gap-4 mt-1 text-xs text-slate-500">
+                    <span>{p.area?.nome}</span>
+                    {p.data_inicio && <span>{new Date(p.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
+                    {p.duracao_horas && <span>{p.duracao_horas}h</span>}
+                    {p.responsavel_nome && <span>{p.responsavel_nome}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-center">
+                  <div><p className="text-lg font-bold text-blue-400">{p.os_total}</p><p className="text-xs text-slate-600">OS</p></div>
+                  <div><p className="text-lg font-bold text-emerald-400">{p.os_concluidas}</p><p className="text-xs text-slate-600">OK</p></div>
+                  {['admin','pcm'].includes(user?.role) && (
+                    <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => handleEdit(p)} className="p-2 hover:bg-slate-700 rounded-lg" data-testid={`edit-parada-${p.id}`}><Edit3 size={14} className="text-blue-400" /></button>
+                      <button onClick={() => setDeleteItem(p)} className="p-2 hover:bg-red-500/10 rounded-lg"><Trash2 size={14} className="text-red-400" /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : <EmptyState icon={Calendar} title="Nenhuma parada" description="Crie paradas programadas para planejar manutenção." actionLabel="Nova Parada" onAction={() => setShowModal(true)} />}
+
+      {/* Modal */}
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? "Editar Parada" : "Nova Parada Programada"} size="lg">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <FormInput label="Área" required>
+              <select value={form.area_id} onChange={e => setForm({...form, area_id: e.target.value})} className="input-industrial w-full px-4" required data-testid="parada-area">
+                <option value="">Selecione...</option>
+                {areas.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
+              </select>
+            </FormInput>
+            <FormInput label="Tipo">
+              <select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} className="input-industrial w-full px-4" data-testid="parada-tipo">
+                {PARADA_TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </FormInput>
+            <FormInput label="Data Início" required>
+              <input type="date" value={form.data_inicio} onChange={e => setForm({...form, data_inicio: e.target.value})} className="input-industrial w-full px-4" required />
+            </FormInput>
+            <FormInput label="Data Fim">
+              <input type="date" value={form.data_fim} onChange={e => setForm({...form, data_fim: e.target.value})} className="input-industrial w-full px-4" />
+            </FormInput>
+            <FormInput label="Duração (horas)">
+              <input type="number" step="0.5" value={form.duracao_horas} onChange={e => setForm({...form, duracao_horas: e.target.value})} className="input-industrial w-full px-4" />
+            </FormInput>
+            <FormInput label="Responsável">
+              <select value={form.responsavel_id} onChange={e => setForm({...form, responsavel_id: e.target.value})} className="input-industrial w-full px-4">
+                <option value="">Selecione...</option>
+                {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              </select>
+            </FormInput>
+          </div>
+          <FormInput label="Descrição">
+            <input value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Parada preventiva semestral" />
+          </FormInput>
+          <FormInput label="Observações">
+            <textarea value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})} className="input-industrial w-full px-4" rows={2} />
+          </FormInput>
+          {/* OS Vinculadas */}
+          <div>
+            <p className="text-xs text-slate-500 uppercase font-semibold mb-2">OS Vinculadas ({form.os_vinculadas.length})</p>
+            <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
+              {osList.filter(os => !['concluida','cancelada'].includes(os.status)).map(os => (
+                <label key={os.id} className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-slate-800/50 cursor-pointer">
+                  <input type="checkbox" checked={form.os_vinculadas.includes(os.id)} onChange={() => toggleOS(os.id)} className="rounded" />
+                  <span className="font-mono text-blue-400 text-xs">#{os.numero}</span>
+                  <span className="text-slate-300 truncate">{os.titulo}</span>
+                  <StatusBadge status={os.status} size="sm" />
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" className="btn-primary">Salvar</button>
+          </div>
+        </form>
+      </Modal>
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Parada" message={`Excluir parada "${deleteItem?.numero}"?`} confirmText="Excluir" danger />
+    </div>
+  );
+};
+
+
 const AdminTemplatesPage = () => {
   const [templates, setTemplates] = useState([]);
   const [equipTypes, setEquipTypes] = useState([]);
@@ -6359,6 +6605,7 @@ function App() {
           <Route path="/ronda" element={<ProtectedRoute><AppLayout><RondaPage /></AppLayout></ProtectedRoute>} />
           <Route path="/scanner" element={<ProtectedRoute><AppLayout><ScannerPage /></AppLayout></ProtectedRoute>} />
           <Route path="/sobressalentes" element={<ProtectedRoute><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/paradas" element={<ProtectedRoute><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
           <Route path="/anomalias" element={<ProtectedRoute><AppLayout><AnomaliasPage /></AppLayout></ProtectedRoute>} />
           <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
           <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
