@@ -1635,7 +1635,8 @@ async def list_tecnicos(user: Dict = Depends(get_current_user)):
 # ============== SEED ==============
 
 @api_router.post("/seed")
-async def seed_data():
+async def seed_data(user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
     existing = await db.organizations.find_one({"nome": "Indústria Demo"})
     if existing:
         return {"message": "Dados já existem"}
