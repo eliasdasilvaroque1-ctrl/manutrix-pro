@@ -1,50 +1,31 @@
 # MANUTRIX OMNI — Product Requirements Document
 
-## Bloco A: Sobressalentes Avançado ✅
-## Bloco B: Simplificação de Inspeções ✅ (2026-06-19)
+## FASE FINAL PRÉ-PILOTO
 
-### Nova Arquitetura — Planos de Inspeção
+### Bloco 1: Validação Multiempresa ✅ (2026-06-21)
 
-**Nível 1: Plano por Tipo de Equipamento**
-- Coleção `planos_inspecao` com `tipo_equipamento` + `categoria` (mecanica/eletrica/lubrificacao)
-- Ex: "ALIMENTADOR VIBRATORIO" + "mecanica" → 3 perguntas padrão
+**Mecanismo:** `organization_id` em todas as entidades (equivalente a tenant_id)
 
-**Nível 2: Perguntas específicas por Ativo**
-- Coleção `planos_inspecao` com `ativo_id` + `categoria`
-- Ex: AV-01 + "mecanica" → 2 perguntas exclusivas
+**Proteções implementadas:**
+- [x] `verify_org_access()` em deps.py — verifica org do documento vs org do usuário
+- [x] Aplicado em: GET ativos, GET OS, GET estoque, GET inspeção (retorna 404 se org diferente)
+- [x] List queries filtram por `organization_id` em: sectors, ativos, OS, inspeções, estoque, sobressalentes
 
-**Resolver**: GET /api/planos-inspecao/resolver?ativo_id=X&categoria=Y
-- Merge Nível 1 + Nível 2 automaticamente
-- Fallback para DEFAULT_CHECKLISTS se nenhum plano existir
+**Orgs de teste criadas:**
+- ASTEC (admin@astec.com) — 1 área, 1 ativo, 1 OS, 1 estoque
+- VALE (admin@vale.com) — 1 área, 1 ativo, 1 OS, 1 estoque
+- CSN (admin@csn.com) — 1 área, 1 ativo, 1 OS, 1 estoque
 
-**Atributos por pergunta:**
-- [x] tipo (boolean, numerico, texto, lista, foto, observacao)
-- [x] obrigatorio
-- [x] periodicidade
-- [x] foto_obrigatoria_nc
-- [x] limites: limite_normal, limite_alerta, limite_critico
-- [x] opcoes (para tipo lista)
-- [x] ordem
+**Testes de isolamento (29/29 PASS):**
+- Listagem: cada org vê apenas seus dados ✅
+- Acesso cruzado por ID: 404 em todas as combinações ✅
+- Export: contém apenas dados da org autenticada ✅
 
-**Fluxo do Técnico (simplificado):**
-Equipamento → Nova Inspeção → Mecânica/Elétrica/Lubrificação → Perguntas carregadas automaticamente
+**Testes:** iteration_38 — Backend 29/29
 
-**Remoções:**
-- [x] Referências a "Template" removidas da UI do técnico
-- [x] Sidebar: "Templates" → "Planos de Inspeção"
-- [x] Página admin atualizada para usar nova API
-
-**Migração:**
-- [x] DEFAULT_CHECKLISTS migrados para planos_inspecao (3 planos universais)
-- [x] Histórico preservado
-
-**Endpoints:**
-- CRUD: /api/planos-inspecao
-- Resolver: /api/planos-inspecao/resolver
-- Migração: /api/planos-inspecao/migrar
-- Categorias: /api/planos-inspecao/categorias-disponiveis
-
-**Testes:** iterations 37-38 — Backend 15/15, Frontend fix confirmed
+### Bloco 2: Auditoria Campo-a-Campo (PRÓXIMO)
+### Bloco 3: Paradas Programadas
+### Bloco 5: Segurança e Produção
 
 ## Regra de Ouro
 > Parar após cada bloco. Entregar evidências. Aguardar aprovação.
