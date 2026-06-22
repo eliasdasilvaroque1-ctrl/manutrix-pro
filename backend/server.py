@@ -1949,7 +1949,10 @@ async def delete_manual(manual_id: str, user: Dict = Depends(get_current_user)):
 
 @api_router.post("/assistente/chat")
 async def assistente_chat(data: ChatMessage, user: Dict = Depends(get_current_user)):
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Assistente IA indisponível neste ambiente. Funcionalidade disponível apenas na plataforma Emergent.")
     
     llm_key = os.environ.get('EMERGENT_LLM_KEY')
     if not llm_key:
