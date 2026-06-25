@@ -32,9 +32,9 @@ async def list_os_eventos(os_id: str, user: Dict = Depends(get_current_user)):
     return eventos
 
 @router.post("/os/{os_id}/eventos")
-async def create_os_evento(os_id: str, tipo: str, detalhes: dict = None, user: Dict = Depends(get_current_user)):
-    """Record an immutable OS event (internal use — called by other endpoints)."""
-    check_write_permission(user)
+async def create_os_evento_manual(os_id: str, tipo: str, detalhes: dict = None, user: Dict = Depends(get_current_user)):
+    """Record an OS event manually (admin/master only)."""
+    check_admin_only(user)
     doc = build_os_evento(user, os_id, tipo, detalhes)
     doc["organization_id"] = user.get("organization_id", "")
     await db.os_eventos.insert_one(doc)
@@ -199,14 +199,34 @@ async def add_os_executante(os_id: str, data: OSExecutanteCreate, user: Dict = D
         raise HTTPException(status_code=404, detail="OS não encontrada")
     verify_org_access(user, os_doc, "OS")
     
-    # Check if already added
+    # Check if already active
     existing = await db.os_executantes.find_one({"os_id": os_id, "user_id": data.user_id, "deleted_at": None})
     if existing:
         raise HTTPException(status_code=400, detail="Usuário já é executante desta OS")
     
-    # Get user info
+    # Get target user info
     target_user = await db.users.find_one({"id": data.user_id}, {"_id": 0, "nome": 1})
     user_nome = target_user.get("nome", "") if target_user else ""
+    
+    # Check if soft-deleted — reactivate instead of insert
+    soft_deleted = await db.os_executantes.find_one({"os_id": os_id, "user_id": data.user_id, "deleted_at": {"$ne": None}})
+    if soft_deleted:
+        now = datetime.now(timezone.utc).isoformat()
+        await db.os_executantes.update_one(
+            {"os_id": os_id, "user_id": data.user_id},
+            {"$set": {"deleted_at": None, "funcao": data.funcao, "status": "ativo", "updated_at": now, "updated_by": user["id"]}}
+        )
+        soft_deleted.pop("_id", None)
+        soft_deleted["deleted_at"] = None
+        soft_deleted["funcao"] = data.funcao
+        soft_deleted["status"] = "ativo"
+        
+        await db.ordens_servico.update_one({"id": os_id}, {"$addToSet": {"equipe": data.user_id}})
+        await db.os_eventos.insert_one(build_os_evento(
+            user, os_id, "equipe_alterada",
+            {"acao": "reativado", "user_id": data.user_id, "user_nome": user_nome, "funcao": data.funcao}
+        ))
+        return soft_deleted
     
     doc = build_os_executante(user, os_id, data.user_id, user_nome, data.funcao)
     doc["organization_id"] = user.get("organization_id", "")

@@ -168,7 +168,7 @@ INDEXES = {
         {"keys": [("organization_id", 1), ("user_id", 1), ("timestamp", -1)], "name": "org_user_time"},
     ],
     "os_executantes": [
-        {"keys": [("os_id", 1), ("user_id", 1)], "name": "os_user", "unique": True},
+        {"keys": [("os_id", 1), ("user_id", 1)], "name": "os_user", "unique": True, "partialFilterExpression": {"deleted_at": None}},
         {"keys": [("organization_id", 1), ("user_id", 1)], "name": "org_user"},
         {"keys": [("user_id", 1), ("status", 1)], "name": "user_status"},
     ],
@@ -213,6 +213,8 @@ async def create_all_indexes(db):
                 kwargs = {"name": idx["name"], "background": True}
                 if idx.get("unique"):
                     kwargs["unique"] = True
+                if idx.get("partialFilterExpression"):
+                    kwargs["partialFilterExpression"] = idx["partialFilterExpression"]
                 await coll.create_index(idx["keys"], **kwargs)
                 total += 1
             except Exception as e:

@@ -1,71 +1,56 @@
 # MANUTRIX OMNI — Product Requirements Document
 
-## Status: FASE 1 PILOTO ASTEC — BLOCO A COMPLETO
-## Versão: 4.0.0
+## Status: FASE 1 PILOTO ASTEC — ARQUITETURA DE DADOS COMPLETA
+## Versão: 4.1.0
 
 ---
 
-## BLOCO A — Infraestrutura + Operacional ✅ (25/06/2026, iteration_43)
+## BLOCO A — Infraestrutura + Operacional ✅ (iteration_43)
+- Admin Master, Limpeza Ambiente, Kanban Visual, Filtros, Plantas, Auditoria Admin, 11 Tipos OS
 
-### #1 Admin Master ✅
-- Novo role `master` acima de `admin`
-- Hierarquia: MASTER > ADMIN > GERENTE > PCM > SUPERVISOR > TÉCNICO > INSPETOR > VIEWER
-- Master tem acesso total ao sistema
-- Funções exclusivas do Master: cleanup, prepare-production, admin-actions
+## ARQUITETURA DE DADOS — Event-Sourced ✅ (iteration_44)
 
-### #2 Limpeza do Ambiente ✅
-- Painel exclusivo Master em /master/cleanup
-- Limpeza seletiva (12 collections) e total ("Preparar para Produção")
-- Confirmação dupla com digitação "PREPARAR PRODUCAO"
-- Preserva: usuários, áreas, ativos, materiais, planos, configurações
-- Todas as ações registradas em `admin_actions` collection
+### Novas Collections
+| Collection | Propósito | Índices |
+|---|---|---|
+| `os_eventos` | Log imutável de eventos por OS | 3 |
+| `hh_registros` | Apontamento de mão de obra (INICIAR/PAUSAR/RETORNAR/FINALIZAR/TRANSFERIR) | 4 |
+| `os_executantes` | Equipe da OS com funções (Executor/Apoio/Supervisor/Inspetor/Líder) | 3 |
+| `metricas_diarias` | Indicadores pré-agregados por usuário/dia | 2 |
+| `metricas_mensais` | Indicadores pré-agregados por usuário/mês | 2 |
 
-### #3 Kanban Visual ✅
-- Cards redesenhados com: Planta (topo), Área, TAG + Nome do equipamento, OS # + Tipo (badge colorido), Título, Prioridade + Disciplina, Responsável, Data prevista, Badge ATRASADA
-- 11 tipos de OS com cores distintas
+### Índices Criados: 36 total em 13 collections
+- `ordens_servico`: 8 (org+status, org+tipo+status, org+data_conclusao, ativo+status, responsavel+status, equipe, org+resp+conclusao, org+created)
+- `inspecoes`: 3 | `anomalias`: 3 | `audit_logs`: 2 | `movimentacoes_estoque`: 3
+- `hh_registros`: 4 | `os_eventos`: 3 | `os_executantes`: 3 (partial unique)
+- `metricas_diarias`: 2 (unique org+user+data) | `metricas_mensais`: 2 (unique org+user+ano+mes)
 
-### #4 Filtros Avançados ✅
-- Busca por nº, título ou TAG
-- Filtros por prioridade (botões rápidos)
-- Painel expandível: Tipo de OS, Área, Responsável, Disciplina
-- Botão "Limpar filtros"
-- Contador de filtros ativos
+### API Endpoints Novos
+- `POST/GET /api/os/{id}/hh` — Cronômetro HH
+- `GET /api/hh/resumo/{os_id}` — Resumo HH bruta/líquida/parado
+- `POST/GET /api/os/{id}/executantes` — Equipe da OS
+- `GET /api/os/{id}/eventos` — Timeline de eventos
+- `GET /api/metricas/usuario/{id}?periodo=` — Métricas por técnico
+- `GET /api/metricas/equipe?periodo=` — Ranking da equipe
+- `POST /api/metricas/rebuild` — Reconstruir métricas (admin)
 
-### #5 Plantas (Hierarquia) ✅
-- Nova entidade: Planta (Empresa > Planta > Área > Ativo)
-- CRUD completo com auditoria
-- Collection: `plantas_v2`
-- Página frontend: /plantas
+### Campos padrão em todas as collections novas
+organization_id, created_at, updated_at, created_by, updated_by, deleted_at (soft delete)
 
-### #13 Auditoria de Exclusão Admin ✅
-- Collection `admin_actions` imutável pelo cleanup
-- Registra: quem, quando, o que, quantidade, resultado
-- Acessível apenas pelo Master
-
-### Novos Tipos de OS ✅
-- corretiva, preventiva, lubrificação, inspeção, fabricação
-- preparação material, melhoria, calibração, instalação, reforma, emergencial
+### Escalabilidade
+- Projetado para 500 empresas, milhões de OS, dezenas de milhões de HH
+- Toda query inicia por organization_id
+- Métricas pré-agregadas para dashboards rápidos
+- Preparado para IA futura (event-sourcing permite reconstrução completa)
 
 ---
 
-## PRÓXIMOS BLOCOS
+## PRÓXIMOS: BLOCO B — Frontend + Integração
+- Dashboard da Equipe (frontend usando /metricas/equipe)
+- Cronômetro visual na OS (frontend usando /os/{id}/hh)
+- Gestão de executantes na OS (frontend usando /os/{id}/executantes)
+- Timeline de eventos na OS (frontend usando /os/{id}/eventos)
+- Indicadores de produtividade (frontend usando metricas)
 
-### BLOCO B — Gestão de Equipe + HH (A FAZER)
-- #7 HH Automático (cronômetro + manual)
-- #8 OS Compartilhadas (crédito individual)
-- #5 Dashboard da Equipe (performance por técnico)
-- #9 Produtividade (indicadores automáticos)
-
-### BLOCO C — Dashboards Executivos + Export (A FAZER)
-- #6 Ranking da Equipe
-- #10 Dashboard Supervisor
-- #11 Qualidade dos Serviços
-- #12 Exportação Excel/PDF/CSV
-- #14 Finalização
-
----
-
-## Módulos Completos
-Áreas, Ativos, OS, Inspeções, Anomalias, Estoque, Sobressalentes,
-Paradas Programadas, Auditoria, Multiempresa, PWA/Offline,
-Dashboard, Exportação, Object Storage, Plantas, Master Admin, Limpeza de Ambiente
+## BLOCO C — Dashboards Executivos + Export (A FAZER)
+- Ranking, Dashboard Supervisor, Qualidade, Exportação
