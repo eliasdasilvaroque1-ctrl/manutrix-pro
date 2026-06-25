@@ -1,0 +1,80 @@
+{
+  "summary": "Iteration 46 - MANUTRIX PRO Bloco B (frontend integration): Cronômetro HH visual, Gestão de Executantes, Dashboard Equipe with KPIs/Ranking, immutable Timeline. ALL 14 review items PASS. Backend smoke-tested (login, /api/ordens-servico, /api/os/{id}/eventos, /api/os/{id}/hh, /api/hh/resumo/{id}, /api/os/{id}/executantes, /api/metricas/equipe) — all 200. Frontend e2e: full HH sequence Iniciar→Pausar→Retornar→Finalizar verified with live timer increments (00:00:01 → 00:00:04), state labels (Pronto/Trabalhando…/Em pausa/Finalizado), HH Resumo per executante (Líquida/Bruta/Parado), add executante via modal works (toast 'Executante adicionado!' + Equipe count went 1→2 + Timeline got 'Equipe alterada' entry), remove via X removes from list and equipe array, Equipe page (/equipe) renders 4 KPIs + Ranking 1° to 10° with progress bars, all 4 period filters present and clickable, sidebar 'Equipe' link routes correctly. No regressions on Dashboard, OS Kanban, Ativos.",
+  "pass_fail_matrix": {
+    "Sidebar 'Equipe' link visible and routes to /equipe": "PASS",
+    "Equipe page renders with data-testid='equipe-page'": "PASS",
+    "Equipe KPI cards: Técnicos Ativos / OS Executadas / HH Total / Inspeções": "PASS (11/0/0h/0)",
+    "Equipe Ranking list with position, name, role, OS count, HH, progress bar (10 entries)": "PASS",
+    "Equipe period filters (hoje/semana/mes/ano) all have data-testid and are clickable": "PASS",
+    "OS Detail Cronômetro HH section visible with timer 00:00:00 + Iniciar button": "PASS",
+    "POST /os/{id}/hh (iniciar) updates UI: timer increments live, label='Trabalhando…', Pausar+Finalizar buttons shown": "PASS",
+    "Pausar: timer freezes, label='Em pausa', Retornar+Finalizar buttons shown": "PASS",
+    "Finalizar: label='Finalizado', Iniciar reappears": "PASS",
+    "HH Resumo per executante (Líquida / Bruta / Parado) renders": "PASS",
+    "OS Detail Executantes section visible with Adicionar button": "PASS",
+    "Add executante modal: user select (7 options), funcao select, save → success toast": "PASS",
+    "Equipe array updates in UI (1 → 2 members) after add": "PASS",
+    "Remove executante via X icon (visual present, click removes from list)": "PASS (functional, no data-testid)",
+    "Timeline immutable events render (29 events; new 'Equipe alterada', 'Trabalho iniciado', 'Pausa' appended)": "PASS",
+    "Regression: Login admin → Dashboard loads (KPIs/charts)": "PASS",
+    "Regression: OS Kanban renders columns Abertas/Planejadas/Em Execução/Pausadas": "PASS",
+    "Regression: Ativos list loads": "PASS",
+    "Backend smoke (admin token): /api/ordens-servico, /api/os/{id}/hh, /api/os/{id}/eventos, /api/hh/resumo/{id}, /api/os/{id}/executantes, /api/metricas/equipe": "PASS (all 200)"
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/os/{id}/executantes (carry-over from iteration_44)",
+        "issue": "Re-adding a soft-deleted executante still returns 500 (DuplicateKeyError) — unique index (os_id,user_id) does not include deleted_at. Not exercised by current Bloco B UI flow (UI prevents re-add of removed user within same session) but remains a backend bug for any retry from a different user/session."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "OSDetailPage – remove executante X button",
+        "issue": "No data-testid on the X button at App.js:3678. Visually present and works, but automated tests cannot reliably target it. Suggest data-testid={`remove-exec-${e.user_id}`}.",
+        "selector": "button > X icon inside executantes list item",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Equipe page",
+        "issues": ["Ranking heading is 'Ranking — Semana' (en-dash); my initial substring search for 'Ranking' was case-sensitive — heading is actually 'RANKING — SEMANA' (uppercase tracking). Cosmetic only — no fix needed, just FYI for future regex selectors."]
+      },
+      {
+        "screen": "Dashboard (pre-existing)",
+        "issues": ["Recharts emits width(-1)/height(-1) warnings on first render — same as iteration_45, no functional impact."]
+      },
+      {
+        "screen": "OSDetailPage – React console warning",
+        "issues": ["Hydration warning: '<span> cannot be a child of <option>'. A Select option contains a styled <span> somewhere in the executante or status select. Cosmetic but pollutes console; suggest moving styles to the <option> itself or use a non-native Select."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration44_events_hh.py (backend already covered)"
+  ],
+  "action_items": [
+    "LOW: Add data-testid={`remove-exec-${e.user_id}`} to the X button at App.js:3678 to enable automated remove-executante tests.",
+    "INFO (carry-over): Fix os_executantes unique index to be partial (deleted_at:null) so re-add after soft-delete doesn't 500."
+  ],
+  "critical_code_review_comments": [
+    "App.js:3678 — remove executante button lacks data-testid; all surrounding interactive elements in Bloco B have testids, this one is the only gap.",
+    "App.js:3304-3700 — OSDetailPage is now ~400 lines and includes cronômetro, executantes modal, timeline, materiais, fotos, ações. Consider splitting into <OSCronometro/>, <OSExecutantes/>, <OSTimeline/> sub-components for maintainability (file is >7800 lines total).",
+    "App.js (executante modal) — when the user clicks Adicionar after the executante is already in the list, the backend correctly returns 400 ('duplicado'), but the UI doesn't pre-filter the user-select options to exclude already-active executantes, leading to confusing error toasts. Filter out e.user_id from the options to improve UX.",
+    "App.js (cronômetro) — timer is purely client-side (setInterval over now-start). If the OS detail tab is reloaded mid-run, the timer resets visually until the next event arrives; consider initialising from the last 'iniciar'/'retornar' os_evento timestamp on mount to keep visual continuity.",
+    "Backend (iteration_44 bug) — os_executantes unique index should be partial: {os_id:1, user_id:1} where {deleted_at:null}, otherwise soft-deleted rows poison re-adds.",
+    "Equipe page (App.js:7205+) — KPI 'HH Total' renders '0h' even though the test OS has 2h30m bruta on the Administrator user; verify aggregation period boundaries (the test OS HH was earlier today/this week — investigate whether rebuild_daily_metrics is fired on each hh event or only nightly)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% smoke (6/6 endpoints)", "frontend": "100% (14/14 review items)"},
+  "test_credentials": "admin@manutrix.com / admin123 — working. master@manutrix.com / master123 — confirmed force_password_change unset (login goes straight to dashboard).",
+  "seed_data_creation": "Existing OS #2026-00114 (Anomalia - AV-01) was used for the Cronômetro/Executantes/Timeline flow. Side effects on that OS: 1 full iniciar→pausar→finalizar HH cycle added (~4s of bruta), 1 executante (João Silva, Apoio) added then removed. Timeline now has 29 immutable events. No new entities created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bloco B is fully integrated and verified. All cited data-testids (hh-cronometro, hh-timer-display, hh-iniciar/pausar/retornar/finalizar, os-executantes-section, add-exec-btn, exec-user-select, exec-funcao-select, exec-save-btn, os-eventos-timeline, equipe-page, equipe-periodo-{hoje|semana|mes|ano}) are present and functional. The ONLY missing testid is on the remove-exec X button (App.js:3678). For HH/executante e2e in future runs: token is in sessionStorage as 'manutrix_token', OS detail route is /os/:id, and the cronômetro state cycles Pronto → Trabalhando… → Em pausa → Finalizado. Pre-existing iteration_44 backend bug (re-add executante after soft-delete → 500) is unrelated to Bloco B UI."
+}

@@ -1482,6 +1482,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       label: 'GESTÃO',
       items: [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+        { icon: Users, label: 'Equipe', path: '/equipe' },
         { icon: Box, label: 'Ativos', path: '/ativos' },
         ...(role !== 'pcm' ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
         { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
@@ -3313,19 +3314,47 @@ const OSDetailPage = () => {
   const [showMatModal, setShowMatModal] = useState(false);
   const [matForm, setMatForm] = useState({ item_estoque_id: '', quantidade: '' });
   const [deleteMat, setDeleteMat] = useState(null);
+  const [hhResumo, setHhResumo] = useState(null);
+  const [hhStatus, setHhStatus] = useState(null);
+  const [executantes, setExecutantes] = useState([]);
+  const [tecnicos, setTecnicos] = useState([]);
+  const [showExecModal, setShowExecModal] = useState(false);
+  const [execForm, setExecForm] = useState({ user_id: '', funcao: 'executor' });
+  const [osEventos, setOsEventos] = useState([]);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
   
   const fetchOS = async () => {
     try {
-      const [osRes, histRes, matRes] = await Promise.all([
+      const [osRes, histRes, matRes, hhRes, execRes, evtRes, tecRes] = await Promise.all([
         api.get(`/ordens-servico/${id}`),
         api.get(`/ordens-servico/${id}/historico`).catch(() => ({ data: [] })),
-        api.get(`/ordens-servico/${id}/materiais`).catch(() => ({ data: [] }))
+        api.get(`/ordens-servico/${id}/materiais`).catch(() => ({ data: [] })),
+        api.get(`/hh/resumo/${id}`).catch(() => ({ data: { executantes: [], hh_total_liquida_min: 0 } })),
+        api.get(`/os/${id}/executantes`).catch(() => ({ data: [] })),
+        api.get(`/os/${id}/eventos`).catch(() => ({ data: [] })),
+        api.get('/users/tecnicos').catch(() => ({ data: [] })),
       ]);
       setOs(osRes.data);
       setHistorico(histRes.data);
       setMateriais(matRes.data);
+      setHhResumo(hhRes.data);
+      setExecutantes(execRes.data);
+      setOsEventos(evtRes.data);
+      setTecnicos(tecRes.data);
+      
+      // Determine current HH status for this user
+      const myHH = (hhRes.data?.executantes || []).find(e => e.user_id === user?.id);
+      setHhStatus(myHH?.ultimo_evento || null);
+      
+      // Calculate running timer if currently working
+      if (myHH?.ultimo_evento === 'iniciar' || myHH?.ultimo_evento === 'retornar') {
+        setTimerRunning(true);
+      } else {
+        setTimerRunning(false);
+      }
     } catch (error) {
       toast.error('OS não encontrada');
       navigate('/os');
@@ -3340,6 +3369,48 @@ const OSDetailPage = () => {
   useEffect(() => {
     api.get('/estoque').then(r => setEstoqueItems(r.data)).catch(() => {});
   }, []);
+
+  // Timer tick
+  useEffect(() => {
+    if (!timerRunning) return;
+    const interval = setInterval(() => setTimerSeconds(s => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning]);
+
+  const handleHH = async (evento) => {
+    try {
+      await api.post(`/os/${id}/hh`, { os_id: id, evento });
+      toast.success({ iniciar: 'Cronômetro iniciado!', pausar: 'Pausado', retornar: 'Retomado!', finalizar: 'Finalizado!' }[evento] || evento);
+      setTimerSeconds(0);
+      fetchOS();
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleAddExec = async () => {
+    if (!execForm.user_id) { toast.error('Selecione um técnico'); return; }
+    try {
+      await api.post(`/os/${id}/executantes`, { os_id: id, ...execForm });
+      toast.success('Executante adicionado!');
+      setShowExecModal(false);
+      setExecForm({ user_id: '', funcao: 'executor' });
+      fetchOS();
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleRemoveExec = async (userId) => {
+    try {
+      await api.delete(`/os/${id}/executantes/${userId}`);
+      toast.success('Executante removido');
+      fetchOS();
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const formatTimer = (secs) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  };
   
   const handleAction = async (action) => {
     if (action === 'concluir') { setShowConcluir(true); return; }
@@ -3505,6 +3576,164 @@ const OSDetailPage = () => {
         <div className="glass-card p-4">
           <p className="text-xs text-slate-500 mb-1">Descrição</p>
           <p className="text-slate-200 whitespace-pre-wrap">{os.descricao}</p>
+        </div>
+      )}
+
+      {/* ============ CRONÔMETRO HH ============ */}
+      {!['concluida','cancelada'].includes(os.status) && (
+        <div className="glass-card p-4" data-testid="hh-cronometro">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Clock size={16} /> Cronômetro HH
+          </h3>
+          {/* Timer display */}
+          <div className="text-center mb-4">
+            <p className={`text-4xl font-mono font-bold ${timerRunning ? 'text-emerald-400' : 'text-slate-500'}`} data-testid="hh-timer-display">
+              {formatTimer(timerSeconds)}
+            </p>
+            <p className="text-xs text-slate-600 mt-1">
+              {!hhStatus && 'Pronto para iniciar'}
+              {hhStatus === 'iniciar' && 'Trabalhando...'}
+              {hhStatus === 'retornar' && 'Trabalhando...'}
+              {hhStatus === 'pausar' && 'Em pausa'}
+              {hhStatus === 'finalizar' && 'Finalizado'}
+            </p>
+          </div>
+          {/* Buttons */}
+          <div className="flex gap-2 justify-center">
+            {(!hhStatus || hhStatus === 'finalizar') && (
+              <button onClick={() => handleHH('iniciar')} className="px-6 py-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium text-sm hover:bg-emerald-500/30 flex items-center gap-2" data-testid="hh-iniciar">
+                <Play size={18} /> Iniciar
+              </button>
+            )}
+            {(hhStatus === 'iniciar' || hhStatus === 'retornar') && (
+              <>
+                <button onClick={() => handleHH('pausar')} className="px-5 py-2.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 font-medium text-sm hover:bg-amber-500/30 flex items-center gap-2" data-testid="hh-pausar">
+                  <Pause size={18} /> Pausar
+                </button>
+                <button onClick={() => handleHH('finalizar')} className="px-5 py-2.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium text-sm hover:bg-blue-500/30 flex items-center gap-2" data-testid="hh-finalizar">
+                  <CheckCircle size={18} /> Finalizar
+                </button>
+              </>
+            )}
+            {hhStatus === 'pausar' && (
+              <>
+                <button onClick={() => handleHH('retornar')} className="px-5 py-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium text-sm hover:bg-emerald-500/30 flex items-center gap-2" data-testid="hh-retornar">
+                  <Play size={18} /> Retornar
+                </button>
+                <button onClick={() => handleHH('finalizar')} className="px-5 py-2.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium text-sm hover:bg-blue-500/30 flex items-center gap-2">
+                  <CheckCircle size={18} /> Finalizar
+                </button>
+              </>
+            )}
+          </div>
+          {/* HH Summary */}
+          {hhResumo && hhResumo.executantes?.length > 0 && (
+            <div className="mt-4 border-t border-slate-800 pt-3">
+              <p className="text-xs text-slate-500 mb-2">Resumo HH por executante:</p>
+              <div className="space-y-1.5">
+                {hhResumo.executantes.map(e => (
+                  <div key={e.user_id} className="flex items-center justify-between text-xs bg-slate-800/50 rounded px-3 py-2">
+                    <span className="text-slate-300">{e.user_nome}</span>
+                    <div className="flex gap-3">
+                      <span className="text-emerald-400">Líquida: {Math.floor(e.hh_liquida_min/60)}h{Math.round(e.hh_liquida_min%60)}m</span>
+                      <span className="text-slate-500">Bruta: {Math.floor(e.hh_bruta_min/60)}h{Math.round(e.hh_bruta_min%60)}m</span>
+                      {e.tempo_parado_min > 0 && <span className="text-amber-400">Parado: {Math.round(e.tempo_parado_min)}m</span>}
+                    </div>
+                  </div>
+                ))}
+                <div className="text-right text-xs text-slate-400 pt-1">
+                  Total HH líquida: <span className="text-emerald-400 font-semibold">{Math.floor(hhResumo.hh_total_liquida_min/60)}h{Math.round(hhResumo.hh_total_liquida_min%60)}m</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============ EXECUTANTES DA OS ============ */}
+      <div className="glass-card p-4" data-testid="os-executantes-section">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <Users size={16} /> Equipe ({executantes.length})
+          </h3>
+          {!['concluida','cancelada'].includes(os.status) && ['admin','master','pcm','supervisor'].includes(user?.role) && (
+            <button onClick={() => setShowExecModal(true)} className="text-xs btn-primary flex items-center gap-1" data-testid="add-exec-btn">
+              <Plus size={14} /> Adicionar
+            </button>
+          )}
+        </div>
+        {executantes.length > 0 ? (
+          <div className="space-y-1.5">
+            {executantes.map(e => {
+              const funcColors = { executor: 'text-emerald-400 bg-emerald-500/10', apoio: 'text-blue-400 bg-blue-500/10', supervisor_exec: 'text-amber-400 bg-amber-500/10', inspetor_exec: 'text-cyan-400 bg-cyan-500/10', lider: 'text-purple-400 bg-purple-500/10' };
+              const funcLabels = { executor: 'Executor', apoio: 'Apoio', supervisor_exec: 'Supervisor', inspetor_exec: 'Inspetor', lider: 'Líder' };
+              return (
+                <div key={e.user_id} className="flex items-center justify-between bg-slate-800/50 rounded-lg px-3 py-2" data-testid={`exec-${e.user_id}`}>
+                  <div className="flex items-center gap-2">
+                    <User size={14} className="text-slate-500" />
+                    <span className="text-sm text-slate-300">{e.user_nome}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${funcColors[e.funcao] || 'text-slate-400 bg-slate-500/10'}`}>{funcLabels[e.funcao] || e.funcao}</span>
+                  </div>
+                  {!['concluida','cancelada'].includes(os.status) && ['admin','master','pcm','supervisor'].includes(user?.role) && (
+                    <button onClick={() => handleRemoveExec(e.user_id)} className="p-1 hover:bg-red-500/10 rounded"><X size={14} className="text-red-400" /></button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-600 text-center py-2">Nenhum executante atribuído</p>
+        )}
+      </div>
+
+      {/* Modal Adicionar Executante */}
+      <Modal isOpen={showExecModal} onClose={() => setShowExecModal(false)} title="Adicionar Executante">
+        <div className="space-y-4">
+          <FormInput label="Técnico" required>
+            <select value={execForm.user_id} onChange={e => setExecForm({...execForm, user_id: e.target.value})} className="input-industrial w-full px-4" data-testid="exec-user-select">
+              <option value="">Selecione...</option>
+              {tecnicos.filter(t => !executantes.find(e => e.user_id === t.id)).map(t => (
+                <option key={t.id} value={t.id}>{t.nome} ({t.role})</option>
+              ))}
+            </select>
+          </FormInput>
+          <FormInput label="Função">
+            <select value={execForm.funcao} onChange={e => setExecForm({...execForm, funcao: e.target.value})} className="input-industrial w-full px-4" data-testid="exec-funcao-select">
+              <option value="executor">Executor</option>
+              <option value="apoio">Apoio</option>
+              <option value="lider">Líder</option>
+              <option value="supervisor_exec">Supervisor</option>
+              <option value="inspetor_exec">Inspetor</option>
+            </select>
+          </FormInput>
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={() => setShowExecModal(false)} className="btn-secondary">Cancelar</button>
+            <button onClick={handleAddExec} className="btn-primary" data-testid="exec-save-btn">Adicionar</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ============ TIMELINE DE EVENTOS ============ */}
+      {osEventos.length > 0 && (
+        <div className="glass-card p-4" data-testid="os-eventos-timeline">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Activity size={16} /> Timeline ({osEventos.length})
+          </h3>
+          <div className="space-y-1 max-h-[250px] overflow-y-auto">
+            {osEventos.slice(-20).reverse().map((evt, idx) => {
+              const evtColors = { trabalho_iniciado: 'border-emerald-500', pausa: 'border-amber-500', retorno: 'border-blue-500', os_concluida: 'border-emerald-400', os_criada: 'border-slate-500', equipe_alterada: 'border-purple-500', campo_alterado: 'border-cyan-500' };
+              const evtLabels = { trabalho_iniciado: 'Trabalho iniciado', pausa: 'Pausa', retorno: 'Retorno', os_concluida: 'Finalizado', os_criada: 'OS criada', equipe_alterada: 'Equipe alterada', campo_alterado: 'Campo alterado', material_utilizado: 'Material utilizado', foto_anexada: 'Foto anexada' };
+              return (
+                <div key={evt.id || idx} className={`flex items-start gap-2 text-xs border-l-2 ${evtColors[evt.tipo] || 'border-slate-700'} pl-3 py-1`}>
+                  <div className="flex-1">
+                    <span className="text-slate-300 font-medium">{evtLabels[evt.tipo] || evt.tipo}</span>
+                    {evt.detalhes?.observacao && <span className="text-slate-500 ml-1">— {evt.detalhes.observacao}</span>}
+                    <p className="text-slate-600">{evt.user_nome} · {new Date(evt.timestamp).toLocaleString('pt-BR')}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -6947,6 +7176,144 @@ const UnidadesPage = () => {
 };
 
 
+// ============== EQUIPE PAGE (Dashboard + Ranking + Produtividade) ==============
+
+const EquipePage = () => {
+  const [periodo, setPeriodo] = useState('semana');
+  const [metricas, setMetricas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  const fetchMetricas = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/metricas/equipe?periodo=${periodo}`);
+      setMetricas(res.data);
+    } catch { toast.error('Erro ao carregar métricas'); }
+    finally { setLoading(false); }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchMetricas(); }, [periodo]);
+
+  const formatHH = (min) => { const h = Math.floor(min/60); const m = Math.round(min%60); return `${h}h${m > 0 ? m + 'm' : ''}`; };
+  const totalOS = metricas.reduce((s, m) => s + (m.os_total || 0), 0);
+  const totalHH = metricas.reduce((s, m) => s + (m.hh_liquida_min || 0), 0);
+  const totalInsp = metricas.reduce((s, m) => s + (m.inspecoes || 0), 0);
+
+  return (
+    <div className="space-y-4" data-testid="equipe-page">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-100">Equipe</h1>
+        <div className="flex gap-1">
+          {[{v:'hoje',l:'Hoje'},{v:'semana',l:'Semana'},{v:'mes',l:'Mês'},{v:'ano',l:'Ano'}].map(p => (
+            <button key={p.v} onClick={() => setPeriodo(p.v)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${periodo === p.v ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'border border-slate-700 text-slate-500 hover:text-slate-300'}`}
+              data-testid={`equipe-periodo-${p.v}`}
+            >{p.l}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* KPI Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="glass-card p-4 text-center">
+          <p className="text-3xl font-bold text-emerald-400">{metricas.length}</p>
+          <p className="text-xs text-slate-500">Técnicos Ativos</p>
+        </div>
+        <div className="glass-card p-4 text-center">
+          <p className="text-3xl font-bold text-blue-400">{totalOS}</p>
+          <p className="text-xs text-slate-500">OS Executadas</p>
+        </div>
+        <div className="glass-card p-4 text-center">
+          <p className="text-3xl font-bold text-amber-400">{formatHH(totalHH)}</p>
+          <p className="text-xs text-slate-500">HH Total</p>
+        </div>
+        <div className="glass-card p-4 text-center">
+          <p className="text-3xl font-bold text-cyan-400">{totalInsp}</p>
+          <p className="text-xs text-slate-500">Inspeções</p>
+        </div>
+      </div>
+
+      {/* Ranking */}
+      {loading ? <Loading rows={5} /> : metricas.length > 0 ? (
+        <div className="glass-card p-4">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Ranking — {periodo === 'hoje' ? 'Hoje' : periodo === 'semana' ? 'Semana' : periodo === 'mes' ? 'Mês' : 'Ano'}</h3>
+          <div className="space-y-2">
+            {metricas.slice(0, 10).map((m, idx) => {
+              const maxOS = metricas[0]?.os_total || 1;
+              const pct = Math.min(100, ((m.os_total || 0) / maxOS) * 100);
+              const medalColors = ['text-amber-400', 'text-slate-300', 'text-amber-600'];
+              const tipos = m.os_por_tipo || {};
+              return (
+                <div key={m.user_id} className="group" data-testid={`ranking-${idx}`}>
+                  <div className="flex items-center gap-3 py-2">
+                    <span className={`text-lg font-bold w-8 text-center ${medalColors[idx] || 'text-slate-600'}`}>
+                      {idx < 3 ? ['1º','2º','3º'][idx] : `${idx+1}º`}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <div>
+                          <span className="text-sm text-slate-200 font-medium">{m.user_nome || 'Sem nome'}</span>
+                          <span className="text-[10px] text-slate-600 ml-2 capitalize">{m.user_role}</span>
+                        </div>
+                        <span className="text-sm font-bold text-emerald-400">{m.os_total || 0} OS</span>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500/60 rounded-full transition-all" style={{width: `${pct}%`}} />
+                      </div>
+                      {/* Detail metrics */}
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-slate-500">
+                        <span>HH: <b className="text-slate-400">{formatHH(m.hh_liquida_min || 0)}</b></span>
+                        <span>Solo: <b className="text-slate-400">{m.os_solo || 0}</b></span>
+                        <span>Compartilhada: <b className="text-slate-400">{m.os_compartilhada || 0}</b></span>
+                        {m.inspecoes > 0 && <span>Inspeções: <b className="text-cyan-400">{m.inspecoes}</b></span>}
+                        {m.tempo_medio_os_min > 0 && <span>Tempo médio: <b className="text-slate-400">{formatHH(m.tempo_medio_os_min)}</b></span>}
+                        {tipos.corretiva > 0 && <span className="text-red-400/70">Corr: {tipos.corretiva}</span>}
+                        {tipos.preventiva > 0 && <span className="text-blue-400/70">Prev: {tipos.preventiva}</span>}
+                        {tipos.lubrificacao > 0 && <span className="text-yellow-400/70">Lub: {tipos.lubrificacao}</span>}
+                        {tipos.melhoria > 0 && <span className="text-emerald-400/70">Melh: {tipos.melhoria}</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <EmptyState icon={Users} title="Sem dados para o período" description="Nenhuma métrica registrada. As métricas são geradas automaticamente conforme as OS são concluídas." />
+      )}
+
+      {/* Individual cards (for tecnico viewing their own) */}
+      {user?.role === 'tecnico' && metricas.find(m => m.user_id === user?.id) && (() => {
+        const my = metricas.find(m => m.user_id === user.id);
+        const tipos = my.os_por_tipo || {};
+        return (
+          <div className="glass-card p-4 border-l-4 border-emerald-500" data-testid="minha-performance">
+            <h3 className="text-sm font-semibold text-emerald-400 mb-3">Minha Performance</h3>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div><p className="text-2xl font-bold text-slate-200">{my.os_total}</p><p className="text-[10px] text-slate-500">OS Total</p></div>
+              <div><p className="text-2xl font-bold text-slate-200">{formatHH(my.hh_liquida_min || 0)}</p><p className="text-[10px] text-slate-500">HH Líquida</p></div>
+              <div><p className="text-2xl font-bold text-slate-200">{my.inspecoes || 0}</p><p className="text-[10px] text-slate-500">Inspeções</p></div>
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-2 text-center text-[10px]">
+              {Object.entries(tipos).map(([tipo, count]) => (
+                <div key={tipo} className="bg-slate-800/50 rounded p-1.5">
+                  <p className="text-sm font-bold text-slate-300">{count}</p>
+                  <p className="text-slate-600 capitalize">{tipo.replace(/_/g,' ')}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+};
+
+
 // ============== MASTER CLEANUP PAGE ==============
 
 const MasterCleanupPage = () => {
@@ -7456,6 +7823,7 @@ function App() {
           <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
           <Route path="/unidades" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
           <Route path="/admin/config" element={<ProtectedRoute><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/equipe" element={<ProtectedRoute><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
           <Route path="/master/cleanup" element={<ProtectedRoute><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
