@@ -3675,7 +3675,7 @@ const OSDetailPage = () => {
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${funcColors[e.funcao] || 'text-slate-400 bg-slate-500/10'}`}>{funcLabels[e.funcao] || e.funcao}</span>
                   </div>
                   {!['concluida','cancelada'].includes(os.status) && ['admin','master','pcm','supervisor'].includes(user?.role) && (
-                    <button onClick={() => handleRemoveExec(e.user_id)} className="p-1 hover:bg-red-500/10 rounded"><X size={14} className="text-red-400" /></button>
+                    <button onClick={() => handleRemoveExec(e.user_id)} className="p-1 hover:bg-red-500/10 rounded" data-testid={`remove-exec-${e.user_id}`}><X size={14} className="text-red-400" /></button>
                   )}
                 </div>
               );
