@@ -229,13 +229,17 @@ async def gerar_numero(db, org_id: str, entidade: str, tipo: str = "", config: d
     
     if padrao and prefixo_empresa:
         tipo_abrev = TIPO_ABREVIACOES.get(tipo, tipo[:4].upper()) if tipo else ""
-        numero = padrao.format(
-            empresa=prefixo_empresa,
-            tipo_abrev=tipo_abrev,
-            ano=ano,
-            unidade="",
-            area="",
-        ) + str(seq).zfill(digitos)
+        try:
+            numero = padrao.format(
+                empresa=prefixo_empresa,
+                tipo_abrev=tipo_abrev,
+                ano=ano,
+                unidade="",
+                area="",
+            ) + str(seq).zfill(digitos)
+        except (KeyError, IndexError):
+            # Malformed pattern fallback
+            numero = f"{prefixo_empresa}-{tipo_abrev}-{ano}-{str(seq).zfill(digitos)}"
     else:
         # Fallback to simple format
         numero = f"{ano}-{str(seq).zfill(5)}"
