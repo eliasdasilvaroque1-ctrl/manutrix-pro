@@ -1,0 +1,83 @@
+{
+  "summary": "Iteration 45 - MANUTRIX ENTERPRISE consolidation (org_config central brain + unidades collection rename + numbering engine + plantas backward compat). All 21/21 backend tests PASS. Frontend OrgConfigPage renders all 5 tabs and persists changes through the API; UnidadesPage renders with empty-state and 'Nova Unidade' CTA; sidebar 'Unidades' link is active under INFRAESTRUTURA. No regressions observed on Dashboard/Ativos/OS/Inspeções routes.",
+  "pass_fail_matrix": {
+    "GET /api/org/config (auto-creates if missing, full schema)": "PASS",
+    "PUT /api/org/config/identidade + GET persistence check": "PASS",
+    "PUT /api/org/config/tema (all 8 color fields)": "PASS",
+    "PUT /api/org/config/terminologia (49-term dict partial update)": "PASS",
+    "PUT /api/org/config/numeracao (prefix + digitos)": "PASS",
+    "PUT /api/org/config/preferencias (work hours, turnos, prefixo_empresa, etc.)": "PASS",
+    "GET /api/org/config/numeracao/preview returns formatted preview + padrao + prefixo + digitos": "PASS",
+    "Tecnico → 403 on all 5 org_config PUT sections": "PASS",
+    "GET /api/unidades list (no _id leakage)": "PASS",
+    "POST /api/unidades create + list verification": "PASS",
+    "PUT /api/unidades/{id} update": "PASS",
+    "DELETE /api/unidades/{id} soft-delete (disappears from list)": "PASS",
+    "GET /api/plantas backward-compatible list": "PASS",
+    "POST /api/plantas creates and is visible via /api/unidades (shared collection)": "PASS",
+    "PUT /api/plantas/{id} backward-compat update": "PASS",
+    "DELETE /api/plantas/{id} backward-compat soft-delete": "PASS",
+    "Regression login: master/admin/tecnico": "PASS",
+    "Regression: /api/dashboard/stats, /api/ativos, /api/ordens-servico, /api/inspecoes": "PASS",
+    "Frontend OrgConfigPage: 5 tabs visible (Identidade/Tema/Terminologia/Numeração/Preferências)": "PASS",
+    "Frontend OrgConfigPage: Identidade save persists across reload": "PASS",
+    "Frontend OrgConfigPage: Save buttons present on every tab": "PASS",
+    "Frontend UnidadesPage renders with empty-state + Nova Unidade CTA": "PASS",
+    "Sidebar 'Unidades' nav item routes to /unidades": "PASS",
+    "Regression frontend pages load (Ativos, Inspeções)": "PASS"
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PUT /api/org/config/terminologia",
+        "issue": "Silently ignores non-string values AND any key not in DEFAULT_TERMINOLOGY (49-key whitelist). Caller gets 200 with no indication that part of the payload was dropped. Consider returning a list of unrecognized keys or 400."
+      },
+      {
+        "endpoint": "PUT /api/org/config/numeracao",
+        "issue": "Only accepts entidades already in DEFAULT_NUMERACAO (5 fixed keys). Adding a new entity later requires a code change. Also the {ano} placeholder is rendered as 4 digits but no validation that {empresa}/{tipo_abrev} are present in custom prefixo, so a malformed prefixo (e.g., '{foo}-') will raise KeyError 500 on gerar_numero."
+      },
+      {
+        "endpoint": "POST /api/org/config/logo & favicon",
+        "issue": "No size/MIME validation. A 100MB file or non-image upload will be accepted. Suggest enforce <=5MB and check content_type startswith 'image/'."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard/Ativos/OS/Inspeções", "issues": ["Recharts containers warn 'width(-1)/height(-1) should be > 0' on first render — pre-existing, no functional impact but pollutes the console."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration45_org_config.py",
+    "/app/test_reports/pytest/iteration45_org_config.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Validate org_config/numeracao 'prefixo' placeholders to prevent KeyError 500 on gerar_numero if admin types a malformed pattern.",
+    "OPTIONAL: Enforce file size (<5MB) and MIME (image/*) on POST /api/org/config/logo and /favicon to avoid abuse.",
+    "OPTIONAL: Return list of unrecognized keys from PUT /org/config/terminologia (currently silently dropped).",
+    "OPTIONAL: Fix Recharts width=-1/height=-1 warnings by setting a min height on chart containers."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/org.py:107 update_numeracao accepts a free-form 'prefixo' string from admin without validating placeholders; combined with str.format() in org_config.gerar_numero (line 232) any unknown placeholder ({foo}) will raise KeyError → 500 on the next number generation.",
+    "backend/routes/org.py:94 update_terminologia silently drops payload keys that aren't in DEFAULT_TERMINOLOGY (49-term whitelist) and non-string values. UI client has no way to know its writes were partial.",
+    "backend/routes/org.py:144 / :170 upload_logo & upload_favicon don't validate content_type or file size, write directly to disk/object store. Admin abuse risk.",
+    "backend/org_config.py:181 gerar_numero falls back to 'YYYY-00000' when padrao OR prefixo_empresa is missing; current default config sets prefixo_empresa to first 3 letters of org name, so for orgs with empty/numeric names the fallback silently activates. Consider warning at config seed.",
+    "backend/routes/org.py:241 list_unidades hard-codes .to_list(100); orgs with >100 unidades will be silently truncated. Pair with pagination or raise the limit.",
+    "backend/routes/org.py:266 update_unidade ignores fields not in the (codigo/nome/descricao/endereco) whitelist — fine, but no 400 returned, so callers think their other fields persisted.",
+    "frontend/src/App.js:7324 The 'Numeração' tab Save calls onSave(form) then unconditionally calls api.put('/org/config/preferencias',{prefixo_empresa: prefixo}) without awaiting — two parallel writes, last-one-wins; if the second fails toast.success still already fired.",
+    "frontend/src/App.js:7130 get('/org/config') doesn't handle 401/403 — page silently blanks for tecnicos who navigate to /admin/config via URL (no admin guard on the route itself).",
+    "Service Worker on the preview domain re-registers and triggers a reload on first navigation; this clears form state mid-test and likely also affects real users on first visit. Worth investigating SW update strategy (skipWaiting vs prompt)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration45_org_config.py (new)"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "100% of checks executed"},
+  "test_credentials": "admin@manutrix.com/admin123, tecnico@manutrix.com/tecnico123, master@manutrix.com/master123 — all working.",
+  "seed_data_creation": "Created and soft-deleted TEST_Unidade_Iter45 and TEST_Planta_BackCompat unidades via API. Updated org_config.identidade via UI test and reset back to default values via API after the run. org_config.tema/terminologia/numeracao/preferencias were modified by tests and left at last test values (non-destructive — main agent can re-seed if defaults are desired).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file: /app/backend/tests/test_iteration45_org_config.py — covers all 5 org_config sections (GET/PUT + RBAC), unidades CRUD with soft-delete verification, plantas backward-compat via /api/plantas mirrors the unidades collection, numeração preview, and regression on login/dashboard/ativos/OS/inspeções. UI verified: OrgConfigPage at /admin/config renders all 5 tabs with data-testid='config-tab-{id}' and save buttons data-testid='config-save-{section}'; UnidadesPage at /unidades shows empty-state with Nova Unidade CTA. Sidebar 'Unidades' link is under INFRAESTRUTURA. Identidade was reset to defaults at end of run; tema/terminologia/numeracao/preferencias still hold test values (admin can re-set via UI). One pre-existing harmless warning: Recharts width(-1)/height(-1) on initial render."
+}

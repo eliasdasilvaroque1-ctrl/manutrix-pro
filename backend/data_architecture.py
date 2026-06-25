@@ -189,7 +189,7 @@ INDEXES = {
         {"keys": [("item_id", 1)], "name": "item"},
         {"keys": [("os_id", 1)], "name": "os"},
     ],
-    "plantas_v2": [
+    "unidades": [
         {"keys": [("organization_id", 1)], "name": "org"},
     ],
     "paradas_programadas": [

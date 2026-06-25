@@ -40,8 +40,9 @@ from routes.dashboard import router as dashboard_router
 from routes.assets import router as assets_router
 from routes.work_orders import router as work_orders_router
 from routes.events import router as events_router
+from routes.org import router as org_router
 
-app = FastAPI(title="MANUTRIX API", version="4.0.0")
+app = FastAPI(title="MANUTRIX API", version="4.1.0")
 api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -58,13 +59,25 @@ async def startup_init_storage():
 @app.on_event("startup")
 async def startup_create_indexes():
     from data_architecture import create_all_indexes
+    from org_config import CONFIG_INDEXES
     await create_all_indexes(db)
+    # Create config indexes
+    for coll_name, idx_list in CONFIG_INDEXES.items():
+        for idx in idx_list:
+            try:
+                kwargs = {"name": idx["name"], "background": True}
+                if idx.get("unique"):
+                    kwargs["unique"] = True
+                await db[coll_name].create_index(idx["keys"], **kwargs)
+            except Exception as e:
+                logger.warning(f"Config index {idx['name']} on {coll_name}: {e}")
 
 # Include modularized routers
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(assets_router, prefix="/api")
 app.include_router(work_orders_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
+app.include_router(org_router, prefix="/api")
 
 # ============== AUTH ROUTES ==============
 
@@ -1642,53 +1655,55 @@ async def list_tecnicos(user: Dict = Depends(get_current_user)):
 
 
 
-# ============== PLANTAS ==============
+# ============== PLANTAS -> UNIDADES COMPATIBILITY ==============
+# Old /plantas endpoints redirect to /unidades for backward compatibility
 
 @api_router.get("/plantas")
-async def list_plantas(user: Dict = Depends(get_current_user)):
+async def list_plantas_compat(user: Dict = Depends(get_current_user)):
     query = {"deleted_at": None}
     if user.get('organization_id'):
         query['organization_id'] = user['organization_id']
-    return await db.plantas_v2.find(query, {"_id": 0}).sort("nome", 1).to_list(100)
+    return await db.unidades.find(query, {"_id": 0}).sort("nome", 1).to_list(100)
 
 @api_router.post("/plantas")
-async def create_planta(data: PlantaCreate, user: Dict = Depends(get_current_user)):
+async def create_planta_compat(data: PlantaCreate, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
     doc = {
         "id": str(uuid.uuid4()),
         "organization_id": user.get('organization_id', ''),
         **data.model_dump(),
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get('id', ''),
         "deleted_at": None
     }
-    await db.plantas_v2.insert_one(doc)
-    await audit_log("create", "planta", doc['id'], user, f"Planta criada: {data.nome}")
+    await db.unidades.insert_one(doc)
+    await audit_log("create", "unidade", doc['id'], user, f"Unidade criada: {data.nome}")
     doc.pop('_id', None)
     return doc
 
 @api_router.put("/plantas/{planta_id}")
-async def update_planta(planta_id: str, data: PlantaUpdate, user: Dict = Depends(get_current_user)):
+async def update_planta_compat(planta_id: str, data: PlantaUpdate, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
-    existing = await db.plantas_v2.find_one({"id": planta_id, "deleted_at": None}, {"_id": 0})
+    existing = await db.unidades.find_one({"id": planta_id, "deleted_at": None}, {"_id": 0})
     if not existing:
-        raise HTTPException(status_code=404, detail="Planta não encontrada")
-    verify_org_access(user, existing, "Planta")
+        raise HTTPException(status_code=404, detail="Unidade não encontrada")
+    verify_org_access(user, existing, "Unidade")
     updates = {k: v for k, v in data.model_dump(exclude_none=True).items()}
     if updates:
         updates['updated_at'] = datetime.now(timezone.utc).isoformat()
-        await audit_field_changes("planta", planta_id, f"Planta {existing.get('nome','')}", existing, updates, user)
-        await db.plantas_v2.update_one({"id": planta_id}, {"$set": updates})
-    return await db.plantas_v2.find_one({"id": planta_id}, {"_id": 0})
+        await db.unidades.update_one({"id": planta_id}, {"$set": updates})
+    return await db.unidades.find_one({"id": planta_id}, {"_id": 0})
 
 @api_router.delete("/plantas/{planta_id}")
-async def delete_planta(planta_id: str, user: Dict = Depends(get_current_user)):
+async def delete_planta_compat(planta_id: str, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
-    existing = await db.plantas_v2.find_one({"id": planta_id, "deleted_at": None})
+    existing = await db.unidades.find_one({"id": planta_id, "deleted_at": None})
     if not existing:
-        raise HTTPException(status_code=404, detail="Planta não encontrada")
-    verify_org_access(user, existing, "Planta")
-    await db.plantas_v2.update_one({"id": planta_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
-    await audit_log("delete", "planta", planta_id, user, f"Planta excluída: {existing.get('nome')}")
+        raise HTTPException(status_code=404, detail="Unidade não encontrada")
+    verify_org_access(user, existing, "Unidade")
+    await db.unidades.update_one({"id": planta_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    await audit_log("delete", "unidade", planta_id, user, f"Unidade excluída: {existing.get('nome')}")
     return {"success": True}
 
 
