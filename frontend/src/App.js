@@ -282,6 +282,7 @@ const CameraCapture = ({ onCapture, onClose }) => {
     };
     startCamera();
     return () => { if (stream) stream.getTracks().forEach(t => t.stop()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const takePhoto = () => {
@@ -2294,6 +2295,7 @@ const AtivosPage = () => {
     return osList.filter(os => os.ativo_id === ativoId && !['concluida','cancelada'].includes(os.status)).length;
   };
   
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchData(); }, [filterSector]);
   
   const handleDelete = async () => {
@@ -2476,6 +2478,7 @@ const AtivoDetailPage = () => {
     } catch { }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchAtivo(); api.get('/users/tecnicos').then(r => setTecnicos(r.data)).catch(() => {}); }, [id]);
   
   const handleUploadManual = async (e) => {
@@ -3246,6 +3249,7 @@ const OSDetailPage = () => {
     }
   };
   
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchOS(); }, [id]);
   
   useEffect(() => {
@@ -3659,6 +3663,7 @@ const EstoquePage = () => {
     }
   };
   
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchData(); }, [showCritico]);
   
   const handleDelete = async () => {
@@ -4037,6 +4042,7 @@ const InspecaoDetailPage = () => {
     }
   };
   
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchInspecao(); }, [id]);
   
   const handleItemChange = (itemId, field, value) => {
@@ -4921,6 +4927,7 @@ const ScannerPage = () => {
   useEffect(() => { return () => { scanningRef.current = false; stopCamera(); }; }, []);
 
   // Auto-start camera on mount for quick field use
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { startCamera(); }, []);
   
   return (
@@ -5010,6 +5017,7 @@ const PhotoUploader = ({ entityType, entityId, categoria = 'foto', label = 'Foto
     } catch (err) { console.error(err); }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchPhotos(); }, [entityId, entityType]);
 
   const handleUpload = async (e) => {
@@ -6316,6 +6324,7 @@ const AuditoriaPage = () => {
     } catch { toast.error('Erro ao carregar auditoria'); }
     finally { setLoading(false); }
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchLogs(); }, []);
 
   const handleExport = async (fmt) => {
