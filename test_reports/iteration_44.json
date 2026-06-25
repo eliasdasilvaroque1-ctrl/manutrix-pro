@@ -1,0 +1,82 @@
+{
+  "summary": "Iteration 44 - MANUTRIX PRO event-sourced data architecture (HH time tracking, OS events, team executantes, pre-aggregated metrics, 36 indexes). 27/28 backend tests PASS. One HIGH-severity bug found: re-adding an executante after soft-delete returns 500 (DuplicateKeyError) because the unique index (os_id, user_id) on os_executantes does not respect deleted_at. All other event-sourcing/HH/metrics endpoints + regression flows verified.",
+  "pass_fail_matrix": {
+    "POST /api/os/{id}/hh evento=iniciar creates HH registro + OS evento": "PASS",
+    "Event sequence validation (pausar without iniciar → 400)": "PASS",
+    "Full sequence iniciar → pausar → retornar → finalizar works": "PASS",
+    "Invalid transition after finalizar (pausar) → 400": "PASS",
+    "GET /api/os/{id}/hh chronological + no _id leakage": "PASS",
+    "GET /api/hh/resumo/{os_id} returns per-user hh_bruta/liquida/parado/total_eventos": "PASS",
+    "GET /api/os/{id}/eventos populated by HH calls (trabalho_iniciado/pausa/retorno/os_concluida)": "PASS",
+    "POST /api/os/{id}/executantes adds team member, sets status=ativo, updates equipe array": "PASS",
+    "Duplicate executante (live) → 400": "PASS",
+    "GET /api/os/{id}/executantes lists active members": "PASS",
+    "DELETE /api/os/{id}/executantes/{user_id} soft-deletes + removes from equipe": "PASS",
+    "DELETE non-existent executante → 404": "PASS",
+    "Re-add executante after soft-delete (BUG)": "FAIL (500)",
+    "GET /api/metricas/usuario/{id}?periodo=hoje": "PASS",
+    "GET /api/metricas/usuario/{id}?periodo=mes": "PASS",
+    "GET /api/metricas/equipe?periodo=semana with ranking sort": "PASS",
+    "GET /api/metricas/equipe?periodo=mes": "PASS",
+    "POST /api/metricas/rebuild as admin (all users)": "PASS",
+    "POST /api/metricas/rebuild as tecnico → 403": "PASS",
+    "POST /api/metricas/rebuild?user_id=… single-user": "PASS",
+    "36 custom indexes verified across 13 collections (hh_registros, os_eventos, os_executantes, metricas_diarias, metricas_mensais, etc.)": "PASS",
+    "Regression: Dashboard /api/dashboard/stats, /api/ativos, /api/ordens-servico, /api/inspecoes, login master/admin/tecnico": "PASS"
+  },
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/os/{id}/executantes",
+        "issue": "Re-adding a soft-deleted executante returns 500 (pymongo DuplicateKeyError E11000 on unique index os_user). The unique index defined in data_architecture.py INDEXES['os_executantes'][0] is on (os_id, user_id) and does not include deleted_at, so soft-deleted rows permanently block re-adds. Soft-delete pattern is broken for this collection.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/os/{id}/hh",
+        "issue": "Each HH event call triggers an inline rebuild_daily_metrics() which scans ordens_servico, hh_registros, and inspecoes for the day. For 'tens of millions of HH records' scale this will add latency to every iniciar/pausar/retornar/finalizar. Consider moving to a fire-and-forget background task or queue."
+      },
+      {
+        "endpoint": "GET /api/os/{id}/eventos",
+        "issue": "Helper POST /api/os/{id}/eventos is publicly exposed but documented as 'internal use'. Anyone with write permission can manually inject arbitrary events into the immutable log — defeats the purpose of event sourcing."
+      },
+      {
+        "endpoint": "POST /api/os/{id}/hh",
+        "issue": "Inside rebuild_daily_metrics, the timestamp ISO format used by build_hh_registro contains '+00:00' offset; the day_start/day_end strings use the same format, but the $gte/$lte string comparison can break if an event is recorded at exactly midnight in a different TZ. Low risk but worth a unit test."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration44_events_hh.py",
+    "/app/test_reports/pytest/iteration44_events_hh.xml"
+  ],
+  "action_items": [
+    "FIX HIGH: In data_architecture.py, change os_executantes unique index from (os_id, user_id) to a PARTIAL unique index `{'os_id':1,'user_id':1}` with `partialFilterExpression={'deleted_at': None}`, OR include deleted_at in the key. Also (defensively) update routes/events.py:add_os_executante to catch DuplicateKeyError and, if a soft-deleted row exists, $set deleted_at=None to reactivate it (return 200). Otherwise soft-deleted users can never be re-assigned to the same OS.",
+    "OPTIONAL: Make POST /api/os/{id}/eventos admin-only or remove it from the public router (currently any write-permission user can inject arbitrary events into the immutable log).",
+    "OPTIONAL: Move per-event rebuild_daily_metrics out of the HH POST request path (background task or message queue) to keep tracking endpoints fast at scale."
+  ],
+  "critical_code_review_comments": [
+    "routes/events.py:213 — add_os_executante checks {deleted_at: None} to detect duplicates but inserts unconditionally; with the current unique index that always crashes 500 after a soft-delete instead of returning 400. The duplicate-check and unique-index semantics are inconsistent.",
+    "data_architecture.py:171 — Unique index on os_executantes is (os_id, user_id) without a partial filter. With the soft-delete pattern used elsewhere in MANUTRIX, this should be a partial unique index `partialFilterExpression={'deleted_at': null}` or include `deleted_at` in the key.",
+    "routes/events.py:34 — `POST /os/{id}/eventos` is marked 'internal use' but exposed as a public router with no role gate beyond check_write_permission. Anyone (incl. tecnicos) can inject arbitrary events into the immutable log; for true event sourcing this should be internal only or restricted to system actors.",
+    "routes/events.py:108 — try/except in rebuild_daily_metrics is bare `except:` (lines 150, 161, 287, 297 in data_architecture.py). Swallows all exceptions silently — replace with `except Exception:` and log.",
+    "routes/events.py:111 — rebuild_daily_metrics is awaited inline on every HH POST. At scale this couples write latency to aggregation cost. Move to BackgroundTasks or a queue.",
+    "data_architecture.py:91 — build_hh_registro accepts os_doc.get('area_id') but ordens_servico documents don't have area_id natively; the enrichment in routes/events.py:71-73 sets it from ativo→sector.id which is a sector_id, not an area_id (semantic mismatch; field misnamed).",
+    "routes/events.py:312-322 — get_team_metrics builds `user_ids = list(set(...))` then calls find({id: $in user_ids}); if user_ids is empty this still works but returns 0 users — fine. However for huge orgs (>200 users) the .to_list(200) cap silently truncates the ranking.",
+    "data_architecture.py:200 — INDEXES totals correctly to 36 across 13 collections (8+3+3+4+3+3+2+2+2+3+1+1+1); spec matches implementation. All 36 verified present via index_information().",
+    "routes/events.py:269 — `return metric or {...}` returns minimal default; for `periodo=hoje` if no daily doc exists, callers get only `{os_total:0, hh_liquida_min:0, inspecoes:0}` missing `os_solo/os_compartilhada/hh_bruta_min/tempo_parado_min/os_por_tipo` — inconsistent schema between with/without data.",
+    "routes/events.py:264 — datetime.now(timezone.utc).strftime('%Y-%m-%d') for 'hoje' uses UTC; if app users are in BRT (-3), the 'hoje' boundary will be wrong for 3 hours each day."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration44_events_hh.py (new)"
+  ],
+  "success_rate": {"backend": "96.4% (27/28)", "frontend": "skipped (backend-only request)"},
+  "test_credentials": "Used admin@manutrix.com/admin123, tecnico@manutrix.com/tecnico123, master@manutrix.com/master123 — all verified.",
+  "seed_data_creation": "Created HH events (iniciar/pausar/retornar/finalizar) on the first OS for admin. Added/removed tecnico as executante on the same OS. Cleaned the test executante record from MongoDB after the run to keep DB clean.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file: /app/backend/tests/test_iteration44_events_hh.py — covers HH events, OS eventos, executantes (CRUD + duplicate + re-add-after-delete bug), metrics (user/team/rebuild + RBAC), index verification (36 declared, all created), and regression (dashboard/stats, ativos, OS, inspecoes, login). The events router is mounted at /api prefix. Bug found: os_executantes unique index does not honor soft-delete — re-adding a soft-deleted executante returns 500.",
+  "rca of the issue": "Bug: POST /api/os/{id}/executantes returns 500 when re-adding a user who was previously soft-deleted from the same OS. Root cause: data_architecture.py:171 declares unique index on os_executantes with keys=[('os_id',1),('user_id',1)] without a partialFilterExpression. When a row is soft-deleted via DELETE endpoint (sets deleted_at=ISO timestamp), the row still exists with the same (os_id, user_id) tuple. The add endpoint at routes/events.py:203 only checks for existing rows where deleted_at IS None (which now returns None, so it proceeds), then calls insert_one(doc), which hits the unique index and raises pymongo.errors.DuplicateKeyError E11000 — uncaught, surfaced as 500. Reproduction: 1) POST /api/os/{id}/executantes with body {os_id, user_id, funcao}, 2) DELETE /api/os/{id}/executantes/{user_id}, 3) Repeat step 1 with same user_id → 500. Mitigation options: (a) change the index to partial with partialFilterExpression={'deleted_at': None}; (b) include deleted_at in the unique key; (c) in add_os_executante, also detect soft-deleted rows and $set deleted_at=None to reactivate."
+}

@@ -39,8 +39,9 @@ import storage as objstore
 from routes.dashboard import router as dashboard_router
 from routes.assets import router as assets_router
 from routes.work_orders import router as work_orders_router
+from routes.events import router as events_router
 
-app = FastAPI(title="MANUTRIX API", version="3.2.0")
+app = FastAPI(title="MANUTRIX API", version="4.0.0")
 api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -53,10 +54,17 @@ async def startup_init_storage():
     except Exception as e:
         logger.warning(f"Object storage init deferred: {e}")
 
+# Create all indexes at startup
+@app.on_event("startup")
+async def startup_create_indexes():
+    from data_architecture import create_all_indexes
+    await create_all_indexes(db)
+
 # Include modularized routers
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(assets_router, prefix="/api")
 app.include_router(work_orders_router, prefix="/api")
+app.include_router(events_router, prefix="/api")
 
 # ============== AUTH ROUTES ==============
 
