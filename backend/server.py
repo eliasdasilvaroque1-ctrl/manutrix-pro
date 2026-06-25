@@ -27,7 +27,7 @@ from deps import (
     JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS,
     SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, supabase_client,
     hash_password, verify_password, create_token, get_current_user,
-    is_admin, check_write_permission, check_admin_only, check_pcm_or_admin, check_not_gerente, can_export, can_view_dashboard,
+    is_admin, is_master, check_write_permission, check_admin_only, check_master_only, check_pcm_or_admin, check_not_gerente, can_export, can_view_dashboard,
     generate_tag, generate_sku, generate_os_numero,
     audit_log, audit_denial, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids, verify_org_access, audit_field_changes,
     logger
@@ -1631,6 +1631,155 @@ async def list_tecnicos(user: Dict = Depends(get_current_user)):
     if user.get('organization_id'):
         query['organization_id'] = user['organization_id']
     return await db.users.find(query, {"_id": 0, "id": 1, "nome": 1, "email": 1, "telefone": 1, "role": 1}).to_list(100)
+
+
+
+# ============== PLANTAS ==============
+
+@api_router.get("/plantas")
+async def list_plantas(user: Dict = Depends(get_current_user)):
+    query = {"deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    return await db.plantas_v2.find(query, {"_id": 0}).sort("nome", 1).to_list(100)
+
+@api_router.post("/plantas")
+async def create_planta(data: PlantaCreate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "organization_id": user.get('organization_id', ''),
+        **data.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_at": None
+    }
+    await db.plantas_v2.insert_one(doc)
+    await audit_log("create", "planta", doc['id'], user, f"Planta criada: {data.nome}")
+    doc.pop('_id', None)
+    return doc
+
+@api_router.put("/plantas/{planta_id}")
+async def update_planta(planta_id: str, data: PlantaUpdate, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    existing = await db.plantas_v2.find_one({"id": planta_id, "deleted_at": None}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Planta não encontrada")
+    verify_org_access(user, existing, "Planta")
+    updates = {k: v for k, v in data.model_dump(exclude_none=True).items()}
+    if updates:
+        updates['updated_at'] = datetime.now(timezone.utc).isoformat()
+        await audit_field_changes("planta", planta_id, f"Planta {existing.get('nome','')}", existing, updates, user)
+        await db.plantas_v2.update_one({"id": planta_id}, {"$set": updates})
+    return await db.plantas_v2.find_one({"id": planta_id}, {"_id": 0})
+
+@api_router.delete("/plantas/{planta_id}")
+async def delete_planta(planta_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    existing = await db.plantas_v2.find_one({"id": planta_id, "deleted_at": None})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Planta não encontrada")
+    verify_org_access(user, existing, "Planta")
+    await db.plantas_v2.update_one({"id": planta_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
+    await audit_log("delete", "planta", planta_id, user, f"Planta excluída: {existing.get('nome')}")
+    return {"success": True}
+
+
+# ============== MASTER: ENVIRONMENT CLEANUP ==============
+
+@api_router.post("/master/cleanup")
+async def master_cleanup(
+    targets: List[str] = Query(default=[]),
+    user: Dict = Depends(get_current_user)
+):
+    """Master-only: Clean test data. Preserves users, areas, ativos, materiais, planos, configs."""
+    check_master_only(user)
+    org_id = user.get('organization_id', '')
+    org_filter = {"organization_id": org_id} if org_id else {}
+    
+    results = {}
+    cleanable = {
+        "ordens_servico": db.ordens_servico,
+        "inspecoes": db.inspecoes,
+        "anomalias": db.anomalias,
+        "paradas_programadas": db.paradas_programadas,
+        "audit_logs": db.audit_logs,
+        "notificacoes": db.notificacoes,
+        "movimentacoes_estoque": db.movimentacoes_estoque,
+        "chat_history": db.chat_history,
+        "attachments": db.attachments,
+        "anomalia_historico": db.anomalia_historico,
+        "anomalia_comentarios": db.anomalia_comentarios,
+        "os_materiais": db.os_materiais,
+    }
+    
+    for target in targets:
+        if target in cleanable:
+            r = await cleanable[target].delete_many(org_filter)
+            results[target] = r.deleted_count
+    
+    await db.admin_actions.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": "cleanup",
+        "user_id": user['id'],
+        "user_nome": user.get('nome', ''),
+        "user_role": user.get('role', ''),
+        "organization_id": org_id,
+        "targets": targets,
+        "results": results,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"success": True, "deleted": results}
+
+@api_router.post("/master/prepare-production")
+async def prepare_production(user: Dict = Depends(get_current_user)):
+    """Master-only: Clean ALL test data, prepare for production."""
+    check_master_only(user)
+    org_id = user.get('organization_id', '')
+    org_filter = {"organization_id": org_id} if org_id else {}
+    
+    all_targets = [
+        "ordens_servico", "inspecoes", "anomalias", "paradas_programadas",
+        "audit_logs", "notificacoes", "movimentacoes_estoque", "chat_history",
+        "attachments", "anomalia_historico", "anomalia_comentarios", "os_materiais"
+    ]
+    
+    results = {}
+    collections_map = {
+        "ordens_servico": db.ordens_servico, "inspecoes": db.inspecoes,
+        "anomalias": db.anomalias, "paradas_programadas": db.paradas_programadas,
+        "audit_logs": db.audit_logs, "notificacoes": db.notificacoes,
+        "movimentacoes_estoque": db.movimentacoes_estoque, "chat_history": db.chat_history,
+        "attachments": db.attachments, "anomalia_historico": db.anomalia_historico,
+        "anomalia_comentarios": db.anomalia_comentarios, "os_materiais": db.os_materiais,
+    }
+    
+    for target in all_targets:
+        r = await collections_map[target].delete_many(org_filter)
+        results[target] = r.deleted_count
+    
+    await db.admin_actions.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": "prepare_production",
+        "user_id": user['id'],
+        "user_nome": user.get('nome', ''),
+        "user_role": user.get('role', ''),
+        "organization_id": org_id,
+        "targets": all_targets,
+        "results": results,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"success": True, "deleted": results, "message": "Ambiente preparado para produção"}
+
+@api_router.get("/master/admin-actions")
+async def list_admin_actions(user: Dict = Depends(get_current_user)):
+    """Master-only: View administrative action logs."""
+    check_master_only(user)
+    org_filter = {"organization_id": user.get('organization_id', '')} if user.get('organization_id') else {}
+    actions = await db.admin_actions.find(org_filter, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return actions
+
 
 # ============== SEED ==============
 

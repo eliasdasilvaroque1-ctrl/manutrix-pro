@@ -13,7 +13,7 @@ import {
   Zap, Target, Layers, Filter, MoreVertical, Eye, Edit, Trash2, Save,
   Phone, Mail, Building, Hash, Thermometer, Volume2, Droplet, Cog,
   DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
-  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy
+  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy, Factory
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
 import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData } from "@/lib/offlineQueue";
@@ -1474,6 +1474,8 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const { user, logout } = useAuth();
   
   const role = user?.role || 'tecnico';
+  const isAdmin = role === 'admin' || role === 'master';
+  const isMaster = role === 'master';
   const menuGroups = [
     {
       label: 'GESTÃO',
@@ -1489,6 +1491,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     ...(role !== 'tecnico' ? [{
       label: 'INFRAESTRUTURA',
       items: [
+        ...(isAdmin ? [{ icon: Factory, label: 'Plantas', path: '/plantas' }] : []),
         { icon: Layers, label: 'Áreas', path: '/setores' },
       ]
     }] : []),
@@ -1500,12 +1503,13 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         { icon: Calendar, label: 'Paradas', path: '/paradas' },
       ]
     }] : []),
-    ...(role === 'admin' ? [{
+    ...(isAdmin ? [{
       label: 'ADMIN',
       items: [
         { icon: Users, label: 'Usuários', path: '/admin/usuarios' },
         { icon: ClipboardCheck, label: 'Planos de Inspeção', path: '/admin/templates' },
         { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
+        ...(isMaster ? [{ icon: Trash2, label: 'Limpeza', path: '/master/cleanup' }] : []),
       ]
     }] : []),
     ...(role === 'pcm' ? [{
@@ -2324,7 +2328,7 @@ const AtivosPage = () => {
           <h1 className="text-2xl font-bold text-slate-100">Ativos</h1>
           <ExportButtons entity="ativos" />
         </div>
-        {user?.role === 'admin' && (
+        {['admin','master'].includes(user?.role) && (
           <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-ativo-btn">
             <Plus size={20} /> Novo Ativo
           </button>
@@ -2380,7 +2384,7 @@ const AtivosPage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {user?.role === 'admin' && (
+                  {['admin','master'].includes(user?.role) && (
                     <div className="hidden group-hover:flex items-center gap-1">
                       <button onClick={() => { setEditItem(ativo); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg">
                         <Edit size={16} className="text-slate-400" />
@@ -2547,7 +2551,7 @@ const AtivoDetailPage = () => {
           {ativo.tipo_equipamento && <p className="text-sm text-slate-500">{ativo.tipo_equipamento}</p>}
         </div>
         <div className="flex items-center gap-2 print:hidden">
-          {user?.role === 'admin' && (
+          {['admin','master'].includes(user?.role) && (
             <button onClick={async () => {
               const res = await api.get('/sectors');
               setDupSectors(res.data);
@@ -2617,7 +2621,7 @@ const AtivoDetailPage = () => {
           <div className="glass-card p-4" data-testid="ativo-materiais">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2"><Package size={16} /> Lista Técnica (BOM)</h3>
-              {user?.role === 'admin' && <button onClick={() => setShowBomModal(true)} className="text-xs btn-primary flex items-center gap-1" data-testid="add-bom-btn"><Plus size={14} /> Adicionar</button>}
+              {['admin','master'].includes(user?.role) && <button onClick={() => setShowBomModal(true)} className="text-xs btn-primary flex items-center gap-1" data-testid="add-bom-btn"><Plus size={14} /> Adicionar</button>}
             </div>
             {bomSearch !== undefined && (
               <input value={bomSearch} onChange={e => setBomSearch(e.target.value)} placeholder="Buscar por código ou descrição..." className="input-industrial w-full px-3 text-sm mb-3" data-testid="bom-search" />
@@ -2637,7 +2641,7 @@ const AtivoDetailPage = () => {
                     <span className="font-mono text-xs text-slate-500 w-24">{m.codigo || '-'}</span>
                     <span className="text-slate-300 flex-1">{m.nome}</span>
                     <span className="text-slate-500">{m.quantidade} {m.unidade}</span>
-                    {user?.role === 'admin' && (
+                    {['admin','master'].includes(user?.role) && (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                         <button onClick={() => { setBomEdit(m); setBomForm({ nome: m.nome, codigo: m.codigo || '', quantidade: m.quantidade, unidade: m.unidade || 'UN', observacoes: m.observacoes || '' }); setShowBomModal(true); }} className="p-1 hover:bg-slate-700 rounded"><Edit size={12} className="text-slate-400" /></button>
                         <button onClick={async () => { await api.delete(`/ativos/${ativo.id}/materiais/${m.id}`); toast.success('Removido'); fetchAtivo(); }} className="p-1 hover:bg-red-500/10 rounded"><Trash2 size={12} className="text-red-400" /></button>
@@ -2786,7 +2790,7 @@ const AtivoDetailPage = () => {
         <div className="glass-card p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2"><FileText size={16} /> Manuais Técnicos</h3>
-            {user?.role === 'admin' && (
+            {['admin','master'].includes(user?.role) && (
               <label className="btn-primary text-sm flex items-center gap-2 cursor-pointer" data-testid="upload-manual-btn">
                 <Upload size={16} /> {uploading ? 'Enviando...' : 'Enviar PDF'}
                 <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUploadManual} className="hidden" disabled={uploading} />
@@ -2809,7 +2813,7 @@ const AtivoDetailPage = () => {
                     <button onClick={async () => {
                       try { const res = await fetch(`${BACKEND_URL}${m.url}`); const blob = await res.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = m.filename; a.click(); window.URL.revokeObjectURL(url); } catch { toast.error('Erro ao baixar'); }
                     }} className="p-2 hover:bg-emerald-500/10 rounded-lg" title="Baixar"><Download size={16} className="text-emerald-400" /></button>
-                    {user?.role === 'admin' && <button onClick={() => handleDeleteManual(m.id)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100" title="Remover"><Trash2 size={16} className="text-red-400" /></button>}
+                    {['admin','master'].includes(user?.role) && <button onClick={() => handleDeleteManual(m.id)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100" title="Remover"><Trash2 size={16} className="text-red-400" /></button>}
                   </div>
                 </div>
               ))}
@@ -2938,38 +2942,74 @@ const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete }) 
               <span className="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{colItems.length}</span>
             </div>
             <div className="p-2 flex-1 space-y-2 min-h-[120px] max-h-[60vh] overflow-y-auto custom-scrollbar">
-              {colItems.map(os => (
+              {colItems.map(os => {
+                const tipoColors = {
+                  corretiva: 'bg-red-500/15 text-red-400 border-red-500/30',
+                  preventiva: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+                  lubrificacao: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+                  inspecao: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+                  fabricacao: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+                  preparacao_material: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+                  melhoria: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+                  emergencial: 'bg-red-600/20 text-red-300 border-red-500/40',
+                  calibracao: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+                  instalacao: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
+                  reforma: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+                };
+                const tipoClass = tipoColors[os.tipo] || 'bg-slate-500/15 text-slate-400 border-slate-500/30';
+                const tipoLabel = (os.tipo || '').replace(/_/g, ' ');
+                return (
                 <div
                   key={os.id}
                   draggable={col.id !== 'concluida'}
                   onDragStart={(e) => handleDragStart(e, os)}
-                  className={`p-3 rounded-lg bg-slate-900/80 border border-slate-700/50 hover:border-slate-600 cursor-grab active:cursor-grabbing transition-all group/card ${
+                  className={`rounded-lg bg-slate-900/80 border border-slate-700/50 hover:border-slate-600 cursor-grab active:cursor-grabbing transition-all group/card overflow-hidden ${
                     draggedItem?.id === os.id ? 'opacity-40' : ''
-                  } ${col.id === 'concluida' ? 'cursor-default opacity-70' : ''}`}
+                  } ${col.id === 'concluida' ? 'cursor-default opacity-70' : ''} ${os.atrasada ? 'border-red-500/50' : ''}`}
                   data-testid={`kanban-card-${os.id}`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono text-xs text-emerald-400 cursor-pointer hover:underline" onClick={() => onCardClick(os)}>#{os.numero}</span>
-                    <PriorityBadge priority={os.prioridade} />
+                  {/* Top: Area/Planta stripe */}
+                  <div className="px-3 py-1.5 bg-slate-800/60 border-b border-slate-700/30">
+                    {os.ativo?.planta_nome && <p className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">{os.ativo.planta_nome}</p>}
+                    <p className="text-[10px] text-slate-400 font-medium">{os.ativo?.sector?.nome || os.ativo?.area_nome || ''}</p>
                   </div>
-                  <p className="text-sm text-slate-200 leading-tight cursor-pointer hover:text-white" onClick={() => onCardClick(os)}>{os.titulo}</p>
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      {os.ativo && <span className="text-[10px] text-slate-500">{os.ativo.tag}</span>}
-                      <span className="text-[10px] text-slate-600 capitalize">{os.tipo}</span>
+                  <div className="p-2.5">
+                    {/* TAG + Equipment name */}
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      {os.ativo?.tag && <span className="font-mono text-xs text-emerald-400 font-bold">{os.ativo.tag}</span>}
+                      {os.ativo?.nome && <span className="text-[10px] text-slate-500 truncate">{os.ativo.nome}</span>}
                     </div>
-                    {(onEdit || onDelete) && (
-                      <div className="hidden group-hover/card:flex gap-0.5">
-                        {onEdit && <button onClick={(e) => { e.stopPropagation(); onEdit(os); }} className="p-1 hover:bg-blue-500/10 rounded" title="Editar"><Edit3 size={12} className="text-blue-400" /></button>}
-                        {onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(os); }} className="p-1 hover:bg-red-500/10 rounded" title="Excluir"><Trash2 size={12} className="text-red-400" /></button>}
+                    {/* OS number + type */}
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="font-mono text-xs text-slate-300 cursor-pointer hover:text-white hover:underline" onClick={() => onCardClick(os)}>OS #{os.numero}</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded border capitalize ${tipoClass}`}>{tipoLabel}</span>
+                    </div>
+                    {/* Title */}
+                    <p className="text-sm text-slate-200 leading-tight cursor-pointer hover:text-white mb-2" onClick={() => onCardClick(os)}>{os.titulo}</p>
+                    {/* Priority + Responsavel + Date */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <PriorityBadge priority={os.prioridade} />
+                        {os.disciplina && <span className="text-[9px] px-1 py-0.5 rounded bg-slate-800 text-slate-500 capitalize">{os.disciplina}</span>}
                       </div>
-                    )}
+                      {(onEdit || onDelete) && (
+                        <div className="hidden group-hover/card:flex gap-0.5">
+                          {onEdit && <button onClick={(e) => { e.stopPropagation(); onEdit(os); }} className="p-1 hover:bg-blue-500/10 rounded" title="Editar"><Edit3 size={12} className="text-blue-400" /></button>}
+                          {onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(os); }} className="p-1 hover:bg-red-500/10 rounded" title="Excluir"><Trash2 size={12} className="text-red-400" /></button>}
+                        </div>
+                      )}
+                    </div>
+                    {/* Responsavel */}
+                    {os.responsavel && <p className="text-[10px] text-slate-500 mt-1.5"><User size={10} className="inline mr-0.5 text-slate-600" />{os.responsavel.nome}</p>}
+                    {/* Date + Late badge */}
+                    <div className="flex items-center justify-between mt-1">
+                      {os.data_planejada && <span className="text-[9px] text-slate-600"><Calendar size={9} className="inline mr-0.5" />{new Date(os.data_planejada).toLocaleDateString('pt-BR')}</span>}
+                      {os.atrasada && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-bold border border-red-500/30">ATRASADA</span>}
+                    </div>
                   </div>
-                  {os.responsavel && <p className="text-[10px] text-slate-600 mt-1"><User size={10} className="inline mr-0.5" />{os.responsavel.nome}</p>}
-                  {os.atrasada && <div className="mt-1 text-[10px] text-red-400 font-medium">ATRASADA</div>}
                   {/* Mobile quick-move buttons */}
                   {col.id !== 'concluida' && (
-                    <div className="mt-2 flex gap-1 md:hidden" data-testid={`mobile-move-${os.id}`}>
+                    <div className="px-2.5 pb-2 flex gap-1 md:hidden" data-testid={`mobile-move-${os.id}`}>
                       {columns.filter(c => c.id !== col.id && c.id !== 'concluida').map(c => (
                         <button key={c.id} onClick={(e) => { e.stopPropagation(); onMove(os.id, c.id); }} className={`text-[9px] px-1.5 py-0.5 rounded ${c.bg} ${c.color} border`}>
                           {c.title.slice(0, 3)}
@@ -2978,7 +3018,8 @@ const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete }) 
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
               {colItems.length === 0 && (
                 <div className="flex items-center justify-center h-20 text-slate-700 text-xs border border-dashed border-slate-800 rounded-lg">
                   {col.id === 'concluida' ? 'Concluídas' : 'Arraste OS aqui'}
@@ -2997,10 +3038,17 @@ const OSPage = () => {
   const [osList, setOsList] = useState([]);
   const [ativos, setAtivos] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
+  const [sectors, setSectors] = useState([]);
+  const [plantas, setPlantas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [searchOS, setSearchOS] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
+  const [filterTipo, setFilterTipo] = useState('');
+  const [filterArea, setFilterArea] = useState('');
+  const [filterResponsavel, setFilterResponsavel] = useState('');
+  const [filterDisciplina, setFilterDisciplina] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
@@ -3015,14 +3063,18 @@ const OSPage = () => {
   
   const fetchData = async () => {
     try {
-      const [osRes, ativosRes, tecnicosRes] = await Promise.all([
+      const [osRes, ativosRes, tecnicosRes, sectorsRes, plantasRes] = await Promise.all([
         api.get('/ordens-servico'),
         api.get('/ativos'),
-        api.get('/users/tecnicos')
+        api.get('/users/tecnicos'),
+        api.get('/sectors'),
+        api.get('/plantas').catch(() => ({ data: [] }))
       ]);
       setOsList(osRes.data);
       setAtivos(ativosRes.data);
       setTecnicos(tecnicosRes.data);
+      setSectors(sectorsRes.data);
+      setPlantas(plantasRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
     } finally {
@@ -3054,33 +3106,29 @@ const OSPage = () => {
     }
   };
   
-  const filtered = osList.filter(os => {
-    if (filter && os.status !== filter) return false;
-    if (filterPriority && os.prioridade !== filterPriority) return false;
-    if (searchOS) {
-      const s = searchOS.toLowerCase();
-      const matchNum = os.numero?.toLowerCase().includes(s);
-      const matchTitulo = os.titulo?.toLowerCase().includes(s);
-      const matchTag = os.ativo?.tag?.toLowerCase().includes(s);
-      const matchNome = os.ativo?.nome?.toLowerCase().includes(s);
-      if (!matchNum && !matchTitulo && !matchTag && !matchNome) return false;
-    }
-    return true;
-  });
+  const applyFilters = (list) => {
+    return list.filter(os => {
+      if (filter && os.status !== filter) return false;
+      if (filterPriority && os.prioridade !== filterPriority) return false;
+      if (filterTipo && os.tipo !== filterTipo) return false;
+      if (filterDisciplina && os.disciplina !== filterDisciplina) return false;
+      if (filterArea && os.ativo?.sector_id !== filterArea) return false;
+      if (filterResponsavel && os.responsavel_id !== filterResponsavel) return false;
+      if (searchOS) {
+        const s = searchOS.toLowerCase();
+        const matchNum = os.numero?.toLowerCase().includes(s);
+        const matchTitulo = os.titulo?.toLowerCase().includes(s);
+        const matchTag = os.ativo?.tag?.toLowerCase().includes(s);
+        const matchNome = os.ativo?.nome?.toLowerCase().includes(s);
+        if (!matchNum && !matchTitulo && !matchTag && !matchNome) return false;
+      }
+      return true;
+    });
+  };
 
-  // For Kanban, use the filtered list
-  const kanbanItems = osList.filter(os => {
-    if (filterPriority && os.prioridade !== filterPriority) return false;
-    if (searchOS) {
-      const s = searchOS.toLowerCase();
-      const matchNum = os.numero?.toLowerCase().includes(s);
-      const matchTitulo = os.titulo?.toLowerCase().includes(s);
-      const matchTag = os.ativo?.tag?.toLowerCase().includes(s);
-      const matchNome = os.ativo?.nome?.toLowerCase().includes(s);
-      if (!matchNum && !matchTitulo && !matchTag && !matchNome) return false;
-    }
-    return true;
-  });
+  const filtered = applyFilters(osList);
+  const kanbanItems = applyFilters(osList);
+  const activeFilterCount = [filterPriority, filterTipo, filterArea, filterResponsavel, filterDisciplina].filter(Boolean).length;
 
   const kanbanColumns = [
     { id: 'aberta', title: 'Abertas', color: 'border-blue-500/40', bg: 'bg-blue-500/5', badge: 'bg-blue-500' },
@@ -3112,36 +3160,71 @@ const OSPage = () => {
         </div>
       </div>
       
-      {/* OS1 + OS2: Search + Priority Filter */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-          <input
-            type="text"
-            value={searchOS}
-            onChange={(e) => setSearchOS(e.target.value)}
-            placeholder="Buscar por nº, título ou TAG do ativo..."
-            className="input-industrial w-full pl-9 pr-4 text-sm"
-            data-testid="os-search-input"
-          />
-          {searchOS && <button onClick={() => setSearchOS('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={14} /></button>}
+      {/* Search + Filters */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+            <input
+              type="text"
+              value={searchOS}
+              onChange={(e) => setSearchOS(e.target.value)}
+              placeholder="Buscar por nº, título ou TAG do ativo..."
+              className="input-industrial w-full pl-9 pr-4 text-sm"
+              data-testid="os-search-input"
+            />
+            {searchOS && <button onClick={() => setSearchOS('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={14} /></button>}
+          </div>
+          <button onClick={() => setShowFilters(!showFilters)}
+            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${showFilters || activeFilterCount > 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'border-slate-700 text-slate-400 hover:text-slate-300'}`}
+            data-testid="os-toggle-filters"
+          >
+            <Filter size={14} />Filtros
+            {activeFilterCount > 0 && <span className="bg-emerald-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
+          </button>
+          <div className="flex gap-1">
+            {[
+              { value: '', label: 'Todas' },
+              { value: 'emergencia', label: 'Emerg.', cls: 'text-red-400 bg-red-500/10 border-red-500/30' },
+              { value: 'alta', label: 'Alta', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/30' },
+              { value: 'media', label: 'Média', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
+              { value: 'baixa', label: 'Baixa', cls: 'text-slate-400 bg-slate-500/10 border-slate-500/30' },
+            ].map(p => (
+              <button key={p.value} onClick={() => setFilterPriority(p.value)}
+                className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition-all ${filterPriority === p.value ? (p.cls || 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30') : 'border-slate-700 text-slate-500 hover:text-slate-300'}`}
+                data-testid={`os-filter-priority-${p.value || 'all'}`}
+              >{p.label}</button>
+            ))}
+          </div>
         </div>
-        <div className="flex gap-1">
-          {[
-            { value: '', label: 'Todas', cls: '' },
-            { value: 'emergencia', label: 'Emerg.', cls: 'text-red-400 bg-red-500/10 border-red-500/30' },
-            { value: 'alta', label: 'Alta', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/30' },
-            { value: 'media', label: 'Média', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
-            { value: 'baixa', label: 'Baixa', cls: 'text-slate-400 bg-slate-500/10 border-slate-500/30' },
-          ].map(p => (
-            <button key={p.value} onClick={() => setFilterPriority(p.value)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${filterPriority === p.value ? (p.cls || 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30') : 'border-slate-700 text-slate-500 hover:text-slate-300'}`}
-              data-testid={`os-filter-priority-${p.value || 'all'}`}
-            >{p.label}</button>
-          ))}
-        </div>
-        {(searchOS || filterPriority) && (
-          <button onClick={() => { setSearchOS(''); setFilterPriority(''); }} className="text-xs text-slate-500 hover:text-emerald-400" data-testid="os-clear-filters">Limpar</button>
+        {/* Expanded filters panel */}
+        {showFilters && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-3 glass-card" data-testid="os-filters-panel">
+            <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} className="input-industrial text-xs" data-testid="os-filter-tipo">
+              <option value="">Tipo de OS</option>
+              {['corretiva','preventiva','lubrificacao','inspecao','fabricacao','preparacao_material','melhoria','calibracao','instalacao','reforma','emergencial'].map(t => (
+                <option key={t} value={t}>{t.replace(/_/g,' ')}</option>
+              ))}
+            </select>
+            <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="input-industrial text-xs" data-testid="os-filter-area">
+              <option value="">Área</option>
+              {sectors.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+            </select>
+            <select value={filterResponsavel} onChange={(e) => setFilterResponsavel(e.target.value)} className="input-industrial text-xs" data-testid="os-filter-responsavel">
+              <option value="">Responsável</option>
+              {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+            <select value={filterDisciplina} onChange={(e) => setFilterDisciplina(e.target.value)} className="input-industrial text-xs" data-testid="os-filter-disciplina">
+              <option value="">Disciplina</option>
+              {['mecanica','eletrica','instrumentacao','civil','producao'].map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            <button onClick={() => { setFilterPriority(''); setFilterTipo(''); setFilterArea(''); setFilterResponsavel(''); setFilterDisciplina(''); setSearchOS(''); }}
+              className="text-xs text-slate-500 hover:text-emerald-400 flex items-center justify-center gap-1" data-testid="os-clear-all-filters">
+              <X size={12} />Limpar filtros
+            </button>
+          </div>
         )}
       </div>
 
@@ -3151,8 +3234,8 @@ const OSPage = () => {
           items={kanbanItems}
           onMove={handleKanbanMove}
           onCardClick={(os) => navigate(`/os/${os.id}`)}
-          onEdit={['admin','pcm'].includes(user?.role) ? (os) => { setEditItem(os); setShowModal(true); } : null}
-          onDelete={user?.role === 'admin' ? (os) => setDeleteItem(os) : null}
+          onEdit={['admin','master','pcm'].includes(user?.role) ? (os) => { setEditItem(os); setShowModal(true); } : null}
+          onDelete={['admin','master'].includes(user?.role) ? (os) => setDeleteItem(os) : null}
         />
       ) : (
         <>
@@ -3185,10 +3268,10 @@ const OSPage = () => {
                       {os.responsavel && <p className="text-xs text-slate-500"><User size={12} className="inline mr-1" />{os.responsavel.nome}</p>}
                     </div>
                     <div className="flex items-center gap-2">
-                      {['admin','pcm'].includes(user?.role) && (
+                      {['admin','master','pcm'].includes(user?.role) && (
                         <div className="flex items-center gap-1">
                           <button onClick={(e) => { e.stopPropagation(); setEditItem(os); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar" data-testid={`edit-os-${os.id}`}><Edit3 size={15} className="text-blue-400" /></button>
-                          {user?.role === 'admin' && <button onClick={(e) => { e.stopPropagation(); setDeleteItem(os); }} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir" data-testid={`delete-os-${os.id}`}><Trash2 size={15} className="text-red-400" /></button>}
+                          {['admin','master'].includes(user?.role) && <button onClick={(e) => { e.stopPropagation(); setDeleteItem(os); }} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir" data-testid={`delete-os-${os.id}`}><Trash2 size={15} className="text-red-400" /></button>}
                         </div>
                       )}
                       <PriorityBadge priority={os.prioridade} />
@@ -3473,7 +3556,7 @@ const OSDetailPage = () => {
                   </p>
                 </div>
                 {m.custo_total > 0 && <span className="text-sm text-slate-300 mx-2">R$ {m.custo_total.toFixed(2)}</span>}
-                {!['concluida','cancelada'].includes(os.status) && ['admin','pcm','supervisor'].includes(user?.role) && (
+                {!['concluida','cancelada'].includes(os.status) && ['admin','master','pcm','supervisor'].includes(user?.role) && (
                   <button onClick={() => setDeleteMat(m)} className="p-1.5 hover:bg-red-500/10 rounded" title="Devolver"><Trash2 size={14} className="text-red-400" /></button>
                 )}
               </div>
@@ -3759,7 +3842,7 @@ const EstoquePage = () => {
                     <button onClick={() => toggleExpand(item.id)} className="p-2 hover:bg-slate-700 rounded-lg transition-colors" title="Ver movimentações" data-testid={`expand-estoque-${item.id}`}>
                       {expandedItem === item.id ? <ChevronUp size={16} className="text-emerald-400" /> : <ChevronDown size={16} className="text-slate-400" />}
                     </button>
-                    {user?.role === 'admin' && (
+                    {['admin','master'].includes(user?.role) && (
                       <div className="hidden group-hover:flex items-center gap-1">
                         <button onClick={() => { setEditItem(item); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar">
                           <Edit3 size={15} className="text-blue-400" />
@@ -3977,7 +4060,7 @@ const InspecoesPage = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {['admin','supervisor'].includes(user?.role) && (
+                  {['admin','master','supervisor'].includes(user?.role) && (
                     <button onClick={() => setDeleteItem(insp)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100" data-testid={`delete-inspecao-${insp.id}`}>
                       <Trash2 size={16} className="text-red-400" />
                     </button>
@@ -5264,7 +5347,7 @@ const SobressalentesPage = () => {
         <div className="flex gap-2">
           <button onClick={() => handleExport('excel')} className="btn-secondary flex items-center gap-2 text-sm" data-testid="spare-export-excel"><Download size={16} /> Excel</button>
           <button onClick={() => handleExport('pdf')} className="btn-secondary flex items-center gap-2 text-sm" data-testid="spare-export-pdf"><FileText size={16} /> PDF</button>
-          {['admin','pcm'].includes(user?.role) && (
+          {['admin','master','pcm'].includes(user?.role) && (
             <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-spare-btn"><Plus size={20} /> Novo</button>
           )}
         </div>
@@ -5305,7 +5388,7 @@ const SobressalentesPage = () => {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   {sp.custo > 0 && <p className="text-lg font-bold text-slate-200">R$ {sp.custo.toFixed(2)}</p>}
-                  {['admin','pcm'].includes(user?.role) && (
+                  {['admin','master','pcm'].includes(user?.role) && (
                     <div className="flex items-center gap-1">
                       <button onClick={() => handleOpenReformas(sp)} className="p-2 hover:bg-amber-500/10 rounded-lg" title="Reformas" data-testid={`reforma-spare-${sp.id}`}><Wrench size={15} className="text-amber-400" /></button>
                       <button onClick={() => handleEdit(sp)} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar" data-testid={`edit-spare-${sp.id}`}><Edit3 size={15} className="text-blue-400" /></button>
@@ -5360,7 +5443,7 @@ const SobressalentesPage = () => {
       {/* Modal Histórico de Reformas */}
       <Modal isOpen={!!showReformaModal} onClose={() => setShowReformaModal(null)} title={`Reformas — ${showReformaModal?.tag || ''}`} size="lg">
         <div className="space-y-4">
-          {['admin','pcm'].includes(user?.role) && (
+          {['admin','master','pcm'].includes(user?.role) && (
             <div className="glass-card p-3 space-y-3">
               <p className="text-xs text-slate-500 uppercase font-semibold">Registrar Reforma</p>
               <div className="grid grid-cols-2 gap-3">
@@ -5992,7 +6075,7 @@ const ParadasPage = () => {
           <h1 className="text-2xl font-bold text-slate-100">Paradas Programadas</h1>
           <p className="text-sm text-slate-500">{paradas.length} parada(s)</p>
         </div>
-        {['admin','pcm'].includes(user?.role) && (
+        {['admin','master','pcm'].includes(user?.role) && (
           <button onClick={() => { setEditItem(null); setForm({ area_id: '', data_inicio: '', data_fim: '', duracao_horas: '', tipo: 'preventiva', responsavel_id: '', descricao: '', observacoes: '', os_vinculadas: [] }); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="new-parada-btn"><Plus size={20} /> Nova Parada</button>
         )}
       </div>
@@ -6019,7 +6102,7 @@ const ParadasPage = () => {
                 <div className="flex items-center gap-3 text-center">
                   <div><p className="text-lg font-bold text-blue-400">{p.os_total}</p><p className="text-xs text-slate-600">OS</p></div>
                   <div><p className="text-lg font-bold text-emerald-400">{p.os_concluidas}</p><p className="text-xs text-slate-600">OK</p></div>
-                  {['admin','pcm'].includes(user?.role) && (
+                  {['admin','master','pcm'].includes(user?.role) && (
                     <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                       <button onClick={() => handleEdit(p)} className="p-2 hover:bg-slate-700 rounded-lg" data-testid={`edit-parada-${p.id}`}><Edit3 size={14} className="text-blue-400" /></button>
                       <button onClick={() => setDeleteItem(p)} className="p-2 hover:bg-red-500/10 rounded-lg"><Trash2 size={14} className="text-red-400" /></button>
@@ -6564,7 +6647,7 @@ const AdminUsuariosPage = () => {
 
 const ExportButtons = ({ entity }) => {
   const { user } = useAuth();
-  if (!['admin','pcm','gerente'].includes(user?.role)) return null;
+  if (!['admin','master','pcm','gerente'].includes(user?.role)) return null;
   
   const handleExport = async (format) => {
     try {
@@ -6670,7 +6753,7 @@ const SetoresPage = () => {
           <h1 className="text-2xl font-bold text-slate-100" data-testid="setores-title">Áreas</h1>
           <p className="text-sm text-slate-500">Gerencie as áreas industriais</p>
         </div>
-        {user?.role === 'admin' && (
+        {['admin','master'].includes(user?.role) && (
           <button onClick={() => openModal()} className="btn-primary flex items-center gap-2" data-testid="add-sector-btn">
             <Plus size={20} /> Nova Área
           </button>
@@ -6693,7 +6776,7 @@ const SetoresPage = () => {
                     <p className="text-slate-100 font-medium">{s.nome}</p>
                   </div>
                 </div>
-                {user?.role === 'admin' && (
+                {['admin','master'].includes(user?.role) && (
                   <div className="hidden group-hover:flex items-center gap-1">
                     <button onClick={() => openModal(s)} className="p-2 hover:bg-slate-700 rounded-lg"><Edit size={16} className="text-slate-400" /></button>
                     <button onClick={() => handleToggle(s)} className={`p-2 rounded-lg ${s.is_active !== false ? 'hover:bg-yellow-500/10' : 'hover:bg-green-500/10'}`} title={s.is_active !== false ? 'Desabilitar' : 'Habilitar'}>
@@ -6741,6 +6824,289 @@ const SetoresPage = () => {
       </Modal>
 
       <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Área" message={`Excluir a área "${deleteItem?.nome}"? Todos os ativos precisam ser movidos antes.`} confirmText="Excluir" danger />
+    </div>
+  );
+};
+
+
+// ============== PLANTAS PAGE ==============
+
+const PlantasPage = () => {
+  const [plantas, setPlantas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [form, setForm] = useState({ codigo: '', nome: '', descricao: '', endereco: '' });
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+
+  const fetchData = async () => {
+    try {
+      const res = await api.get('/plantas');
+      setPlantas(res.data);
+    } catch { toast.error('Erro ao carregar plantas'); }
+    finally { setLoading(false); }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData(); }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (editItem) {
+        await api.put(`/plantas/${editItem.id}`, form);
+        toast.success('Planta atualizada!');
+      } else {
+        await api.post('/plantas', form);
+        toast.success('Planta criada!');
+      }
+      setShowModal(false);
+      setEditItem(null);
+      setForm({ codigo: '', nome: '', descricao: '', endereco: '' });
+      fetchData();
+    } catch (err) { toast.error(normalizeError(err)); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/plantas/${deleteItem.id}`);
+      toast.success('Planta excluída!');
+      setDeleteItem(null);
+      fetchData();
+    } catch (err) { toast.error(normalizeError(err)); }
+  };
+
+  return (
+    <div className="space-y-4" data-testid="plantas-page">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-100">Plantas</h1>
+        {['admin','master'].includes(user?.role) && (
+          <button onClick={() => { setEditItem(null); setForm({ codigo: '', nome: '', descricao: '', endereco: '' }); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-planta-btn">
+            <Plus size={20} /> Nova Planta
+          </button>
+        )}
+      </div>
+      {loading ? <Loading rows={3} /> : plantas.length > 0 ? (
+        <div className="space-y-2">
+          {plantas.map(p => (
+            <div key={p.id} className="glass-card p-4 hover:border-slate-600 transition-all group" data-testid={`planta-card-${p.codigo}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-500/10"><Factory size={22} className="text-blue-400" /></div>
+                  <div>
+                    <span className="font-mono text-blue-400 text-sm">{p.codigo}</span>
+                    <p className="text-slate-100 font-medium">{p.nome}</p>
+                    {p.descricao && <p className="text-xs text-slate-500">{p.descricao}</p>}
+                    {p.endereco && <p className="text-xs text-slate-600"><MapPin size={10} className="inline mr-1" />{p.endereco}</p>}
+                  </div>
+                </div>
+                {['admin','master'].includes(user?.role) && (
+                  <div className="hidden group-hover:flex items-center gap-1">
+                    <button onClick={() => { setEditItem(p); setForm({ codigo: p.codigo, nome: p.nome, descricao: p.descricao || '', endereco: p.endereco || '' }); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg"><Edit size={16} className="text-slate-400" /></button>
+                    <button onClick={() => setDeleteItem(p)} className="p-2 hover:bg-red-500/10 rounded-lg"><Trash2 size={16} className="text-red-400" /></button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={Factory} title="Nenhuma planta cadastrada" description="Crie a primeira planta da organização." action={() => setShowModal(true)} actionLabel="Nova Planta" />
+      )}
+
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? 'Editar Planta' : 'Nova Planta'}>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormInput label="Código" required>
+            <input value={form.codigo} onChange={e => setForm({...form, codigo: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: PL-01" required data-testid="planta-codigo-input" />
+          </FormInput>
+          <FormInput label="Nome" required>
+            <input value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Planta de Britagem" required data-testid="planta-nome-input" />
+          </FormInput>
+          <FormInput label="Descrição">
+            <textarea value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4 min-h-[60px]" />
+          </FormInput>
+          <FormInput label="Endereço">
+            <input value={form.endereco} onChange={e => setForm({...form, endereco: e.target.value})} className="input-industrial w-full px-4" placeholder="Localização física" />
+          </FormInput>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary" data-testid="planta-save-btn">{saving ? 'Salvando...' : 'Salvar'}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Planta" message={`Excluir a planta "${deleteItem?.nome}"? As áreas vinculadas precisam ser movidas antes.`} confirmText="Excluir" danger />
+    </div>
+  );
+};
+
+
+// ============== MASTER CLEANUP PAGE ==============
+
+const MasterCleanupPage = () => {
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [adminActions, setAdminActions] = useState([]);
+  const [confirmProd, setConfirmProd] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const { user } = useAuth();
+
+  const fetchActions = async () => {
+    try {
+      const res = await api.get('/master/admin-actions');
+      setAdminActions(res.data);
+    } catch {}
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchActions(); }, []);
+
+  const cleanableItems = [
+    { key: 'ordens_servico', label: 'Ordens de Serviço', icon: Wrench },
+    { key: 'inspecoes', label: 'Inspeções', icon: ClipboardCheck },
+    { key: 'anomalias', label: 'Anomalias', icon: AlertTriangle },
+    { key: 'paradas_programadas', label: 'Paradas Programadas', icon: Calendar },
+    { key: 'audit_logs', label: 'Auditoria', icon: Shield },
+    { key: 'notificacoes', label: 'Notificações', icon: Bell },
+    { key: 'movimentacoes_estoque', label: 'Movimentações de Estoque', icon: Package },
+    { key: 'attachments', label: 'Fotos e Uploads', icon: Image },
+    { key: 'chat_history', label: 'Histórico de Chat', icon: FileText },
+    { key: 'anomalia_historico', label: 'Histórico de Anomalias', icon: Activity },
+    { key: 'anomalia_comentarios', label: 'Comentários de Anomalias', icon: FileText },
+    { key: 'os_materiais', label: 'Materiais Utilizados em OS', icon: Package },
+  ];
+
+  const [selected, setSelected] = useState([]);
+
+  const toggleSelect = (key) => {
+    setSelected(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  };
+
+  const handleCleanup = async () => {
+    if (selected.length === 0) { toast.error('Selecione pelo menos um item'); return; }
+    setLoading(true);
+    try {
+      const res = await api.post(`/master/cleanup?${selected.map(s => `targets=${s}`).join('&')}`);
+      setResults(res.data.deleted);
+      toast.success('Limpeza concluída!');
+      fetchActions();
+    } catch (err) { toast.error(normalizeError(err)); }
+    finally { setLoading(false); }
+  };
+
+  const handlePrepareProduction = async () => {
+    if (confirmText !== 'PREPARAR PRODUCAO') { toast.error('Digite exatamente: PREPARAR PRODUCAO'); return; }
+    setLoading(true);
+    try {
+      const res = await api.post('/master/prepare-production');
+      setResults(res.data.deleted);
+      toast.success('Ambiente preparado para produção!');
+      setConfirmProd(false);
+      setConfirmText('');
+      fetchActions();
+    } catch (err) { toast.error(normalizeError(err)); }
+    finally { setLoading(false); }
+  };
+
+  if (user?.role !== 'master') return <div className="text-center text-red-400 mt-10">Acesso restrito ao Administrador Master.</div>;
+
+  return (
+    <div className="space-y-6" data-testid="master-cleanup-page">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Limpeza do Ambiente</h1>
+          <p className="text-xs text-slate-500 mt-1">Remova dados de teste para preparar o ambiente de produção</p>
+        </div>
+        <button onClick={() => setConfirmProd(true)} className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 text-sm font-medium hover:bg-red-500/30 transition-all" data-testid="prepare-production-btn">
+          Preparar Ambiente para Produção
+        </button>
+      </div>
+
+      {/* Selective cleanup */}
+      <div className="glass-card p-4">
+        <h3 className="text-sm font-semibold text-slate-300 mb-3">Selecionar dados para limpar:</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          {cleanableItems.map(item => {
+            const Icon = item.icon;
+            const isSelected = selected.includes(item.key);
+            return (
+              <button key={item.key} onClick={() => toggleSelect(item.key)}
+                className={`flex items-center gap-2 p-3 rounded-lg border text-left text-sm transition-all ${isSelected ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}
+                data-testid={`cleanup-${item.key}`}
+              >
+                {isSelected ? <CheckSquare size={16} className="text-red-400 shrink-0" /> : <Square size={16} className="text-slate-600 shrink-0" />}
+                <Icon size={14} className="shrink-0" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-xs text-slate-600">{selected.length} item(ns) selecionado(s)</p>
+          <button onClick={handleCleanup} disabled={loading || selected.length === 0}
+            className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium hover:bg-red-500/30 disabled:opacity-50 transition-all" data-testid="cleanup-execute-btn">
+            {loading ? 'Limpando...' : 'Executar Limpeza'}
+          </button>
+        </div>
+      </div>
+
+      {/* Results */}
+      {results && (
+        <div className="glass-card p-4" data-testid="cleanup-results">
+          <h3 className="text-sm font-semibold text-emerald-400 mb-2">Resultado da Limpeza:</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {Object.entries(results).map(([key, count]) => (
+              <div key={key} className="bg-slate-800/50 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-slate-200">{count}</p>
+                <p className="text-[10px] text-slate-500 capitalize">{key.replace(/_/g, ' ')}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Admin actions log */}
+      {adminActions.length > 0 && (
+        <div className="glass-card p-4">
+          <h3 className="text-sm font-semibold text-slate-300 mb-2">Histórico de Ações Administrativas</h3>
+          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            {adminActions.map(a => (
+              <div key={a.id} className="flex items-center justify-between py-2 border-b border-slate-800/50 last:border-0 text-xs">
+                <div>
+                  <span className="text-slate-400 font-medium">{a.user_nome}</span>
+                  <span className="text-slate-600 mx-1">—</span>
+                  <span className={`font-medium ${a.action === 'prepare_production' ? 'text-red-400' : 'text-amber-400'}`}>{a.action === 'prepare_production' ? 'Preparação Produção' : 'Limpeza'}</span>
+                </div>
+                <span className="text-slate-600">{new Date(a.created_at).toLocaleString('pt-BR')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Prepare production confirmation modal */}
+      <Modal isOpen={confirmProd} onClose={() => { setConfirmProd(false); setConfirmText(''); }} title="Preparar Ambiente para Produção">
+        <div className="space-y-4">
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p className="text-sm text-red-300 font-medium">Esta ação não poderá ser desfeita.</p>
+            <p className="text-xs text-red-400/80 mt-1">Todos os dados operacionais (OS, inspeções, anomalias, paradas, auditoria, fotos, notificações) serão permanentemente excluídos. Usuários, áreas, ativos, materiais e planos serão mantidos.</p>
+          </div>
+          <FormInput label="Para confirmar, digite: PREPARAR PRODUCAO">
+            <input value={confirmText} onChange={e => setConfirmText(e.target.value)} className="input-industrial w-full px-4" placeholder="PREPARAR PRODUCAO" data-testid="confirm-production-input" />
+          </FormInput>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setConfirmProd(false); setConfirmText(''); }} className="btn-secondary">Cancelar</button>
+            <button onClick={handlePrepareProduction} disabled={loading || confirmText !== 'PREPARAR PRODUCAO'}
+              className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-500 disabled:opacity-50 transition-all" data-testid="confirm-production-btn">
+              {loading ? 'Processando...' : 'Confirmar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -6815,6 +7181,8 @@ function App() {
           <Route path="/admin/templates" element={<ProtectedRoute><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
           <Route path="/admin/auditoria" element={<ProtectedRoute><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
           <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/plantas" element={<ProtectedRoute><AppLayout><PlantasPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/master/cleanup" element={<ProtectedRoute><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster position="top-center" richColors />

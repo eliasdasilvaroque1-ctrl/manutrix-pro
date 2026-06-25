@@ -9,6 +9,7 @@ import uuid
 # ============== ENUMS ==============
 
 class UserRole(str, Enum):
+    MASTER = "master"
     ADMIN = "admin"
     GERENTE = "gerente"
     PCM = "pcm"
@@ -38,11 +39,18 @@ class OSStatus(str, Enum):
     CANCELADA = "cancelada"
 
 class OSTipo(str, Enum):
-    LUBRIFICACAO = "lubrificacao"
-    LIMPEZA_ORGANIZACAO = "limpeza_organizacao"
-    PREVENTIVA = "preventiva"
     CORRETIVA = "corretiva"
+    PREVENTIVA = "preventiva"
+    LUBRIFICACAO = "lubrificacao"
+    INSPECAO = "inspecao"
+    FABRICACAO = "fabricacao"
     PREPARACAO_MATERIAL = "preparacao_material"
+    MELHORIA = "melhoria"
+    CALIBRACAO = "calibracao"
+    INSTALACAO = "instalacao"
+    REFORMA = "reforma"
+    EMERGENCIAL = "emergencial"
+    LIMPEZA_ORGANIZACAO = "limpeza_organizacao"
     FABRICACAO_MELHORIAS = "fabricacao_melhorias"
 
 class Disciplina(str, Enum):
@@ -137,10 +145,24 @@ class Organization(BaseModel):
     cnpj: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-# Sector (top-level entity, no plant_id)
+# Planta (between Organization and Sector)
+class PlantaCreate(BaseModel):
+    codigo: str
+    nome: str
+    descricao: Optional[str] = None
+    endereco: Optional[str] = None
+
+class PlantaUpdate(BaseModel):
+    codigo: Optional[str] = None
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    endereco: Optional[str] = None
+
+# Sector (belongs to a Planta)
 class SectorCreate(BaseModel):
     codigo: str
     nome: str
+    planta_id: Optional[str] = None
     descricao: Optional[str] = None
     cor: str = "#10b981"
     is_active: bool = True

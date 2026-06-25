@@ -88,25 +88,32 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 # ============== PERMISSION HELPERS ==============
 
 def is_admin(user: Dict) -> bool:
-    return user.get('role') == 'admin'
+    return user.get('role') in ('admin', 'master')
+
+def is_master(user: Dict) -> bool:
+    return user.get('role') == 'master'
 
 def check_write_permission(user: Dict, allowed_roles: list = None):
     role = user.get('role', '')
     if role == 'gerente':
         raise HTTPException(status_code=403, detail="Perfil Gerente possui apenas acesso de leitura")
-    if is_admin(user):
+    if role in ('admin', 'master'):
         return True
     if allowed_roles and role in allowed_roles:
         return True
     raise HTTPException(status_code=403, detail="Sem permissão para esta operação")
 
 def check_admin_only(user: Dict):
-    if user.get('role') not in ['admin']:
+    if user.get('role') not in ['admin', 'master']:
         raise HTTPException(status_code=403, detail="Apenas administradores podem realizar esta operação")
+
+def check_master_only(user: Dict):
+    if user.get('role') != 'master':
+        raise HTTPException(status_code=403, detail="Apenas o Administrador Master pode realizar esta operação")
 
 def check_pcm_or_admin(user: Dict):
     """PCM: estoque, sobressalentes, templates, relatórios, exportações"""
-    if user.get('role') not in ['admin', 'pcm']:
+    if user.get('role') not in ['admin', 'master', 'pcm']:
         raise HTTPException(status_code=403, detail="Apenas Admin ou PCM podem realizar esta operação")
 
 def check_not_gerente(user: Dict):
@@ -124,10 +131,10 @@ def verify_org_access(user: Dict, document: dict, entity_name: str = "Registro")
 
 
 def can_export(user: Dict) -> bool:
-    return user.get('role') in ['admin', 'pcm', 'gerente', 'supervisor']
+    return user.get('role') in ['admin', 'master', 'pcm', 'gerente', 'supervisor']
 
 def can_view_dashboard(user: Dict) -> bool:
-    return user.get('role') in ['admin', 'pcm', 'gerente', 'supervisor']
+    return user.get('role') in ['admin', 'master', 'pcm', 'gerente', 'supervisor']
 
 
 # ============== UTILITY HELPERS ==============

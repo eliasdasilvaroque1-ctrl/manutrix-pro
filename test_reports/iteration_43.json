@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 43 - MANUTRIX Phase 1 Block A (master role, Plantas CRUD, Master cleanup, redesigned Kanban, enhanced OS filters). Backend pytest: 20/20 PASS after fix. Frontend regression PASS. Found and fixed one HIGH-severity bug in PUT /api/plantas/{id} (audit_field_changes called with wrong signature -> Motor DB object encoded into BSON -> 500).",
+  "pass_fail_matrix": {
+    "Master login (master@manutrix.com/master123) returns role 'master'": "PASS",
+    "Admin login still works": "PASS",
+    "Tecnico login still works": "PASS",
+    "POST /api/master/cleanup allowed for master, 403 for admin & tecnico": "PASS",
+    "POST /api/master/prepare-production 403 for admin & tecnico": "PASS",
+    "GET /api/master/admin-actions 200 for master, 403 for admin": "PASS",
+    "Cleanup action logged in admin_actions collection": "PASS",
+    "GET /api/plantas returns list for all roles": "PASS",
+    "POST /api/plantas allowed for admin AND master, 403 for tecnico": "PASS",
+    "PUT /api/plantas/{id} 200 (after fix)": "PASS (was 500)",
+    "DELETE /api/plantas/{id} soft-deletes (removed from list)": "PASS",
+    "Frontend: Master sidebar shows Plantas + Limpeza, role 'Master' shown": "PASS",
+    "Frontend: Admin sidebar shows Plantas but NOT Limpeza": "PASS",
+    "Frontend: Tecnico sidebar shows neither Plantas nor Limpeza nor admin items": "PASS",
+    "Frontend: /plantas page renders, Master can create planta via modal": "PASS",
+    "Frontend: /master/cleanup renders 12 cleanable cards + history of admin_actions": "PASS",
+    "Frontend: OS Kanban renders 32 cards with planta, area, ativo TAG/nome, OS #, tipo badge, priority": "PASS",
+    "Frontend: Filtros button toggles Tipo/Área/Responsável/Disciplina selectors": "PASS",
+    "Frontend: Priority filter buttons (Emerg/Alta/Média/Baixa) present": "PASS",
+    "Frontend: Search input on OS page present": "PASS",
+    "Regression: Dashboard, Ativos, OS, Inspeções APIs 200": "PASS"
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Pre-existing Recharts width(-1)/height(-1) warnings during initial render (documented iteration 41-42, cosmetic only)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration43_master_plantas.py",
+    "/app/test_reports/pytest/iteration43_master_plantas.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FIXED by tester - server.py:1671: update_planta called audit_field_changes(db, 'planta', planta_id, existing, {**existing, **updates}, user) but the helper signature is audit_field_changes(entity_type, entity_id, entity_label, old_doc, new_data, user, motivo=''). Passing the Motor `db` object caused 'bson.errors.InvalidDocument: cannot encode object: AsyncIOMotorDatabase' -> 500 on every PUT /api/plantas/{id}. Fixed to: audit_field_changes('planta', planta_id, f'Planta {existing.get(\"nome\",\"\")}', existing, updates, user).",
+    "server.py:1689 - master_cleanup uses `targets: List[str] = Query(default=[])`. Frontend posts targets as query string (works), but POST body would not be parsed. Document this for API consumers.",
+    "server.py:1697 - org_filter falls back to {} when user has no organization_id, which means cleanup could delete cross-org docs for a master user without an org_id. Consider rejecting cleanup if org_id is empty rather than silently global-deleting.",
+    "deps.py:107-111 - check_admin_only allows both 'admin' and 'master' (intentional). Naming is misleading; consider renaming to check_admin_or_master for clarity.",
+    "App.js:1977 - 'Limpeza' string appears as a chart legend label for OS tipo 'limpeza_organizacao' on Dashboard, which can confuse role-visibility text-based tests; not a bug but worth noting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration43_master_plantas.py (new)",
+    "/app/backend/server.py (line 1671 - fixed audit_field_changes call in update_planta)"
+  ],
+  "success_rate": {"backend": "100% (20/20 after 1 fix)", "frontend": "100% (all critical flows verified visually + via selectors)"},
+  "test_credentials": "master@manutrix.com/master123 (verified, role=master), admin@manutrix.com/admin123 (verified, role=admin), tecnico@manutrix.com/tecnico123 (verified, role=tecnico). Master user already seeded in MongoDB.",
+  "seed_data_creation": "Created several TEST_Planta* via API and one TEST_UI_Planta via UI; cleaned up via soft-delete tests. Cleanup endpoint exercised against 'notificacoes' target.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Block A complete. New routes: /api/plantas (CRUD, admin+master can write), /api/master/cleanup, /api/master/prepare-production, /api/master/admin-actions (master only). OS list page route is /os (NOT /ordens-servico). Click 'Filtros' button to reveal Tipo/Área/Responsável/Disciplina selectors. Master user seeded with role 'master' in users collection.",
+  "rca of the issue": "Bug RCA — PUT /api/plantas/{id} returned 500. Root cause: server.py line 1671 invoked `audit_field_changes(db, 'planta', planta_id, existing, {**existing, **updates}, user)` but the helper's actual signature is `audit_field_changes(entity_type, entity_id, entity_label, old_doc, new_data, user, motivo='')`. The Motor `db` instance was placed into `entity_type` and downstream Motor was asked to encode it into a BSON document, raising `bson.errors.InvalidDocument: cannot encode object: AsyncIOMotorDatabase`. Reproduction: log in as admin/master, create a planta, PUT /api/plantas/{id} with any payload. Mitigation applied: changed call to `audit_field_changes('planta', planta_id, f'Planta {existing.get(\"nome\",\"\")}', existing, updates, user)`. Test re-run confirms 200 and persistence."
+}
