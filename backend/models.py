@@ -70,9 +70,14 @@ class OSOrigem(str, Enum):
     FALHA = "falha"
 
 class InspecaoTipo(str, Enum):
+    INSPECAO = "inspecao"
+    PREVENTIVA = "preventiva"
+    LUBRIFICACAO = "lubrificacao"
+    LIMPEZA = "limpeza"
+    MELHORIA = "melhoria"
+    # backward compat
     MECANICA = "mecanica"
     ELETRICA = "eletrica"
-    LUBRIFICACAO = "lubrificacao"
 
 class InspecaoStatus(str, Enum):
     PENDENTE = "pendente"
@@ -434,30 +439,51 @@ class KnowledgeBaseCreate(BaseModel):
     categoria: str = "geral"
 
 
-# ============== PLANOS DE INSPEÇÃO ==============
+# ============== PLANOS DE INSPEÇÃO (Enterprise) ==============
 
 class PlanoPerguntaCreate(BaseModel):
-    descricao: str
-    tipo: str = "boolean"  # boolean, numerico, texto, lista, foto, observacao
-    obrigatorio: bool = True
-    periodicidade: Optional[str] = None  # diaria, semanal, mensal, trimestral, semestral, anual
-    foto_obrigatoria_nc: bool = False
+    texto: Optional[str] = None
+    descricao: Optional[str] = None  # backward compat
+    tipo_campo: str = "boolean"  # boolean, numero, texto, lista, escala_4, faixa, foto, comentario
+    tipo: Optional[str] = None  # backward compat alias
+    obrigatoria: bool = True
+    obrigatorio: Optional[bool] = None  # backward compat
+    foto_obrigatoria: bool = False
+    foto_obrigatoria_nc: Optional[bool] = None  # backward compat
+    comentario_obrigatorio: bool = False
     unidade: Optional[str] = None
-    limite_normal: Optional[float] = None
-    limite_alerta: Optional[float] = None
-    limite_critico: Optional[float] = None
+    valor_min: Optional[float] = None
+    valor_max: Optional[float] = None
+    limite_normal: Optional[float] = None  # backward compat
+    limite_alerta: Optional[float] = None  # backward compat
+    limite_critico: Optional[float] = None  # backward compat
     opcoes: Optional[List[str]] = None
+    periodicidade: Optional[str] = None
     ordem: int = 0
 
 class PlanoInspecaoCreate(BaseModel):
-    tipo_equipamento: Optional[str] = None
-    ativo_id: Optional[str] = None
-    categoria: str  # mecanica, eletrica, lubrificacao
     nome: str
+    tipo: str = "inspecao"  # inspecao, preventiva, lubrificacao, limpeza, melhoria
+    ativo_id: str  # OBRIGATÓRIO — plano SEMPRE vinculado a um ativo
+    frequencia: Optional[str] = None  # diaria, semanal, quinzenal, mensal, trimestral, semestral, anual
+    responsavel_id: Optional[str] = None
+    disciplina: Optional[str] = None  # mecanica, eletrica, instrumentacao (informativo)
+    status: str = "ativo"  # ativo, inativo
+    versao: int = 1
     perguntas: List[PlanoPerguntaCreate] = []
+    # backward compat fields
+    tipo_equipamento: Optional[str] = None
+    categoria: Optional[str] = None
 
 class PlanoInspecaoUpdate(BaseModel):
     nome: Optional[str] = None
+    tipo: Optional[str] = None
+    ativo_id: Optional[str] = None
+    frequencia: Optional[str] = None
+    responsavel_id: Optional[str] = None
+    disciplina: Optional[str] = None
+    status: Optional[str] = None
+    versao: Optional[int] = None
     perguntas: Optional[List[PlanoPerguntaCreate]] = None
 
 class ParadaProgramadaCreate(BaseModel):
@@ -481,9 +507,6 @@ class ParadaProgramadaUpdate(BaseModel):
     observacoes: Optional[str] = None
     os_vinculadas: Optional[List[str]] = None
     status: Optional[str] = None
-
-    nome: Optional[str] = None
-    perguntas: Optional[List[PlanoPerguntaCreate]] = None
 
 
 # ============== TEMPLATES DE INSPEÇÃO (legacy) ==============

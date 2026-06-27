@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 47 — Backend testing of refactored per-ATIVO Planos de Inspeção + Inspecao auto-load. 20/20 tests pass for happy-path CRUD + auto-load + backward compat. However a CRITICAL bug was discovered in the inspection auto-load query that selects the WRONG plan when an ativo has multiple plans of different tipos.",
+  "pass_fail_matrix": {
+    "POST /api/planos-inspecao creates plan with new rich field types (tipo_campo, obrigatoria, foto_obrigatoria, valor_min/max, unidade, ordem)": "PASS",
+    "GET /api/planos-inspecao?ativo_id={id} returns plans for ativo": "PASS",
+    "GET /api/planos-inspecao/por-ativo/{ativo_id}": "PASS",
+    "GET /api/planos-inspecao/resolver?ativo_id=&tipo=inspecao": "PASS (uses correct $or logic)",
+    "GET /api/planos-inspecao/categorias-disponiveis?ativo_id=": "PASS (returns 5 tipos with disponivel flags)",
+    "POST /api/inspecoes tipo=inspecao auto-loads plan (plano_id, plano_nome, checklist populated)": "PASS (when ativo has only one plan)",
+    "POST /api/inspecoes tipo=mecanica backward compat": "PASS",
+    "POST /api/inspecoes tipo=lubrificacao auto-loads plan": "PASS (single-plan case)",
+    "POST /api/inspecoes for ativo WITHOUT plan -> minimal default checklist": "PASS",
+    "PUT /api/planos-inspecao/{id} updates fields incl. perguntas": "PASS",
+    "DELETE /api/planos-inspecao/{id} soft-deletes": "PASS",
+    "Regression: login, dashboard, OS, ativos, equipe": "PASS",
+    "Multi-plan ativo: POST /inspecoes tipo=X picks PLAN OF tipo=X (not most-recent plan of any tipo)": "FAIL — see RCA below"
+  },
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/inspecoes (auto-load logic)",
+        "issue": "When an ativo has multiple plans of different tipos, the auto-load picks the WRONG plan. Verified: ativo with plans {tipo=lubrificacao, versao=1} and {tipo=inspecao, versao=99}, POST /inspecoes tipo=lubrificacao returns the INSPECAO plan's checklist (7 items) instead of the LUBRIFICACAO plan (2 items).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration47_planos_per_ativo.py",
+    "/app/backend/tests/test_iteration47_rca_dollar_or.py",
+    "/app/test_reports/pytest/iteration47_planos.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix /app/backend/server.py lines 1180-1182. The Mongo query dict has TWO `$or` keys in the same literal — Python dict semantics make the second `$or` (status filter) silently overwrite the first (categoria/tipo filter). Result: the tipo/categoria match is dropped from the query and the most-recent active plan of ANY tipo wins via the sort. Fix by combining via `$and`:\n\n  plano = await db.planos_inspecao.find_one(\n      {\"organization_id\": org_id, \"ativo_id\": data.ativo_id, \"deleted_at\": None,\n       \"$and\": [\n           {\"$or\": [{\"categoria\": cat_busca}, {\"tipo\": cat_busca}]},\n           {\"$or\": [{\"status\": \"ativo\"}, {\"status\": {\"$exists\": False}}]}\n       ]},\n      {\"_id\": 0},\n      sort=[(\"versao\", -1), (\"created_at\", -1)]\n  )\n\nAfter fix, re-run /app/backend/tests/test_iteration47_rca_dollar_or.py — should pass."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1180-1182 — duplicate `$or` keys in the same dict literal silently drop the tipo/categoria filter. This breaks the core 'per-ATIVO plan resolution by tipo' contract of the refactor. The /api/planos-inspecao/resolver endpoint (line 998-1032) does NOT have this bug — it uses a single $or correctly. The bug is only in the inline auto-load logic inside POST /inspecoes.",
+    "server.py:1198-1216 — checklist normalization between PlanoPergunta.{texto,tipo_campo,obrigatoria,valor_min,valor_max} and ChecklistItem.{descricao,tipo,obrigatorio,tolerancia_min,tolerancia_max} works but has divergent field names; consider unifying these in a future cleanup to avoid the per-field if/else mapping.",
+    "server.py:1175 (tipo_to_categoria) — missing key 'inspecao' is mapped via dict.get(tipo_str, tipo_str), so 'inspecao' falls through; OK but explicit mapping would be safer.",
+    "models.py:444-462 PlanoPerguntaCreate — has BOTH 'obrigatoria' (new) and 'obrigatorio' (compat), as well as 'texto'/'descricao' and 'tipo_campo'/'tipo'. Backward compat is fine, but document precedence in code comments; right now precedence is enforced in server.py at line 940-943 (texto wins over descricao) and 1203-1205 (texto OR descricao; obrigatoria OR obrigatorio).",
+    "server.py:912 GET /api/planos-inspecao — accepts `categoria` query parameter but tests indicate the new contract is tipo-based. Consider documenting that `categoria` is a legacy alias.",
+    "server.py:927 — sort by 'categoria' on list; with the new tipo-first model, consider also/instead sorting by 'tipo'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "95% (20/21 incl. RCA test failing as expected)", "frontend": "n/a (skipped)"},
+  "test_credentials": "admin@manutrix.com / admin123 — login returns access_token (not 'token')",
+  "seed_data_creation": "All TEST_-prefixed plans were created and then soft-deleted by the cleanup class. 3 test inspecoes were created against the demo ativo (not cleaned — minor data residue, but harmless).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 5 new GET endpoints work, CRUD on /planos-inspecao works, auto-load on /inspecoes works for the SINGLE-plan-per-ativo case. The CRITICAL gap is the multi-plan-per-ativo case at server.py:1180-1182 (duplicate $or). The RCA reproduction test is at /app/backend/tests/test_iteration47_rca_dollar_or.py and currently FAILS — after main agent applies the fix, re-run that file plus the main suite at test_iteration47_planos_per_ativo.py.",
+  "rca of the issue": "Mongo query at server.py:1180-1182 uses a Python dict literal with two `$or` keys. Python evaluates left-to-right so the second `$or` (status filter) overwrites the first (categoria/tipo filter). Effective query becomes `{ativo_id, deleted_at, $or:[status==ativo, status missing]}` — i.e. ANY active plan for the ativo, sorted by versao desc + created_at desc. Reproduction: create plan A {tipo:lubrificacao, versao:1} then plan B {tipo:inspecao, versao:99} for same ativo; POST /inspecoes tipo=lubrificacao incorrectly returns plan B's 7-question checklist. Mitigation: merge the two `$or` clauses into a single `$and` array as shown in action_items."
+}
