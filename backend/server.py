@@ -1173,13 +1173,16 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         tipo_to_categoria = {
             'inspecao': 'inspecao', 'lubrificacao': 'lubrificacao',
             'preventiva': 'preventiva', 'limpeza': 'limpeza', 'melhoria': 'melhoria',
+            'mecanica': 'mecanica', 'eletrica': 'eletrica',
         }
         cat_busca = tipo_to_categoria.get(tipo_str, tipo_str)
         
         plano = await db.planos_inspecao.find_one(
             {"organization_id": org_id, "ativo_id": data.ativo_id, "deleted_at": None,
-             "$or": [{"categoria": cat_busca}, {"tipo": cat_busca}],
-             "$or": [{"status": "ativo"}, {"status": {"$exists": False}}]},
+             "$and": [
+                 {"$or": [{"categoria": cat_busca}, {"tipo": cat_busca}]},
+                 {"$or": [{"status": "ativo"}, {"status": {"$exists": False}}]}
+             ]},
             {"_id": 0},
             sort=[("versao", -1), ("created_at", -1)]
         )
