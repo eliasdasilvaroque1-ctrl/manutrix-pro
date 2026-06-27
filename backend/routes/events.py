@@ -1,5 +1,5 @@
 """
-MANUTRIX PRO — Event & HH Routes
+MAINTRIX PRO — Event & HH Routes
 Endpoints for OS events, HH time tracking, team members, and metrics.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query

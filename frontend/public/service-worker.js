@@ -1,5 +1,5 @@
-const CACHE_NAME = 'manutrix-v3';
-const API_CACHE = 'manutrix-api-v3';
+const CACHE_NAME = 'maintrix-v3';
+const API_CACHE = 'maintrix-api-v3';
 
 const STATIC_ASSETS = [
   '/',

@@ -1,4 +1,4 @@
-# MANUTRIX OMNI - REVISAO OPERACIONAL DE USABILIDADE
+# MAINTRIX OMNI - REVISAO OPERACIONAL DE USABILIDADE
 ## Pre-Piloto ASTEC | Fevereiro 2026
 
 > **Objetivo:** Identificar melhorias de usabilidade, campos faltantes e otimizacoes de produtividade para Tecnico, PCM e Gerencia. Nenhuma funcionalidade nova sera criada.

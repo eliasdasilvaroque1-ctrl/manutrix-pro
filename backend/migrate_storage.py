@@ -136,7 +136,7 @@ async def migrate_manuals():
 
 
 async def main():
-    print("MANUTRIX Storage Migration — Local -> Object Storage")
+    print("MAINTRIX Storage Migration — Local -> Object Storage")
     print("=" * 60)
     
     # Initialize storage

@@ -1,9 +1,9 @@
 /**
- * Offline Queue Engine for MANUTRIX
+ * Offline Queue Engine for MAINTRIX
  * Stores pending operations in IndexedDB and syncs when online
  */
 
-const DB_NAME = 'manutrix_offline';
+const DB_NAME = 'maintrix_offline';
 const DB_VERSION = 1;
 const STORE_NAME = 'pending_operations';
 const CACHE_STORE = 'cached_data';

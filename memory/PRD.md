@@ -1,43 +1,33 @@
-# MANUTRIX ENTERPRISE — Product Requirements Document
+# MAINTRIX ENTERPRISE — Product Requirements Document
 
 ## Versão: 5.1.0
 
 ---
 
-## REFATORAÇÃO PLANOS DE INSPEÇÃO ✅ (iteration_47 + fix)
+## REBRANDING MANUTRIX → MAINTRIX ✅ (27/06/2026)
 
-### Arquitetura Nova
-- Planos são SEMPRE vinculados a um ATIVO específico (não mais genéricos por disciplina)
-- Tipos de plano: inspecao, preventiva, lubrificacao, limpeza, melhoria
-- Perguntas com tipos ricos: boolean, numero, texto, lista, escala_4, faixa, foto, comentario
-- Cada pergunta: texto, tipo_campo, obrigatoria, foto_obrigatoria, comentario_obrigatorio, unidade, valor_min, valor_max, opcoes, ordem
+### Arquivos Alterados
+**Frontend:**
+- `public/index.html` — title, meta tags, apple-mobile-web-app-title
+- `public/manifest.json` — short_name, name
+- `public/service-worker.js` — cache names
+- `src/App.js` — UI strings (login, sidebar)
+- `src/App.css` — comment
+- `src/lib/api.js` — sessionStorage keys (maintrix_token, maintrix_user)
+- `src/lib/offlineQueue.js` — IndexedDB name, comment
 
-### Auto-Load de Planos
-- Ao criar inspeção sem checklist: backend busca plano do ativo por tipo
-- plano_id e plano_nome são registrados no documento da inspeção
-- Fallback: equipment-type plan → minimal default (2 itens)
-- Checklists genéricos hardcoded REMOVIDOS
+**Backend:**
+- `server.py` — FastAPI title, export filenames, PDF titles, AI prompt
+- `org_config.py` — default config strings
+- `storage.py` — APP_NAME
+- `models.py` — module docstring
+- `data_architecture.py` — module docstring
+- `migrate_storage.py` — print string
 
-### Bug Crítico Corrigido
-- Duas chaves $or no dict Python → query ignorava filtro de tipo
-- Corrigido com $and encapsulando os dois $or
+**Domínio preparado:** app.maintrix.com.br
 
-### Endpoints
-- GET /api/planos-inspecao/por-ativo/{ativo_id} — Planos por ativo
-- GET /api/planos-inspecao/resolver?ativo_id=&tipo= — Resolve plano
-- GET /api/planos-inspecao/categorias-disponiveis?ativo_id= — Tipos disponíveis
-
----
-
-## MÓDULOS COMPLETOS
-Bloco A (Admin Master, Kanban, Filtros, Unidades) ✅
-Arquitetura de Dados (Event-sourced, HH, Executantes, Métricas) ✅
-Consolidação Enterprise (org_config, Terminologia, Numeração, White-label) ✅
-Bloco B (Cronômetro, Executantes, Equipe, Ranking) ✅
-Planos de Inspeção Enterprise ✅
-
-## PRÓXIMO: BLOCO C
-- Dashboard Supervisor
-- Qualidade dos Serviços
-- Exportação Excel/PDF/CSV
-- Finalização
+### NÃO alterado
+- Collections MongoDB (nomes internos mantidos)
+- Endpoints da API (rotas mantidas)
+- Emails de usuário (@manutrix.com — são dados, não branding)
+- Event sourcing, auditoria, HH, estrutura de banco

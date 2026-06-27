@@ -1,4 +1,4 @@
-# MANUTRIX OMNI — RELATÓRIO DE AUDITORIA E2E DE PRODUÇÃO
+# MAINTRIX OMNI — RELATÓRIO DE AUDITORIA E2E DE PRODUÇÃO
 **Data:** 2026-06-13  
 **Versão:** Iteration 22  
 **Objetivo:** Validação completa para uso em campo pela equipe de manutenção

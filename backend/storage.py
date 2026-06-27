@@ -1,4 +1,4 @@
-"""Emergent Object Storage integration for MANUTRIX file uploads"""
+"""Emergent Object Storage integration for MAINTRIX file uploads"""
 import os
 import logging
 import requests
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
-APP_NAME = "manutrix"
+APP_NAME = "maintrix"
 
 storage_key = None
 

@@ -1,4 +1,4 @@
-# MANUTRIX OMNI - RELATORIO FINAL DE PRODUCAO
+# MAINTRIX - RELATORIO FINAL DE PRODUCAO
 ## Versao 3.1.0 | Piloto ASTEC | Fevereiro 2026
 
 ---
@@ -83,10 +83,10 @@
 ### Passo 2: MongoDB Atlas
 - [ ] Criar conta em [cloud.mongodb.com](https://cloud.mongodb.com)
 - [ ] Criar cluster (M0 Free ou M10+ para producao)
-- [ ] Criar database: `manutrix_production`
+- [ ] Criar database: `maintrix_production`
 - [ ] Criar usuario de banco com permissao readWrite
 - [ ] Configurar Network Access (IP do Railway/VPS ou 0.0.0.0/0 temporario)
-- [ ] Copiar connection string: `mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/manutrix_production`
+- [ ] Copiar connection string: `mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/maintrix_production`
 - [ ] Testar conexao com `mongosh`
 
 ### Passo 3: Supabase (Producao)
@@ -95,8 +95,8 @@
 - [ ] Anotar: `SUPABASE_ANON_KEY` (Settings > API > anon/public)
 - [ ] Anotar: `SUPABASE_SERVICE_KEY` (Settings > API > service_role - **secreto**)
 - [ ] Configurar Auth > Settings:
-  - Site URL: `https://app.manutrix.com.br`
-  - Redirect URLs: `https://app.manutrix.com.br/**`
+  - Site URL: `https://app.maintrix.com.br`
+  - Redirect URLs: `https://app.maintrix.com.br/**`
 - [ ] Habilitar Email Auth (desabilitar "Confirm email" se desnecessario)
 
 ### Passo 4: Railway (Backend)
@@ -106,7 +106,7 @@
 - [ ] Build Command: `pip install -r requirements.txt`
 - [ ] Start Command: `uvicorn server:app --host 0.0.0.0 --port $PORT`
 - [ ] Configurar variaveis de ambiente (ver Secao 3)
-- [ ] Gerar dominio: `api-manutrix.up.railway.app` (ou custom domain)
+- [ ] Gerar dominio: `api-maintrix.up.railway.app` (ou custom domain)
 - [ ] Verificar logs de deploy
 
 ### Passo 5: Vercel (Frontend)
@@ -117,18 +117,18 @@
 - [ ] Build Command: `yarn build` (ou `craco build`)
 - [ ] Output Directory: `build`
 - [ ] Configurar variavel de ambiente:
-  - `REACT_APP_BACKEND_URL` = URL do Railway (ex: `https://api-manutrix.up.railway.app`)
+  - `REACT_APP_BACKEND_URL` = URL do Railway (ex: `https://api-maintrix.up.railway.app`)
 - [ ] Deploy
 
 ### Passo 6: Dominio
-- [ ] Registrar dominio (ex: manutrix.com.br)
-- [ ] DNS para Frontend: CNAME `app.manutrix.com.br` -> `cname.vercel-dns.com`
-- [ ] DNS para Backend: CNAME `api.manutrix.com.br` -> `<railway-domain>`
+- [ ] Registrar dominio (ex: maintrix.com.br)
+- [ ] DNS para Frontend: CNAME `app.maintrix.com.br` -> `cname.vercel-dns.com`
+- [ ] DNS para Backend: CNAME `api.maintrix.com.br` -> `<railway-domain>`
 - [ ] Configurar dominio customizado no Vercel (Settings > Domains)
 - [ ] Configurar dominio customizado no Railway (Settings > Networking)
 - [ ] SSL: Automatico em ambos (Let's Encrypt)
-- [ ] Atualizar `REACT_APP_BACKEND_URL` no Vercel para `https://api.manutrix.com.br`
-- [ ] Atualizar `Site URL` no Supabase para `https://app.manutrix.com.br`
+- [ ] Atualizar `REACT_APP_BACKEND_URL` no Vercel para `https://api.maintrix.com.br`
+- [ ] Atualizar `Site URL` no Supabase para `https://app.maintrix.com.br`
 
 ### Passo 7: Dados Iniciais
 - [ ] Fazer login com conta admin na aplicacao
@@ -144,11 +144,11 @@
 ### 3.1 Backend (Railway / .env)
 ```
 MONGO_URL=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/<db>?retryWrites=true&w=majority
-DB_NAME=manutrix_production
+DB_NAME=maintrix_production
 SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_KEY=eyJ...
-CORS_ORIGINS=https://app.manutrix.com.br
+CORS_ORIGINS=https://app.maintrix.com.br
 ```
 
 **Opcionais:**
@@ -161,7 +161,7 @@ EMERGENT_LLM_KEY=<se-usar-assistente-ia>
 
 ### 3.2 Frontend (Vercel / .env)
 ```
-REACT_APP_BACKEND_URL=https://api.manutrix.com.br
+REACT_APP_BACKEND_URL=https://api.maintrix.com.br
 ```
 
 > Nenhuma outra variavel e necessaria no frontend. Todas as chaves sensiveis ficam exclusivamente no backend.
@@ -175,7 +175,7 @@ REACT_APP_BACKEND_URL=https://api.manutrix.com.br
 - **Backup manual:**
 ```bash
 # Instalar mongodump (MongoDB Database Tools)
-mongodump --uri="mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/manutrix_production" \
+mongodump --uri="mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/maintrix_production" \
   --out=/backup/$(date +%Y%m%d_%H%M%S)
 ```
 - **Frequencia recomendada:** Diario (noturno) + antes de cada deploy
@@ -183,7 +183,7 @@ mongodump --uri="mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/manutrix_prod
 
 ### 4.2 MongoDB Local (Desenvolvimento)
 ```bash
-mongodump --db manutrix_production --out /backup/$(date +%Y%m%d)
+mongodump --db maintrix_production --out /backup/$(date +%Y%m%d)
 ```
 
 ### 4.3 Supabase Auth
@@ -205,14 +205,14 @@ tar -czf uploads_$(date +%Y%m%d).tar.gz /app/backend/uploads/
 ```bash
 # Restore completo
 mongorestore --uri="mongodb+srv://<user>:<pass>@<cluster>.mongodb.net" \
-  --db manutrix_production \
-  /backup/YYYYMMDD/manutrix_production
+  --db maintrix_production \
+  /backup/YYYYMMDD/maintrix_production
 
 # Restore de collection especifica
 mongorestore --uri="<connection-string>" \
-  --db manutrix_production \
+  --db maintrix_production \
   --collection ordens_servico \
-  /backup/YYYYMMDD/manutrix_production/ordens_servico.bson
+  /backup/YYYYMMDD/maintrix_production/ordens_servico.bson
 ```
 
 ### 5.2 Supabase Auth
@@ -268,8 +268,8 @@ git push origin hotfix/rollback
 # 1. Parar o backend (Railway > Pause service)
 # 2. Restore do backup
 mongorestore --drop --uri="<connection-string>" \
-  --db manutrix_production \
-  /backup/YYYYMMDD/manutrix_production
+  --db maintrix_production \
+  /backup/YYYYMMDD/maintrix_production
 # 3. Reiniciar o backend
 ```
 
@@ -329,7 +329,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 async def migrate():
     client = AsyncIOMotorClient("mongodb+srv://...")
-    db = client["manutrix_production"]
+    db = client["maintrix_production"]
     
     # Adicionar campo com valor padrao
     result = await db.ativos.update_many(

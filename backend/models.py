@@ -1,4 +1,4 @@
-"""Shared models, enums, and Pydantic schemas for MANUTRIX API"""
+"""Shared models, enums, and Pydantic schemas for MAINTRIX API"""
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from enum import Enum

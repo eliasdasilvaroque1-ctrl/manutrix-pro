@@ -1,5 +1,5 @@
 """
-MANUTRIX ENTERPRISE — Organization Configuration Module
+MAINTRIX ENTERPRISE — Organization Configuration Module
 Central brain for each company: identity, theme, terminology, numbering, preferences.
 
 Collection: org_config (one document per organization)
@@ -160,11 +160,11 @@ def build_default_org_config(org_id: str, org_nome: str = "") -> dict:
         "organization_id": org_id,
         "identidade": {
             "nome_sistema": f"Portal de Manutenção {org_nome}".strip(),
-            "subtitulo": "Powered by MANUTRIX",
+            "subtitulo": "Powered by MAINTRIX",
             "logo_url": None,
             "favicon_url": None,
             "wallpaper_url": None,
-            "rodape": f"© {datetime.now().year} {org_nome} — Powered by MANUTRIX",
+            "rodape": f"© {datetime.now().year} {org_nome} — Powered by MAINTRIX",
             "texto_institucional": "",
         },
         "tema": {**DEFAULT_THEME},

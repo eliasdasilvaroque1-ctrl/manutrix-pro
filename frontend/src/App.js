@@ -1535,7 +1535,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       <div className={`p-4 border-b border-slate-800 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && (
           <div>
-            <h1 className="text-xl font-bold text-emerald-400 tracking-wider">MANUTRIX</h1>
+            <h1 className="text-xl font-bold text-emerald-400 tracking-wider">MAINTRIX</h1>
             <p className="text-[10px] text-slate-500 uppercase tracking-wider">Enterprise CMMS</p>
           </div>
         )}
@@ -1743,7 +1743,7 @@ const LoginPage = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 mb-4">
             <Cog size={32} className="text-emerald-400" />
           </div>
-          <h1 className="text-3xl font-bold text-emerald-400 tracking-wider">MANUTRIX</h1>
+          <h1 className="text-3xl font-bold text-emerald-400 tracking-wider">MAINTRIX</h1>
           <p className="text-slate-500 mt-1 text-sm">Enterprise CMMS Platform</p>
         </div>
         
@@ -1928,7 +1928,7 @@ const DashboardPage = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${entity}_manutrix.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      a.download = `${entity}_maintrix.${format === 'excel' ? 'xlsx' : 'csv'}`;
       a.click();
       window.URL.revokeObjectURL(url);
       toast.success(`${entity} exportado com sucesso`);
@@ -5504,7 +5504,7 @@ const SobressalentesPage = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `sobressalentes_manutrix.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
+      link.setAttribute('download', `sobressalentes_maintrix.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -6647,7 +6647,7 @@ const AuditoriaPage = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `auditoria_manutrix.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
+      link.setAttribute('download', `auditoria_maintrix.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
       document.body.appendChild(link); link.click(); link.remove();
       window.URL.revokeObjectURL(url);
       toast.success('Exportado!');
@@ -6886,7 +6886,7 @@ const ExportButtons = ({ entity }) => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${entity}_manutrix.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      link.download = `${entity}_maintrix.${format === 'excel' ? 'xlsx' : 'pdf'}`;
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success(`Exportado em ${format.toUpperCase()}`);
@@ -7775,20 +7775,20 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    const storedUser = sessionStorage.getItem('manutrix_user');
+    const storedUser = sessionStorage.getItem('maintrix_user');
     if (storedUser) setUser(JSON.parse(storedUser));
     setLoading(false);
   }, []);
   
   const login = (data) => {
-    sessionStorage.setItem('manutrix_token', data.access_token);
-    sessionStorage.setItem('manutrix_user', JSON.stringify(data.user));
+    sessionStorage.setItem('maintrix_token', data.access_token);
+    sessionStorage.setItem('maintrix_user', JSON.stringify(data.user));
     setUser(data.user);
   };
   
   const logout = () => {
-    sessionStorage.removeItem('manutrix_token');
-    sessionStorage.removeItem('manutrix_user');
+    sessionStorage.removeItem('maintrix_token');
+    sessionStorage.removeItem('maintrix_user');
     setUser(null);
   };
   

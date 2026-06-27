@@ -11,7 +11,7 @@ export const useAuth = () => useContext(AuthContext);
 // API Client
 export const api = axios.create({ baseURL: API });
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('manutrix_token');
+  const token = sessionStorage.getItem('maintrix_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -19,8 +19,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      sessionStorage.removeItem('manutrix_token');
-      sessionStorage.removeItem('manutrix_user');
+      sessionStorage.removeItem('maintrix_token');
+      sessionStorage.removeItem('maintrix_user');
       window.location.href = '/login';
     }
     return Promise.reject(error);

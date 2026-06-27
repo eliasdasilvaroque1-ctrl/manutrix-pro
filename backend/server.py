@@ -42,7 +42,7 @@ from routes.work_orders import router as work_orders_router
 from routes.events import router as events_router
 from routes.org import router as org_router
 
-app = FastAPI(title="MANUTRIX API", version="4.1.0")
+app = FastAPI(title="MAINTRIX API", version="5.1.0")
 api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -2099,7 +2099,7 @@ async def assistente_chat(data: ChatMessage, user: Dict = Depends(get_current_us
     
     manual_context = "\n\n".join(context_parts) if context_parts else "Nenhum manual carregado no sistema."
     
-    system_msg = f"""Você é o Assistente Técnico MANUTRIX, especialista em manutenção industrial.
+    system_msg = f"""Você é o Assistente Técnico MAINTRIX, especialista em manutenção industrial.
 Responda em português do Brasil, de forma clara e objetiva.
 Seu papel é ajudar mecânicos e eletricistas a resolver problemas e tirar dúvidas sobre equipamentos.
 Use as informações dos manuais técnicos disponíveis como referência.
@@ -2109,7 +2109,7 @@ Se não souber a resposta ou não encontrar nos manuais, diga honestamente e sug
 {manual_context}
 """
     
-    session_id = data.session_id or f"manutrix_{user['id']}_{uuid.uuid4().hex[:8]}"
+    session_id = data.session_id or f"maintrix_{user['id']}_{uuid.uuid4().hex[:8]}"
     
     # Load chat history from DB
     history = await db.chat_history.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(20)
@@ -2195,7 +2195,7 @@ async def export_ativos(format: str = "excel", user: Dict = Depends(get_current_
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=ativos_manutrix.xlsx"})
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=ativos_maintrix.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
@@ -2209,7 +2209,7 @@ async def export_ativos(format: str = "excel", user: Dict = Depends(get_current_
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
-        elements = [Paragraph("MANUTRIX - Relatório de Ativos", styles['Title']), Spacer(1, 12)]
+        elements = [Paragraph("MAINTRIX - Relatório de Ativos", styles['Title']), Spacer(1, 12)]
         data = [["Área", "TAG", "Nome", "Tipo", "Fabricante", "Modelo"]]
         for a in ativos:
             data.append([sector_map.get(a.get('sector_id',''),''), a.get('tag','') or '', (a.get('nome','') or '')[:30], (a.get('tipo_equipamento','') or '')[:20], (a.get('fabricante','') or '')[:20], (a.get('modelo','') or '')[:20]])
@@ -2218,7 +2218,7 @@ async def export_ativos(format: str = "excel", user: Dict = Depends(get_current_
         elements.append(t)
         doc.build(elements)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=ativos_manutrix.pdf"})
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=ativos_maintrix.pdf"})
 
 @api_router.get("/export/ordens-servico")
 async def export_os(format: str = "excel", user: Dict = Depends(get_current_user)):
@@ -2247,7 +2247,7 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=ordens_servico_manutrix.xlsx"})
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=ordens_servico_maintrix.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
@@ -2257,7 +2257,7 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
-        elements = [Paragraph("MANUTRIX - Relatório de Ordens de Serviço", styles['Title']), Spacer(1, 12)]
+        elements = [Paragraph("MAINTRIX - Relatório de Ordens de Serviço", styles['Title']), Spacer(1, 12)]
         data = [["Nº", "TAG", "Tipo", "Prioridade", "Status", "Título", "Custo"]]
         for o in os_list:
             custo = o.get('custo_total') or 0
@@ -2267,7 +2267,7 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
         elements.append(t)
         doc.build(elements)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=ordens_servico_manutrix.pdf"})
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=ordens_servico_maintrix.pdf"})
 
 @api_router.get("/export/estoque")
 async def export_estoque(format: str = "excel", user: Dict = Depends(get_current_user)):
@@ -2291,7 +2291,7 @@ async def export_estoque(format: str = "excel", user: Dict = Depends(get_current
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=estoque_manutrix.xlsx"})
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=estoque_maintrix.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
@@ -2301,7 +2301,7 @@ async def export_estoque(format: str = "excel", user: Dict = Depends(get_current
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
-        elements = [Paragraph("MANUTRIX - Relatório de Estoque", styles['Title']), Spacer(1, 12)]
+        elements = [Paragraph("MAINTRIX - Relatório de Estoque", styles['Title']), Spacer(1, 12)]
         data = [["Código", "Nome", "Categoria", "Qtd", "Un", "Mín", "Custo Unit."]]
         for i in items:
             data.append([i.get('sku',''), (i.get('nome','') or '')[:25], i.get('categoria',''), i.get('quantidade',0), i.get('unidade',''), i.get('estoque_minimo',0), f"R${i.get('custo_unitario',0):.2f}"])
@@ -2310,7 +2310,7 @@ async def export_estoque(format: str = "excel", user: Dict = Depends(get_current
         elements.append(t)
         doc.build(elements)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=estoque_manutrix.pdf"})
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=estoque_maintrix.pdf"})
 
 @api_router.get("/export/inspecoes")
 async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_current_user)):
@@ -2339,7 +2339,7 @@ async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_curre
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=inspecoes_manutrix.xlsx"})
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=inspecoes_maintrix.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
@@ -2349,7 +2349,7 @@ async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_curre
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
-        elements = [Paragraph("MANUTRIX - Relatório de Inspeções", styles['Title']), Spacer(1, 12)]
+        elements = [Paragraph("MAINTRIX - Relatório de Inspeções", styles['Title']), Spacer(1, 12)]
         data = [["TAG", "Ativo", "Tipo", "Freq.", "Status", "Resultado", "Data"]]
         for i in inspecoes:
             data.append([i.get('ativo_tag',''), i.get('ativo_nome','')[:20], i.get('tipo',''), i.get('frequencia',''), i.get('status',''), i.get('resultado',''), i.get('data_programada','')[:10]])
@@ -2358,7 +2358,7 @@ async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_curre
         elements.append(t)
         doc.build(elements)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=inspecoes_manutrix.pdf"})
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=inspecoes_maintrix.pdf"})
 
 # ============== ATTACHMENTS ==============
 
@@ -2934,7 +2934,7 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=sobressalentes_manutrix.xlsx"})
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=sobressalentes_maintrix.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
@@ -2947,7 +2947,7 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=15*mm, bottomMargin=15*mm, leftMargin=10*mm, rightMargin=10*mm)
         styles = getSampleStyleSheet()
         elements = []
-        elements.append(Paragraph("MANUTRIX — Sobressalentes", styles['Title']))
+        elements.append(Paragraph("MAINTRIX — Sobressalentes", styles['Title']))
         elements.append(Paragraph(f"Total: {len(spares)} registro(s) — {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
         elements.append(Spacer(1, 6*mm))
         
@@ -2975,7 +2975,7 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         elements.append(table)
         doc.build(elements)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=sobressalentes_manutrix.pdf"})
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=sobressalentes_maintrix.pdf"})
 
 # ============== POWER BI DATA ENDPOINTS ==============
 
@@ -3152,7 +3152,7 @@ async def export_audit(format: str = "excel", user: Dict = Depends(get_current_u
         wb.save(buf)
         buf.seek(0)
         return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=auditoria_manutrix.xlsx"})
+            headers={"Content-Disposition": "attachment; filename=auditoria_maintrix.xlsx"})
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -3161,7 +3161,7 @@ async def export_audit(format: str = "excel", user: Dict = Depends(get_current_u
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
-        elements = [Paragraph("MANUTRIX - Auditoria", styles['Title']), Spacer(1, 12)]
+        elements = [Paragraph("MAINTRIX - Auditoria", styles['Title']), Spacer(1, 12)]
         data = [["Data/Hora", "Usuário", "Perfil", "Módulo", "Operação", "Detalhes"]]
         for l in logs[:200]:
             data.append([
@@ -3176,13 +3176,13 @@ async def export_audit(format: str = "excel", user: Dict = Depends(get_current_u
         doc.build(elements)
         buf.seek(0)
         return StreamingResponse(buf, media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=auditoria_manutrix.pdf"})
+            headers={"Content-Disposition": "attachment; filename=auditoria_maintrix.pdf"})
 
 # ============== ROOT ==============
 
 @api_router.get("/")
 async def root():
-    return {"message": "MANUTRIX API v3.0.0", "status": "online"}
+    return {"message": "MAINTRIX API v5.1.0", "status": "online"}
 
 app.include_router(api_router)
 

@@ -1,5 +1,5 @@
 """
-MANUTRIX ENTERPRISE — Organization Config Routes
+MAINTRIX ENTERPRISE — Organization Config Routes
 CRUD for org_config, numbering preview, unidades management.
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File

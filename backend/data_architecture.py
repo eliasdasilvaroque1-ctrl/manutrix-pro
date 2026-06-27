@@ -1,5 +1,5 @@
 """
-MANUTRIX PRO — Data Architecture Module
+MAINTRIX PRO — Data Architecture Module
 Event-sourced collections, indexes, and aggregation infrastructure.
 
 Collections:
