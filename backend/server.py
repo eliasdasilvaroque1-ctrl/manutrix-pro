@@ -41,6 +41,7 @@ from routes.assets import router as assets_router
 from routes.work_orders import router as work_orders_router
 from routes.events import router as events_router
 from routes.org import router as org_router
+from routes.biblioteca import router as biblioteca_router, BIBLIOTECA_INDEXES
 
 app = FastAPI(title="MAINTRIX API", version="5.1.0")
 api_router = APIRouter(prefix="/api")
@@ -71,6 +72,13 @@ async def startup_create_indexes():
                 await db[coll_name].create_index(idx["keys"], **kwargs)
             except Exception as e:
                 logger.warning(f"Config index {idx['name']} on {coll_name}: {e}")
+    # Create biblioteca indexes
+    for coll_name, idx_list in BIBLIOTECA_INDEXES.items():
+        for idx in idx_list:
+            try:
+                await db[coll_name].create_index(idx["keys"], name=idx["name"], background=True)
+            except Exception as e:
+                logger.warning(f"Biblioteca index {idx['name']} on {coll_name}: {e}")
 
 # Include modularized routers
 app.include_router(dashboard_router, prefix="/api")
@@ -78,6 +86,7 @@ app.include_router(assets_router, prefix="/api")
 app.include_router(work_orders_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(org_router, prefix="/api")
+app.include_router(biblioteca_router, prefix="/api")
 
 # ============== AUTH ROUTES ==============
 

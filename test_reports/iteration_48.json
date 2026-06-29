@@ -1,0 +1,61 @@
+{
+  "summary": "Iteration 48 — Biblioteca de Modelos & Classificação Técnica. Backend 22/22 pytest cases PASS. Frontend e2e: BibliotecaPage renders with 3 tabs (Categorias/Fabricantes/Modelos Mestres), search/add work, full create-categoria flow works end-to-end (toast 'Criado!' shown, item appears in list), Ativo form exposes new classification dropdowns (Categoria, Fabricante, Classe, Criticidade, Família). Deep-copy endpoint produces independent planos_inspecao with full traceability (modelo_origem_id, modelo_versao=1, plano_origem_id) and updates the ativo with modelo_mestre_id/categoria_id/fabricante_id/modelo_id. RBAC: tecnico correctly blocked (403) on all create endpoints and can still read categorias.",
+  "pass_fail_matrix": {
+    "POST /api/biblioteca/categorias auto-code CAT-XXXXXX": "PASS",
+    "GET /api/biblioteca/categorias list/search/pagination": "PASS",
+    "PUT /api/biblioteca/categorias/{id}": "PASS",
+    "DELETE /api/biblioteca/categorias/{id} soft-delete": "PASS",
+    "POST /api/biblioteca/fabricantes auto-code FAB-XXXXXX + categoria link": "PASS",
+    "GET /api/biblioteca/fabricantes filter by categoria_id": "PASS",
+    "DELETE /api/biblioteca/fabricantes/{id} soft-delete": "PASS",
+    "POST /api/biblioteca/modelos-mestre auto-code MM-XXXXXX + planos + perguntas (PLA-XXXXXX, ordem, valor_min/max, unidade, foto_obrigatoria, etc.)": "PASS",
+    "GET /api/biblioteca/modelos-mestre/{id} returns full doc with planos": "PASS",
+    "GET /api/biblioteca/modelos-mestre list enriched with categoria_nome/fabricante_nome": "PASS",
+    "DELETE /api/biblioteca/modelos-mestre/{id} soft-delete": "PASS",
+    "POST /api/biblioteca/modelos-mestre/{id}/aplicar/{ativo_id} DEEP COPY creates independent planos_inspecao": "PASS (2 planos copied with new ids, new pergunta ids)",
+    "Traceability fields (modelo_origem_id, modelo_versao, plano_origem_id, motivo_criacao)": "PASS",
+    "Ativo updated with classification (modelo_mestre_id, categoria_id, fabricante_id, modelo_id)": "PASS",
+    "Tecnico 403 on create categoria/fabricante/modelo": "PASS",
+    "Tecnico 200 on GET categorias": "PASS",
+    "Frontend: /biblioteca renders biblioteca-page with 3 tabs + search + add btn": "PASS",
+    "Frontend: create categoria via UI persists & search shows it": "PASS",
+    "Frontend: AtivoModal exposes ativo-categoria, ativo-fabricante-cat, ativo-criticidade": "PASS",
+    "Regression: Login (master/admin), dashboard/stats, OS list, ativos list, /biblioteca route": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard (loaded inside Biblioteca/Ativos navigation tests)", "issues": ["Recharts containers emit width(-1)/height(-1) warnings repeatedly — chart parent has no min-width/min-height. Non-blocking but pollutes console and may cause empty charts on first render. Add minWidth=0 / minHeight=0 or fixed aspect ratio on the ResponsiveContainer parent."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration48_biblioteca.py",
+    "/app/test_reports/pytest/iteration48_biblioteca.xml"
+  ],
+  "action_items": [
+    "(Optional) Add a GET /api/biblioteca/categorias/{id} and /fabricantes/{id} for read-by-id parity with /modelos-mestre/{id}. Current code only exposes list + soft delete + update, which forces UI to round-trip via list+search.",
+    "(Optional) Fix Recharts container width/height warnings on the dashboard parent (minWidth: 0)."
+  ],
+  "critical_code_review_comments": [
+    "biblioteca.py:55,118,187 — list endpoints use `.to_list(limit)` instead of `.to_list(length=limit)` (kw arg). Pymongo/Motor accepts positional but mixing limit() and to_list(limit) is brittle; recommend `.to_list(length=None)` after limit() or `.to_list(length=limit)` for clarity.",
+    "biblioteca.py:298 — `motivo` is a query parameter (FastAPI default), works but POST bodies are conventional for action data. Confirmed working with `?motivo=...`.",
+    "biblioteca.py:355-358 — aplicar endpoint overwrites `categoria_id` / `fabricante_id` / `modelo_id` on the ativo with the master model's values. If the ativo already had a different (manually set) classification, it is silently replaced. Consider logging the previous values in audit_log for true traceability (the audit currently only logs the apply action).",
+    "biblioteca.py:209,320 — `next_code('PLA','planos')` generates plano codes here, but the legacy /planos-inspecao create endpoint in server.py may have its own numbering. Verify no code collisions between master-plan codes and asset-plan codes (same counter ‘planos_seq’ used → safe).",
+    "biblioteca.py:243 — `especificacoes: data.get('especificacoes', {})` is a free-form dict (no validation). OK for v1 but flag for future schema typing.",
+    "biblioteca.py:283 (delete_modelo_mestre) — only soft-deletes the modelo_mestre; does NOT cascade or warn about already-applied (deep-copied) plans on ativos that reference it via modelo_origem_id. By design (deep copy = independent), but this could surprise users. UI should show 'X ativos derivam deste modelo' before allowing delete.",
+    "Frontend App.js single file is >8000 lines (BibliotecaPage at 7213, routes at 8010). Strongly recommend splitting into pages/ and components/ folders for maintainability — already flagged in earlier iterations.",
+    "Recharts ResponsiveContainer parent missing minWidth/minHeight → repeated console warnings. Cosmetic."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration48_biblioteca.py (new)"
+  ],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "100% on tested flows (biblioteca render, create-categoria, ativo classification fields, regression nav)"},
+  "test_credentials": "master@manutrix.com / master123, tecnico@manutrix.com / tecnico123 — both authenticated successfully. force_password_change was NOT triggered on master.",
+  "seed_data_creation": "Created and then soft-deleted: 1 TEST_CAT_*, 1 TEST_FAB_*, 1 TEST_MM_* with 2 planos. Also UI created UI_TEST_CAT_* (not cleaned, harmless residue, soft-delete via API works). Deep-copy applied 2 planos_inspecao to the first existing ativo — these remain on the asset (TEST data with modelo_origem_id can be filtered by main agent if needed).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 48 fully covers Biblioteca + Deep Copy + Traceability + RBAC. Backend test suite at /app/backend/tests/test_iteration48_biblioteca.py runs in ~4s, all 22 pass. The previous iteration 47 RCA (server.py:1180-1182 duplicate $or in inspection auto-load) was NOT retested here — it is OUTSIDE the scope of iteration 48 and remains a known issue per iteration_47.json. Frontend BibliotecaPage is fully functional with all required testids. Ativo classification dropdowns load from /api/biblioteca/categorias and /api/biblioteca/fabricantes (verified visually).",
+  "rca of the issue": "n/a — no new bugs detected in this iteration."
+}

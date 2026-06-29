@@ -14,7 +14,7 @@ import {
   Phone, Mail, Building, Hash, Thermometer, Volume2, Droplet, Cog,
   DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
   Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy, Factory,
-  Building2, Palette
+  Building2, Palette, BookOpen
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
 import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData } from "@/lib/offlineQueue";
@@ -446,12 +446,20 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
   const [sectors, setSectors] = useState([]);
   const [form, setForm] = useState({
     tag: '', nome: '', tipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
-    sector_id: '', observacoes: ''
+    sector_id: '', observacoes: '',
+    categoria_id: '', fabricante_id: '', modelo_id: '', familia: '', classe_equipamento: '', criticidade: ''
   });
+  
+  const [bibCategorias, setBibCategorias] = useState([]);
+  const [bibFabricantes, setBibFabricantes] = useState([]);
+  const [bibModelos, setBibModelos] = useState([]);
   
   useEffect(() => {
     if (isOpen) {
       api.get('/sectors').then(r => setSectors(r.data)).catch(() => {});
+      api.get('/biblioteca/categorias').then(r => setBibCategorias(r.data.items || [])).catch(() => {});
+      api.get('/biblioteca/fabricantes').then(r => setBibFabricantes(r.data.items || [])).catch(() => {});
+      api.get('/biblioteca/modelos-mestre').then(r => setBibModelos(r.data.items || [])).catch(() => {});
     }
   }, [isOpen]);
   
@@ -465,12 +473,19 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
         modelo: editData.modelo || '',
         numero_serie: editData.numero_serie || '',
         sector_id: editData.sector_id || '',
-        observacoes: editData.observacoes || ''
+        observacoes: editData.observacoes || '',
+        categoria_id: editData.categoria_id || '',
+        fabricante_id: editData.fabricante_id || '',
+        modelo_id: editData.modelo_id || '',
+        familia: editData.familia || '',
+        classe_equipamento: editData.classe_equipamento || '',
+        criticidade: editData.criticidade || '',
       });
     } else {
       setForm({
         tag: '', nome: '', tipo_equipamento: '', fabricante: '', modelo: '', numero_serie: '',
-        sector_id: '', observacoes: ''
+        sector_id: '', observacoes: '',
+        categoria_id: '', fabricante_id: '', modelo_id: '', familia: '', classe_equipamento: '', criticidade: ''
       });
     }
     setPdfFiles([]);
@@ -561,39 +576,50 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
                 required
               />
             </FormInput>
-            <FormInput label="Tipo de Equipamento" required>
-              <input
-                type="text"
-                value={form.tipo_equipamento}
-                onChange={(e) => setForm({...form, tipo_equipamento: e.target.value})}
-                placeholder="Ex: Bomba, Motor, Compressor"
-                className="input-industrial w-full px-4"
-                required
-              />
+            {/* Classification fields */}
+            <FormInput label="Categoria">
+              <select value={form.categoria_id} onChange={(e) => setForm({...form, categoria_id: e.target.value})} className="input-industrial w-full px-4" data-testid="ativo-categoria">
+                <option value="">Selecione...</option>
+                {bibCategorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
             </FormInput>
-            <FormInput label="Número de Série">
-              <input
-                type="text"
-                value={form.numero_serie}
-                onChange={(e) => setForm({...form, numero_serie: e.target.value})}
-                className="input-industrial w-full px-4"
-              />
+            <FormInput label="Fabricante (Catálogo)">
+              <select value={form.fabricante_id} onChange={(e) => { const fab = bibFabricantes.find(f => f.id === e.target.value); setForm({...form, fabricante_id: e.target.value, fabricante: fab?.nome || form.fabricante}); }} className="input-industrial w-full px-4" data-testid="ativo-fabricante-cat">
+                <option value="">Selecione...</option>
+                {bibFabricantes.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+              </select>
+            </FormInput>
+            <FormInput label="Tipo de Equipamento" required>
+              <input type="text" value={form.tipo_equipamento} onChange={(e) => setForm({...form, tipo_equipamento: e.target.value})} placeholder="Ex: Bomba, Motor, Compressor" className="input-industrial w-full px-4" required />
             </FormInput>
             <FormInput label="Fabricante">
-              <input
-                type="text"
-                value={form.fabricante}
-                onChange={(e) => setForm({...form, fabricante: e.target.value})}
-                className="input-industrial w-full px-4"
-              />
+              <input type="text" value={form.fabricante} onChange={(e) => setForm({...form, fabricante: e.target.value})} className="input-industrial w-full px-4" />
             </FormInput>
             <FormInput label="Modelo">
-              <input
-                type="text"
-                value={form.modelo}
-                onChange={(e) => setForm({...form, modelo: e.target.value})}
-                className="input-industrial w-full px-4"
-              />
+              <input type="text" value={form.modelo} onChange={(e) => setForm({...form, modelo: e.target.value})} className="input-industrial w-full px-4" />
+            </FormInput>
+            <FormInput label="Número de Série">
+              <input type="text" value={form.numero_serie} onChange={(e) => setForm({...form, numero_serie: e.target.value})} className="input-industrial w-full px-4" />
+            </FormInput>
+            <FormInput label="Família">
+              <input type="text" value={form.familia} onChange={(e) => setForm({...form, familia: e.target.value})} placeholder="Ex: Equipamentos Rotativos" className="input-industrial w-full px-4" />
+            </FormInput>
+            <FormInput label="Classe">
+              <select value={form.classe_equipamento} onChange={(e) => setForm({...form, classe_equipamento: e.target.value})} className="input-industrial w-full px-4">
+                <option value="">Selecione...</option>
+                <option value="A">A — Crítico</option>
+                <option value="B">B — Importante</option>
+                <option value="C">C — Secundário</option>
+              </select>
+            </FormInput>
+            <FormInput label="Criticidade">
+              <select value={form.criticidade} onChange={(e) => setForm({...form, criticidade: e.target.value})} className="input-industrial w-full px-4" data-testid="ativo-criticidade">
+                <option value="">Selecione...</option>
+                <option value="critica">Crítica</option>
+                <option value="alta">Alta</option>
+                <option value="media">Média</option>
+                <option value="baixa">Baixa</option>
+              </select>
             </FormInput>
           </div>
         </div>
@@ -1503,6 +1529,12 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         { icon: Package, label: 'Estoque', path: '/estoque' },
         { icon: Cog, label: 'Sobressalentes', path: '/sobressalentes' },
         { icon: Calendar, label: 'Paradas', path: '/paradas' },
+      ]
+    }] : []),
+    ...(['admin','master','pcm'].includes(role) ? [{
+      label: 'PCM',
+      items: [
+        { icon: BookOpen, label: 'Biblioteca', path: '/biblioteca' },
       ]
     }] : []),
     ...(isAdmin ? [{
@@ -7176,6 +7208,179 @@ const UnidadesPage = () => {
 };
 
 
+// ============== BIBLIOTECA DE MODELOS PAGE ==============
+
+const BibliotecaPage = () => {
+  const [tab, setTab] = useState('categorias');
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [categorias, setCategorias] = useState([]);
+  const [fabricantes, setFabricantes] = useState([]);
+  const { user } = useAuth();
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const params = search ? `?search=${search}` : '';
+      const res = await api.get(`/biblioteca/${tab}${params}`);
+      setItems(res.data.items || res.data);
+      setTotal(res.data.total || (res.data.items || res.data).length);
+      if (tab === 'modelos-mestre' || tab === 'fabricantes') {
+        const catRes = await api.get('/biblioteca/categorias');
+        setCategorias(catRes.data.items || []);
+      }
+      if (tab === 'modelos-mestre') {
+        const fabRes = await api.get('/biblioteca/fabricantes');
+        setFabricantes(fabRes.data.items || []);
+      }
+    } catch { toast.error('Erro ao carregar dados'); }
+    finally { setLoading(false); }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData(); }, [tab, search]);
+
+  const getEmptyForm = () => {
+    if (tab === 'categorias') return { nome: '', descricao: '' };
+    if (tab === 'fabricantes') return { nome: '', descricao: '', categoria_id: '', pais: '', website: '' };
+    return { nome: '', modelo: '', categoria_id: '', fabricante_id: '', descricao: '' };
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (editItem) {
+        await api.put(`/biblioteca/${tab}/${editItem.id}`, form);
+        toast.success('Atualizado!');
+      } else {
+        await api.post(`/biblioteca/${tab}`, form);
+        toast.success('Criado!');
+      }
+      setShowModal(false); setEditItem(null); setForm(getEmptyForm());
+      fetchData();
+    } catch (err) { toast.error(normalizeError(err)); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/biblioteca/${tab}/${deleteItem.id}`);
+      toast.success('Excluído!');
+      setDeleteItem(null);
+      fetchData();
+    } catch (err) { toast.error(normalizeError(err)); }
+  };
+
+  const tabs = [
+    { id: 'categorias', label: 'Categorias', icon: Layers },
+    { id: 'fabricantes', label: 'Fabricantes', icon: Factory },
+    { id: 'modelos-mestre', label: 'Modelos Mestres', icon: BookOpen },
+  ];
+
+  return (
+    <div className="space-y-4" data-testid="biblioteca-page">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-100">Biblioteca de Modelos</h1>
+        <button onClick={() => { setEditItem(null); setForm(getEmptyForm()); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="biblioteca-add-btn">
+          <Plus size={20} /> Novo
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-slate-800 pb-1">
+        {tabs.map(t => {
+          const Icon = t.icon;
+          return (
+            <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
+              className={`px-4 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all ${tab === t.id ? 'bg-slate-800 text-emerald-400 border-b-2 border-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}
+              data-testid={`bib-tab-${t.id}`}
+            ><Icon size={14} />{t.label}</button>
+          );
+        })}
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="input-industrial w-full pl-9 pr-4 text-sm" data-testid="bib-search" />
+      </div>
+
+      <p className="text-xs text-slate-600">{total} registro(s)</p>
+
+      {/* List */}
+      {loading ? <Loading rows={5} /> : items.length > 0 ? (
+        <div className="space-y-2">
+          {items.map(item => (
+            <div key={item.id} className="glass-card p-4 hover:border-slate-600 transition-all group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-emerald-500/10"><BookOpen size={20} className="text-emerald-400" /></div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-emerald-400 text-xs">{item.codigo}</span>
+                      {item.status === 'inativo' && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30">Inativo</span>}
+                    </div>
+                    <p className="text-slate-100 font-medium">{item.nome}</p>
+                    <div className="flex gap-2 text-xs text-slate-500 mt-0.5">
+                      {item.categoria_nome && <span className="bg-slate-800 px-1.5 py-0.5 rounded">{item.categoria_nome}</span>}
+                      {item.fabricante_nome && <span className="bg-slate-800 px-1.5 py-0.5 rounded">{item.fabricante_nome}</span>}
+                      {item.modelo && <span>Modelo: {item.modelo}</span>}
+                      {item.versao && <span>v{item.versao}</span>}
+                      {item.planos?.length > 0 && <span className="text-blue-400">{item.planos.length} plano(s)</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="hidden group-hover:flex items-center gap-1">
+                  <button onClick={() => { setEditItem(item); setForm(tab === 'categorias' ? { nome: item.nome, descricao: item.descricao || '' } : tab === 'fabricantes' ? { nome: item.nome, descricao: item.descricao || '', categoria_id: item.categoria_id || '', pais: item.pais || '', website: item.website || '' } : { nome: item.nome, modelo: item.modelo || '', categoria_id: item.categoria_id || '', fabricante_id: item.fabricante_id || '', descricao: item.descricao || '' }); setShowModal(true); }} className="p-2 hover:bg-slate-700 rounded-lg"><Edit size={16} className="text-slate-400" /></button>
+                  <button onClick={() => setDeleteItem(item)} className="p-2 hover:bg-red-500/10 rounded-lg"><Trash2 size={16} className="text-red-400" /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={BookOpen} title={`Nenhum registro em ${tab}`} description="Crie o primeiro item." action={() => { setForm(getEmptyForm()); setShowModal(true); }} actionLabel="Criar" />
+      )}
+
+      {/* Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? `Editar ${tab === 'categorias' ? 'Categoria' : tab === 'fabricantes' ? 'Fabricante' : 'Modelo Mestre'}` : `Novo ${tab === 'categorias' ? 'Categoria' : tab === 'fabricantes' ? 'Fabricante' : 'Modelo Mestre'}`}>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <FormInput label="Nome" required><input value={form.nome || ''} onChange={e => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-4" required data-testid="bib-nome" /></FormInput>
+          {tab === 'fabricantes' && (
+            <>
+              <FormInput label="Categoria"><select value={form.categoria_id || ''} onChange={e => setForm({...form, categoria_id: e.target.value})} className="input-industrial w-full px-4"><option value="">Selecione...</option>{categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></FormInput>
+              <FormInput label="País"><input value={form.pais || ''} onChange={e => setForm({...form, pais: e.target.value})} className="input-industrial w-full px-4" /></FormInput>
+            </>
+          )}
+          {tab === 'modelos-mestre' && (
+            <>
+              <FormInput label="Modelo"><input value={form.modelo || ''} onChange={e => setForm({...form, modelo: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: C125" data-testid="bib-modelo" /></FormInput>
+              <FormInput label="Categoria"><select value={form.categoria_id || ''} onChange={e => setForm({...form, categoria_id: e.target.value})} className="input-industrial w-full px-4"><option value="">Selecione...</option>{categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></FormInput>
+              <FormInput label="Fabricante"><select value={form.fabricante_id || ''} onChange={e => setForm({...form, fabricante_id: e.target.value})} className="input-industrial w-full px-4"><option value="">Selecione...</option>{fabricantes.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}</select></FormInput>
+            </>
+          )}
+          <FormInput label="Descrição"><textarea value={form.descricao || ''} onChange={e => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4 min-h-[60px]" /></FormInput>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary" data-testid="bib-save">{saving ? 'Salvando...' : 'Salvar'}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir" message={`Excluir "${deleteItem?.nome}"? Esta ação não poderá ser desfeita.`} confirmText="Excluir" danger />
+    </div>
+  );
+};
+
+
 // ============== EQUIPE PAGE (Dashboard + Ranking + Produtividade) ==============
 
 const EquipePage = () => {
@@ -7824,6 +8029,7 @@ function App() {
           <Route path="/unidades" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
           <Route path="/admin/config" element={<ProtectedRoute><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
           <Route path="/equipe" element={<ProtectedRoute><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
+          <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
           <Route path="/master/cleanup" element={<ProtectedRoute><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
