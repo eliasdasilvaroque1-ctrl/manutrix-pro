@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import json
 import random
 
-from deps import db, get_current_user, get_scoped_asset_ids, check_admin_only
+from deps import db, get_current_user, get_scoped_asset_ids, check_admin_only, build_dashboard_visibility, build_visibility_query, _get_asset_ids_for_areas, get_user_disciplinas
 from models import Disciplina
 
 router = APIRouter()
@@ -13,19 +13,37 @@ router = APIRouter()
 
 @router.get("/kpis")
 async def get_kpis(sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
-    org_id = user.get('organization_id', '')
-    query = {"organization_id": org_id, "deleted_at": None} if org_id else {"deleted_at": None}
+    os_query = await build_dashboard_visibility(user)
 
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
-    asset_query = dict(query)
-    os_query = dict(query)
+    # Additional sector filter (frontend visual filter)
     if sector_id:
-        asset_query['sector_id'] = sector_id
-        asset_ids = await get_scoped_asset_ids(org_id, sector_id=sector_id)
+        asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), sector_id=sector_id)
         if asset_ids is not None:
             os_query['ativo_id'] = {"$in": asset_ids}
+
+    # Build asset query from same scope
+    asset_query = {"deleted_at": None}
+    org_id = user.get('organization_id', '')
+    if org_id:
+        asset_query['organization_id'] = org_id
+    role = user.get('role', '')
+    if role == 'supervisor':
+        area_ids = user.get('area_ids') or []
+        if area_ids:
+            asset_query['sector_id'] = {"$in": area_ids}
+    elif role in ('tecnico', 'inspetor'):
+        area_ids = user.get('area_ids') or []
+        if area_ids:
+            asset_query['sector_id'] = {"$in": area_ids}
+    elif role == 'operador':
+        area_ids = user.get('area_ids') or []
+        if area_ids:
+            asset_query['sector_id'] = {"$in": area_ids}
+    if sector_id:
+        asset_query['sector_id'] = sector_id
 
     # Auto-calculated from OS data
     os_corretivas_concluidas = await db.ordens_servico.find(
@@ -68,15 +86,25 @@ async def get_kpis(sector_id: Optional[str] = None, user: Dict = Depends(get_cur
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    os_query = await build_dashboard_visibility(user)
     org_id = user.get('organization_id', '')
-    query = {"organization_id": org_id, "deleted_at": None} if org_id else {"deleted_at": None}
+    role = user.get('role', '')
 
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
-    asset_query = dict(query)
-    os_query = dict(query)
-    insp_query = dict(query)
+    # Build scoped asset query
+    asset_query = {"deleted_at": None}
+    if org_id:
+        asset_query['organization_id'] = org_id
+    if role in ('supervisor', 'tecnico', 'inspetor', 'operador'):
+        area_ids = user.get('area_ids') or []
+        if area_ids:
+            asset_query['sector_id'] = {"$in": area_ids}
+
+    insp_query = await build_dashboard_visibility(user)
+
+    # Additional sector filter (frontend visual filter)
     if sector_id:
         asset_query['sector_id'] = sector_id
         asset_ids = await get_scoped_asset_ids(org_id, sector_id=sector_id)
@@ -108,7 +136,10 @@ async def get_dashboard_stats(sector_id: Optional[str] = None, user: Dict = Depe
         "nao_conformes_mes": await db.inspecoes.count_documents({**insp_query, "resultado": "nao_conforme"})
     }
 
-    estoque_items = await db.itens_estoque.find(query, {"_id": 0, "quantidade": 1, "estoque_minimo": 1, "item_critico": 1}).to_list(1000)
+    estoque_base = {"deleted_at": None}
+    if org_id:
+        estoque_base['organization_id'] = org_id
+    estoque_items = await db.itens_estoque.find(estoque_base, {"_id": 0, "quantidade": 1, "estoque_minimo": 1, "item_critico": 1}).to_list(1000)
     estoque = {
         "total_itens": len(estoque_items),
         "criticos": len([i for i in estoque_items if i.get('quantidade', 0) <= i.get('estoque_minimo', 0)]),
@@ -120,15 +151,27 @@ async def get_dashboard_stats(sector_id: Optional[str] = None, user: Dict = Depe
 @router.get("/dashboard/os-por-setor")
 async def dashboard_os_por_setor(user: Dict = Depends(get_current_user)):
     """OS count by sector for dashboard chart"""
+    base_q = await build_dashboard_visibility(user)
     org_id = user.get('organization_id', '')
-    q = {"deleted_at": None}
+    role = user.get('role', '')
+
+    sector_q = {"deleted_at": None}
     if org_id:
-        q['organization_id'] = org_id
-    sectors = await db.sectors.find(q, {"_id": 0, "id": 1, "nome": 1, "cor": 1}).to_list(100)
+        sector_q['organization_id'] = org_id
+    # Scope sectors to user's areas if not full visibility
+    if role in ('supervisor', 'tecnico', 'inspetor', 'operador'):
+        area_ids = user.get('area_ids') or []
+        if area_ids:
+            sector_q['id'] = {"$in": area_ids}
+
+    sectors = await db.sectors.find(sector_q, {"_id": 0, "id": 1, "nome": 1, "cor": 1}).to_list(100)
     result = []
     for s in sectors:
         aids = [a['id'] for a in await db.ativos.find({"sector_id": s['id'], "deleted_at": None}, {"_id": 0, "id": 1}).to_list(500)]
-        os_count = await db.ordens_servico.count_documents({"ativo_id": {"$in": aids}, "status": {"$nin": ["concluida", "cancelada"]}, "deleted_at": None}) if aids else 0
+        os_q = {**base_q, "status": {"$nin": ["concluida", "cancelada"]}}
+        if aids:
+            os_q['ativo_id'] = {"$in": aids}
+        os_count = await db.ordens_servico.count_documents(os_q) if aids else 0
         if os_count > 0 or True:
             result.append({"sector": s['nome'], "cor": s.get('cor', '#10b981'), "os_abertas": os_count})
     return sorted(result, key=lambda x: x['os_abertas'], reverse=True)
@@ -137,14 +180,21 @@ async def dashboard_os_por_setor(user: Dict = Depends(get_current_user)):
 @router.get("/dashboard/os-por-disciplina")
 async def dashboard_os_por_disciplina(user: Dict = Depends(get_current_user)):
     """OS count by discipline for dashboard chart"""
-    org_id = user.get('organization_id', '')
-    q = {"deleted_at": None, "status": {"$nin": ["concluida", "cancelada"]}}
-    if org_id:
-        q['organization_id'] = org_id
+    q = await build_dashboard_visibility(user)
+    q['status'] = {"$nin": ["concluida", "cancelada"]}
+
     result = []
     labels = {"mecanica": "Mecânica", "eletrica": "Elétrica", "instrumentacao": "Instrumentação", "civil": "Civil", "producao": "Produção"}
     colors = {"mecanica": "#3b82f6", "eletrica": "#f59e0b", "instrumentacao": "#8b5cf6", "civil": "#ef4444", "producao": "#10b981"}
-    for d in Disciplina:
+
+    # Determine which disciplines to show
+    role = user.get('role', '')
+    if role == 'operador':
+        disc_list = [d for d in Disciplina if d.value not in ('mecanica', 'eletrica', 'instrumentacao')]
+    else:
+        disc_list = list(Disciplina)
+
+    for d in disc_list:
         count = await db.ordens_servico.count_documents({**q, "disciplina": d.value})
         result.append({"disciplina": labels.get(d.value, d.value), "key": d.value, "cor": colors.get(d.value, '#64748b'), "count": count})
     return result
@@ -153,10 +203,8 @@ async def dashboard_os_por_disciplina(user: Dict = Depends(get_current_user)):
 @router.get("/dashboard/ativos-mais-falhas")
 async def dashboard_ativos_mais_falhas(user: Dict = Depends(get_current_user)):
     """Top assets with most failures (corretiva OS)"""
-    org_id = user.get('organization_id', '')
-    q = {"deleted_at": None, "tipo": "corretiva"}
-    if org_id:
-        q['organization_id'] = org_id
+    q = await build_dashboard_visibility(user)
+    q['tipo'] = "corretiva"
     os_list = await db.ordens_servico.find(q, {"_id": 0, "ativo_id": 1}).to_list(5000)
     counts = {}
     for o in os_list:
@@ -176,13 +224,18 @@ async def dashboard_ativos_mais_falhas(user: Dict = Depends(get_current_user)):
 @router.get("/dashboard/trend")
 async def get_dashboard_trend(sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
     """Monthly trend data for charts (last 6 months)"""
+    os_query = await build_dashboard_visibility(user)
     org_id = user.get('organization_id', '')
-    query = {"deleted_at": None}
-    if org_id:
-        query['organization_id'] = org_id
+    role = user.get('role', '')
 
-    os_query = dict(query)
-    asset_query = dict(query)
+    asset_query = {"deleted_at": None}
+    if org_id:
+        asset_query['organization_id'] = org_id
+    if role in ('supervisor', 'tecnico', 'inspetor', 'operador'):
+        area_ids = user.get('area_ids') or []
+        if area_ids:
+            asset_query['sector_id'] = {"$in": area_ids}
+
     if sector_id:
         asset_query['sector_id'] = sector_id
         asset_ids = await get_scoped_asset_ids(org_id, sector_id=sector_id)

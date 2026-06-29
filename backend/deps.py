@@ -136,6 +136,209 @@ def can_export(user: Dict) -> bool:
 def can_view_dashboard(user: Dict) -> bool:
     return user.get('role') in ['admin', 'master', 'pcm', 'gerente', 'supervisor']
 
+def get_user_disciplinas(user: Dict) -> list:
+    """Get all disciplines a user can see (principal + secondary)."""
+    disciplinas = []
+    dp = user.get('disciplina_principal')
+    if dp:
+        disciplinas.append(dp)
+    for d in (user.get('disciplinas_secundarias') or []):
+        if d and d not in disciplinas:
+            disciplinas.append(d)
+    return disciplinas
+
+def user_has_full_visibility(user: Dict) -> bool:
+    """Roles that see ALL data regardless of discipline/area."""
+    return user.get('role') in ('master', 'admin', 'pcm', 'gerente')
+
+def build_disciplina_filter(user: Dict) -> dict:
+    """Build MongoDB filter for discipline-scoped queries. Returns {} for full-visibility roles."""
+    if user_has_full_visibility(user):
+        return {}
+    disciplinas = get_user_disciplinas(user)
+    if not disciplinas:
+        return {}
+    return {"disciplina": {"$in": disciplinas + [None, ""]}}
+
+
+# ============== VISIBILITY ENGINE ==============
+
+async def _get_asset_ids_for_areas(org_id: str, area_ids: list) -> list:
+    """Resolve area (sector) IDs to asset IDs."""
+    if not area_ids:
+        return None
+    q = {"deleted_at": None, "sector_id": {"$in": area_ids}}
+    if org_id:
+        q['organization_id'] = org_id
+    assets = await db.ativos.find(q, {"_id": 0, "id": 1}).to_list(10000)
+    return [a['id'] for a in assets]
+
+
+async def build_visibility_query(user: Dict, entity_type: str = "os") -> dict:
+    """Build MongoDB query filter enforcing role-based visibility.
+
+    Visibility rules:
+    - master:       All data across all organizations
+    - admin:        All records of their organization
+    - pcm:          All disciplines of their organization
+    - gerente:      All records (read-only enforced elsewhere)
+    - supervisor:   Only their disciplines + their areas
+    - tecnico:      Only their disciplines + their areas + assigned activities
+    - inspetor:     Same as tecnico for inspections
+    - operador:     Only operational (NEVER mechanical/electrical OS)
+    - viewer:       Only assigned items
+    """
+    role = user.get('role', '')
+    org_id = user.get('organization_id', '')
+    user_id = user.get('id', '')
+
+    base = {"deleted_at": None}
+    if org_id:
+        base['organization_id'] = org_id
+
+    # --- Full visibility roles ---
+    if role == 'master':
+        return base
+    if role in ('admin', 'pcm', 'gerente'):
+        return base
+
+    # --- Supervisor: disciplines AND areas (combined), plus direct assignments ---
+    if role == 'supervisor':
+        disciplinas = get_user_disciplinas(user)
+        area_ids = user.get('area_ids') or []
+
+        # Build scope filter (discipline AND area)
+        scope_filter = {}
+        if disciplinas:
+            scope_filter["disciplina"] = {"$in": disciplinas}
+        if area_ids:
+            asset_ids = await _get_asset_ids_for_areas(org_id, area_ids)
+            if asset_ids is not None:
+                scope_filter["ativo_id"] = {"$in": asset_ids}
+
+        # OR: in scope, OR directly assigned
+        or_conditions = []
+        if scope_filter:
+            or_conditions.append(scope_filter)
+        or_conditions.append({"responsavel_id": user_id})
+        if entity_type == "os":
+            or_conditions.append({"equipe": user_id})
+        elif entity_type == "inspecao":
+            or_conditions.append({"executantes": user_id})
+
+        if or_conditions:
+            base["$or"] = or_conditions
+        return base
+
+    # --- Técnico / Inspetor: disciplines AND areas (combined), plus direct assignments ---
+    if role in ('tecnico', 'inspetor'):
+        disciplinas = get_user_disciplinas(user)
+        area_ids = user.get('area_ids') or []
+
+        # Build scope filter (discipline AND area)
+        scope_filter = {}
+        if disciplinas:
+            scope_filter["disciplina"] = {"$in": disciplinas}
+        if area_ids:
+            asset_ids = await _get_asset_ids_for_areas(org_id, area_ids)
+            if asset_ids is not None:
+                scope_filter["ativo_id"] = {"$in": asset_ids}
+
+        # OR: in scope, OR directly assigned
+        or_conditions = []
+        if scope_filter:
+            or_conditions.append(scope_filter)
+        or_conditions.append({"responsavel_id": user_id})
+        if entity_type == "os":
+            or_conditions.append({"equipe": user_id})
+        elif entity_type == "inspecao":
+            or_conditions.append({"executantes": user_id})
+
+        if or_conditions:
+            base["$or"] = or_conditions
+        else:
+            base["$or"] = [
+                {"responsavel_id": user_id},
+                {"equipe": user_id} if entity_type == "os" else {"executantes": user_id},
+                {"criado_por": user_id},
+            ]
+        return base
+
+    # --- Operador: NEVER sees mechanical/electrical/instrumentation OS ---
+    if role == 'operador':
+        if entity_type == "os":
+            base["$or"] = [
+                {"disciplina": {"$in": ["producao", "civil", None, ""]}},
+                {"responsavel_id": user_id},
+                {"equipe": user_id},
+            ]
+        elif entity_type == "inspecao":
+            base["$or"] = [
+                {"disciplina": {"$in": ["producao", "civil", None, ""]}},
+                {"responsavel_id": user_id},
+                {"executantes": user_id},
+            ]
+        elif entity_type == "ativo":
+            area_ids = user.get('area_ids') or []
+            if area_ids:
+                base["sector_id"] = {"$in": area_ids}
+        return base
+
+    # --- Viewer / unknown: own assignments only ---
+    own_conditions = [{"criado_por": user_id}]
+    if entity_type == "os":
+        own_conditions.extend([{"responsavel_id": user_id}, {"equipe": user_id}])
+    elif entity_type == "inspecao":
+        own_conditions.extend([{"responsavel_id": user_id}, {"executantes": user_id}])
+    base["$or"] = own_conditions
+    return base
+
+
+async def build_dashboard_visibility(user: Dict) -> dict:
+    """Build base query for dashboard/KPI/stats endpoints."""
+    role = user.get('role', '')
+    org_id = user.get('organization_id', '')
+
+    base = {"deleted_at": None}
+    if org_id:
+        base['organization_id'] = org_id
+
+    if role in ('master', 'admin', 'pcm', 'gerente'):
+        return base
+
+    # Supervisor: scope to their disciplines and areas
+    if role == 'supervisor':
+        conditions = {}
+        disciplinas = get_user_disciplinas(user)
+        area_ids = user.get('area_ids') or []
+        if disciplinas:
+            conditions["disciplina"] = {"$in": disciplinas}
+        if area_ids:
+            asset_ids = await _get_asset_ids_for_areas(org_id, area_ids)
+            if asset_ids is not None:
+                conditions["ativo_id"] = {"$in": asset_ids}
+        base.update(conditions)
+        return base
+
+    # Técnico/Inspetor: scope to their disciplines and areas
+    if role in ('tecnico', 'inspetor'):
+        disciplinas = get_user_disciplinas(user)
+        area_ids = user.get('area_ids') or []
+        if disciplinas:
+            base["disciplina"] = {"$in": disciplinas}
+        if area_ids:
+            asset_ids = await _get_asset_ids_for_areas(org_id, area_ids)
+            if asset_ids is not None:
+                base["ativo_id"] = {"$in": asset_ids}
+        return base
+
+    # Operador: only producao, never mecanica/eletrica
+    if role == 'operador':
+        base["disciplina"] = {"$in": ["producao", "civil", None, ""]}
+        return base
+
+    return base
+
 
 # ============== UTILITY HELPERS ==============
 

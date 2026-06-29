@@ -28,6 +28,8 @@ from deps import (
     SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, supabase_client,
     hash_password, verify_password, create_token, get_current_user,
     is_admin, is_master, check_write_permission, check_admin_only, check_master_only, check_pcm_or_admin, check_not_gerente, can_export, can_view_dashboard,
+    get_user_disciplinas, user_has_full_visibility, build_disciplina_filter,
+    build_visibility_query, build_dashboard_visibility, _get_asset_ids_for_areas,
     generate_tag, generate_sku, generate_os_numero,
     audit_log, audit_denial, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids, verify_org_access, audit_field_changes,
     logger
@@ -112,6 +114,11 @@ async def register(user_data: UserCreate):
         "role": user_data.role.value,
         "organization_id": org_id,
         "telefone": user_data.telefone,
+        "disciplina_principal": user_data.disciplina_principal,
+        "disciplinas_secundarias": user_data.disciplinas_secundarias or [],
+        "turno": user_data.turno,
+        "unidade_ids": user_data.unidade_ids or [],
+        "area_ids": user_data.area_ids or [],
         "password_hash": hash_password(user_data.password),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None
@@ -185,12 +192,17 @@ async def login(credentials: UserLogin):
         access_token=token,
         user={"id": user['id'], "email": user['email'], "nome": user['nome'],
               "role": user['role'], "organization_id": user.get('organization_id'),
-              "telefone": user.get('telefone'), "force_password_change": user.get('force_password_change', False)}
+              "telefone": user.get('telefone'), "force_password_change": user.get('force_password_change', False),
+              "disciplina_principal": user.get('disciplina_principal'),
+              "disciplinas_secundarias": user.get('disciplinas_secundarias', []),
+              "turno": user.get('turno'), "unidade_ids": user.get('unidade_ids', []),
+              "area_ids": user.get('area_ids', [])}
     )
 
 @api_router.get("/auth/me")
 async def get_me(user: Dict = Depends(get_current_user)):
-    return {k: v for k, v in user.items() if k not in ['password_hash']}
+    full = await db.users.find_one({"id": user['id']}, {"_id": 0, "password_hash": 0})
+    return full or user
 
 # ============== PASSWORD RESET ==============
 
@@ -302,7 +314,7 @@ async def admin_update_user(user_id: str, data: dict, user: Dict = Depends(get_c
     if not target:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     
-    allowed_fields = {'nome', 'email', 'role', 'telefone', 'active'}
+    allowed_fields = {'nome', 'email', 'role', 'telefone', 'active', 'disciplina_principal', 'disciplinas_secundarias', 'turno', 'unidade_ids', 'area_ids'}
     update_data = {k: v for k, v in data.items() if k in allowed_fields and v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
@@ -1074,9 +1086,10 @@ async def list_inspecoes(
     sector_id: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
-    query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    # Start with role-based visibility filter
+    query = await build_visibility_query(user, entity_type="inspecao")
+
+    # Apply optional frontend filters (visual only)
     if status:
         query['status'] = status.value
     if ativo_id:
@@ -1260,6 +1273,20 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         status = "pendente"
         data_conclusao = None
     
+    # Derive disciplina from explicit field, tipo, or plano
+    disciplina_insp = data.disciplina  # explicitly provided by frontend
+    if not disciplina_insp:
+        if tipo_str in ('mecanica',):
+            disciplina_insp = 'mecanica'
+        elif tipo_str in ('eletrica',):
+            disciplina_insp = 'eletrica'
+        elif plano_usado_id:
+            plano_disc = await db.planos_inspecao.find_one({"id": plano_usado_id}, {"_id": 0, "disciplina": 1})
+            if plano_disc:
+                disciplina_insp = plano_disc.get('disciplina')
+    if not disciplina_insp:
+        disciplina_insp = 'producao'
+
     insp_id = str(uuid.uuid4())
     insp_doc = {
         "id": insp_id,
@@ -1268,6 +1295,8 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         "responsavel_id": data.responsavel_id,
         "organization_id": org_id,
         "tipo": tipo_str,
+        "disciplina": disciplina_insp,
+        "sector_id": ativo.get('sector_id', ''),
         "frequencia": data.frequencia,
         "status": status,
         "resultado": resultado,
@@ -1994,6 +2023,139 @@ async def seed_data(user: Dict = Depends(get_current_user)):
     }
 
 
+@api_router.post("/seed/test-users")
+async def seed_test_users(user: Dict = Depends(get_current_user)):
+    """Create test users for each role to validate visibility rules."""
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+
+    # Get areas for assignment
+    areas = await db.sectors.find({"organization_id": org_id, "deleted_at": None}, {"_id": 0, "id": 1, "nome": 1}).to_list(100)
+    area_ids = [a['id'] for a in areas]
+    area_mecanica = area_ids[:2] if len(area_ids) >= 2 else area_ids  # first 2 areas
+    area_eletrica = area_ids[1:3] if len(area_ids) >= 3 else area_ids  # areas 2-3
+    area_producao = area_ids[:1] if area_ids else []
+
+    test_users = [
+        {
+            "email": "test.admin@maintrix.com", "nome": "Admin Teste", "role": "admin",
+            "password": "admin123", "disciplina_principal": None,
+            "disciplinas_secundarias": [], "area_ids": [], "turno": "ADM",
+        },
+        {
+            "email": "test.pcm@maintrix.com", "nome": "PCM Teste", "role": "pcm",
+            "password": "pcm123", "disciplina_principal": None,
+            "disciplinas_secundarias": [], "area_ids": [], "turno": "ADM",
+        },
+        {
+            "email": "test.sup.mec@maintrix.com", "nome": "Supervisor Mecânico", "role": "supervisor",
+            "password": "sup123", "disciplina_principal": "mecanica",
+            "disciplinas_secundarias": [], "area_ids": area_mecanica, "turno": "A",
+        },
+        {
+            "email": "test.sup.ele@maintrix.com", "nome": "Supervisor Elétrico", "role": "supervisor",
+            "password": "sup123", "disciplina_principal": "eletrica",
+            "disciplinas_secundarias": ["instrumentacao"], "area_ids": area_eletrica, "turno": "A",
+        },
+        {
+            "email": "test.mec@maintrix.com", "nome": "Mecânico Teste", "role": "tecnico",
+            "password": "tec123", "disciplina_principal": "mecanica",
+            "disciplinas_secundarias": [], "area_ids": area_mecanica, "turno": "A",
+        },
+        {
+            "email": "test.ele@maintrix.com", "nome": "Eletricista Teste", "role": "tecnico",
+            "password": "tec123", "disciplina_principal": "eletrica",
+            "disciplinas_secundarias": ["instrumentacao"], "area_ids": area_eletrica, "turno": "B",
+        },
+        {
+            "email": "test.operador@maintrix.com", "nome": "Operador Teste", "role": "operador",
+            "password": "op123", "disciplina_principal": "producao",
+            "disciplinas_secundarias": [], "area_ids": area_producao, "turno": "A",
+        },
+    ]
+
+    created = []
+    for tu in test_users:
+        existing = await db.users.find_one({"email": tu['email'], "deleted_at": None})
+        if existing:
+            # Update existing user with correct fields
+            await db.users.update_one({"email": tu['email']}, {"$set": {
+                "role": tu['role'],
+                "disciplina_principal": tu['disciplina_principal'],
+                "disciplinas_secundarias": tu['disciplinas_secundarias'],
+                "area_ids": tu['area_ids'],
+                "turno": tu['turno'],
+            }})
+            created.append({"email": tu['email'], "status": "updated"})
+            continue
+        user_id = str(uuid.uuid4())
+        user_doc = {
+            "id": user_id,
+            "email": tu['email'],
+            "nome": tu['nome'],
+            "role": tu['role'],
+            "organization_id": org_id,
+            "password_hash": hash_password(tu['password']),
+            "disciplina_principal": tu['disciplina_principal'],
+            "disciplinas_secundarias": tu['disciplinas_secundarias'],
+            "area_ids": tu['area_ids'],
+            "unidade_ids": [],
+            "turno": tu['turno'],
+            "telefone": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "deleted_at": None,
+        }
+        await db.users.insert_one(user_doc)
+        created.append({"email": tu['email'], "role": tu['role'], "status": "created"})
+
+    return {"message": f"{len(created)} usuários de teste criados/atualizados", "users": created}
+
+
+@api_router.post("/migrate/denormalize-sector")
+async def migrate_denormalize_sector(user: Dict = Depends(get_current_user)):
+    """Backfill sector_id on existing OS and inspections from their ativo's sector."""
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+
+    # Backfill OS
+    os_missing = await db.ordens_servico.find(
+        {"organization_id": org_id, "sector_id": {"$exists": False}, "deleted_at": None},
+        {"_id": 0, "id": 1, "ativo_id": 1}
+    ).to_list(10000)
+    os_updated = 0
+    for os_doc in os_missing:
+        ativo = await db.ativos.find_one({"id": os_doc.get('ativo_id')}, {"_id": 0, "sector_id": 1})
+        if ativo and ativo.get('sector_id'):
+            await db.ordens_servico.update_one({"id": os_doc['id']}, {"$set": {"sector_id": ativo['sector_id']}})
+            os_updated += 1
+
+    # Backfill Inspeções
+    insp_missing = await db.inspecoes.find(
+        {"organization_id": org_id, "sector_id": {"$exists": False}, "deleted_at": None},
+        {"_id": 0, "id": 1, "ativo_id": 1, "tipo": 1}
+    ).to_list(10000)
+    insp_updated = 0
+    for insp_doc in insp_missing:
+        ativo = await db.ativos.find_one({"id": insp_doc.get('ativo_id')}, {"_id": 0, "sector_id": 1})
+        updates = {}
+        if ativo and ativo.get('sector_id'):
+            updates['sector_id'] = ativo['sector_id']
+        # Backfill disciplina if missing
+        if not insp_doc.get('disciplina'):
+            tipo = insp_doc.get('tipo', '')
+            if tipo in ('mecanica',):
+                updates['disciplina'] = 'mecanica'
+            elif tipo in ('eletrica',):
+                updates['disciplina'] = 'eletrica'
+            else:
+                updates['disciplina'] = 'producao'
+        if updates:
+            await db.inspecoes.update_one({"id": insp_doc['id']}, {"$set": updates})
+            insp_updated += 1
+
+    return {"os_updated": os_updated, "inspecoes_updated": insp_updated}
+
+
 # ============== MANUAL PDF UPLOAD ==============
 
 MANUALS_DIR = ROOT_DIR / 'uploads' / 'manuals'
@@ -2234,9 +2396,7 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
     if not can_export(user):
         raise HTTPException(status_code=403, detail="Sem permissão para exportar")
     
-    query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    query = await build_visibility_query(user, entity_type="os")
     os_list = await db.ordens_servico.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
     
     for os_item in os_list:
@@ -2326,9 +2486,7 @@ async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_curre
     if not can_export(user):
         raise HTTPException(status_code=403, detail="Sem permissão para exportar")
     
-    query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    query = await build_visibility_query(user, entity_type="inspecao")
     inspecoes = await db.inspecoes.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
     
     for insp in inspecoes:
@@ -3011,9 +3169,7 @@ async def powerbi_ativos(api_key: Optional[str] = None, user: Dict = Depends(get
 @api_router.get("/powerbi/ordens-servico")
 async def powerbi_os(user: Dict = Depends(get_current_user)):
     """Flat JSON data for Power BI - Ordens de Serviço"""
-    query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    query = await build_visibility_query(user, entity_type="os")
     os_list = await db.ordens_servico.find(query, {"_id": 0}).to_list(10000)
     result = []
     for o in os_list:
@@ -3033,9 +3189,7 @@ async def powerbi_os(user: Dict = Depends(get_current_user)):
 
 @api_router.get("/powerbi/inspecoes")
 async def powerbi_inspecoes(user: Dict = Depends(get_current_user)):
-    query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    query = await build_visibility_query(user, entity_type="inspecao")
     inspecoes = await db.inspecoes.find(query, {"_id": 0, "checklist": 0}).to_list(10000)
     result = []
     for i in inspecoes:
@@ -3053,12 +3207,22 @@ async def powerbi_inspecoes(user: Dict = Depends(get_current_user)):
 @api_router.get("/powerbi/kpis-historico")
 async def powerbi_kpis(user: Dict = Depends(get_current_user)):
     """KPIs snapshot for Power BI dashboard"""
-    org_id = user.get('organization_id', '')
-    query = {"organization_id": org_id, "deleted_at": None} if org_id else {"deleted_at": None}
+    query = await build_dashboard_visibility(user)
     
-    ativos_total = await db.ativos.count_documents(query)
-    ativos_op = await db.ativos.count_documents({**query, "status": "operacional"})
-    ativos_parados = await db.ativos.count_documents({**query, "status": {"$in": ["parado", "manutencao"]}})
+    # Asset query scoped
+    asset_query = {"deleted_at": None}
+    org_id = user.get('organization_id', '')
+    if org_id:
+        asset_query['organization_id'] = org_id
+    role = user.get('role', '')
+    if role in ('supervisor', 'tecnico', 'inspetor', 'operador'):
+        area_ids = user.get('area_ids') or []
+        if area_ids:
+            asset_query['sector_id'] = {"$in": area_ids}
+
+    ativos_total = await db.ativos.count_documents(asset_query)
+    ativos_op = await db.ativos.count_documents({**asset_query, "status": "operacional"})
+    ativos_parados = await db.ativos.count_documents({**asset_query, "status": {"$in": ["parado", "manutencao"]}})
     
     os_concluidas = await db.ordens_servico.find({**query, "status": "concluida", "tempo_execucao_minutos": {"$exists": True, "$ne": None}}, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1}).to_list(5000)
     tempos = [o['tempo_execucao_minutos'] for o in os_concluidas if o.get('tempo_execucao_minutos')]

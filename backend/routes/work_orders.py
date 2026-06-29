@@ -7,7 +7,8 @@ import uuid
 
 from deps import (
     db, get_current_user, check_admin_only, check_write_permission, check_not_gerente,
-    audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids, verify_org_access, audit_field_changes
+    audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids, verify_org_access, audit_field_changes,
+    build_visibility_query, build_dashboard_visibility
 )
 from models import (
     OSCreate, OSUpdate, OSStatus, OSTipo, Prioridade, Disciplina,
@@ -28,9 +29,10 @@ async def list_os(
     sector_id: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
-    query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    # Start with role-based visibility filter
+    query = await build_visibility_query(user, entity_type="os")
+
+    # Apply optional frontend filters (visual only)
     if status:
         query['status'] = status.value
     if tipo:
@@ -84,9 +86,7 @@ async def list_os(
 
 @router.get("/ordens-servico/estatisticas")
 async def os_estatisticas(user: Dict = Depends(get_current_user)):
-    query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    query = await build_dashboard_visibility(user)
 
     status_counts = {}
     for s in OSStatus:
@@ -115,9 +115,8 @@ async def os_estatisticas(user: Dict = Depends(get_current_user)):
 
 @router.get("/ordens-servico/backlog")
 async def get_backlog(user: Dict = Depends(get_current_user)):
-    query = {"deleted_at": None, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    query = await build_visibility_query(user, entity_type="os")
+    query['status'] = {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}
     os_list = await db.ordens_servico.find(query, {"_id": 0}).sort("created_at", 1).to_list(500)
     enriched = []
     for os in os_list:
@@ -176,6 +175,7 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "id": os_id, "numero": numero, "ativo_id": data.ativo_id,
         "organization_id": org_id, "tipo": data.tipo.value,
         "disciplina": data.disciplina.value,
+        "sector_id": ativo.get('sector_id', ''),
         "origem": data.origem.value,
         "prioridade": data.prioridade.value, "titulo": data.titulo,
         "descricao": data.descricao, "status": "aberta",

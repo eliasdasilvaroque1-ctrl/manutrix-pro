@@ -1503,55 +1503,52 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const role = user?.role || 'tecnico';
   const isAdmin = role === 'admin' || role === 'master';
   const isMaster = role === 'master';
+  const isOperacional = ['tecnico', 'operador', 'inspetor'].includes(role);
+  const isPCM = role === 'pcm';
+  const isSupervisor = role === 'supervisor';
+  
   const menuGroups = [
     {
       label: 'GESTÃO',
       items: [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-        { icon: Users, label: 'Equipe', path: '/equipe' },
+        ...(!isOperacional ? [{ icon: Users, label: 'Equipe', path: '/equipe' }] : []),
         { icon: Box, label: 'Ativos', path: '/ativos' },
         ...(role !== 'pcm' ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
         { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
-        { icon: AlertTriangle, label: 'Anomalias', path: '/anomalias' },
-        ...(role !== 'gerente' && role !== 'pcm' ? [{ icon: Target, label: 'Ronda', path: '/ronda' }] : []),
+        ...(role !== 'operador' ? [{ icon: AlertTriangle, label: 'Anomalias', path: '/anomalias' }] : []),
+        ...(isOperacional ? [{ icon: Target, label: 'Ronda', path: '/ronda' }] : []),
       ]
     },
-    ...(role !== 'tecnico' ? [{
+    ...(!isOperacional ? [{
       label: 'INFRAESTRUTURA',
       items: [
         ...(isAdmin ? [{ icon: Factory, label: 'Unidades', path: '/unidades' }] : []),
         { icon: Layers, label: 'Áreas', path: '/setores' },
       ]
     }] : []),
-    ...(role !== 'tecnico' ? [{
+    {
       label: 'MATERIAIS',
       items: [
         { icon: Package, label: 'Estoque', path: '/estoque' },
-        { icon: Cog, label: 'Sobressalentes', path: '/sobressalentes' },
-        { icon: Calendar, label: 'Paradas', path: '/paradas' },
+        ...(!isOperacional ? [{ icon: Cog, label: 'Sobressalentes', path: '/sobressalentes' }] : []),
+        ...(!isOperacional ? [{ icon: Calendar, label: 'Paradas', path: '/paradas' }] : []),
       ]
-    }] : []),
+    },
     ...(['admin','master','pcm'].includes(role) ? [{
       label: 'PCM',
       items: [
         { icon: BookOpen, label: 'Biblioteca', path: '/biblioteca' },
       ]
     }] : []),
-    ...(isAdmin ? [{
+    ...(isAdmin || isPCM || isSupervisor ? [{
       label: 'ADMIN',
       items: [
-        { icon: Users, label: 'Usuários', path: '/admin/usuarios' },
-        { icon: ClipboardCheck, label: 'Planos de Inspeção', path: '/admin/templates' },
+        ...(isAdmin ? [{ icon: Users, label: 'Usuários', path: '/admin/usuarios' }] : []),
+        ...(isAdmin || isPCM ? [{ icon: ClipboardCheck, label: 'Planos de Inspeção', path: '/admin/templates' }] : []),
         { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
         ...(isAdmin ? [{ icon: Cog, label: 'Configurações', path: '/admin/config' }] : []),
         ...(isMaster ? [{ icon: Trash2, label: 'Limpeza', path: '/master/cleanup' }] : []),
-      ]
-    }] : []),
-    ...(role === 'pcm' ? [{
-      label: 'ADMIN',
-      items: [
-        { icon: ClipboardCheck, label: 'Planos de Inspeção', path: '/admin/templates' },
-        { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
       ]
     }] : []),
     ...(role === 'gerente' ? [{
@@ -6761,7 +6758,7 @@ const AdminUsuariosPage = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ nome: '', email: '', password: '', role: 'tecnico', telefone: '' });
+  const [form, setForm] = useState({ nome: '', email: '', password: '', role: 'tecnico', telefone: '', disciplina_principal: '', disciplinas_secundarias: [], turno: '' });
   const [saving, setSaving] = useState(false);
   const [resetResult, setResetResult] = useState(null);
   const { user } = useAuth();
@@ -6781,7 +6778,7 @@ const AdminUsuariosPage = () => {
       await api.post('/admin/users', form);
       toast.success('Usuário criado!');
       setShowModal(false);
-      setForm({ nome: '', email: '', password: '', role: 'tecnico', telefone: '' });
+      setForm({ nome: '', email: '', password: '', role: 'tecnico', telefone: '', disciplina_principal: '', disciplinas_secundarias: [], turno: '' });
       fetchUsers();
     } catch (e) { toast.error(normalizeError(e)); }
     finally { setSaving(false); }
@@ -6802,14 +6799,18 @@ const AdminUsuariosPage = () => {
 
   const handleEditUser = (u) => {
     setEditUser(u);
-    setForm({ nome: u.nome, email: u.email, password: '', role: u.role, telefone: u.telefone || '' });
+    setForm({ nome: u.nome, email: u.email, password: '', role: u.role, telefone: u.telefone || '',
+      disciplina_principal: u.disciplina_principal || '', disciplinas_secundarias: u.disciplinas_secundarias || [], turno: u.turno || '' });
     setShowModal(true);
   };
 
   const handleSaveEdit = async () => {
     setSaving(true);
     try {
-      await api.put(`/admin/users/${editUser.id}`, { nome: form.nome, email: form.email, role: form.role, telefone: form.telefone });
+      await api.put(`/admin/users/${editUser.id}`, {
+        nome: form.nome, email: form.email, role: form.role, telefone: form.telefone,
+        disciplina_principal: form.disciplina_principal, disciplinas_secundarias: form.disciplinas_secundarias, turno: form.turno
+      });
       toast.success('Usuário atualizado!');
       setShowModal(false);
       setEditUser(null);
@@ -6818,10 +6819,11 @@ const AdminUsuariosPage = () => {
     finally { setSaving(false); }
   };
 
-  const roleLabels = { admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tecnico: 'Técnico', inspetor: 'Inspetor', viewer: 'Visualizador' };
-  const roleColors = { admin: 'text-red-400 bg-red-500/10', gerente: 'text-purple-400 bg-purple-500/10', pcm: 'text-blue-400 bg-blue-500/10', supervisor: 'text-amber-400 bg-amber-500/10', tecnico: 'text-emerald-400 bg-emerald-500/10', inspetor: 'text-cyan-400 bg-cyan-500/10', viewer: 'text-slate-400 bg-slate-500/10' };
+  const roleLabels = { master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tecnico: 'Técnico', operador: 'Operador', inspetor: 'Inspetor', viewer: 'Visualizador' };
+  const roleColors = { master: 'text-pink-400 bg-pink-500/10', admin: 'text-red-400 bg-red-500/10', gerente: 'text-purple-400 bg-purple-500/10', pcm: 'text-blue-400 bg-blue-500/10', supervisor: 'text-amber-400 bg-amber-500/10', tecnico: 'text-emerald-400 bg-emerald-500/10', operador: 'text-teal-400 bg-teal-500/10', inspetor: 'text-cyan-400 bg-cyan-500/10', viewer: 'text-slate-400 bg-slate-500/10' };
+  const disciplinaLabels = { mecanica: 'Mecânica', eletrica: 'Elétrica', instrumentacao: 'Instrumentação', operacao: 'Operação', civil: 'Civil', producao: 'Produção', lubrificacao: 'Lubrificação' };
 
-  if (user?.role !== 'admin') return <EmptyState icon={Shield} title="Acesso Restrito" description="Apenas administradores podem gerenciar usuários." />;
+  if (!['admin','master'].includes(user?.role)) return <EmptyState icon={Shield} title="Acesso Restrito" description="Apenas administradores podem gerenciar usuários." />;
 
   return (
     <div className="space-y-4">
@@ -6837,7 +6839,11 @@ const AdminUsuariosPage = () => {
                 <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center"><User size={20} className="text-emerald-400" /></div>
                 <div>
                   <p className="text-slate-100 font-medium">{u.nome}</p>
-                  <p className="text-xs text-slate-500">{u.email}</p>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span>{u.email}</span>
+                    {u.disciplina_principal && <span className="bg-slate-800 px-1.5 py-0.5 rounded capitalize">{disciplinaLabels[u.disciplina_principal] || u.disciplina_principal}</span>}
+                    {u.turno && <span className="bg-slate-800 px-1.5 py-0.5 rounded">Turno {u.turno}</span>}
+                  </div>
                   {u.force_password_change && <span className="text-[10px] text-amber-400">Troca de senha pendente</span>}
                 </div>
               </div>

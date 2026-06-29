@@ -15,6 +15,7 @@ class UserRole(str, Enum):
     PCM = "pcm"
     SUPERVISOR = "supervisor"
     TECNICO = "tecnico"
+    OPERADOR = "operador"
     INSPETOR = "inspetor"
     VIEWER = "viewer"
 
@@ -131,6 +132,11 @@ class UserBase(BaseModel):
     role: UserRole = UserRole.TECNICO
     telefone: Optional[str] = None
     organization_id: Optional[str] = None
+    disciplina_principal: Optional[str] = None  # mecanica, eletrica, instrumentacao, operacao, civil, producao
+    disciplinas_secundarias: Optional[List[str]] = []
+    turno: Optional[str] = None  # A, B, C, D, ADM
+    unidade_ids: Optional[List[str]] = []  # unidades de atuação
+    area_ids: Optional[List[str]] = []  # áreas de atuação
 
 class UserCreate(UserBase):
     password: str
@@ -267,6 +273,7 @@ class ChecklistItem(BaseModel):
 class InspecaoCreate(BaseModel):
     ativo_id: str
     tipo: InspecaoTipo = InspecaoTipo.MECANICA
+    disciplina: Optional[str] = None  # mecanica, eletrica, instrumentacao, producao, civil
     frequencia: Optional[str] = "diaria"
     responsavel_id: Optional[str] = None
     executantes: List[str] = []
