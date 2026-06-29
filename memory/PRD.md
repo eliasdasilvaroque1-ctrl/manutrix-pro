@@ -1,33 +1,45 @@
 # MAINTRIX ENTERPRISE — Product Requirements Document
 
-## Versão: 5.1.0
+## Versão: 5.2.0
 
 ---
 
-## REBRANDING MANUTRIX → MAINTRIX ✅ (27/06/2026)
+## ADITIVO ARQUITETURAL Nº 001 ✅ (iteration_48 — 22/22)
 
-### Arquivos Alterados
-**Frontend:**
-- `public/index.html` — title, meta tags, apple-mobile-web-app-title
-- `public/manifest.json` — short_name, name
-- `public/service-worker.js` — cache names
-- `src/App.js` — UI strings (login, sidebar)
-- `src/App.css` — comment
-- `src/lib/api.js` — sessionStorage keys (maintrix_token, maintrix_user)
-- `src/lib/offlineQueue.js` — IndexedDB name, comment
+### 1. Biblioteca de Modelos ✅
+- `categorias_equipamento` — CRUD com auto-código CAT-000001
+- `fabricantes` — CRUD com auto-código FAB-000001, vinculado a categoria
+- `modelos_mestre` — CRUD com auto-código MM-000001, contém planos mestres com perguntas
+- Página frontend com 3 abas (Categorias, Fabricantes, Modelos Mestres) + busca + paginação
 
-**Backend:**
-- `server.py` — FastAPI title, export filenames, PDF titles, AI prompt
-- `org_config.py` — default config strings
-- `storage.py` — APP_NAME
-- `models.py` — module docstring
-- `data_architecture.py` — module docstring
-- `migrate_storage.py` — print string
+### 2. Classificação Técnica dos Ativos ✅
+- Novos campos: categoria_id, fabricante_id, modelo_id, familia, classe_equipamento, criticidade
+- Formulário de Ativos atualizado com dropdowns dos catálogos corporativos
 
-**Domínio preparado:** app.maintrix.com.br
+### 3. Deep Copy (Modelo → Ativo) ✅
+- POST /api/biblioteca/modelos-mestre/{id}/aplicar/{ativo_id}
+- Cria planos independentes com IDs novos para perguntas
+- Rastreabilidade: modelo_origem_id, modelo_versao, plano_origem_id, motivo_criacao
 
-### NÃO alterado
-- Collections MongoDB (nomes internos mantidos)
-- Endpoints da API (rotas mantidas)
-- Emails de usuário (@manutrix.com — são dados, não branding)
-- Event sourcing, auditoria, HH, estrutura de banco
+### 4. Códigos Automáticos ✅
+- CAT-000001, FAB-000001, MM-000001, PLA-000001
+- Contadores atômicos via collection `contadores`
+
+### 5. Preparação para Subconjuntos ✅
+- Campos parent_ativo_id e nivel preparados no modelo (nullable)
+
+---
+
+## HISTÓRICO COMPLETO
+- Bloco A: Admin Master, Kanban Visual, Filtros, Unidades, Auditoria ✅
+- Arquitetura de Dados: Event-sourced, HH, Executantes, Métricas ✅
+- Enterprise: org_config, Terminologia, Numeração, White-label ✅
+- Bloco B: Cronômetro, Executantes, Equipe, Ranking ✅
+- Planos Enterprise: Auto-load por ativo ✅
+- Rebranding: MANUTRIX → MAINTRIX ✅
+- Aditivo 001: Biblioteca, Classificação, Deep Copy ✅
+
+## PRÓXIMO: BLOCO C
+- Dashboard Supervisor
+- Qualidade dos Serviços
+- Exportação Excel/PDF/CSV
