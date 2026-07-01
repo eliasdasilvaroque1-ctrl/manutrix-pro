@@ -482,6 +482,7 @@ class PlanoInspecaoCreate(BaseModel):
     # backward compat fields
     tipo_equipamento: Optional[str] = None
     categoria: Optional[str] = None
+    force_override: Optional[bool] = False  # bypass duplicate check
 
 class PlanoInspecaoUpdate(BaseModel):
     nome: Optional[str] = None

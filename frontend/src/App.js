@@ -2733,6 +2733,7 @@ const AtivoDetailPage = () => {
   const [ativo, setAtivo] = useState(null);
   const [manuais, setManuais] = useState([]);
   const [historico, setHistorico] = useState([]);
+  const [planosVinculados, setPlanosVinculados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
@@ -2752,14 +2753,16 @@ const AtivoDetailPage = () => {
   
   const fetchAtivo = async () => {
     try {
-      const [ativoRes, manuaisRes, histRes] = await Promise.all([
+      const [ativoRes, manuaisRes, histRes, planosRes] = await Promise.all([
         api.get(`/ativos/${id}`),
         api.get(`/ativos/${id}/manuais`),
-        api.get(`/ativos/${id}/historico`).catch(() => ({ data: [] }))
+        api.get(`/ativos/${id}/historico`).catch(() => ({ data: [] })),
+        api.get(`/planos-inspecao/por-ativo/${id}`).catch(() => ({ data: [] }))
       ]);
       setAtivo(ativoRes.data);
       setManuais(manuaisRes.data);
       setHistorico(histRes.data);
+      setPlanosVinculados(planosRes.data);
     } catch (error) {
       toast.error('Ativo não encontrado');
       navigate('/ativos');
@@ -2822,6 +2825,7 @@ const AtivoDetailPage = () => {
   
   const tabs = [
     { key: 'info', label: 'Informações' },
+    { key: 'planos', label: `Planos (${planosVinculados.length})` },
     { key: 'historico', label: 'Histórico' },
     { key: 'manuais', label: `Manuais (${manuais.length})` },
   ];
@@ -2991,6 +2995,54 @@ const AtivoDetailPage = () => {
           <div className="glass-card p-4">
             <PhotoUploader entityType="asset" entityId={ativo.id} label="Fotos do Equipamento" />
           </div>
+        </div>
+      )}
+
+
+      {/* TAB: Planos Vinculados */}
+      {activeTab === 'planos' && (
+        <div className="space-y-3" data-testid="ativo-planos-vinculados">
+          {planosVinculados.length > 0 ? (
+            <div className="space-y-2">
+              {planosVinculados.map(p => {
+                const statusColor = p.status === 'aprovado' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+                const tipoLabels = { inspecao: 'Inspeção', preventiva: 'Preventiva', lubrificacao: 'Lubrificação', limpeza: 'Limpeza', melhoria: 'Melhoria' };
+                return (
+                  <div key={p.id} className="glass-card p-4" data-testid={`plano-vinculado-${p.id}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <ClipboardCheck size={16} className="text-emerald-400" />
+                          <span className="text-slate-100 font-medium">{p.nome}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusColor}`}>{p.status || 'Rascunho'}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                          <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{tipoLabels[p.tipo] || p.tipo}</span>
+                          {p.disciplina && <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{p.disciplina}</span>}
+                          <span>{(p.perguntas || []).length} perguntas</span>
+                          <span>v{p.versao || 1}</span>
+                          {p.updated_at && <span>Revisado: {new Date(p.updated_at).toLocaleDateString('pt-BR')}</span>}
+                          {p._generico && <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Genérico</span>}
+                        </div>
+                      </div>
+                      <button onClick={() => navigate('/admin/templates')} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar plano">
+                        <Edit size={16} className="text-slate-400" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="glass-card p-8 text-center">
+              <ClipboardCheck size={36} className="text-slate-600 mx-auto mb-3" />
+              <p className="text-slate-400">Nenhum plano aprovado para este ativo</p>
+              <p className="text-xs text-slate-600 mt-1">O PCM deve criar e aprovar planos de inspeção vinculados a este ativo.</p>
+              {['admin','pcm','master','supervisor'].includes(user?.role) && (
+                <button onClick={() => navigate('/admin/templates')} className="mt-3 btn-primary text-sm">Criar Plano</button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -6829,7 +6881,7 @@ const AdminTemplatesPage = () => {
     setForm(prev => ({ ...prev, itens: prev.itens.filter((_, i) => i !== idx) }));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (forceOverride = false) => {
     if (!form.nome) { toast.error("Campo 'Nome do Plano' é obrigatório"); return; }
     if (form.itens.length === 0) { toast.error('Adicione pelo menos uma pergunta'); return; }
     setSaving(true);
@@ -6841,6 +6893,7 @@ const AdminTemplatesPage = () => {
         categoria: form.tipo || 'inspecao',
         disciplina: form.disciplina || null,
         ativo_id: form.ativo_id || null,
+        force_override: forceOverride,
         perguntas: form.itens.map((it, idx) => ({
           descricao: it.descricao, tipo: it.tipo, obrigatorio: it.obrigatorio, unidade: it.unidade,
           limite_normal: it.tolerancia_max || it.limite_normal, limite_alerta: it.limite_alerta, limite_critico: it.limite_critico,
@@ -6856,7 +6909,26 @@ const AdminTemplatesPage = () => {
       }
       setEditing(null);
       fetchData();
-    } catch (error) { toast.error(normalizeError(error)); }
+    } catch (error) {
+      // Handle duplicate conflict (409)
+      const detail = error?.response?.data?.detail;
+      if (error?.response?.status === 409 && detail?.action_required === 'duplicate_conflict') {
+        const existingId = detail.existing_plan_id;
+        const existingNome = detail.existing_plan_nome;
+        const confirmed = window.confirm(
+          `${detail.message}\n\nDeseja:\n• OK = Criar mesmo assim (substituir)\n• Cancelar = Abrir plano existente "${existingNome}"`
+        );
+        if (confirmed) {
+          handleSave(true); // retry with force_override
+        } else if (existingId) {
+          // Open existing plan
+          const existing = templates.find(t => t.id === existingId);
+          if (existing) openEdit(existing);
+        }
+      } else {
+        toast.error(normalizeError(error));
+      }
+    }
     finally { setSaving(false); }
   };
 
@@ -6903,7 +6975,7 @@ const AdminTemplatesPage = () => {
           <FormInput label="Vincular a Ativo (opcional)">
             <select value={form.ativo_id} onChange={e => setForm({...form, ativo_id: e.target.value})} className="input-industrial w-full px-4" data-testid="template-ativo">
               <option value="">Plano genérico (sem ativo)</option>
-              {ativos.map(a => <option key={a.id} value={a.id}>{a.tag} - {a.nome}</option>)}
+              {ativos.map(a => <option key={a.id} value={a.id}>{a.sector?.nome || ''} {'\u203A'} {a.tag} — {a.nome} {a.tipo_equipamento ? `(${a.tipo_equipamento})` : ''} {a.fabricante || ''}</option>)}
             </select>
           </FormInput>
         </div>
@@ -6975,24 +7047,37 @@ const AdminTemplatesPage = () => {
             const isAprovado = t.status === 'aprovado';
             const statusLabel = isAprovado ? 'Aprovado' : (t.status === 'ativo' ? 'Ativo' : (t.status || 'Rascunho'));
             const statusColor = isAprovado ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+            const tipoLabels = { inspecao: 'Inspeção', preventiva: 'Preventiva', lubrificacao: 'Lubrificação', limpeza: 'Limpeza', melhoria: 'Melhoria' };
             return (
             <div key={t.id} className="glass-card p-4 hover:border-slate-600 transition-all group" data-testid={`template-card-${t.id}`}>
-              <div className="flex items-center justify-between">
-                <div className="cursor-pointer flex-1" onClick={() => openEdit(t)}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <ClipboardCheck size={16} className="text-emerald-400" />
+              <div className="flex items-start justify-between gap-3">
+                <div className="cursor-pointer flex-1 min-w-0" onClick={() => openEdit(t)}>
+                  {/* Hierarchy breadcrumb */}
+                  {t.ativo_tag && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-600 mb-1 truncate">
+                      {t.area_nome && <><span>{t.area_nome}</span><ChevronRight size={10} /></>}
+                      <span className="text-emerald-500/70 font-mono">{t.ativo_tag}</span>
+                      <ChevronRight size={10} />
+                      <span className="text-slate-500">{t.ativo_nome}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <ClipboardCheck size={16} className="text-emerald-400 shrink-0" />
                     <span className="text-slate-100 font-medium">{t.nome}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusColor}`}>{statusLabel}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{t.tipo || t.categoria || ''}</span>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+                    <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{tipoLabels[t.tipo] || t.tipo || ''}</span>
                     {t.disciplina && <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{t.disciplina}</span>}
                     <span>{(t.perguntas || []).length} perguntas</span>
                     <span>v{t.versao || 1}</span>
-                    {t.ativo_id && <span className="text-emerald-400/60">Vinculado a ativo</span>}
+                    {t.ativo_fabricante && <span className="text-slate-600">{t.ativo_fabricante}</span>}
+                    {t.ativo_modelo && <span className="text-slate-600">{t.ativo_modelo}</span>}
+                    {!t.ativo_id && <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Genérico</span>}
+                    {t.updated_at && <span className="text-slate-700">{new Date(t.updated_at).toLocaleDateString('pt-BR')}</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   {!isAprovado && (t.perguntas || []).length > 0 && (
                     <button onClick={() => handleAprovar(t)} className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium rounded-lg border border-emerald-500/30 transition-all" title="Aprovar para execução" data-testid={`aprovar-plano-${t.id}`}>
                       Aprovar

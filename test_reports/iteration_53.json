@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 53 — Plan usability improvements (hierarchy enrichment, duplicate 409, force_override, planos-por-ativo, sem_data operador fix). Backend: 9/9 pytest cases PASS (list enrichment fields ativo_tag/ativo_nome/area_nome present; POST returns 409 with action_required='duplicate_conflict' for same ativo+tipo+disciplina; force_override=true bypasses check; generic plans without ativo_id never trigger dup check; por-ativo returns only 'aprovado' plans; operador central sem_data no longer leaks mecanica/eletrica/instrumentacao — bug from iteration 52 CONFIRMED FIXED). Frontend: 4/4 UI checks PASS — Planos page shows breadcrumb 'PLANTA-01 › AV-01 › ALIMENTADOR' with status badge (rascunho), disciplina, versão (v1), perguntas count, MFAB/MMOD tags and date 01/07/2026 per card; Ativo detail (AV-01) has 'Planos (0)' tab (0 aprovados matches — the 2 seed plans are 'rascunho'); Plan editor ativo <select> shows full context 'PLANTA-01 › AV-01 — ALIMENTADOR (ALIMENTADOR VIBRATORIO) MFAB-1782051756' matching required format Area › TAG — Nome (Tipo) Fabricante.",
+  "pass_fail_matrix": {
+    "Backend: GET /api/planos-inspecao enriches with ativo_tag/ativo_nome/area_nome": "PASS",
+    "Backend: POST /api/planos-inspecao duplicate (same ativo+tipo+disciplina) → 409 action_required=duplicate_conflict": "PASS",
+    "Backend: POST /api/planos-inspecao force_override=true bypasses duplicate check": "PASS",
+    "Backend: POST /api/planos-inspecao without ativo_id (generic) → no dup check, 2 creates succeed": "PASS",
+    "Backend: GET /api/planos-inspecao/por-ativo/{id} returns only status='aprovado' plans": "PASS",
+    "Backend: GET /api/planos-inspecao/por-ativo/invalid-id returns []": "PASS",
+    "Backend: GET /api/central operador sem_data no mecanica/eletrica/instrumentacao (bug fix from iter52)": "PASS",
+    "Backend: GET /api/central operador all sections no restricted disciplines": "PASS",
+    "Frontend: Planos page shows breadcrumb PLANTA-01 › AV-01 › ALIMENTADOR per card": "PASS",
+    "Frontend: Plan card shows status badge (rascunho), tipo, disciplina, versão v1, perguntas count, data revisão": "PASS",
+    "Frontend: Ativo detail has 'Planos (0)' tab (0 aprovados matches seed data)": "PASS",
+    "Frontend: Plan editor ativo <select> shows 'AREA › TAG — Nome (Tipo) Fabricante' context": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Plan Editor (/admin/templates → NOVO PLANO)",
+        "issues": ["React hydration warning in console: '<span> cannot be a child of <option>'. The ativo dropdown wraps option text in dynamic <span> tags which is invalid HTML inside <option>. Options still render and work correctly, but console shows hydration error. Fix: render option text as plain string, not JSX-wrapped span. Source: /app/frontend/src/App.js:6978."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration53_planos_usability.py",
+    "/app/test_reports/pytest/iteration53.xml"
+  ],
+  "action_items": [
+    "Optional: fix React hydration warning in ativo option rendering (App.js:6978) — wrap option label as plain text, not <span>.",
+    "Consider: dup check on POST currently only considers same tipo+disciplina+ativo, but backend does NOT enforce dup check on PUT (update) — if a plan is edited to match another plan's tipo+disciplina+ativo, no validation prevents it. Not required by spec but worth considering.",
+    "Consider: /api/planos-inspecao list endpoint has N+1 lookups (per-plan ativo + sector fetch). At 500 plan limit this is up to 1000 extra queries. Use $lookup aggregation or batch prefetch by unique ativo_ids."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1000 — 409 detail is a dict; FastAPI wraps it under 'detail' automatically. Frontend must read response.data.detail.action_required (not response.data.action_required). Test file confirms wrapping.",
+    "server.py:990-1007 — Duplicate check uses `tipo_check = data.tipo or data.categoria or 'inspecao'`, but the dup query filters ONLY on 'tipo' field. Existing plans stored with only 'categoria' (legacy) may not match. Consider $or [{tipo: X}, {categoria: X}] for backward compat.",
+    "server.py:996 — 'if data.disciplina' means plans WITHOUT disciplina are checked ONLY on ativo+tipo. If two plans are created for the same ativo+tipo but different disciplinas, and one has disciplina=null, both will collide. Consider explicit 'disciplina': None in dup_query when disciplina absent.",
+    "server.py:1115-1139 — planos_por_ativo returns approved plans + generic-by-tipo_equipamento. But generic filter `ativo_id: {$in: [None, '']}` — depending on Mongo driver serialization, plans with missing ativo_id field entirely may not match. Should be `ativo_id: {$in: [None, '', null]}` or `$or: [{ativo_id: null}, {ativo_id: ''}, {ativo_id: {$exists: false}}]`.",
+    "central.py:130-135 — sem_data fix uses `sem_data_q.setdefault('$and', []).append(...)`. GOOD — preserves visibility $or. Verified operator no longer leaks restricted disciplines. Same pattern should be applied to any future section that adds its own $or.",
+    "App.js:6978 — <option><span>...</span></option> hydration warning. Refactor to plain string interpolation."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration53_planos_usability.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (4/4 checks)"},
+  "test_credentials": "master@manutrix.com/master123 and test.operador@maintrix.com/op123 — both valid.",
+  "seed_data_creation": "Created 4 TEST_ plans during dup check tests (all cleaned up via teardown_class). No DB residue expected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 53 complete. All spec items pass: (1) hierarchy enrichment ativo_tag/ativo_nome/area_nome present in list plans; (2) 409 duplicate response with action_required='duplicate_conflict'; (3) force_override=true bypass; (4) generic plans skip dup check; (5) por-ativo returns only aprovado; (6) sem_data operador leak from iter52 FIXED. Frontend breadcrumb, status badges, versão, data revisão, Planos tab on ativo detail, and ativo selector 'Area › TAG — Nome (Tipo) Fabricante' format all confirmed. Only minor issue: React hydration warning on ativo <option><span> (cosmetic, no functional impact).",
+  "rca_of_the_issue": "N/A — iter52 sem_data bug confirmed fixed via central.py:132 `sem_data_q.setdefault('$and', []).append({'$or': [...]})` pattern that preserves the visibility '$or' from build_visibility_query."
+}

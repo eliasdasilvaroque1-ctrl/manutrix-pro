@@ -947,19 +947,70 @@ async def list_planos_inspecao(
         query['ativo_id'] = ativo_id
     if categoria:
         query['categoria'] = categoria
-    planos = await db.planos_inspecao.find(query, {"_id": 0}).sort("categoria", 1).to_list(500)
+    planos = await db.planos_inspecao.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+    # Enrich with full hierarchy: Unidade → Área → Ativo → Plano
+    ativo_cache = {}
+    sector_cache = {}
+    for p in planos:
+        aid = p.get('ativo_id')
+        if aid and aid not in ativo_cache:
+            ativo_cache[aid] = await db.ativos.find_one(
+                {"id": aid, "deleted_at": None},
+                {"_id": 0, "id": 1, "tag": 1, "nome": 1, "sector_id": 1,
+                 "tipo_equipamento": 1, "fabricante": 1, "modelo": 1, "categoria_id": 1}
+            )
+        ativo = ativo_cache.get(aid)
+        if ativo:
+            p['ativo_tag'] = ativo.get('tag', '')
+            p['ativo_nome'] = ativo.get('nome', '')
+            p['ativo_tipo_equipamento'] = ativo.get('tipo_equipamento', '')
+            p['ativo_fabricante'] = ativo.get('fabricante', '')
+            p['ativo_modelo'] = ativo.get('modelo', '')
+            sid = ativo.get('sector_id', '')
+            if sid and sid not in sector_cache:
+                sector_cache[sid] = await db.sectors.find_one(
+                    {"id": sid, "deleted_at": None},
+                    {"_id": 0, "id": 1, "nome": 1, "codigo": 1}
+                )
+            sector = sector_cache.get(sid)
+            p['area_nome'] = sector.get('nome', '') if sector else ''
+        else:
+            p['ativo_tag'] = ''
+            p['ativo_nome'] = ''
+            p['area_nome'] = ''
     return planos
 
 @api_router.post("/planos-inspecao")
 async def create_plano_inspecao(data: PlanoInspecaoCreate, user: Dict = Depends(get_current_user)):
     check_write_permission(user, ['admin', 'pcm', 'supervisor'])
     org_id = user.get('organization_id', '')
+
+    # Validação de duplicidade: mesmo tipo + disciplina + ativo
+    if data.ativo_id:
+        tipo_check = data.tipo or data.categoria or "inspecao"
+        dup_query = {
+            "organization_id": org_id, "ativo_id": data.ativo_id,
+            "tipo": tipo_check, "deleted_at": None
+        }
+        if data.disciplina:
+            dup_query["disciplina"] = data.disciplina
+        existing = await db.planos_inspecao.find_one(dup_query, {"_id": 0, "id": 1, "nome": 1, "versao": 1, "status": 1})
+        if existing and not data.force_override:
+            raise HTTPException(status_code=409, detail={
+                "message": f"Já existe um plano '{existing['nome']}' (v{existing.get('versao',1)}) do tipo '{tipo_check}'"
+                           + (f" disciplina '{data.disciplina}'" if data.disciplina else "")
+                           + f" para este ativo. Status: {existing.get('status','')}.",
+                "existing_plan_id": existing['id'],
+                "existing_plan_nome": existing['nome'],
+                "action_required": "duplicate_conflict"
+            })
+
     perguntas = []
     for i, p in enumerate(data.perguntas):
         d = p.model_dump()
         d['id'] = str(uuid.uuid4())
         d['ordem'] = d.get('ordem', 0) or i
-        # Normalize field names
         if d.get('descricao') and not d.get('texto'):
             d['texto'] = d['descricao']
         if d.get('tipo') and not d.get('tipo_campo'):
