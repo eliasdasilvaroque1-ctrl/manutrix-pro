@@ -1,74 +1,71 @@
 # MAINTRIX ENTERPRISE — Product Requirements Document
 
-## Versão: 5.3.1
+## Versão: 6.0.0
 
 ---
 
-## ADITIVO ARQUITETURAL Nº 002 ✅ (iteration_50 — 12/12 backend + 5/5 frontend)
+## CORREÇÃO CRÍTICA: Fluxo de Execução de Inspeções ✅ (iteration_51 — 11/11 + 3/3)
 
-### 1. Segurança de Visibilidade Backend (RBAC por Disciplina/Área) ✅
-- **Motor de Visibilidade**: `build_visibility_query(user, entity_type)` e `build_dashboard_visibility(user)` em `deps.py`
-- Toda filtragem de segurança ocorre **exclusivamente no Backend**
-- Frontend aplica apenas filtros visuais (pesquisa, ordenação, paginação)
+### Problema Resolvido
+O módulo de Inspeções NÃO utilizava os Planos criados pelo PCM. Criava inspeções genéricas com checklist padrão, tornando inútil todo o módulo de Planos.
 
-### 2. Regras de Visibilidade por Perfil ✅
+### Novo Fluxo Implementado
+```
+PCM: Criar Plano → Vincular ao Ativo → Aprovar → Permanente
+Técnico: Acessar Ativo → Ver Planos Aprovados → Executar → Execução vinculada
+```
+
+### Arquitetura Plano Permanente → Execuções Recorrentes ✅
+| Entidade | Descrição |
+|----------|-----------|
+| Plano | Permanente, criado pelo PCM, status: rascunho → aprovado |
+| Execução | Histórica, vinculada ao Plano (plano_id, plano_versao) |
+
+### Mudanças Backend ✅
+- `POST /api/inspecoes` EXIGE `plano_id` — 422 se ausente
+- Plano deve ter status "aprovado" — 400 se rascunho/inativo
+- Checklist genérico **REMOVIDO DEFINITIVAMENTE**
+- `PATCH /api/planos-inspecao/{id}/aprovar` — aprovação explícita
+- `GET /api/planos-inspecao/por-ativo/{id}` — somente planos aprovados
+- Execução preserva: `plano_id`, `plano_nome`, `plano_versao`
+- Novo plano inicia como "rascunho" (não mais "ativo")
+
+### Mudanças Frontend ✅
+- ModalNovaInspecao: mostra Planos Aprovados como cards selecionáveis
+- RondaPage: mostra planos aprovados do ativo (não mais tipos hardcoded)
+- AdminTemplatesPage: badge de status + botão "Aprovar"
+- Tabs hardcoded Mecânica/Elétrica/Lubrificação **REMOVIDAS**
+
+---
+
+## ADITIVO ARQUITETURAL Nº 002 ✅ (iteration_50)
+
+### Segurança de Visibilidade Backend (RBAC) ✅
 | Perfil | Visibilidade |
 |--------|-------------|
 | MASTER | Todo o sistema |
-| Admin | Todos os registros da empresa |
-| PCM | Todas as disciplinas da empresa |
-| Supervisor | Todas disciplinas da empresa (mesmo acesso que PCM) |
-| Gerente | Todos (somente leitura) |
-| Técnico | Apenas disciplinas + áreas permitidas + atividades atribuídas |
-| Inspetor | Mesmo que Técnico para inspeções |
-| Operador | Apenas producao/civil. NUNCA vê mecanica/eletrica/instrumentacao |
+| Admin/PCM/Supervisor | Todos da empresa |
+| Técnico | Disciplinas + áreas + atividades atribuídas |
+| Operador | Apenas producao/civil, NUNCA mecanica/eletrica |
 
-### 3. Campos Denormalizados ✅
-- OS: `disciplina` (obrigatório), `sector_id` (denormalizado do ativo)
-- Inspeções: `disciplina` (derivado do tipo/plano), `sector_id` (denormalizado do ativo)
-- Endpoint de migração: `POST /api/migrate/denormalize-sector`
-
-### 4. Dashboard Scoped ✅
-- Todos os endpoints usam `build_dashboard_visibility`
-
-### 5. Bug Fix: Plano de Inspeção "Field required" ✅
-- `ativo_id` agora é `Optional[str] = None` em `PlanoInspecaoCreate`
-- `normalizeError` no frontend mostra nome do campo em português (ex: "Campo 'Nome' é obrigatório")
-- Formulário atualizado com campos: Tipo do Plano, Disciplina, Vincular a Ativo
-- Mapeamento `perguntas` ↔ `itens` corrigido no frontend
-- PUT endpoint atualiza todos os campos (não apenas nome/perguntas)
-- Testado com 10, 50 e 100 itens de checklist
-
-### 6. Usuários de Teste ✅
-- `POST /api/seed/test-users` cria 7 perfis com disciplinas e áreas
+### Bug Fix: Plano de Inspeção "Field required" ✅
+- `normalizeError` mostra nome do campo em português
+- Formulário com campos completos
 
 ---
 
-## ADITIVO ARQUITETURAL Nº 001 ✅ (iteration_48 — 22/22)
-- Biblioteca de Modelos (Categorias, Fabricantes, Modelos Mestres)
-- Classificação Técnica dos Ativos
-- Deep Copy (Modelo → Ativo)
-- Códigos Automáticos
-- Preparação para Subconjuntos
+## ADITIVO ARQUITETURAL Nº 001 ✅ (iteration_48)
+- Biblioteca de Modelos, Classificação, Deep Copy, Códigos Automáticos
 
----
-
-## HISTÓRICO COMPLETO
-- Bloco A: Admin Master, Kanban Visual, Filtros, Unidades, Auditoria ✅
-- Arquitetura de Dados: Event-sourced, HH, Executantes, Métricas ✅
-- Enterprise: org_config, Terminologia, Numeração, White-label ✅
-- Bloco B: Cronômetro, Executantes, Equipe, Ranking ✅
-- Planos Enterprise: Auto-load por ativo ✅
+## HISTÓRICO
+- Bloco A/B: Kanban, Filtros, Cronômetro, Equipe, Ranking ✅
+- Enterprise: org_config, Terminologia, White-label ✅
 - Rebranding: MANUTRIX → MAINTRIX ✅
-- Aditivo 001: Biblioteca, Classificação, Deep Copy ✅
-- Aditivo 002: Visibilidade RBAC, Bug Plano Inspeção, Supervisor=PCM ✅
 
 ## PRÓXIMO: BLOCO C
 - Dashboard Supervisor Executivo
-- Indicadores de Qualidade (Retrabalho, OS reabertas, Tempo médio)
-- Exportação Excel/PDF/CSV de relatórios de produtividade
+- Indicadores de Qualidade
+- Exportação Excel/PDF/CSV
 
 ## BACKLOG (P2)
-- IA Features: Previsão de falhas, produtividade, consumo de peças
-- Estrutura de Subconjuntos e Componentes (CRUD/UI)
-- Integrações ERP/SAP (suspenso até pós-piloto)
+- IA Features, Subconjuntos, Integrações ERP/SAP
