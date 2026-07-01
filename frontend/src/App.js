@@ -2734,9 +2734,10 @@ const AtivoDetailPage = () => {
   const [manuais, setManuais] = useState([]);
   const [historico, setHistorico] = useState([]);
   const [planosVinculados, setPlanosVinculados] = useState([]);
+  const [saude, setSaude] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [activeTab, setActiveTab] = useState('info');
+  const [activeTab, setActiveTab] = useState('prontuario');
   const [showBomModal, setShowBomModal] = useState(false);
   const [bomEdit, setBomEdit] = useState(null);
   const [bomForm, setBomForm] = useState({ nome: '', codigo: '', quantidade: 1, unidade: 'UN', observacoes: '' });
@@ -2747,22 +2748,25 @@ const AtivoDetailPage = () => {
   const [dupSaving, setDupSaving] = useState(false);
   const [histFilters, setHistFilters] = useState({ tipo: '', status: '', usuario_id: '', data_inicio: '', data_fim: '' });
   const [tecnicos, setTecnicos] = useState([]);
+  const [timelineLimit, setTimelineLimit] = useState(20);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { user } = useAuth();
   
   const fetchAtivo = async () => {
     try {
-      const [ativoRes, manuaisRes, histRes, planosRes] = await Promise.all([
+      const [ativoRes, manuaisRes, histRes, planosRes, saudeRes] = await Promise.all([
         api.get(`/ativos/${id}`),
         api.get(`/ativos/${id}/manuais`),
         api.get(`/ativos/${id}/historico`).catch(() => ({ data: [] })),
-        api.get(`/planos-inspecao/por-ativo/${id}`).catch(() => ({ data: [] }))
+        api.get(`/planos-inspecao/por-ativo/${id}`).catch(() => ({ data: [] })),
+        api.get(`/ativos/${id}/saude`).catch(() => ({ data: null })),
       ]);
       setAtivo(ativoRes.data);
       setManuais(manuaisRes.data);
       setHistorico(histRes.data);
       setPlanosVinculados(planosRes.data);
+      setSaude(saudeRes.data);
     } catch (error) {
       toast.error('Ativo não encontrado');
       navigate('/ativos');
@@ -2790,223 +2794,322 @@ const AtivoDetailPage = () => {
   const handleUploadManual = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      toast.error('Apenas arquivos PDF são permitidos');
-      return;
-    }
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
       await api.post(`/ativos/${id}/manual`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      toast.success('Manual carregado com sucesso!');
+      toast.success('Documento carregado!');
       const res = await api.get(`/ativos/${id}/manuais`);
       setManuais(res.data);
-    } catch (error) {
-      toast.error(normalizeError(error));
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+    } catch (error) { toast.error(normalizeError(error)); }
+    finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
   };
 
   const handleDeleteManual = async (manualId) => {
-    try {
-      await api.delete(`/manuais/${manualId}`);
-      toast.success('Manual removido');
-      setManuais(prev => prev.filter(m => m.id !== manualId));
-    } catch (error) {
-      toast.error(normalizeError(error));
-    }
+    try { await api.delete(`/manuais/${manualId}`); toast.success('Removido'); setManuais(prev => prev.filter(m => m.id !== manualId)); }
+    catch (error) { toast.error(normalizeError(error)); }
   };
 
   if (loading) return <Loading rows={4} />;
   if (!ativo) return null;
-  
+
+  const criticidadeColors = { A: 'text-red-400 bg-red-500/10', B: 'text-amber-400 bg-amber-500/10', C: 'text-blue-400 bg-blue-500/10' };
+  const statusColors = { operacional: 'text-emerald-400 bg-emerald-500/10', parado: 'text-red-400 bg-red-500/10', manutencao: 'text-amber-400 bg-amber-500/10' };
+  const tipoEventoConfig = {
+    os: { color: 'border-blue-500', bg: 'bg-blue-500', icon: Wrench, label: 'OS' },
+    inspecao: { color: 'border-emerald-500', bg: 'bg-emerald-500', icon: ClipboardCheck, label: 'Inspeção' },
+    anomalia: { color: 'border-red-500', bg: 'bg-red-500', icon: AlertTriangle, label: 'Anomalia' },
+    material: { color: 'border-amber-500', bg: 'bg-amber-500', icon: Package, label: 'Material' },
+    parada: { color: 'border-purple-500', bg: 'bg-purple-500', icon: Calendar, label: 'Parada' },
+  };
+
   const tabs = [
-    { key: 'info', label: 'Informações' },
+    { key: 'prontuario', label: 'Prontuário' },
+    { key: 'timeline', label: `Timeline (${historico.length})` },
     { key: 'planos', label: `Planos (${planosVinculados.length})` },
-    { key: 'historico', label: 'Histórico' },
-    { key: 'manuais', label: `Manuais (${manuais.length})` },
+    { key: 'os', label: `OS (${ativo.ordens_servico?.length || 0})` },
+    { key: 'docs', label: `Docs (${manuais.length})` },
+    { key: 'materiais', label: `BOM (${ativo.materiais?.length || 0})` },
   ];
 
-  const tipoEventoConfig = {
-    os: { color: 'text-blue-400', bg: 'bg-blue-500/10', icon: Wrench, label: 'OS' },
-    inspecao: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', icon: ClipboardCheck, label: 'Inspeção' },
-    anomalia: { color: 'text-red-400', bg: 'bg-red-500/10', icon: AlertTriangle, label: 'Anomalia' },
-    material: { color: 'text-amber-400', bg: 'bg-amber-500/10', icon: Package, label: 'Material' },
-    parada: { color: 'text-purple-400', bg: 'bg-purple-500/10', icon: Calendar, label: 'Parada' },
-  };
-  
+  // Health card helper
+  const SaudeItem = ({ label, data, icon: Icon, color }) => (
+    <div className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/30">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
+        <Icon size={14} className="text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] text-slate-500 uppercase">{label}</p>
+        {data ? (
+          <>
+            <p className="text-xs text-slate-300">{new Date(data.data).toLocaleDateString('pt-BR')}</p>
+            <p className="text-[10px] text-slate-500 truncate">{data.executor || '—'} {data.resultado ? `• ${data.resultado}` : ''}</p>
+          </>
+        ) : (
+          <p className="text-xs text-slate-600">Nenhum registro</p>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-4" data-testid="ativo-detail-page">
-      {/* Header — Área + TAG + Equipamento */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/ativos')} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg">
-          <ArrowLeft size={20} className="text-slate-400" />
-        </button>
-        <div className="flex-1">
-          {ativo.sector && <p className="text-xs text-slate-500 font-medium uppercase" data-testid="ativo-area-name">{ativo.sector.nome}</p>}
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-emerald-400 text-lg" data-testid="ativo-tag">{ativo.tag}</span>
-          </div>
-          <h1 className="text-xl font-bold text-slate-100" data-testid="ativo-nome">{ativo.nome}</h1>
-          {ativo.tipo_equipamento && <p className="text-sm text-slate-500">{ativo.tipo_equipamento}</p>}
+    <div className="space-y-4" data-testid="prontuario-ativo">
+      {/* ===== HEADER: Identificação ===== */}
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <button onClick={() => navigate('/ativos')} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg"><ArrowLeft size={18} className="text-slate-400" /></button>
+          <h1 className="text-xl font-bold text-slate-100">Prontuário do Ativo</h1>
         </div>
-        <div className="flex items-center gap-2 print:hidden">
-          {['admin','master'].includes(user?.role) && (
-            <button onClick={async () => {
-              const res = await api.get('/sectors');
-              setDupSectors(res.data);
-              setDupForm({ sector_id: ativo.sector_id || '', tag: '', numero_serie: '' });
-              setShowDupModal(true);
-            }} className="btn-secondary flex items-center gap-2 text-sm" data-testid="duplicate-ativo-btn">
-              <Copy size={16} /> Duplicar
-            </button>
-          )}
-          <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 text-sm" data-testid="print-qr-btn">
-            <QrCode size={16} /> Imprimir QR
-          </button>
-        </div>
-      </div>
-      
-      {/* QR Code — printable */}
-      <div className="glass-card p-5 print:border print:border-black print:bg-white" data-testid="ativo-qr-section">
-        <div className="flex flex-col sm:flex-row items-center gap-5">
-          <div className="bg-white p-4 rounded-xl shadow-lg print:shadow-none">
-            <QRCodeSVG 
-              value={`${window.location.origin}/ativos/${ativo.id}`} 
-              size={140} level="H" includeMargin={false}
-            />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Left: Main info */}
+          <div className="lg:col-span-2">
+            <div className="flex items-start gap-4">
+              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-emerald-500/20 to-blue-500/20 flex items-center justify-center border border-slate-700 shrink-0">
+                <Cog size={28} className="text-emerald-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="font-mono text-emerald-400 text-lg font-bold" data-testid="prontuario-tag">{ativo.tag}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[ativo.status] || 'text-slate-400 bg-slate-700'}`}>{ativo.status || 'Operacional'}</span>
+                  {ativo.criticidade && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${criticidadeColors[ativo.criticidade] || ''}`}>Crit. {ativo.criticidade}</span>}
+                </div>
+                <h2 className="text-lg text-slate-200 font-semibold" data-testid="prontuario-nome">{ativo.nome}</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 mt-3 text-sm">
+                  <div><span className="text-slate-500">Área</span><p className="text-slate-300">{ativo.sector?.nome || '—'}</p></div>
+                  <div><span className="text-slate-500">Tipo</span><p className="text-slate-300">{ativo.tipo_equipamento || '—'}</p></div>
+                  <div><span className="text-slate-500">Fabricante</span><p className="text-slate-300">{ativo.fabricante || '—'}</p></div>
+                  <div><span className="text-slate-500">Modelo</span><p className="text-slate-300">{ativo.modelo || '—'}</p></div>
+                  <div><span className="text-slate-500">Nº Série</span><p className="text-slate-300">{ativo.numero_serie || '—'}</p></div>
+                  <div><span className="text-slate-500">QR Code</span><p className="text-slate-300 font-mono text-xs">{ativo.qr_code?.substring(0,8) || '—'}</p></div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex-1 text-center sm:text-left">
-            {ativo.sector && <p className="text-sm text-slate-500 uppercase print:text-gray-600">{ativo.sector.nome}</p>}
-            <p className="font-mono text-2xl font-bold text-emerald-400 print:text-black">{ativo.tag}</p>
-            <p className="text-lg text-slate-200 print:text-black">{ativo.nome}</p>
-            <p className="text-sm text-slate-500 print:text-gray-600">{ativo.tipo_equipamento} {ativo.fabricante ? `• ${ativo.fabricante}` : ''} {ativo.modelo ? `• ${ativo.modelo}` : ''}</p>
+          {/* Right: KPIs */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold text-slate-100">{ativo.kpis?.total_os || 0}</p>
+              <p className="text-[10px] text-slate-500 uppercase">Total OS</p>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold text-blue-400">{ativo.kpis?.total_falhas || 0}</p>
+              <p className="text-[10px] text-slate-500 uppercase">Falhas</p>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold text-emerald-400">{ativo.kpis?.disponibilidade_percent || 100}%</p>
+              <p className="text-[10px] text-slate-500 uppercase">Disponibilidade</p>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+              <p className="text-xl font-bold text-amber-400">{ativo.kpis?.mtbf_horas || 0}h</p>
+              <p className="text-[10px] text-slate-500 uppercase">MTBF</p>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Action Buttons — Nova OS / Nova Inspeção (herdando ativo) */}
-      <div className="grid grid-cols-2 gap-3 print:hidden" data-testid="ativo-actions">
-        <button onClick={() => navigate(`/os?new=true&ativo=${ativo.id}`)} className="btn-secondary py-3 flex items-center justify-center gap-2" data-testid="new-os-from-ativo">
-          <Wrench size={18} /> Nova OS
-        </button>
-        <button onClick={() => navigate(`/inspecoes?new=true&ativo=${ativo.id}`)} className="btn-primary py-3 flex items-center justify-center gap-2" data-testid="new-inspecao-from-ativo">
-          <ClipboardCheck size={18} /> Nova Inspeção
-        </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-800 print:hidden">
-        {tabs.map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2.5 text-sm font-medium transition-all border-b-2 ${activeTab === tab.key ? 'border-emerald-400 text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-            data-testid={`tab-${tab.key}`}
-          >{tab.label}</button>
+      {/* ===== TABS ===== */}
+      <div className="flex gap-1 bg-slate-900/50 rounded-lg p-1 overflow-x-auto">
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${activeTab === t.key ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
+            data-testid={`tab-${t.key}`}
+          >{t.label}</button>
         ))}
       </div>
 
-      {/* TAB: Informações */}
-      {activeTab === 'info' && (
-        <div className="space-y-4">
-          <div className="glass-card p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-emerald-400">Dados do Equipamento</h3>
-            {ativo.tipo_equipamento && <div className="flex justify-between text-sm"><span className="text-slate-500">Tipo</span><span className="text-slate-200">{ativo.tipo_equipamento}</span></div>}
-            {ativo.fabricante && <div className="flex justify-between text-sm"><span className="text-slate-500">Fabricante</span><span className="text-slate-200">{ativo.fabricante}</span></div>}
-            {ativo.modelo && <div className="flex justify-between text-sm"><span className="text-slate-500">Modelo</span><span className="text-slate-200">{ativo.modelo}</span></div>}
-            {ativo.numero_serie && <div className="flex justify-between text-sm"><span className="text-slate-500">Nº Série</span><span className="text-slate-200 font-mono">{ativo.numero_serie}</span></div>}
-            {ativo.observacoes && <div className="pt-2 border-t border-slate-800"><p className="text-xs text-slate-500 mb-1">Observações</p><p className="text-sm text-slate-300">{ativo.observacoes}</p></div>}
+      {/* ===== TAB: Prontuário (Saúde + Planos + OS resumo) ===== */}
+      {activeTab === 'prontuario' && (
+        <div className="space-y-4" data-testid="prontuario-tab">
+          {/* Saúde do Equipamento */}
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Activity size={16} className="text-emerald-400" /> Saúde do Equipamento</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <SaudeItem label="Última Inspeção" data={saude?.ultima_inspecao} icon={ClipboardCheck} color="bg-emerald-600" />
+              <SaudeItem label="Próxima Inspeção" data={saude?.proxima_inspecao} icon={Calendar} color="bg-blue-600" />
+              <SaudeItem label="Última Preventiva" data={saude?.ultima_preventiva} icon={Shield} color="bg-purple-600" />
+              <SaudeItem label="Próxima Preventiva" data={saude?.proxima_preventiva} icon={Calendar} color="bg-purple-500" />
+              <SaudeItem label="Última Lubrificação" data={saude?.ultima_lubrificacao} icon={Droplet} color="bg-amber-600" />
+              <SaudeItem label="Última OS" data={saude?.ultima_os} icon={Wrench} color="bg-blue-600" />
+              <SaudeItem label="Última Anomalia" data={saude?.ultima_anomalia} icon={AlertTriangle} color="bg-red-600" />
+              <div className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/30">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-600"><Clock size={14} className="text-white" /></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">MTTR</p><p className="text-xs text-slate-300">{ativo.kpis?.mttr_horas || 0}h</p></div>
+              </div>
+            </div>
           </div>
 
-          {/* Lista Técnica (BOM) */}
-          <div className="glass-card p-4" data-testid="ativo-materiais">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2"><Package size={16} /> Lista Técnica (BOM)</h3>
-              {['admin','master'].includes(user?.role) && <button onClick={() => setShowBomModal(true)} className="text-xs btn-primary flex items-center gap-1" data-testid="add-bom-btn"><Plus size={14} /> Adicionar</button>}
-            </div>
-            {bomSearch !== undefined && (
-              <input value={bomSearch} onChange={e => setBomSearch(e.target.value)} placeholder="Buscar por código ou descrição..." className="input-industrial w-full px-3 text-sm mb-3" data-testid="bom-search" />
-            )}
-            {(ativo.materiais?.filter(m => {
-              if (!bomSearch) return true;
-              const s = bomSearch.toLowerCase();
-              return m.codigo?.toLowerCase().includes(s) || m.nome?.toLowerCase().includes(s);
-            }) || []).length > 0 ? (
-              <div className="space-y-1">
-                {(ativo.materiais || []).filter(m => {
-                  if (!bomSearch) return true;
-                  const s = bomSearch.toLowerCase();
-                  return m.codigo?.toLowerCase().includes(s) || m.nome?.toLowerCase().includes(s);
-                }).map((m, idx) => (
-                  <div key={m.id || idx} className="flex items-center gap-3 text-sm py-2 border-b border-slate-800/50 group">
-                    <span className="font-mono text-xs text-slate-500 w-24">{m.codigo || '-'}</span>
-                    <span className="text-slate-300 flex-1">{m.nome}</span>
-                    <span className="text-slate-500">{m.quantidade} {m.unidade}</span>
-                    {['admin','master'].includes(user?.role) && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                        <button onClick={() => { setBomEdit(m); setBomForm({ nome: m.nome, codigo: m.codigo || '', quantidade: m.quantidade, unidade: m.unidade || 'UN', observacoes: m.observacoes || '' }); setShowBomModal(true); }} className="p-1 hover:bg-slate-700 rounded"><Edit size={12} className="text-slate-400" /></button>
-                        <button onClick={async () => { await api.delete(`/ativos/${ativo.id}/materiais/${m.id}`); toast.success('Removido'); fetchAtivo(); }} className="p-1 hover:bg-red-500/10 rounded"><Trash2 size={12} className="text-red-400" /></button>
+          {/* Planos Permanentes */}
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><ClipboardCheck size={16} className="text-emerald-400" /> Planos Permanentes ({planosVinculados.length})</h3>
+            {planosVinculados.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {planosVinculados.map(p => {
+                  const discColors = { mecanica: 'bg-emerald-500/20 text-emerald-400', eletrica: 'bg-blue-500/20 text-blue-400', lubrificacao: 'bg-amber-500/20 text-amber-400', producao: 'bg-slate-500/20 text-slate-400', instrumentacao: 'bg-purple-500/20 text-purple-400' };
+                  return (
+                    <div key={p.id} className="p-3 rounded-lg border border-slate-800 bg-slate-800/30 hover:border-slate-600 transition-all" data-testid={`plano-perm-${p.id}`}>
+                      <p className="text-sm text-slate-200 font-medium truncate">{p.nome}</p>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded capitalize ${discColors[p.disciplina] || 'bg-slate-700 text-slate-400'}`}>{p.disciplina}</span>
+                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">{p.status}</span>
+                        <span className="text-[10px] text-slate-500">{(p.perguntas || []).length}q • v{p.versao || 1}</span>
                       </div>
-                    )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600 text-center py-4">Nenhum plano aprovado vinculado a este ativo.</p>
+            )}
+          </div>
+
+          {/* OS Abertas resumo */}
+          {(ativo.ordens_servico || []).filter(o => !['concluida','cancelada'].includes(o.status)).length > 0 && (
+            <div className="glass-card p-4">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Wrench size={16} className="text-blue-400" /> OS em Aberto</h3>
+              <div className="space-y-2">
+                {(ativo.ordens_servico || []).filter(o => !['concluida','cancelada'].includes(o.status)).map(o => (
+                  <div key={o.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-800 bg-slate-800/30 cursor-pointer hover:border-slate-600" onClick={() => navigate(`/os/${o.id}`)}>
+                    <div className={`w-1.5 h-10 rounded-full ${prioColors[o.prioridade] || 'bg-slate-600'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-slate-200 truncate">{o.titulo}</p>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                        <span>#{o.numero}</span>
+                        <StatusBadge status={o.status} size="sm" />
+                        <span className="capitalize">{o.disciplina}</span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-xs text-slate-600">{bomSearch ? 'Nenhum material encontrado' : 'Nenhum material na lista técnica'}</p>
-                {!bomSearch && ativo.materiais?.length === 0 && <button onClick={() => setBomSearch('')} className="text-xs text-emerald-400 mt-1">Habilitar busca</button>}
-              </div>
-            )}
-          </div>
-
-          {/* Modal BOM */}
-          <Modal isOpen={showBomModal} onClose={() => { setShowBomModal(false); setBomEdit(null); setBomForm({ nome: '', codigo: '', quantidade: 1, unidade: 'UN', observacoes: '' }); }} title={bomEdit ? 'Editar Material' : 'Adicionar Material'} size="sm">
-            <div className="space-y-3">
-              <FormInput label="Código"><input value={bomForm.codigo} onChange={e => setBomForm({...bomForm, codigo: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: ROL-22218" data-testid="bom-codigo" /></FormInput>
-              <FormInput label="Descrição" required><input value={bomForm.nome} onChange={e => setBomForm({...bomForm, nome: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Rolamento 22218" data-testid="bom-nome" /></FormInput>
-              <div className="grid grid-cols-2 gap-3">
-                <FormInput label="Quantidade"><input type="number" min="1" value={bomForm.quantidade} onChange={e => setBomForm({...bomForm, quantidade: parseFloat(e.target.value) || 1})} className="input-industrial w-full px-4" /></FormInput>
-                <FormInput label="Unidade"><input value={bomForm.unidade} onChange={e => setBomForm({...bomForm, unidade: e.target.value})} className="input-industrial w-full px-4" placeholder="UN" /></FormInput>
-              </div>
-              <div className="flex gap-3 justify-end pt-3 border-t border-slate-800">
-                <button onClick={() => { setShowBomModal(false); setBomEdit(null); }} className="btn-secondary">Cancelar</button>
-                <button onClick={async () => {
-                  if (!bomForm.nome) { toast.error('Preencha a descrição'); return; }
-                  try {
-                    if (bomEdit) {
-                      await api.put(`/ativos/${ativo.id}/materiais/${bomEdit.id}`, bomForm);
-                      toast.success('Material atualizado!');
-                    } else {
-                      await api.post(`/ativos/${ativo.id}/materiais`, bomForm);
-                      toast.success('Material adicionado!');
-                    }
-                    setShowBomModal(false); setBomEdit(null);
-                    setBomForm({ nome: '', codigo: '', quantidade: 1, unidade: 'UN', observacoes: '' });
-                    fetchAtivo();
-                  } catch (error) { toast.error(normalizeError(error)); }
-                }} className="btn-primary" data-testid="save-bom">Salvar</button>
-              </div>
             </div>
-          </Modal>
+          )}
 
-          {/* Fotos */}
+          {/* Timeline preview (últimos 5) */}
           <div className="glass-card p-4">
-            <PhotoUploader entityType="asset" entityId={ativo.id} label="Fotos do Equipamento" />
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Clock size={16} className="text-slate-400" /> Últimos Eventos</h3>
+              <button onClick={() => setActiveTab('timeline')} className="text-xs text-emerald-400 hover:underline">Ver todos</button>
+            </div>
+            {historico.length > 0 ? (
+              <div className="space-y-0">
+                {historico.slice(0, 5).map((ev, idx) => {
+                  const config = tipoEventoConfig[ev.tipo_evento] || tipoEventoConfig.os;
+                  return (
+                    <div key={ev.id || idx} className="flex gap-3 pb-3 last:pb-0">
+                      <div className="flex flex-col items-center">
+                        <div className={`w-7 h-7 rounded-full ${config.bg} flex items-center justify-center shrink-0`}>
+                          <config.icon size={12} className="text-white" />
+                        </div>
+                        {idx < 4 && <div className="w-0.5 flex-1 bg-slate-800 mt-1" />}
+                      </div>
+                      <div className="flex-1 min-w-0 pb-1">
+                        <p className="text-sm text-slate-200">{ev.titulo}</p>
+                        <p className="text-xs text-slate-500 truncate">{ev.descricao}</p>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-600 mt-0.5">
+                          {ev.data && <span>{new Date(ev.data).toLocaleDateString('pt-BR')}</span>}
+                          {ev.usuario && <span>{ev.usuario}</span>}
+                          {ev.status && <StatusBadge status={ev.status} size="sm" />}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600 text-center py-4">Nenhum evento registrado.</p>
+            )}
           </div>
         </div>
       )}
 
+      {/* ===== TAB: Timeline completa ===== */}
+      {activeTab === 'timeline' && (
+        <div className="space-y-3" data-testid="timeline-tab">
+          {/* Filters */}
+          <div className="glass-card p-3 flex flex-wrap items-center gap-2">
+            <select value={histFilters.tipo} onChange={e => { const f = {...histFilters, tipo: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial px-3 text-sm">
+              <option value="">Todos tipos</option>
+              <option value="os">OS</option>
+              <option value="inspecao">Inspeção</option>
+              <option value="anomalia">Anomalia</option>
+              <option value="material">Material</option>
+            </select>
+            <select value={histFilters.status} onChange={e => { const f = {...histFilters, status: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial px-3 text-sm">
+              <option value="">Todos status</option>
+              <option value="concluida">Concluída</option>
+              <option value="aberta">Aberta</option>
+              <option value="pendente">Pendente</option>
+            </select>
+            <span className="text-xs text-slate-500">{historico.length} eventos</span>
+          </div>
 
-      {/* TAB: Planos Vinculados */}
+          {/* Timeline */}
+          {historico.length > 0 ? (
+            <div className="glass-card p-4">
+              <div className="space-y-0">
+                {historico.slice(0, timelineLimit).map((ev, idx) => {
+                  const config = tipoEventoConfig[ev.tipo_evento] || tipoEventoConfig.os;
+                  const evDate = ev.data ? new Date(ev.data) : null;
+                  const prevDate = idx > 0 && historico[idx-1].data ? new Date(historico[idx-1].data) : null;
+                  const showDateSep = evDate && (!prevDate || evDate.toDateString() !== prevDate.toDateString());
+                  return (
+                    <div key={ev.id || idx}>
+                      {showDateSep && (
+                        <div className="flex items-center gap-3 py-2">
+                          <div className="h-px flex-1 bg-slate-800" />
+                          <span className="text-[10px] text-slate-500 font-medium uppercase">{evDate.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                          <div className="h-px flex-1 bg-slate-800" />
+                        </div>
+                      )}
+                      <div className="flex gap-3 pb-3 last:pb-0">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-8 h-8 rounded-full ${config.bg} flex items-center justify-center shrink-0`}>
+                            <config.icon size={14} className="text-white" />
+                          </div>
+                          {idx < Math.min(historico.length, timelineLimit) - 1 && <div className="w-0.5 flex-1 bg-slate-800 mt-1" />}
+                        </div>
+                        <div className="flex-1 min-w-0 pb-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-slate-200 font-medium">{ev.titulo}</p>
+                            {ev.status && <StatusBadge status={ev.status} size="sm" />}
+                          </div>
+                          <p className="text-xs text-slate-500 truncate">{ev.descricao}</p>
+                          <div className="flex items-center gap-3 text-[10px] text-slate-600 mt-0.5">
+                            {ev.data && <span>{new Date(ev.data).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>}
+                            {ev.usuario && <span className="flex items-center gap-1"><User size={10} />{ev.usuario}</span>}
+                            {ev.tempo_minutos && <span className="flex items-center gap-1"><Clock size={10} />{ev.tempo_minutos}min</span>}
+                            {ev.prioridade && <span className="capitalize">{prioLabels[ev.prioridade] || ev.prioridade}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {historico.length > timelineLimit && (
+                <button onClick={() => setTimelineLimit(prev => prev + 20)} className="w-full mt-3 py-2 text-sm text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors">
+                  Carregar mais ({historico.length - timelineLimit} restantes)
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="glass-card p-8 text-center">
+              <Clock size={36} className="text-slate-600 mx-auto mb-2" />
+              <p className="text-slate-500">Nenhum evento registrado para este ativo.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== TAB: Planos ===== */}
       {activeTab === 'planos' && (
-        <div className="space-y-3" data-testid="ativo-planos-vinculados">
+        <div className="space-y-3" data-testid="planos-tab">
           {planosVinculados.length > 0 ? (
             <div className="space-y-2">
               {planosVinculados.map(p => {
                 const statusColor = p.status === 'aprovado' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
-                const tipoLabels = { inspecao: 'Inspeção', preventiva: 'Preventiva', lubrificacao: 'Lubrificação', limpeza: 'Limpeza', melhoria: 'Melhoria' };
+                const tipoLabels2 = { inspecao: 'Inspeção', preventiva: 'Preventiva', lubrificacao: 'Lubrificação', limpeza: 'Limpeza', melhoria: 'Melhoria' };
                 return (
                   <div key={p.id} className="glass-card p-4" data-testid={`plano-vinculado-${p.id}`}>
                     <div className="flex items-center justify-between">
@@ -3017,12 +3120,11 @@ const AtivoDetailPage = () => {
                           <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusColor}`}>{p.status || 'Rascunho'}</span>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
-                          <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{tipoLabels[p.tipo] || p.tipo}</span>
+                          <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{tipoLabels2[p.tipo] || p.tipo}</span>
                           {p.disciplina && <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{p.disciplina}</span>}
                           <span>{(p.perguntas || []).length} perguntas</span>
                           <span>v{p.versao || 1}</span>
                           {p.updated_at && <span>Revisado: {new Date(p.updated_at).toLocaleDateString('pt-BR')}</span>}
-                          {p._generico && <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Genérico</span>}
                         </div>
                       </div>
                       <button onClick={() => navigate('/admin/templates')} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar plano">
@@ -3036,8 +3138,7 @@ const AtivoDetailPage = () => {
           ) : (
             <div className="glass-card p-8 text-center">
               <ClipboardCheck size={36} className="text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400">Nenhum plano aprovado para este ativo</p>
-              <p className="text-xs text-slate-600 mt-1">O PCM deve criar e aprovar planos de inspeção vinculados a este ativo.</p>
+              <p className="text-slate-400">Nenhum plano aprovado para este ativo.</p>
               {['admin','pcm','master','supervisor'].includes(user?.role) && (
                 <button onClick={() => navigate('/admin/templates')} className="mt-3 btn-primary text-sm">Criar Plano</button>
               )}
@@ -3046,179 +3147,150 @@ const AtivoDetailPage = () => {
         </div>
       )}
 
-      {/* TAB: Histórico (Prontuário) */}
-      {activeTab === 'historico' && (
-        <div className="space-y-3" data-testid="ativo-historico">
-          {/* Filters */}
-          <div className="glass-card p-4 space-y-3" data-testid="historico-filtros">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Tipo</label>
-                <select value={histFilters.tipo} onChange={e => { const f = {...histFilters, tipo: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-tipo">
-                  <option value="">Todos</option>
-                  <option value="os">OS</option>
-                  <option value="inspecao">Inspeção</option>
-                  <option value="anomalia">Anomalia</option>
-                  <option value="material">Material</option>
-                  <option value="parada">Parada</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Status</label>
-                <select value={histFilters.status} onChange={e => { const f = {...histFilters, status: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-status">
-                  <option value="">Todos</option>
-                  <option value="aberta">Aberta</option>
-                  <option value="em_execucao">Em Execução</option>
-                  <option value="concluida">Concluída</option>
-                  <option value="pendente">Pendente</option>
-                  <option value="em_andamento">Em Andamento</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Usuário</label>
-                <select value={histFilters.usuario_id} onChange={e => { const f = {...histFilters, usuario_id: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-usuario">
-                  <option value="">Todos</option>
-                  {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Data Inicial</label>
-                <input type="date" value={histFilters.data_inicio} onChange={e => { const f = {...histFilters, data_inicio: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-data-inicio" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Data Final</label>
-                <input type="date" value={histFilters.data_fim} onChange={e => { const f = {...histFilters, data_fim: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial w-full px-3 text-sm" data-testid="filtro-data-fim" />
-              </div>
-            </div>
-            {(histFilters.tipo || histFilters.status || histFilters.usuario_id || histFilters.data_inicio || histFilters.data_fim) && (
-              <button onClick={() => { const f = { tipo: '', status: '', usuario_id: '', data_inicio: '', data_fim: '' }; setHistFilters(f); fetchHistorico(f); }} className="text-xs text-slate-400 hover:text-emerald-400" data-testid="limpar-filtros">
-                Limpar filtros
-              </button>
-            )}
-          </div>
-
-          <p className="text-xs text-slate-500">{historico.length} registro(s)</p>
-
-          {/* Timeline */}
-          {historico.length > 0 ? (
-            <div className="space-y-2">
-              {historico.map((ev, idx) => {
-                const cfg = tipoEventoConfig[ev.tipo_evento] || tipoEventoConfig.os;
+      {/* ===== TAB: OS ===== */}
+      {activeTab === 'os' && (
+        <div className="space-y-3" data-testid="os-tab">
+          {(ativo.ordens_servico || []).length > 0 ? (
+            <>
+              {['em_aberto', 'em_execucao', 'concluidas'].map(group => {
+                const statuses = group === 'em_aberto' ? ['aberta','planejada'] : group === 'em_execucao' ? ['em_execucao','pausada'] : ['concluida'];
+                const label = group === 'em_aberto' ? 'Em Aberto' : group === 'em_execucao' ? 'Em Execução' : 'Concluídas';
+                const items = (ativo.ordens_servico || []).filter(o => statuses.includes(o.status));
+                if (items.length === 0) return null;
                 return (
-                  <div key={`${ev.tipo_evento}-${ev.id}-${idx}`} className="glass-card p-4 flex items-start gap-3" data-testid={`historico-item-${idx}`}>
-                    <div className={`p-2 rounded-lg ${cfg.bg} mt-0.5 shrink-0`}><cfg.icon size={16} className={cfg.color} /></div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <span className={`text-xs font-semibold uppercase ${cfg.color}`}>{cfg.label}</span>
-                        {ev.status && <span className="text-xs px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded">{ev.status}</span>}
-                        {ev.prioridade && <span className="text-xs px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded">{ev.prioridade}</span>}
-                      </div>
-                      <p className="text-sm text-slate-200 font-medium">{ev.titulo}</p>
-                      <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{ev.descricao}</p>
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-                        {ev.data && <span>{new Date(ev.data).toLocaleString('pt-BR')}</span>}
-                        {ev.usuario && <span>• {ev.usuario}</span>}
-                        {ev.concluido_por && ev.concluido_por !== ev.usuario && <span>• Concl: {ev.concluido_por}</span>}
-                        {ev.tempo_minutos && <span>• {ev.tempo_minutos}min</span>}
-                      </div>
+                  <div key={group} className="glass-card p-4">
+                    <h3 className="text-sm font-semibold text-slate-400 mb-2">{label} ({items.length})</h3>
+                    <div className="space-y-2">
+                      {items.map(o => (
+                        <div key={o.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-800 bg-slate-800/30 cursor-pointer hover:border-slate-600" onClick={() => navigate(`/os/${o.id}`)}>
+                          <div className={`w-1.5 h-10 rounded-full ${prioColors[o.prioridade] || 'bg-slate-600'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-slate-200 truncate">{o.titulo || `OS #${o.numero}`}</p>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                              <span>#{o.numero}</span>
+                              <span className="capitalize">{o.tipo}</span>
+                              <span className="capitalize">{o.disciplina}</span>
+                              <StatusBadge status={o.status} size="sm" />
+                              {o.data_planejada && <span>{new Date(o.data_planejada).toLocaleDateString('pt-BR')}</span>}
+                            </div>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-700" />
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );
               })}
-            </div>
+            </>
           ) : (
-            <div className="text-center py-12 text-slate-500">
-              <Clock size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Nenhum registro encontrado</p>
-              <p className="text-xs mt-1">Ajuste os filtros ou aguarde eventos neste equipamento</p>
+            <div className="glass-card p-8 text-center">
+              <Wrench size={36} className="text-slate-600 mx-auto mb-2" />
+              <p className="text-slate-500">Nenhuma OS registrada para este ativo.</p>
             </div>
           )}
         </div>
       )}
 
-      {/* TAB: Manuais */}
-      {activeTab === 'manuais' && (
-        <div className="glass-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2"><FileText size={16} /> Manuais Técnicos</h3>
-            {['admin','master'].includes(user?.role) && (
-              <label className="btn-primary text-sm flex items-center gap-2 cursor-pointer" data-testid="upload-manual-btn">
-                <Upload size={16} /> {uploading ? 'Enviando...' : 'Enviar PDF'}
-                <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUploadManual} className="hidden" disabled={uploading} />
+      {/* ===== TAB: Documentos ===== */}
+      {activeTab === 'docs' && (
+        <div className="space-y-3" data-testid="docs-tab">
+          <div className="glass-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Documentos</h3>
+              <label className="btn-primary text-sm cursor-pointer flex items-center gap-2">
+                <Upload size={16} /> {uploading ? 'Enviando...' : 'Enviar'}
+                <input ref={fileInputRef} type="file" className="hidden" onChange={handleUploadManual} disabled={uploading} />
               </label>
-            )}
-          </div>
-          {manuais.length > 0 ? (
-            <div className="space-y-2">
-              {manuais.map((m) => (
-                <div key={m.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg group">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-red-500/10 rounded-lg"><FileText size={20} className="text-red-400" /></div>
-                    <div>
-                      <p className="text-sm text-slate-200">{m.filename}</p>
-                      <p className="text-xs text-slate-500">{(m.size_bytes / 1024).toFixed(0)} KB • {new Date(m.created_at).toLocaleDateString('pt-BR')}</p>
+            </div>
+            {manuais.length > 0 ? (
+              <div className="space-y-2">
+                {manuais.map(m => (
+                  <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-800 bg-slate-800/30">
+                    <FileText size={20} className="text-blue-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-slate-200 truncate">{m.nome}</p>
+                      <p className="text-[10px] text-slate-500">{m.tipo_arquivo || 'PDF'} • {new Date(m.created_at).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      {m.url && <a href={m.url} target="_blank" rel="noreferrer" className="p-2 hover:bg-slate-700 rounded-lg"><Download size={14} className="text-blue-400" /></a>}
+                      <button onClick={() => handleDeleteManual(m.id)} className="p-2 hover:bg-red-500/10 rounded-lg"><Trash2 size={14} className="text-red-400" /></button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => window.open(`${BACKEND_URL}${m.url}`, '_blank')} className="p-2 hover:bg-blue-500/10 rounded-lg" title="Abrir PDF"><Eye size={16} className="text-blue-400" /></button>
-                    <button onClick={async () => {
-                      try { const res = await fetch(`${BACKEND_URL}${m.url}`); const blob = await res.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = m.filename; a.click(); window.URL.revokeObjectURL(url); } catch { toast.error('Erro ao baixar'); }
-                    }} className="p-2 hover:bg-emerald-500/10 rounded-lg" title="Baixar"><Download size={16} className="text-emerald-400" /></button>
-                    {['admin','master'].includes(user?.role) && <button onClick={() => handleDeleteManual(m.id)} className="p-2 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100" title="Remover"><Trash2 size={16} className="text-red-400" /></button>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-6 text-slate-500">
-              <FileText size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Nenhum manual carregado</p>
-            </div>
-          )}
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600 text-center py-4">Nenhum documento cadastrado.</p>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Modal Duplicar Ativo */}
-      <Modal isOpen={showDupModal} onClose={() => setShowDupModal(false)} title="Duplicar Ativo" size="sm">
-        <div className="space-y-4">
-          <div className="bg-slate-800/50 rounded-lg p-3 text-sm">
-            <p className="text-xs text-slate-500 mb-1">Duplicando de:</p>
-            {ativo.sector && <p className="text-xs text-slate-500 uppercase">{ativo.sector.nome}</p>}
-            <span className="font-mono text-emerald-400">{ativo.tag}</span>
-            <span className="text-slate-300 ml-2">{ativo.nome}</span>
-          </div>
-          <FormInput label="Área do Novo Ativo" required>
-            <Select value={dupForm.sector_id} onChange={v => setDupForm({...dupForm, sector_id: v})}
-              options={dupSectors.map(s => ({ value: s.id, label: s.nome }))} placeholder="Selecione a área..." />
-          </FormInput>
-          <FormInput label="Nova TAG" required>
-            <input value={dupForm.tag} onChange={e => setDupForm({...dupForm, tag: e.target.value.toUpperCase()})}
-              className="input-industrial w-full px-4 font-mono" placeholder="Ex: AV-02" data-testid="dup-tag-input" />
-          </FormInput>
-          <FormInput label="Novo Número de Série">
-            <input value={dupForm.numero_serie} onChange={e => setDupForm({...dupForm, numero_serie: e.target.value})}
-              className="input-industrial w-full px-4" placeholder="Opcional" data-testid="dup-serie-input" />
-          </FormInput>
-          <p className="text-xs text-slate-500">Será copiado: tipo, fabricante, modelo, observações, lista técnica (BOM), manuais e fotos.</p>
-          <div className="flex gap-3 justify-end pt-3 border-t border-slate-800">
-            <button onClick={() => setShowDupModal(false)} className="btn-secondary">Cancelar</button>
-            <button disabled={dupSaving} onClick={async () => {
-              if (!dupForm.sector_id || !dupForm.tag) { toast.error('Preencha área e TAG'); return; }
-              setDupSaving(true);
-              try {
-                const res = await api.post(`/ativos/${ativo.id}/duplicar`, dupForm);
-                const d = res.data;
-                toast.success(`Ativo ${d.tag} criado! (${d._materiais_copied} materiais, ${d._manuais_copied} manuais, ${d._fotos_copied} copiados)`);
-                setShowDupModal(false);
-                navigate(`/ativos/${d.id}`);
-              } catch (error) { toast.error(normalizeError(error)); }
-              finally { setDupSaving(false); }
-            }} className="btn-primary flex items-center gap-2" data-testid="confirm-duplicate">
-              {dupSaving ? <RefreshCw size={16} className="animate-spin" /> : <Copy size={16} />}
-              {dupSaving ? 'Duplicando...' : 'Duplicar Ativo'}
-            </button>
+      {/* ===== TAB: BOM (Materiais) ===== */}
+      {activeTab === 'materiais' && (
+        <div className="space-y-3" data-testid="materiais-tab">
+          <div className="glass-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Lista de Materiais (BOM)</h3>
+              <button onClick={() => { setBomEdit(null); setBomForm({ nome: '', codigo: '', quantidade: 1, unidade: 'UN', observacoes: '' }); setShowBomModal(true); }} className="btn-primary text-sm flex items-center gap-2"><Plus size={16} /> Adicionar</button>
+            </div>
+            {(ativo.materiais || []).length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-slate-800 text-slate-500 text-xs uppercase">
+                    <th className="text-left py-2 px-3">Código</th>
+                    <th className="text-left py-2 px-3">Descrição</th>
+                    <th className="text-right py-2 px-3">Qtd</th>
+                    <th className="text-left py-2 px-3">Un</th>
+                    <th className="text-right py-2 px-3">Ações</th>
+                  </tr></thead>
+                  <tbody>
+                    {(ativo.materiais || []).filter(m => !bomSearch || (m.nome||'').toLowerCase().includes(bomSearch) || (m.codigo||'').toLowerCase().includes(bomSearch)).map(m => (
+                      <tr key={m.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                        <td className="py-2 px-3 font-mono text-xs text-blue-400">{m.codigo || '—'}</td>
+                        <td className="py-2 px-3 text-slate-300">{m.nome}</td>
+                        <td className="py-2 px-3 text-right text-slate-300">{m.quantidade}</td>
+                        <td className="py-2 px-3 text-slate-500">{m.unidade}</td>
+                        <td className="py-2 px-3 text-right">
+                          <button onClick={() => { setBomEdit(m); setBomForm({ nome: m.nome, codigo: m.codigo||'', quantidade: m.quantidade, unidade: m.unidade, observacoes: m.observacoes||'' }); setShowBomModal(true); }} className="p-1 hover:bg-slate-700 rounded"><Edit size={12} className="text-slate-400" /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600 text-center py-4">Nenhum material cadastrado.</p>
+            )}
           </div>
         </div>
+      )}
+
+      {/* BOM Modal */}
+      <Modal isOpen={showBomModal} onClose={() => { setShowBomModal(false); setBomEdit(null); }} title={bomEdit ? "Editar Material" : "Adicionar Material"} size="md">
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            if (bomEdit) {
+              await api.put(`/ativos/${id}/materiais/${bomEdit.id}`, bomForm);
+              toast.success('Material atualizado!');
+            } else {
+              await api.post(`/ativos/${id}/materiais`, bomForm);
+              toast.success('Material adicionado!');
+            }
+            setShowBomModal(false);
+            setBomEdit(null);
+            fetchAtivo();
+          } catch (error) { toast.error(normalizeError(error)); }
+        }} className="space-y-4">
+          <FormInput label="Código"><input value={bomForm.codigo} onChange={e => setBomForm({...bomForm, codigo: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: ROL-6310" /></FormInput>
+          <FormInput label="Descrição" required><input value={bomForm.nome} onChange={e => setBomForm({...bomForm, nome: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Rolamento 6310 2RS" required /></FormInput>
+          <div className="grid grid-cols-2 gap-4">
+            <FormInput label="Quantidade"><input type="number" min="0" step="0.01" value={bomForm.quantidade} onChange={e => setBomForm({...bomForm, quantidade: parseFloat(e.target.value) || 0})} className="input-industrial w-full px-4" /></FormInput>
+            <FormInput label="Unidade"><input value={bomForm.unidade} onChange={e => setBomForm({...bomForm, unidade: e.target.value})} className="input-industrial w-full px-4" placeholder="UN" /></FormInput>
+          </div>
+          <FormInput label="Observações"><input value={bomForm.observacoes} onChange={e => setBomForm({...bomForm, observacoes: e.target.value})} className="input-industrial w-full px-4" /></FormInput>
+          <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setShowBomModal(false)} className="btn-secondary">Cancelar</button><button type="submit" className="btn-primary">Salvar</button></div>
+        </form>
       </Modal>
     </div>
   );

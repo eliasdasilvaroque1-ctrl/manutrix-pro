@@ -523,3 +523,76 @@ async def get_ativo_historico(
     # Sort all by date descending
     eventos.sort(key=lambda x: x.get('data', '') or '', reverse=True)
     return eventos
+
+
+@router.get("/ativos/{ativo_id}/saude")
+async def get_ativo_saude(ativo_id: str, user: Dict = Depends(get_current_user)):
+    """Equipment health summary for Prontuário do Ativo."""
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
+
+    # Last and next for each type
+    async def get_last(collection, query, date_field="data_conclusao"):
+        doc = await collection.find_one(
+            {**query, "deleted_at": None, date_field: {"$ne": None}},
+            {"_id": 0}, sort=[(date_field, -1)]
+        )
+        return doc
+
+    async def get_next_pending(collection, query):
+        doc = await collection.find_one(
+            {**query, "deleted_at": None, "status": {"$in": ["pendente", "planejada", "aberta"]}},
+            {"_id": 0}, sort=[("data_programada", 1)]
+        )
+        return doc
+
+    user_cache = {}
+    async def resolve_user(uid):
+        if not uid: return None
+        if uid not in user_cache:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1})
+            user_cache[uid] = u.get('nome') if u else None
+        return user_cache[uid]
+
+    # Inspections
+    last_insp = await get_last(db.inspecoes, {"ativo_id": ativo_id, "tipo": {"$nin": ["lubrificacao"]}})
+    next_insp = await get_next_pending(db.inspecoes, {"ativo_id": ativo_id, "tipo": {"$nin": ["lubrificacao"]}})
+
+    # Preventivas (OS tipo=preventiva)
+    last_prev = await get_last(db.ordens_servico, {"ativo_id": ativo_id, "tipo": "preventiva"}, "data_conclusao")
+    next_prev_q = {"ativo_id": ativo_id, "tipo": "preventiva", "deleted_at": None, "status": {"$in": ["aberta", "planejada"]}}
+    next_prev = await db.ordens_servico.find_one(next_prev_q, {"_id": 0}, sort=[("data_planejada", 1)])
+
+    # Lubrificação
+    last_lub = await get_last(db.inspecoes, {"ativo_id": ativo_id, "tipo": "lubrificacao"})
+
+    # Last OS (any)
+    last_os = await get_last(db.ordens_servico, {"ativo_id": ativo_id})
+
+    # Last anomalia
+    last_anom = await db.anomalias.find_one(
+        {"ativo_id": ativo_id, "deleted_at": None},
+        {"_id": 0}, sort=[("created_at", -1)]
+    )
+
+    async def format_event(doc, tipo):
+        if not doc: return None
+        executor = await resolve_user(doc.get('concluido_por') or doc.get('responsavel_id') or doc.get('criado_por'))
+        return {
+            "data": doc.get('data_conclusao') or doc.get('data_programada') or doc.get('data_planejada') or doc.get('created_at'),
+            "executor": executor,
+            "resultado": doc.get('resultado') or doc.get('status'),
+            "id": doc.get('id'),
+        }
+
+    return {
+        "ultima_inspecao": await format_event(last_insp, "inspecao"),
+        "proxima_inspecao": await format_event(next_insp, "inspecao"),
+        "ultima_preventiva": await format_event(last_prev, "preventiva"),
+        "proxima_preventiva": await format_event(next_prev, "preventiva"),
+        "ultima_lubrificacao": await format_event(last_lub, "lubrificacao"),
+        "ultima_os": await format_event(last_os, "os"),
+        "ultima_anomalia": await format_event(last_anom, "anomalia") if last_anom else None,
+    }

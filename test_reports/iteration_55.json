@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 55 — Prontuário do Ativo (BR-01) fully validated. Backend 9/9 pytest PASS: GET /api/ativos/{id} returns identification (tag=BR-01, nome=BRITADOR, fabricante=ASTEC, sector=Britagem Primária) and KPIs (total_os, total_falhas, disponibilidade_percent, mtbf_horas, mttr_horas) with correct types/ranges; GET /api/ativos/{id}/saude returns all 7 expected keys (ultima_inspecao, proxima_inspecao, ultima_preventiva, proxima_preventiva, ultima_lubrificacao, ultima_os, ultima_anomalia); BR-01 has a pending proxima_inspecao with valid date; 404 on unknown ativo; 401/403 without auth; BR-01 exposes 3 aprovado plans (mecanica/eletrica/lubrificacao) via /planos-inspecao/por-ativo/{id} and >=1 open OS. Frontend 27/27 UI checks PASS on /ativos/025260b9-e541-4745-9100-e5110efb8155 as master: header shows 'Prontuário do Ativo' + TAG BR-01 + status operacional + BRITADOR + Área Britagem Primária + Tipo BRITADOR DE MANDIBULA + Fabricante ASTEC + Modelo 2238 + QR Code d5729e51; 4 KPI cards (Total OS=2 / Falhas=0 / Disponibilidade=100% / MTBF=0h); Saúde do Equipamento renders all 8 cards (última/próxima inspeção, última/próxima preventiva, última lubrificação, última OS, última anomalia, MTTR) with pending 01/07/2026 shown for próxima inspeção; Planos Permanentes (3) shows Mecânica/Elétrica/Lubrificação cards with disciplina badge + aprovado status + '10q • v1' / '8q • v1' / '7q • v1' meta; OS em Aberto lists 2 corretiva OS (#2026-00018, #2026-00009) with priority bar (Alta) and Aberta badge; Últimos Eventos preview shows timeline entries with icons and dates plus 'Ver todos' link; all 6 tabs (Prontuário/Timeline/Planos/OS/Docs/BOM) navigate and reveal their panels; Timeline tab shows date separators ('QUA., 1 DE JUL.') + 11 events + tipo/status filter selects; Planos tab lists 3 approved plans with disciplina/versão/perguntas; Docs tab shows manual upload; BOM tab shows add materials CTA.",
+  "pass_fail_matrix": {
+    "Backend: GET /api/ativos/{id} identification (tag/nome/fabricante/sector)": "PASS",
+    "Backend: GET /api/ativos/{id} returns full KPIs dict with 5 fields and valid ranges": "PASS",
+    "Backend: GET /api/ativos/{id} returns ordens_servico/inspecoes/materiais lists": "PASS",
+    "Backend: GET /api/ativos/{id}/saude returns 7 expected keys": "PASS",
+    "Backend: GET /api/ativos/BR-01/saude has proxima_inspecao with data": "PASS",
+    "Backend: GET /api/ativos/unknown/saude returns 404": "PASS",
+    "Backend: GET /api/ativos/{id}/saude requires auth (401/403)": "PASS",
+    "Backend: BR-01 has >=3 aprovado plans via /planos-inspecao/por-ativo/{id}": "PASS",
+    "Backend: BR-01 has open OS via /ordens-servico?ativo_id=": "PASS",
+    "Frontend: Header shows 'Prontuário do Ativo' + TAG BR-01 + area/fabricante/tipo/modelo/QR": "PASS",
+    "Frontend: 4 KPI cards (Total OS, Falhas, Disponibilidade, MTBF)": "PASS",
+    "Frontend: Saúde do Equipamento shows 8 cards with dates/pendente labels + MTTR": "PASS",
+    "Frontend: Planos Permanentes (3) with disciplina/versão/perguntas meta": "PASS",
+    "Frontend: OS em Aberto section shows priority bar + status badge + numero": "PASS",
+    "Frontend: Últimos Eventos preview shows timeline entries + Ver todos link": "PASS",
+    "Frontend: Tab Prontuário/Timeline/Planos/OS/Docs/BOM all render panels": "PASS",
+    "Frontend: Timeline tab shows date separators + 11 events + filter selects": "PASS",
+    "Frontend: Planos tab shows approved plans with disciplina/versão/perguntas": "PASS",
+    "Frontend: Docs tab shows manual upload area": "PASS",
+    "Frontend: BOM tab shows add material CTA": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Prontuário → Saúde do Equipamento", "issues": ["7 of 8 saúde cards show 'Nenhum registro' for BR-01 (only Próxima Inspeção has data). This is functionally correct given seed state, but the sea of empty cards weakens the 'health at a glance' pitch. Consider showing subdued/collapsed cards or a compact bar when zero events exist for a category."]},
+      {"screen": "Prontuário → OS Tab", "issues": ["OS tab renders the 2 open OS but grouping headers for 'Em Execução' and 'Concluídas' were not detected in DOM (only 'Aberta' status appears). Because BR-01 has no OS in those buckets today, cannot confirm the grouped-by-status layout advertised in the spec — please verify with a manual walkthrough when other statuses exist, or hide/collapse empty groups explicitly."]},
+      {"screen": "Prontuário header", "issues": ["Nº Série renders as em-dash '—' when null — visually OK, but consider adding tooltip 'Não informado' for accessibility."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration55_prontuario.py",
+    "/app/test_reports/pytest/iteration55.xml"
+  ],
+  "action_items": [
+    "OPTIONAL polish: Collapse or dim Saúde cards showing 'Nenhum registro' to reduce visual noise on assets with sparse history.",
+    "OPTIONAL: Verify OS tab renders explicit group headers 'Em Aberto / Em Execução / Concluídas' — currently only Aberta rows visible because BR-01 has no other statuses (spec bullet #13). Hide empty groups OR always render zero-state headers.",
+    "OPTIONAL (carryover from iter54): Add search/filter on Planos de Inspeção list; fix hydration warning at App.js:6978.",
+    "OPTIONAL: The saude endpoint duplicates the last/next helper logic inline for preventivas — consider unifying into the get_last / get_next_pending helpers to reduce drift."
+  ],
+  "critical_code_review_comments": [
+    "assets.py GET /api/ativos/{id}/saude is well-factored with tiny helpers (get_last, get_next_pending, format_event) and correctly excludes lubricação from generic inspection query — good.",
+    "MTBF formula uses fixed 720h denominator (assumed monthly operational hours) — document this assumption or derive from ativo.horas_operacionais_mes if that field exists.",
+    "disponibilidade formula guards against div-by-zero with the (mtbf+mttr)>0 check — good, but returns 100% when both are zero, which conflates 'no data' with 'perfect'. Consider returning null and letting UI render '—'.",
+    "AtivoDetailPage (App.js line 2731) — component now >500 lines; six tab panels + BOM modal + dup modal are all inline. Extract each tab panel into a separate component to bring App.js file size under control (currently 8628 lines).",
+    "Prontuário header uses api.get('/ativos/{id}/manuais') separately even though ativo detail response could embed the count — minor perf nit, N+1 style."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration55_prontuario.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (27/27 UI checks)"},
+  "test_credentials": "master@manutrix.com / master123 — VERIFIED working.",
+  "seed_data_creation": "None. Used existing homologacao seed from iter54. BR-01 ativo_id=025260b9-e541-4745-9100-e5110efb8155 has: 3 aprovado plans, 2 open corretiva OS (#2026-00018, #2026-00009), 11 timeline events, 1 pending inspection (01/07/2026).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sprint 55 Prontuário do Ativo fully validated end-to-end. Both new endpoints (/api/ativos/{id}/saude and KPIs on /api/ativos/{id}) work correctly. Frontend AtivoDetailPage renders Prontuário header + KPI strip + 4 sections (Saúde, Planos Permanentes, OS em Aberto, Últimos Eventos) + 6 tabs. No functional bugs found. Only optional polish items around zero-state visuals. AtivoDetailPage component starts at App.js:2731 and is very long — recommend splitting for maintainability. Direct navigation URL for master validation: /ativos/025260b9-e541-4745-9100-e5110efb8155.",
+  "rca_of_the_issue": "N/A — no bugs. Sprint 55 lands cleanly. The only minor testing wrinkle: `Locator.inner_text()` returns CSS-`text-transform: uppercase` transformed text; used `inner_html()` instead for case-preserving assertions."
+}
