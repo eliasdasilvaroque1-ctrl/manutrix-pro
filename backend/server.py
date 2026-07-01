@@ -2177,6 +2177,241 @@ async def seed_test_users(user: Dict = Depends(get_current_user)):
     return {"message": f"{len(created)} usuários de teste criados/atualizados", "users": created}
 
 
+@api_router.post("/seed/homologacao")
+async def seed_homologacao(user: Dict = Depends(get_current_user)):
+    """Seed ASTEC Cedro plant for operational homologation."""
+    check_admin_only(user)
+    org_id = user.get('organization_id', '')
+    now = datetime.now(timezone.utc)
+    report = {"areas": 0, "equipamentos": 0, "planos": 0, "os": 0, "users": 0}
+
+    # 1. Rename existing areas to ASTEC Cedro names
+    renames = {"PLANTA-01": "Britagem Primária", "PLANTA-02": "Britagem Secundária", "PLANTA-03": "Pátio de Estocagem"}
+    for old_nome, new_nome in renames.items():
+        sector = await db.sectors.find_one({"organization_id": org_id, "nome": old_nome, "deleted_at": None})
+        if sector:
+            await db.sectors.update_one({"id": sector['id']}, {"$set": {"nome": new_nome}})
+            report['areas'] += 1
+
+    # 2. Create Expedição area if missing
+    exp = await db.sectors.find_one({"organization_id": org_id, "nome": "Expedição", "deleted_at": None})
+    if not exp:
+        exp_id = str(uuid.uuid4())
+        await db.sectors.insert_one({
+            "id": exp_id, "organization_id": org_id, "codigo": "EXPD",
+            "nome": "Expedição", "descricao": "Carregamento e expedição", "cor": "#f59e0b",
+            "is_active": True, "created_at": now.isoformat(), "deleted_at": None
+        })
+        report['areas'] += 1
+
+    # Get area IDs
+    all_areas = {}
+    async for s in db.sectors.find({"organization_id": org_id, "deleted_at": None}, {"_id": 0}):
+        all_areas[s['nome']] = s['id']
+
+    # 3. Add new equipment
+    from seed_homologacao import NEW_EQUIPMENT
+    for area_name, equipments in NEW_EQUIPMENT.items():
+        area_id = all_areas.get(area_name)
+        if not area_id:
+            continue
+        for eq in equipments:
+            existing = await db.ativos.find_one({
+                "organization_id": org_id, "tag": eq['tag'],
+                "sector_id": area_id, "deleted_at": None
+            })
+            if existing:
+                continue
+            ativo_id = str(uuid.uuid4())
+            await db.ativos.insert_one({
+                "id": ativo_id, "organization_id": org_id, "sector_id": area_id,
+                "tag": eq['tag'], "nome": eq['nome'],
+                "tipo_equipamento": eq['tipo_equipamento'],
+                "fabricante": eq.get('fabricante', ''),
+                "modelo": eq.get('modelo', ''),
+                "numero_serie": eq.get('numero_serie', ''),
+                "criticidade": eq.get('criticidade', 'B'),
+                "status": "operacional",
+                "created_at": now.isoformat(), "deleted_at": None
+            })
+            report['equipamentos'] += 1
+
+    # 4. Create inspection plans for all equipment types
+    from seed_homologacao import PLANOS
+    all_ativos = await db.ativos.find(
+        {"organization_id": org_id, "deleted_at": None},
+        {"_id": 0, "id": 1, "tag": 1, "nome": 1, "tipo_equipamento": 1, "sector_id": 1}
+    ).to_list(500)
+
+    for ativo in all_ativos:
+        tipo_eq = (ativo.get('tipo_equipamento') or '').upper()
+        # Find matching plan templates
+        matched_templates = None
+        for pattern, templates in PLANOS.items():
+            if pattern.upper() in tipo_eq or tipo_eq in pattern.upper():
+                matched_templates = templates
+                break
+        if not matched_templates:
+            continue
+
+        for disciplina, template in matched_templates.items():
+            # Check if plan already exists
+            exists = await db.planos_inspecao.find_one({
+                "organization_id": org_id, "ativo_id": ativo['id'],
+                "disciplina": disciplina, "deleted_at": None
+            })
+            if exists:
+                continue
+
+            perguntas = []
+            for i, p in enumerate(template['perguntas']):
+                perguntas.append({
+                    "id": str(uuid.uuid4()),
+                    "texto": p['descricao'], "descricao": p['descricao'],
+                    "tipo_campo": p.get('tipo', 'boolean'), "tipo": p.get('tipo', 'boolean'),
+                    "obrigatoria": p.get('obrigatorio', True), "obrigatorio": p.get('obrigatorio', True),
+                    "unidade": p.get('unidade', ''),
+                    "valor_max": p.get('valor_max'),
+                    "ordem": i,
+                })
+
+            plano_id = str(uuid.uuid4())
+            await db.planos_inspecao.insert_one({
+                "id": plano_id, "organization_id": org_id,
+                "nome": f"{template['nome']} - {ativo['tag']}",
+                "tipo": "inspecao" if disciplina != "lubrificacao" else "lubrificacao",
+                "categoria": disciplina,
+                "disciplina": disciplina,
+                "ativo_id": ativo['id'],
+                "tipo_equipamento": ativo.get('tipo_equipamento', ''),
+                "status": "aprovado",
+                "versao": 1,
+                "perguntas": perguntas,
+                "aprovado_por": user.get('id'),
+                "aprovado_em": now.isoformat(),
+                "created_by": user.get('id'),
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+                "deleted_at": None
+            })
+            report['planos'] += 1
+
+    # 5. Create OS with varied dates/statuses
+    from seed_homologacao import OS_TEMPLATES
+    from deps import generate_os_numero
+    for os_tpl in OS_TEMPLATES:
+        area_name = os_tpl['area']
+        area_id = all_areas.get(area_name)
+        if not area_id:
+            continue
+        # Find a matching ativo
+        ativo = await db.ativos.find_one({
+            "organization_id": org_id, "sector_id": area_id,
+            "tag": {"$regex": f"^{os_tpl['tag_prefix']}"},
+            "deleted_at": None
+        }, {"_id": 0, "id": 1, "tag": 1, "nome": 1, "sector_id": 1})
+        if not ativo:
+            continue
+
+        data_planejada = (now + timedelta(days=os_tpl.get('data_offset', 0))).isoformat()
+        numero = await generate_os_numero(org_id)
+        os_id = str(uuid.uuid4())
+        os_doc = {
+            "id": os_id, "numero": numero, "ativo_id": ativo['id'],
+            "organization_id": org_id, "sector_id": ativo.get('sector_id', ''),
+            "tipo": os_tpl['tipo'], "disciplina": os_tpl['disciplina'],
+            "prioridade": os_tpl['prioridade'], "titulo": os_tpl['titulo'],
+            "descricao": os_tpl['titulo'], "status": os_tpl['status'],
+            "origem": "pcm", "responsavel_id": None, "equipe": [],
+            "data_planejada": data_planejada,
+            "data_inicio": now.isoformat() if os_tpl['status'] == 'em_execucao' else None,
+            "data_conclusao": None,
+            "tempo_estimado_minutos": os_tpl.get('tempo_estimado'),
+            "hh_total": 0, "materiais": [], "fotos": [],
+            "created_at": now.isoformat(), "updated_at": now.isoformat(), "deleted_at": None,
+            "criado_por": user.get('id'),
+        }
+        await db.ordens_servico.insert_one(os_doc)
+        report['os'] += 1
+
+    # 6. Update test users with correct areas
+    area_brit_pri = all_areas.get("Britagem Primária")
+    area_brit_sec = all_areas.get("Britagem Secundária")
+    area_patio = all_areas.get("Pátio de Estocagem")
+    area_expd = all_areas.get("Expedição")
+    mec_areas = [a for a in [area_brit_pri, area_brit_sec] if a]
+    ele_areas = [a for a in [area_brit_sec, area_patio] if a]
+    op_areas = [a for a in [area_brit_pri, area_patio, area_expd] if a]
+
+    user_updates = [
+        ("test.sup.mec@maintrix.com", {"area_ids": mec_areas + ([area_patio] if area_patio else [])}),
+        ("test.sup.ele@maintrix.com", {"area_ids": ele_areas + ([area_expd] if area_expd else [])}),
+        ("test.mec@maintrix.com", {"area_ids": mec_areas}),
+        ("test.ele@maintrix.com", {"area_ids": ele_areas}),
+        ("test.operador@maintrix.com", {"area_ids": op_areas}),
+    ]
+    for email, updates in user_updates:
+        await db.users.update_one({"email": email, "deleted_at": None}, {"$set": updates})
+        report['users'] += 1
+
+    # 7. Create some pending inspections with dates
+    planos_aprovados = await db.planos_inspecao.find(
+        {"organization_id": org_id, "status": "aprovado", "deleted_at": None},
+        {"_id": 0, "id": 1, "nome": 1, "tipo": 1, "disciplina": 1, "ativo_id": 1, "versao": 1, "perguntas": 1}
+    ).to_list(200)
+
+    # Create pending inspections for today and this week for first 15 plans
+    insp_count = 0
+    for i, plano in enumerate(planos_aprovados[:15]):
+        ativo = await db.ativos.find_one({"id": plano.get('ativo_id')}, {"_id": 0, "id": 1, "sector_id": 1, "tag": 1})
+        if not ativo:
+            continue
+        data_prog = (now + timedelta(days=i % 5)).isoformat()
+        checklist = []
+        for p in (plano.get('perguntas') or []):
+            checklist.append({
+                "id": p.get('id', str(uuid.uuid4())),
+                "descricao": p.get('texto') or p.get('descricao', ''),
+                "tipo": p.get('tipo_campo') or p.get('tipo', 'boolean'),
+                "obrigatorio": p.get('obrigatoria', True),
+                "unidade": p.get('unidade', ''),
+                "conforme": None, "valor": None, "observacao": None,
+            })
+        insp_id = str(uuid.uuid4())
+        await db.inspecoes.insert_one({
+            "id": insp_id, "organization_id": org_id,
+            "ativo_id": plano['ativo_id'],
+            "sector_id": ativo.get('sector_id', ''),
+            "plano_id": plano['id'],
+            "plano_nome": plano['nome'],
+            "plano_versao": plano.get('versao', 1),
+            "tipo": plano.get('tipo', 'inspecao'),
+            "disciplina": plano.get('disciplina', 'mecanica'),
+            "status": "pendente",
+            "resultado": "pendente",
+            "checklist": checklist,
+            "data_programada": data_prog,
+            "data_inicio": None, "data_conclusao": None,
+            "criado_por": user.get('id'),
+            "executantes": [],
+            "observacoes": None, "fotos": [],
+            "created_at": now.isoformat(), "updated_at": now.isoformat(), "deleted_at": None,
+        })
+        insp_count += 1
+
+    report['inspecoes'] = insp_count
+
+    await audit_log("seed", "homologacao", "bulk", user,
+        f"Homologação ASTEC Cedro: {report}")
+
+    return {
+        "message": "Planta ASTEC Cedro configurada para homologação!",
+        "report": report,
+        "areas": list(all_areas.keys()),
+    }
+
+
+
 @api_router.post("/migrate/denormalize-sector")
 async def migrate_denormalize_sector(user: Dict = Depends(get_current_user)):
     """Backfill sector_id on existing OS and inspections from their ativo's sector."""
