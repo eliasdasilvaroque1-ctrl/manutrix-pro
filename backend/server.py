@@ -44,6 +44,7 @@ from routes.work_orders import router as work_orders_router
 from routes.events import router as events_router
 from routes.org import router as org_router
 from routes.biblioteca import router as biblioteca_router, BIBLIOTECA_INDEXES
+from routes.central import router as central_router
 
 app = FastAPI(title="MAINTRIX API", version="5.1.0")
 api_router = APIRouter(prefix="/api")
@@ -89,6 +90,7 @@ app.include_router(work_orders_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(org_router, prefix="/api")
 app.include_router(biblioteca_router, prefix="/api")
+app.include_router(central_router, prefix="/api")
 
 # ============== AUTH ROUTES ==============
 

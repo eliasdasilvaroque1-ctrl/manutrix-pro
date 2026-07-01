@@ -1,0 +1,62 @@
+{
+  "summary": "Iteration 52 — Validated Central de Trabalho adaptive by role. Backend: 5/6 pytest cases PASS (GET /api/central for master returns resumo/planos_pendentes/os_criticas + base sections; tecnico correctly excludes resumo/planos_pendentes/os_criticas; POST /api/migrate/planos-legados works for master, is idempotent, and returns 403 for tecnico). 1 FAIL: operador visibility filter LEAKS an instrumentacao OS in the 'sem_data' section — this is a real bug in central.py sem_data query construction. Frontend: All 6 UI checks PASS — Master lands on 'Central Executiva' with resumo cards + OS Críticas; sidebar shows 'Central de Trabalho' first, 'Dashboard' second; /dashboard renders old graph-based dashboard (Dashboard Operacional, MTBF/MTTR charts, OS por Setor, etc.); Tecnico lands on 'Central do Técnico' with 'Minha Jornada' sidebar item, no 'Central de Trabalho' or 'Dashboard' shown.",
+  "pass_fail_matrix": {
+    "Backend: GET /api/central master → role/resumo/planos_pendentes/os_criticas + all base sections": "PASS",
+    "Backend: GET /api/central tecnico → base sections only, NO resumo/planos_pendentes/os_criticas": "PASS",
+    "Backend: GET /api/central operador → visibility filter (no mecanica/eletrica/instrumentacao)": "FAIL (leaks instrumentacao OS in sem_data)",
+    "Backend: POST /api/migrate/planos-legados as master → 200 with migrated count": "PASS",
+    "Backend: POST /api/migrate/planos-legados idempotent (2nd call returns 0)": "PASS",
+    "Backend: POST /api/migrate/planos-legados as tecnico → 403": "PASS",
+    "Frontend: Master lands on 'Central Executiva' page (not Dashboard graphs)": "PASS",
+    "Frontend: Master sidebar shows 'Central de Trabalho' first, 'Dashboard' second": "PASS",
+    "Frontend: /dashboard renders old graph-based DashboardPage (MTBF/MTTR, OS por Setor)": "PASS",
+    "Frontend: Master Central shows resumo cards (5 OS/0 Insp/49 Ativos/1 Parados) + OS Críticas": "PASS",
+    "Frontend: Tecnico lands on 'Central do Técnico'": "PASS",
+    "Frontend: Tecnico sidebar shows 'Minha Jornada' (not Central de Trabalho / not Dashboard)": "PASS"
+  },
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/central",
+        "issue": "sem_data section leaks OS across visibility filter for operador. Reproduced: test.operador@maintrix.com (disciplina_principal='producao') can see OS id=8743d427-44fb-4b18-a1e8-a0e43093b190 with disciplina='instrumentacao', responsavel_id=None, equipe=[] in result['sem_data']['os']. Root cause: in /app/backend/routes/central.py lines 130-134, the sem_data query merges {**os_query_base, ..., '$or': [{'data_planejada': None}, {'data_planejada': {'$exists': False}}]}. The visibility helper build_visibility_query() sets base['$or'] for operador (lines 241-247 of deps.py) with the discipline whitelist; the second '$or' key in the dict spread OVERWRITES it, so ONLY the data_planejada condition remains and the discipline restriction is lost.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/dashboard (DashboardPage)",
+        "issues": ["Recharts container width/height warnings in console: 'The width(-1) and height(-1) of chart should be greater than 0'. Charts still render (likely re-measured after initial render), but this could produce a brief empty-chart flash on slow devices. Suggest wrapping ResponsiveContainer with a parent that has explicit min-width/min-height or an isReady guard."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration52_central.py",
+    "/app/test_reports/pytest/iteration52.xml"
+  ],
+  "action_items": [
+    "FIX HIGH PRIORITY: /app/backend/routes/central.py sem_data query — replace the second '$or' with '$and' or with a filter using '$or' inside '$and' so the visibility '$or' is preserved. Recommended pattern: `{**os_query_base, 'status': {...}, '$and': [{'$or': [{'data_planejada': None}, {'data_planejada': {'$exists': False}}]}]}` OR merge visibility as `{'$and': [os_query_base, {'status': {...}}, {'$or': [{'data_planejada': None}, {'data_planejada': {'$exists': False}}]}]}`. Grep the whole codebase for the same anti-pattern — any endpoint that spreads a visibility query and adds another top-level '$or' is affected.",
+    "Consider hardening build_visibility_query to return `{'$and': [...]}` so it cannot be silently clobbered by callers adding their own '$or'."
+  ],
+  "critical_code_review_comments": [
+    "central.py:130-134 (sem_data_os) — Dict spread with two '$or' keys silently drops the visibility '$or'. Verified this breaks operator/technician role isolation in the 'sem_data' section. Same pattern check needed elsewhere.",
+    "central.py:47-48 — `hoje/amanha/fim_semana` are computed as .isoformat() strings and used with $lt/$gte against `data_planejada` field. If data_planejada is stored as a Python datetime object in Mongo (not ISO string), lexicographic string comparison fails against BSON dates. Verify data_planejada storage format — the current tests happen to pass because seeded OS have no data_planejada, so they only appear in sem_data. Recommend using timezone-aware datetime objects on both sides (Mongo natively compares BSON dates).",
+    "central.py:166-170 — planos_pendentes is fetched with role in ('supervisor','admin','master','pcm') but the query has no visibility scoping beyond organization_id — supervisors of a specific area will see plans they shouldn't (org-wide). Consider applying discipline/area scope for supervisor role.",
+    "central.py:185-191 — resumo counters use `{**base_q}` unpacking of an already-plain dict; harmless but stylistically use `base_q.copy()`. More importantly, `total_ativos` counts ALL ativos in the org (not visibility-scoped) — for master/admin this is fine but if extended to supervisors later it must be scoped.",
+    "central.py:197 — endpoint returns unbounded OS lists (limit 50 per bucket * 5 buckets = up to 250 docs) plus per-OS ativo lookup with N+1 queries. Consider a single `$lookup` aggregation or batch-fetching ativos by id."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration52_central.py (new)"
+  ],
+  "success_rate": {"backend": "83% (5/6)", "frontend": "100% (12/12 checks)"},
+  "test_credentials": "master@manutrix.com/master123, test.mec@maintrix.com/tec123, test.operador@maintrix.com/op123 — all valid.",
+  "seed_data_creation": "None. Existing DB state used.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Central de Trabalho endpoint is working end-to-end for master and tecnico. The ONE bug to fix and retest is in central.py sem_data query (dict '$or' overwrite). After fix, re-run: pytest backend/tests/test_iteration52_central.py::TestCentralOperador -v. All other role-adaptive behavior is correct (resumo/planos_pendentes/os_criticas only for admin/master/supervisor/pcm as per spec). Frontend routing confirmed: '/' → CentralTrabalhoPage for all roles, '/dashboard' → DashboardPage (graphs). Sidebar uses isOperacional flag to swap 'Central de Trabalho' ↔ 'Minha Jornada' and hides Dashboard for operacional roles.",
+  "rca of the issue": "BUG RCA — Operador visibility leak in sem_data section. Steps to reproduce: (1) Login as test.operador@maintrix.com (op123). (2) GET /api/central. (3) Inspect result['sem_data']['os'] — OS with disciplina='instrumentacao' appears despite operador visibility rule stating 'only producao+civil'. Root cause: /app/backend/routes/central.py lines 130-134 constructs the sem_data query with `{**os_query_base, 'status': {...}, '$or': [...]}`. The visibility helper build_visibility_query() for operador sets `base['$or']` with the discipline whitelist. Python dict literal evaluation lets the later '$or' key overwrite the earlier one from spread, so the discipline filter is silently dropped. Only the data_planejada-null '$or' remains and the OS is returned regardless of disciplina. Mitigation: use `$and` to wrap both '$or' clauses, or restructure build_visibility_query to always return an '$and'-wrapped filter. All other sections (vencidas/hoje/semana/em_execucao) do NOT use their own '$or', so they are unaffected — verified by no leaks in those sections during test."
+}

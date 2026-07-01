@@ -1561,10 +1561,16 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   
   const menuGroups = [
     {
-      label: 'GESTÃO',
+      label: 'PRINCIPAL',
       items: [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+        { icon: LayoutDashboard, label: isOperacional ? 'Minha Jornada' : 'Central de Trabalho', path: '/' },
+        ...(!isOperacional ? [{ icon: BarChart3, label: 'Dashboard', path: '/dashboard' }] : []),
         ...(!isOperacional ? [{ icon: Users, label: 'Equipe', path: '/equipe' }] : []),
+      ]
+    },
+    {
+      label: 'OPERAÇÃO',
+      items: [
         { icon: Box, label: 'Ativos', path: '/ativos' },
         ...(role !== 'pcm' ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
         { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
@@ -1686,7 +1692,7 @@ const BottomNav = () => {
   const navigate = useNavigate();
   
   const items = [
-    { icon: Home, label: 'Início', path: '/' },
+    { icon: Home, label: 'Central', path: '/' },
     { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
     { icon: QrCode, label: 'Scan', path: '/scanner', special: true },
     { icon: Box, label: 'Ativos', path: '/ativos' },
@@ -1923,6 +1929,215 @@ const LoginPage = () => {
 };
 
 // Dashboard
+// ============== CENTRAL DE TRABALHO (role-adaptive) ==============
+
+const centralTitles = {
+  master: 'Central Executiva',
+  admin: 'Central Administrativa', 
+  pcm: 'Central PCM',
+  supervisor: 'Central Supervisor',
+  tecnico: 'Central do Técnico',
+  operador: 'Central Operacional',
+  inspetor: 'Central do Inspetor',
+  gerente: 'Painel Gerencial',
+};
+
+const prioColors = { emergencia: 'bg-red-500', alta: 'bg-orange-500', media: 'bg-amber-500', baixa: 'bg-blue-500' };
+const prioLabels = { emergencia: 'Emergência', alta: 'Alta', media: 'Média', baixa: 'Baixa' };
+
+const AtividadeCard = ({ item, tipo, navigate }) => {
+  const isOS = tipo === 'os';
+  const tag = item.ativo?.tag || '';
+  const nome = item.ativo?.nome || '';
+  const titulo = isOS ? item.titulo : (item.plano_nome || `${item.tipo || 'Inspeção'}`);
+  const rota = isOS ? `/os/${item.id}` : `/inspecoes/${item.id}`;
+  const prioColor = isOS ? (prioColors[item.prioridade] || 'bg-slate-600') : 'bg-emerald-500';
+  const tipoLabel = isOS
+    ? ({corretiva:'Corretiva',preventiva:'Preventiva',lubrificacao:'Lubrificação',inspecao:'Inspeção',emergencial:'Emergencial',calibracao:'Calibração',melhoria:'Melhoria'}[item.tipo] || item.tipo)
+    : ({inspecao:'Inspeção',preventiva:'Preventiva',lubrificacao:'Lubrificação',limpeza:'Limpeza',mecanica:'Mecânica',eletrica:'Elétrica'}[item.tipo] || item.tipo || 'Inspeção');
+  const tempoEstimado = item.tempo_estimado_minutos || item.duracao_estimada;
+
+  return (
+    <div
+      className="flex items-center gap-3 p-3 rounded-lg border border-slate-800 hover:border-slate-600 bg-slate-900/50 cursor-pointer transition-all group active:scale-[0.99]"
+      onClick={() => navigate(rota)}
+      data-testid={`atividade-${item.id}`}
+    >
+      <div className={`w-1.5 h-12 rounded-full ${prioColor} shrink-0`} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-emerald-400 text-xs">{tag}</span>
+          <span className="text-slate-300 text-sm truncate">{nome}</span>
+        </div>
+        <p className="text-slate-100 text-sm font-medium truncate">{titulo}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 capitalize">{tipoLabel}</span>
+          {item.disciplina && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 capitalize">{item.disciplina}</span>}
+          {isOS && item.numero && <span className="text-[10px] text-slate-600">#{item.numero}</span>}
+          {tempoEstimado && <span className="text-[10px] text-slate-500 flex items-center gap-0.5"><Clock size={10} />{tempoEstimado >= 60 ? `${Math.floor(tempoEstimado/60)}h${tempoEstimado%60 > 0 ? (tempoEstimado%60)+'min' : ''}` : `${tempoEstimado}min`}</span>}
+        </div>
+      </div>
+      <div className="text-right shrink-0">
+        {item.data_planejada || item.data_programada ? (
+          <span className="text-[10px] text-slate-500">{new Date(item.data_planejada || item.data_programada).toLocaleDateString('pt-BR')}</span>
+        ) : null}
+        <ChevronRight size={16} className="text-slate-700 group-hover:text-slate-400 transition-colors ml-auto" />
+      </div>
+    </div>
+  );
+};
+
+const SectionBlock = ({ title, icon: Icon, count, color, children, defaultOpen = true }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  if (count === 0) return null;
+  return (
+    <div className="space-y-2" data-testid={`section-${title.toLowerCase().replace(/\s/g,'-')}`}>
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-2 w-full text-left group">
+        <div className={`w-6 h-6 rounded flex items-center justify-center ${color}`}>
+          <Icon size={14} className="text-white" />
+        </div>
+        <span className="text-sm font-semibold text-slate-200 flex-1">{title}</span>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color} text-white`}>{count}</span>
+        <ChevronDown size={14} className={`text-slate-500 transition-transform ${open ? '' : '-rotate-90'}`} />
+      </button>
+      {open && <div className="space-y-1.5 ml-1">{children}</div>}
+    </div>
+  );
+};
+
+const CentralTrabalhoPage = () => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const res = await api.get('/central');
+        setData(res.data);
+      } catch { toast.error('Erro ao carregar central'); }
+      finally { setLoading(false); }
+    };
+    fetch();
+    const interval = setInterval(fetch, 60000); // refresh every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) return <Loading rows={6} />;
+  if (!data) return null;
+
+  const role = data.role;
+  const titulo = centralTitles[role] || 'Central de Trabalho';
+
+  return (
+    <div className="space-y-6" data-testid="central-trabalho">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">{titulo}</h1>
+          <p className="text-sm text-slate-500">
+            {data.user_nome}{data.turno ? ` • Turno ${data.turno}` : ''} • {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-2xl font-bold text-slate-100">{data.total_atividades}</p>
+            <p className="text-[10px] text-slate-500 uppercase">Atividades</p>
+          </div>
+          <button onClick={() => { setLoading(true); api.get('/central').then(r => setData(r.data)).finally(() => setLoading(false)); }} className="p-2 hover:bg-slate-800 rounded-lg transition-colors" data-testid="central-refresh">
+            <RefreshCw size={18} className="text-slate-400" />
+          </button>
+        </div>
+      </div>
+
+      {/* Quick stats for supervisors/admin */}
+      {data.resumo && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="glass-card p-3 text-center">
+            <p className="text-xl font-bold text-slate-100">{data.resumo.total_os_abertas}</p>
+            <p className="text-[10px] text-slate-500 uppercase">OS Abertas</p>
+          </div>
+          <div className="glass-card p-3 text-center">
+            <p className="text-xl font-bold text-slate-100">{data.resumo.total_insp_pendentes}</p>
+            <p className="text-[10px] text-slate-500 uppercase">Inspeções Pendentes</p>
+          </div>
+          <div className="glass-card p-3 text-center">
+            <p className="text-xl font-bold text-slate-100">{data.resumo.total_ativos}</p>
+            <p className="text-[10px] text-slate-500 uppercase">Ativos</p>
+          </div>
+          <div className="glass-card p-3 text-center">
+            <p className="text-xl font-bold text-amber-400">{data.resumo.ativos_parados}</p>
+            <p className="text-[10px] text-slate-500 uppercase">Parados</p>
+          </div>
+        </div>
+      )}
+
+      {/* Vencidas */}
+      <SectionBlock title="Atividades Vencidas" icon={AlertTriangle} count={data.vencidas.total} color="bg-red-600" defaultOpen={true}>
+        {data.vencidas.os.map(o => <AtividadeCard key={o.id} item={o} tipo="os" navigate={navigate} />)}
+        {data.vencidas.inspecoes.map(i => <AtividadeCard key={i.id} item={i} tipo="inspecao" navigate={navigate} />)}
+      </SectionBlock>
+
+      {/* Em execução */}
+      <SectionBlock title="Em Execução" icon={Play} count={data.em_execucao.total} color="bg-blue-600" defaultOpen={true}>
+        {data.em_execucao.os.map(o => <AtividadeCard key={o.id} item={o} tipo="os" navigate={navigate} />)}
+        {data.em_execucao.inspecoes.map(i => <AtividadeCard key={i.id} item={i} tipo="inspecao" navigate={navigate} />)}
+      </SectionBlock>
+
+      {/* Hoje */}
+      <SectionBlock title="Para Hoje" icon={Calendar} count={data.hoje.total} color="bg-amber-600" defaultOpen={true}>
+        {data.hoje.os.map(o => <AtividadeCard key={o.id} item={o} tipo="os" navigate={navigate} />)}
+        {data.hoje.inspecoes.map(i => <AtividadeCard key={i.id} item={i} tipo="inspecao" navigate={navigate} />)}
+      </SectionBlock>
+
+      {/* Semana */}
+      <SectionBlock title="Esta Semana" icon={Calendar} count={data.semana.total} color="bg-blue-500" defaultOpen={data.hoje.total === 0}>
+        {data.semana.os.map(o => <AtividadeCard key={o.id} item={o} tipo="os" navigate={navigate} />)}
+        {data.semana.inspecoes.map(i => <AtividadeCard key={i.id} item={i} tipo="inspecao" navigate={navigate} />)}
+      </SectionBlock>
+
+      {/* Sem data (backlog) */}
+      <SectionBlock title="Sem Data Planejada" icon={Clock} count={data.sem_data.total} color="bg-slate-600" defaultOpen={false}>
+        {data.sem_data.os.map(o => <AtividadeCard key={o.id} item={o} tipo="os" navigate={navigate} />)}
+      </SectionBlock>
+
+      {/* Role-specific: Planos pendentes */}
+      {data.planos_pendentes && data.planos_pendentes.length > 0 && (
+        <SectionBlock title="Planos Pendentes de Aprovação" icon={ClipboardCheck} count={data.planos_pendentes.length} color="bg-purple-600" defaultOpen={true}>
+          {data.planos_pendentes.map(p => (
+            <div key={p.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-800 bg-slate-900/50 cursor-pointer hover:border-slate-600" onClick={() => navigate('/admin/templates')} data-testid={`plano-pendente-${p.id}`}>
+              <ClipboardCheck size={16} className="text-purple-400 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm text-slate-200">{p.nome}</p>
+                <span className="text-[10px] text-slate-500">{(p.perguntas || []).length} perguntas • {p.tipo}</span>
+              </div>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">{p.status}</span>
+            </div>
+          ))}
+        </SectionBlock>
+      )}
+
+      {/* Role-specific: OS críticas */}
+      {data.os_criticas && data.os_criticas.length > 0 && (
+        <SectionBlock title="OS Críticas" icon={AlertCircle} count={data.os_criticas.length} color="bg-red-500" defaultOpen={true}>
+          {data.os_criticas.map(o => <AtividadeCard key={o.id} item={o} tipo="os" navigate={navigate} />)}
+        </SectionBlock>
+      )}
+
+      {/* Empty state */}
+      {data.total_atividades === 0 && !data.resumo && (
+        <div className="glass-card p-12 text-center">
+          <CheckCircle size={48} className="text-emerald-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-slate-200">Tudo em dia!</h3>
+          <p className="text-sm text-slate-500 mt-1">Nenhuma atividade pendente no momento.</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const DashboardPage = () => {
   const [kpis, setKpis] = useState(null);
   const [stats, setStats] = useState(null);
@@ -8178,7 +8393,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><AppLayout><CentralTrabalhoPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
           <Route path="/ativos" element={<ProtectedRoute><AppLayout><AtivosPage /></AppLayout></ProtectedRoute>} />
           <Route path="/ativos/:id" element={<ProtectedRoute><AppLayout><AtivoDetailPage /></AppLayout></ProtectedRoute>} />
           <Route path="/os" element={<ProtectedRoute><AppLayout><OSPage /></AppLayout></ProtectedRoute>} />
