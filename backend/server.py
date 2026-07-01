@@ -974,7 +974,7 @@ async def create_plano_inspecao(data: PlanoInspecaoCreate, user: Dict = Depends(
         "frequencia": data.frequencia,
         "responsavel_id": data.responsavel_id,
         "disciplina": data.disciplina,
-        "status": data.status or "ativo",
+        "status": data.status or "rascunho",
         "versao": data.versao or 1,
         "perguntas": perguntas,
         "created_by": user.get('id'),
@@ -1061,13 +1061,48 @@ async def resolver_plano_inspecao(ativo_id: str, categoria: str = None, tipo: st
 
 @api_router.get("/planos-inspecao/por-ativo/{ativo_id}")
 async def planos_por_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
-    """List all plans for a specific asset."""
+    """List all approved plans for a specific asset (for execution)."""
     org_id = user.get('organization_id', '')
+    # Return plans approved for this asset
     planos = await db.planos_inspecao.find(
-        {"organization_id": org_id, "ativo_id": ativo_id, "deleted_at": None},
+        {"organization_id": org_id, "ativo_id": ativo_id, "deleted_at": None,
+         "status": "aprovado"},
         {"_id": 0}
     ).sort("tipo", 1).to_list(50)
+    # Also include generic plans by equipment type that are approved
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0, "tipo_equipamento": 1})
+    if ativo and ativo.get('tipo_equipamento'):
+        genericos = await db.planos_inspecao.find(
+            {"organization_id": org_id, "tipo_equipamento": ativo['tipo_equipamento'],
+             "ativo_id": {"$in": [None, ""]}, "deleted_at": None,
+             "status": "aprovado"},
+            {"_id": 0}
+        ).to_list(50)
+        existing_ids = {p['id'] for p in planos}
+        for g in genericos:
+            if g['id'] not in existing_ids:
+                g['_generico'] = True
+                planos.append(g)
     return planos
+
+
+@api_router.patch("/planos-inspecao/{plano_id}/aprovar")
+async def aprovar_plano(plano_id: str, user: Dict = Depends(get_current_user)):
+    """Approve a plan for execution."""
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
+    plano = await db.planos_inspecao.find_one({"id": plano_id, "deleted_at": None}, {"_id": 0})
+    if not plano:
+        raise HTTPException(status_code=404, detail="Plano não encontrado")
+    if not plano.get('perguntas'):
+        raise HTTPException(status_code=400, detail="Plano sem perguntas não pode ser aprovado")
+    await db.planos_inspecao.update_one({"id": plano_id}, {"$set": {
+        "status": "aprovado",
+        "aprovado_por": user.get('id'),
+        "aprovado_em": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }})
+    await audit_log("approve", "plano_inspecao", plano_id, user, f"Plano aprovado: {plano.get('nome','')}")
+    return {"success": True, "message": f"Plano '{plano.get('nome','')}' aprovado para execução"}
 
 @api_router.get("/planos-inspecao/categorias-disponiveis")
 async def categorias_disponiveis(ativo_id: str, user: Dict = Depends(get_current_user)):
@@ -1178,121 +1213,91 @@ async def get_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user))
 
 @api_router.post("/inspecoes")
 async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current_user)):
+    """Criar uma Execução de Inspeção a partir de um Plano Aprovado.
+    Toda execução é vinculada a um plano permanente. Nunca checklist genérico."""
     ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
-    
+
     org_id = ativo.get('organization_id', user.get('organization_id', ''))
-    
-    tipo_str = data.tipo.value if hasattr(data.tipo, 'value') else str(data.tipo)
-    checklist = data.checklist or []
-    
-    # Check if checklist has user responses (from Ronda mode)
+
+    # ===== OBRIGATÓRIO: Carregar o Plano Aprovado =====
+    plano = await db.planos_inspecao.find_one(
+        {"id": data.plano_id, "deleted_at": None},
+        {"_id": 0}
+    )
+    if not plano:
+        raise HTTPException(status_code=404, detail="Plano de inspeção não encontrado")
+    if plano.get('status') != 'aprovado':
+        raise HTTPException(status_code=400, detail=f"Plano '{plano.get('nome','')}' não está aprovado. Status atual: {plano.get('status','')}. Solicite aprovação ao PCM.")
+
+    plano_usado_id = plano['id']
+    plano_usado_nome = plano.get('nome', '')
+    plano_versao = plano.get('versao', 1)
+
+    # ===== Copiar perguntas do Plano (NUNCA genérico) =====
+    checklist_from_plan = plano.get('perguntas', [])
+    if not checklist_from_plan:
+        raise HTTPException(status_code=400, detail=f"Plano '{plano_usado_nome}' não possui perguntas cadastradas")
+
+    # Check if frontend sent responses (Ronda mode: checklist already filled)
+    frontend_checklist = []
+    if data.checklist:
+        for c in data.checklist:
+            frontend_checklist.append(c.model_dump() if hasattr(c, 'model_dump') else c)
+
     has_responses = any(
         item.get('conforme') is not None or item.get('valor') is not None
-        for item in (c.model_dump() if hasattr(c, 'model_dump') else c for c in checklist)
-    ) if checklist else False
+        for item in frontend_checklist
+    ) if frontend_checklist else False
 
-    plano_usado_id = None
-    plano_usado_nome = None
+    # Build checklist: use plan questions, overlay with frontend responses if any
+    if has_responses and len(frontend_checklist) > 0:
+        # Ronda mode: frontend sent filled checklist
+        checklist = frontend_checklist
+    else:
+        # Normal mode: copy fresh questions from plan
+        checklist = []
+        for p in checklist_from_plan:
+            item = {
+                "id": p.get('id', str(uuid.uuid4())),
+                "descricao": p.get('texto') or p.get('descricao', ''),
+                "tipo": p.get('tipo_campo') or p.get('tipo', 'boolean'),
+                "obrigatorio": p.get('obrigatoria', p.get('obrigatorio', True)),
+                "foto_obrigatoria": p.get('foto_obrigatoria', False),
+                "comentario_obrigatorio": p.get('comentario_obrigatorio', False),
+                "unidade": p.get('unidade', ''),
+                "tolerancia_min": p.get('valor_min', p.get('tolerancia_min')),
+                "tolerancia_max": p.get('valor_max', p.get('tolerancia_max')),
+                "opcoes": p.get('opcoes', []),
+                "ordem": p.get('ordem', 0),
+                "conforme": None,
+                "valor": None,
+                "observacao": None,
+            }
+            checklist.append(item)
 
-    # AUTO-LOAD: If no checklist provided, load from plano vinculado ao ativo
-    if not checklist or not has_responses:
-        # 1. Try asset-specific plan matching tipo
-        tipo_to_categoria = {
-            'inspecao': 'inspecao', 'lubrificacao': 'lubrificacao',
-            'preventiva': 'preventiva', 'limpeza': 'limpeza', 'melhoria': 'melhoria',
-            'mecanica': 'mecanica', 'eletrica': 'eletrica',
-        }
-        cat_busca = tipo_to_categoria.get(tipo_str, tipo_str)
-        
-        plano = await db.planos_inspecao.find_one(
-            {"organization_id": org_id, "ativo_id": data.ativo_id, "deleted_at": None,
-             "$and": [
-                 {"$or": [{"categoria": cat_busca}, {"tipo": cat_busca}]},
-                 {"$or": [{"status": "ativo"}, {"status": {"$exists": False}}]}
-             ]},
-            {"_id": 0},
-            sort=[("versao", -1), ("created_at", -1)]
-        )
-        
-        # 2. If no asset plan, try equipment-type plan
-        if not plano and ativo.get('tipo_equipamento'):
-            plano = await db.planos_inspecao.find_one(
-                {"organization_id": org_id, "tipo_equipamento": ativo['tipo_equipamento'],
-                 "ativo_id": None, "deleted_at": None,
-                 "$or": [{"categoria": cat_busca}, {"tipo": cat_busca}]},
-                {"_id": 0},
-                sort=[("created_at", -1)]
-            )
-        
-        # 3. If plan found, use its perguntas as checklist
-        if plano and plano.get('perguntas'):
-            checklist = []
-            for p in plano['perguntas']:
-                item = {
-                    "id": p.get('id', str(uuid.uuid4())),
-                    "descricao": p.get('texto') or p.get('descricao', ''),
-                    "tipo": p.get('tipo_campo') or p.get('tipo', 'boolean'),
-                    "obrigatorio": p.get('obrigatoria', p.get('obrigatorio', True)),
-                    "foto_obrigatoria": p.get('foto_obrigatoria', False),
-                    "comentario_obrigatorio": p.get('comentario_obrigatorio', False),
-                    "unidade": p.get('unidade', ''),
-                    "tolerancia_min": p.get('valor_min', p.get('tolerancia_min')),
-                    "tolerancia_max": p.get('valor_max', p.get('tolerancia_max')),
-                    "opcoes": p.get('opcoes', []),
-                    "ordem": p.get('ordem', 0),
-                }
-                checklist.append(item)
-            plano_usado_id = plano.get('id')
-            plano_usado_nome = plano.get('nome')
-        elif data.rota_id:
-            rota = await db.rotas_inspecao.find_one({"id": data.rota_id}, {"_id": 0})
-            if rota:
-                checklist = rota.get('itens', [])
-    
-    # If still no checklist (no plan found), create minimal default
-    if not checklist:
-        checklist = [
-            {"id": str(uuid.uuid4()), "descricao": "Item 1 — Verificar condição geral", "tipo": "boolean", "obrigatorio": True},
-            {"id": str(uuid.uuid4()), "descricao": "Observações", "tipo": "texto", "obrigatorio": False},
-        ]
-    
-    # Serialize checklist items to dicts
-    checklist_dicts = []
-    for item in checklist:
-        if hasattr(item, 'model_dump'):
-            checklist_dicts.append(item.model_dump())
-        elif isinstance(item, dict):
-            checklist_dicts.append(item)
-        else:
-            checklist_dicts.append(dict(item))
-    checklist = checklist_dicts
-    
-    # Auto-conclude if checklist has user responses (Ronda mode)
+    # Auto-conclude if responses present (Ronda mode)
     nao_conformes = [item for item in checklist if item.get('conforme') is False]
     if has_responses:
         resultado = "nao_conforme" if nao_conformes else "conforme"
-        status = "com_pendencias" if nao_conformes else "concluida"
+        status_insp = "com_pendencias" if nao_conformes else "concluida"
         data_conclusao = datetime.now(timezone.utc).isoformat()
     else:
         resultado = "pendente"
-        status = "pendente"
+        status_insp = "pendente"
         data_conclusao = None
-    
-    # Derive disciplina from explicit field, tipo, or plano
-    disciplina_insp = data.disciplina  # explicitly provided by frontend
+
+    # Derive tipo and disciplina from plano
+    tipo_str = data.tipo or plano.get('tipo') or plano.get('categoria') or 'inspecao'
+    disciplina_insp = data.disciplina or plano.get('disciplina')
     if not disciplina_insp:
         if tipo_str in ('mecanica',):
             disciplina_insp = 'mecanica'
         elif tipo_str in ('eletrica',):
             disciplina_insp = 'eletrica'
-        elif plano_usado_id:
-            plano_disc = await db.planos_inspecao.find_one({"id": plano_usado_id}, {"_id": 0, "disciplina": 1})
-            if plano_disc:
-                disciplina_insp = plano_disc.get('disciplina')
-    if not disciplina_insp:
-        disciplina_insp = 'producao'
+        else:
+            disciplina_insp = 'producao'
 
     insp_id = str(uuid.uuid4())
     insp_doc = {
@@ -1305,11 +1310,12 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         "disciplina": disciplina_insp,
         "sector_id": ativo.get('sector_id', ''),
         "frequencia": data.frequencia,
-        "status": status,
+        "status": status_insp,
         "resultado": resultado,
         "checklist": checklist,
         "plano_id": plano_usado_id,
         "plano_nome": plano_usado_nome,
+        "plano_versao": plano_versao,
         "data_programada": data.data_planejada or datetime.now(timezone.utc).isoformat(),
         "data_inicio": datetime.now(timezone.utc).isoformat() if has_responses else None,
         "data_conclusao": data_conclusao,
@@ -1329,9 +1335,9 @@ async def create_inspecao(data: InspecaoCreate, user: Dict = Depends(get_current
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None
     }
-    
+
     await db.inspecoes.insert_one(insp_doc)
-    await audit_log("create", "inspecoes", insp_id, user, f"Inspeção {tipo_str}: {ativo.get('tag','')}")
+    await audit_log("create", "inspecoes", insp_id, user, f"Execução '{plano_usado_nome}' v{plano_versao}: {ativo.get('tag','')}")
     
     # Auto-generate OS for non-conformities in Ronda mode
     if has_responses and nao_conformes:

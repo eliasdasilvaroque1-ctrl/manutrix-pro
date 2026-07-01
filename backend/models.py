@@ -272,8 +272,9 @@ class ChecklistItem(BaseModel):
 
 class InspecaoCreate(BaseModel):
     ativo_id: str
-    tipo: InspecaoTipo = InspecaoTipo.MECANICA
-    disciplina: Optional[str] = None  # mecanica, eletrica, instrumentacao, producao, civil
+    plano_id: str  # OBRIGATÓRIO — toda execução deve vir de um plano aprovado
+    tipo: Optional[str] = None  # derivado do plano se não informado
+    disciplina: Optional[str] = None  # derivado do plano se não informado
     frequencia: Optional[str] = "diaria"
     responsavel_id: Optional[str] = None
     executantes: List[str] = []
@@ -475,7 +476,7 @@ class PlanoInspecaoCreate(BaseModel):
     frequencia: Optional[str] = None  # diaria, semanal, quinzenal, mensal, trimestral, semestral, anual
     responsavel_id: Optional[str] = None
     disciplina: Optional[str] = None  # mecanica, eletrica, instrumentacao (informativo)
-    status: str = "ativo"  # ativo, inativo
+    status: str = "rascunho"  # rascunho, aprovado, inativo
     versao: int = 1
     perguntas: List[PlanoPerguntaCreate] = []
     # backward compat fields

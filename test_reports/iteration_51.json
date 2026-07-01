@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 51 — Validated the NEW Plano→Aprovar→Executar architectural flow. Backend: 11/11 pytest cases PASS covering plan creation (rascunho default), rejection of rascunho plans on POST /api/inspecoes (400), PATCH /aprovar transition, checklist copy from plan (3/5/100 perguntas), plano metadata preservation (plano_id/plano_nome/plano_versao), missing plano_id → 422 with field in loc, GET /por-ativo returns ONLY 'aprovado' plans, aprovar of empty plan → 400, and Ronda-mode auto-conclusion. Frontend: Playwright verified — /admin/templates renders status badges (Aprovado/rascunho/Ativo), 'Aprovar' button appears only on non-approved plans with perguntas (5 of 7 cards); Nova Inspeção modal on /inspecoes now shows a 'Planos Aprovados (N)' list of selectable plan cards after ativo selection (verified 2 approved plans for AV-01) — hardcoded Mecânica/Elétrica/Lubrificação tabs are GONE.",
+  "pass_fail_matrix": {
+    "POST /api/planos-inspecao defaults status='rascunho'": "PASS",
+    "POST /api/inspecoes with rascunho plan -> 400 'não está aprovado'": "PASS",
+    "PATCH /api/planos-inspecao/{id}/aprovar transitions to 'aprovado'": "PASS",
+    "POST /api/inspecoes with aprovado plan copies checklist from plan (3 items)": "PASS",
+    "Execution preserves plano_id + plano_nome + plano_versao": "PASS",
+    "Plan with 5 perguntas -> execution has 5 checklist items": "PASS",
+    "Plan with 100 perguntas -> execution has 100 checklist items": "PASS",
+    "POST /api/inspecoes without plano_id -> 422 with 'plano_id' in detail.loc": "PASS",
+    "GET /por-ativo/{ativo_id} returns ONLY 'aprovado' plans (rascunho hidden)": "PASS",
+    "PATCH /aprovar on plan with 0 perguntas -> 400": "PASS",
+    "POST /api/inspecoes Ronda mode (conforme values) auto-concludes with status='concluida' + resultado='conforme'": "PASS",
+    "UI: /admin/templates shows status badges (Aprovado / rascunho / Ativo)": "PASS",
+    "UI: 'Aprovar' button appears only on non-approved plans with perguntas": "PASS",
+    "UI: Nova Inspeção modal shows 'Planos Aprovados (N)' list, NOT hardcoded Mec/Ele/Lub tabs": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/templates", "issues": ["Legacy plans in DB with status='ativo' (uppercase 'Ativo' badge) still show an 'Aprovar' button — they are neither 'aprovado' nor 'rascunho'. GET /por-ativo filter excludes them (status must be 'aprovado'), so they are effectively non-executable. Consider a data migration to convert legacy status='ativo' to 'aprovado' OR to 'rascunho', or block execution of 'ativo' plans explicitly. Currently the user can approve them, which is the intended path."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration51_planos_execucao.py",
+    "/app/test_reports/pytest/iteration51.xml"
+  ],
+  "action_items": [
+    "Consider a one-off migration to normalize legacy PlanoInspecao documents that still have status='ativo' into either 'aprovado' or 'rascunho' — currently they are visible in /admin/templates as 'Ativo' badge but excluded from /por-ativo (executable) because that endpoint filters status=='aprovado'. Not blocking the new flow."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1067-1085 planos_por_ativo: filter for generic plans uses `ativo_id: {\"$in\": [None, \"\"]}` — good. But the initial by-asset query on line 1067 uses `\"ativo_id\": ativo_id` and status=='aprovado', which is exactly the spec. OK.",
+    "server.py:1096 aprovar_plano checks `plano.get('perguntas')` truthy — this correctly rejects [] and None. OK.",
+    "server.py:1231 create_inspecao: strict status check `!= 'aprovado'` — this MEANS legacy plans with status='ativo' cannot be executed even though they appear in /admin/templates. The 'Aprovar' button on legacy 'ativo' plans is the sane escape hatch. Consider documenting.",
+    "server.py:1241 correctly raises 400 for plans without perguntas — however, since aprovar_plano ALREADY rejects empty plans (line 1096), this branch should be unreachable in production. Keep as defensive guard.",
+    "models.py:275 InspecaoCreate.plano_id is str (required) — validated: missing field returns 422 with plano_id in loc. OK.",
+    "App.js:1476-1480 empty-state message 'O PCM precisa criar e aprovar planos antes de executar inspeções' is clear and user-friendly. OK.",
+    "App.js:6781 conditional `!isAprovado && (t.perguntas || []).length > 0` correctly gates the 'Aprovar' button. Note that legacy status='ativo' plans DO satisfy !isAprovado, so 'Aprovar' is offered — matches migration path.",
+    "server.py:990-1010 (from iteration 50 flag) update_plano_inspecao STILL only supports updating 'nome' and 'perguntas'. Editing status/tipo/ativo_id/disciplina from the UI via PUT will be silently dropped. If a user edits a plan and expects to change tipo/disciplina, it will fail silently. HIGH priority to fix — this is now more critical because the flow depends on plans being editable to iterate before approval."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration51_planos_execucao.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (3/3 UI flows verified)"},
+  "test_credentials": "master@manutrix.com / master123 works. /app/memory/test_credentials.md is accurate.",
+  "seed_data_creation": "9 TEST_ITER51_* plans created via pytest fixture; teardown deletes them via DELETE /api/planos-inspecao/{id}.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 51 confirms end-to-end Plano→Aprovar→Executar architecture works exactly per spec: (1) POST /api/inspecoes REQUIRES plano_id (422 if missing, 400 if plan not 'aprovado'); (2) Execution copies checklist from plan perguntas (verified with 3, 5, 100 items) — no generic fallback exists; (3) plano_id/plano_nome/plano_versao are persisted on the execution doc; (4) GET /planos-inspecao/por-ativo/{ativo_id} filters strictly to status=='aprovado' — verified rascunho plan does NOT appear; (5) Ronda mode (checklist with 'conforme' values in POST body) auto-concludes to status='concluida', resultado='conforme', data_conclusao set. FRONTEND: /admin/templates shows badges, 'Aprovar' button on non-approved plans; ModalNovaInspecao renders 'Planos Aprovados (N)' list of plan cards after ativo selection — no more hardcoded Mecânica/Elétrica/Lubrificação tabs. ONE LEGACY WARNING: DB contains plans with status='ativo' (legacy value); they appear in /admin/templates but not in /por-ativo. Users must approve them via the 'Aprovar' button (which transitions to 'aprovado'). CARRY-OVER FROM ITER 50: PUT /api/planos-inspecao/{id} still ignores tipo/ativo_id/disciplina/status/versao updates — becoming more critical with the new flow.",
+  "rca of the issue": "N/A — no bugs found in this iteration. The architectural rewrite is correctly implemented on both backend and frontend. Only minor observation: legacy 'ativo' status plans persist in DB from before the rewrite; the design correctly routes them through the 'Aprovar' button UI to migrate them to 'aprovado'."
+}

@@ -14,7 +14,7 @@ import {
   Phone, Mail, Building, Hash, Thermometer, Volume2, Droplet, Cog,
   DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
   Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy, Factory,
-  Building2, Palette, BookOpen
+  Building2, Palette, BookOpen, CheckCircle2, Sparkles
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
 import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData } from "@/lib/offlineQueue";
@@ -1321,9 +1321,9 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
 // Modal Nova Inspeção
 const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = [], tecnicos = [], preSelectedAtivoId = null }) => {
   const [loading, setLoading] = useState(false);
-  const [tipoTab, setTipoTab] = useState('mecanica');
+  const [planosDisponiveis, setPlanosDisponiveis] = useState([]);
+  const [selectedPlano, setSelectedPlano] = useState(null);
   const [checklist, setChecklist] = useState([]);
-  const [resolvedPlan, setResolvedPlan] = useState(null);
   const [form, setForm] = useState({
     ativo_id: '', responsavel_id: '', executantes: [], data_planejada: '', observacoes: ''
   });
@@ -1331,50 +1331,60 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   
   useEffect(() => {
     if (isOpen) {
-      setTipoTab('mecanica');
+      setPlanosDisponiveis([]);
+      setSelectedPlano(null);
       setChecklist([]);
-      setResolvedPlan(null);
       setForm({ ativo_id: preSelectedAtivoId || '', responsavel_id: user?.id || '', executantes: [], data_planejada: '', observacoes: '' });
     }
   }, [isOpen, user, preSelectedAtivoId]);
 
-  // Auto-load plan when ativo + categoria change
-  const loadPlan = async (ativoId, categoria) => {
-    if (!ativoId) return;
+  // Load approved plans when ativo changes
+  const loadPlanos = async (ativoId) => {
+    if (!ativoId) { setPlanosDisponiveis([]); return; }
     try {
-      const res = await api.get('/planos-inspecao/resolver', { params: { ativo_id: ativoId, categoria } });
-      setResolvedPlan(res.data);
-      setChecklist((res.data.perguntas || []).map(p => ({
-        ...p, id: p.id || String(Date.now()), conforme: null, resultado: null, observacao: null
-      })));
+      const res = await api.get(`/planos-inspecao/por-ativo/${ativoId}`);
+      setPlanosDisponiveis(res.data);
     } catch {
-      setResolvedPlan(null);
-      setChecklist([]);
+      setPlanosDisponiveis([]);
     }
   };
 
   useEffect(() => {
     const ativoId = preSelectedAtivoId || form.ativo_id;
-    if (ativoId && isOpen) loadPlan(ativoId, tipoTab);
-  }, [tipoTab, form.ativo_id, preSelectedAtivoId, isOpen]);
+    if (ativoId && isOpen) loadPlanos(ativoId);
+  }, [form.ativo_id, preSelectedAtivoId, isOpen]);
 
   const handleAtivoChange = (ativoId) => {
     setForm(prev => ({...prev, ativo_id: ativoId}));
-    if (ativoId) loadPlan(ativoId, tipoTab);
+    setSelectedPlano(null);
+    setChecklist([]);
+  };
+
+  const handleSelectPlano = (plano) => {
+    setSelectedPlano(plano);
+    const perguntas = (plano.perguntas || []).map(p => ({
+      id: p.id || String(Date.now()),
+      descricao: p.texto || p.descricao || '',
+      tipo: p.tipo_campo || p.tipo || 'boolean',
+      obrigatorio: p.obrigatoria ?? p.obrigatorio ?? true,
+      unidade: p.unidade || '',
+      conforme: null, valor: null, observacao: ''
+    }));
+    setChecklist(perguntas);
   };
   
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.ativo_id) {
-      toast.error('Selecione o ativo');
-      return;
-    }
+    if (!form.ativo_id) { toast.error('Selecione o ativo'); return; }
+    if (!selectedPlano) { toast.error('Selecione um plano de inspeção'); return; }
     
     setLoading(true);
     try {
       const payload = {
         ativo_id: form.ativo_id,
-        tipo: tipoTab,
+        plano_id: selectedPlano.id,
+        tipo: selectedPlano.tipo || selectedPlano.categoria || 'inspecao',
+        disciplina: selectedPlano.disciplina || null,
         responsavel_id: form.responsavel_id || null,
         executantes: form.executantes || [],
         checklist: checklist,
@@ -1387,7 +1397,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
         toast.info('Sem conexão — inspeção salva localmente');
       } else {
         await api.post('/inspecoes', payload);
-        toast.success('Inspeção criada com sucesso!');
+        toast.success('Execução criada com sucesso!');
       }
       onSuccess();
       onClose();
@@ -1399,27 +1409,11 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
   };
 
   const selectedAtivo = ativos.find(a => a.id === form.ativo_id);
+  const tipoLabels = { inspecao: 'Inspeção', preventiva: 'Preventiva', lubrificacao: 'Lubrificação', limpeza: 'Limpeza', melhoria: 'Melhoria', mecanica: 'Mecânica', eletrica: 'Elétrica' };
   
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Nova Inspeção" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Nova Execução de Inspeção" size="lg">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Tipo de Inspeção */}
-        <div className="flex bg-slate-800/50 rounded-lg p-1 gap-1">
-          {[
-            { key: 'mecanica', label: 'Mecânica', icon: Cog, color: 'emerald' },
-            { key: 'eletrica', label: 'Elétrica', icon: Zap, color: 'blue' },
-            { key: 'lubrificacao', label: 'Lubrificação', icon: Droplet, color: 'amber' },
-          ].map(tab => (
-            <button key={tab.key} type="button" onClick={() => setTipoTab(tab.key)}
-              className={`flex-1 py-2.5 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                tipoTab === tab.key ? `bg-${tab.color}-500/20 text-${tab.color}-400 border border-${tab.color}-500/30` : 'text-slate-400 hover:text-slate-200'
-              }`} data-testid={`tab-${tab.key}`}
-            >
-              <tab.icon size={16} /> {tab.label}
-            </button>
-          ))}
-        </div>
-
         {/* Equipamento + Responsável */}
         <div className="glass-card p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1473,18 +1467,55 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
           </FormInput>
         </div>
 
-        {/* Plan info & Checklist Preview */}
-        {resolvedPlan && (
-          <div className="text-xs text-slate-500 flex items-center gap-2">
-            <span>{resolvedPlan.total_perguntas} perguntas carregadas</span>
-            {resolvedPlan.plano_tipo && <span className="bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded">Plano: {resolvedPlan.tipo_equipamento}</span>}
-            {resolvedPlan.plano_ativo && <span className="bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded">+ Específico {resolvedPlan.ativo_tag}</span>}
-          </div>
-        )}
-        {checklist.length > 0 && (
+        {/* Planos Aprovados */}
+        {form.ativo_id && (
           <div className="glass-card p-4 space-y-3">
             <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-              Checklist — {({mecanica:'Mecânica',eletrica:'Elétrica',lubrificacao:'Lubrificação'})[tipoTab] || tipoTab} ({checklist.length} itens)
+              Planos Aprovados ({planosDisponiveis.length})
+            </h3>
+            {planosDisponiveis.length === 0 ? (
+              <div className="text-center py-6">
+                <ClipboardCheck size={32} className="text-slate-600 mx-auto mb-2" />
+                <p className="text-sm text-slate-500">Nenhum plano aprovado para este ativo.</p>
+                <p className="text-xs text-slate-600 mt-1">O PCM precisa criar e aprovar planos antes de executar inspeções.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {planosDisponiveis.map(plano => (
+                  <button key={plano.id} type="button"
+                    onClick={() => handleSelectPlano(plano)}
+                    className={`w-full text-left p-3 rounded-lg border transition-all ${
+                      selectedPlano?.id === plano.id
+                        ? 'border-emerald-500/50 bg-emerald-500/10'
+                        : 'border-slate-700 hover:border-slate-500 bg-slate-800/30'
+                    }`}
+                    data-testid={`plano-option-${plano.id}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`font-medium text-sm ${selectedPlano?.id === plano.id ? 'text-emerald-400' : 'text-slate-200'}`}>{plano.nome}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 capitalize">{tipoLabels[plano.tipo] || plano.tipo}</span>
+                          {plano.disciplina && <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 capitalize">{plano.disciplina}</span>}
+                          <span className="text-xs text-slate-500">{(plano.perguntas || []).length} perguntas</span>
+                          <span className="text-xs text-slate-600">v{plano.versao || 1}</span>
+                          {plano._generico && <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">Genérico</span>}
+                        </div>
+                      </div>
+                      {selectedPlano?.id === plano.id && <CheckCircle2 size={20} className="text-emerald-400" />}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Checklist Preview */}
+        {selectedPlano && checklist.length > 0 && (
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+              Checklist — {selectedPlano.nome} ({checklist.length} itens)
             </h3>
             <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
               {checklist.map((item, idx) => (
@@ -1505,8 +1536,8 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button type="submit" disabled={loading} className="btn-primary" data-testid="submit-inspecao">
-            {loading ? 'Salvando...' : `Criar Inspeção ${({mecanica:'Mecânica',eletrica:'Elétrica',lubrificacao:'Lubrificação'})[tipoTab] || ''}`}
+          <button type="submit" disabled={loading || !selectedPlano} className="btn-primary" data-testid="submit-inspecao">
+            {loading ? 'Salvando...' : `Executar ${selectedPlano ? selectedPlano.nome : 'Inspeção'}`}
           </button>
         </div>
       </form>
@@ -4842,8 +4873,6 @@ const RondaPage = () => {
       }
     };
     fetchAreas();
-    // Load checklist templates
-    api.get('/checklists/templates').then(r => setTemplates(r.data)).catch(() => {});
   }, []);
   
   // Step 2: Select area → load equipments
@@ -4863,22 +4892,36 @@ const RondaPage = () => {
     }
   };
   
-  // Step 3: Select equipment
-  const selectAtivo = (ativo) => {
+  // Step 3: Select equipment → load approved plans
+  const selectAtivo = async (ativo) => {
     setSelectedAtivo(ativo);
     setTipoInspecao(null);
     setExecuting(false);
     setChecklist([]);
     setPhotos([]);
+    // Load approved plans for this asset
+    try {
+      const res = await api.get(`/planos-inspecao/por-ativo/${ativo.id}`);
+      setTemplates(res.data || []);
+    } catch {
+      setTemplates([]);
+    }
   };
   
-  // Step 4: Select inspection type → load checklist
-  const selectTipo = (tipo) => {
-    setTipoInspecao(tipo);
-    const template = templates[tipo];
-    if (template) {
-      setChecklist(template.itens.map(item => ({...item, id: item.id || String(Math.random()), valor: null, conforme: null, observacao: ''})));
-    }
+  // Step 4: Select plan → load checklist from plan
+  const selectTipo = (plano) => {
+    setTipoInspecao(plano);
+    const perguntas = (plano.perguntas || []).map(p => ({
+      id: p.id || String(Math.random()),
+      descricao: p.texto || p.descricao || '',
+      tipo: p.tipo_campo || p.tipo || 'boolean',
+      obrigatorio: p.obrigatoria ?? p.obrigatorio ?? true,
+      unidade: p.unidade || '',
+      tolerancia_min: p.valor_min ?? p.tolerancia_min ?? null,
+      tolerancia_max: p.valor_max ?? p.tolerancia_max ?? null,
+      valor: null, conforme: null, observacao: ''
+    }));
+    setChecklist(perguntas);
     setExecuting(true);
   };
   
@@ -4889,7 +4932,7 @@ const RondaPage = () => {
     ));
   };
   
-  // Step 5: Submit inspection
+  // Step 5: Submit inspection (linked to plan)
   const submitInspecao = async () => {
     const obrigatorios = checklist.filter(i => i.obrigatorio);
     const incompletos = obrigatorios.filter(i => i.tipo === 'boolean' && i.conforme === null);
@@ -4902,7 +4945,9 @@ const RondaPage = () => {
     try {
       const payload = {
         ativo_id: selectedAtivo.id,
-        tipo: tipoInspecao,
+        plano_id: tipoInspecao.id,
+        tipo: tipoInspecao.tipo || tipoInspecao.categoria || 'inspecao',
+        disciplina: tipoInspecao.disciplina || null,
         responsavel_id: user?.id,
         checklist: checklist,
         observacoes: null,
@@ -4973,8 +5018,8 @@ const RondaPage = () => {
           <p className="text-sm text-slate-500">
             {!selectedArea && 'Selecione uma área para iniciar'}
             {selectedArea && !selectedAtivo && `${areaDetail?.area_nome || ''} — Selecione o equipamento`}
-            {selectedAtivo && !executing && `${selectedAtivo.tag} — Escolha o tipo de inspeção`}
-            {executing && `${selectedAtivo.tag} — ${tipoInspecao === 'mecanica' ? 'Mecânica' : tipoInspecao === 'eletrica' ? 'Elétrica' : 'Lubrificação'}`}
+            {selectedAtivo && !executing && `${selectedAtivo.tag} — Planos disponíveis`}
+            {executing && `${selectedAtivo.tag} — ${tipoInspecao?.nome || 'Execução'}`}
           </p>
         </div>
       </div>
@@ -5055,7 +5100,7 @@ const RondaPage = () => {
         </div>
       )}
       
-      {/* STEP 3: Inspection type selection */}
+      {/* STEP 3: Plan selection (from approved plans) */}
       {selectedAtivo && !executing && (
         <div className="space-y-4" data-testid="ronda-tipo-inspecao">
           <div className="glass-card p-4">
@@ -5066,31 +5111,41 @@ const RondaPage = () => {
             <p className="text-xs text-slate-500">{selectedAtivo.tipo_equipamento} {selectedAtivo.fabricante ? `• ${selectedAtivo.fabricante}` : ''}</p>
           </div>
           
-          <p className="text-sm text-slate-400 font-medium">Selecione o tipo de inspeção:</p>
+          <p className="text-sm text-slate-400 font-medium">Planos disponíveis para execução:</p>
           
-          <div className="grid grid-cols-1 gap-3">
-            {[
-              { key: 'mecanica', label: 'Inspeção Mecânica', icon: Cog, color: '#10b981', desc: 'Vibração, temperatura, folgas, rolamentos' },
-              { key: 'eletrica', label: 'Inspeção Elétrica', icon: Zap, color: '#3b82f6', desc: 'Tensão, corrente, isolamento, conexões' },
-              { key: 'lubrificacao', label: 'Inspeção de Lubrificação', icon: Droplet, color: '#f59e0b', desc: 'Nível, contaminação, pontos de graxa' },
-            ].map(tipo => (
-              <button
-                key={tipo.key}
-                onClick={() => selectTipo(tipo.key)}
-                className="glass-card p-5 text-left hover:border-emerald-500/50 transition-all active:scale-[0.99] flex items-center gap-4"
-                data-testid={`ronda-tipo-${tipo.key}`}
-              >
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: tipo.color + '20' }}>
-                  <tipo.icon size={24} style={{ color: tipo.color }} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-slate-100 font-semibold">{tipo.label}</p>
-                  <p className="text-xs text-slate-500">{tipo.desc}</p>
-                </div>
-                <ChevronRight className="text-slate-600" />
-              </button>
-            ))}
-          </div>
+          {Array.isArray(templates) && templates.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3">
+              {templates.map(plano => {
+                const tipoIcons = { mecanica: Cog, eletrica: Zap, lubrificacao: Droplet, preventiva: Shield, inspecao: ClipboardCheck, limpeza: Sparkles };
+                const tipoColors = { mecanica: '#10b981', eletrica: '#3b82f6', lubrificacao: '#f59e0b', preventiva: '#8b5cf6', inspecao: '#10b981', limpeza: '#06b6d4' };
+                const Icon = tipoIcons[plano.tipo] || tipoIcons[plano.disciplina] || ClipboardCheck;
+                const color = tipoColors[plano.tipo] || tipoColors[plano.disciplina] || '#64748b';
+                return (
+                  <button
+                    key={plano.id}
+                    onClick={() => selectTipo(plano)}
+                    className="glass-card p-5 text-left hover:border-emerald-500/50 transition-all active:scale-[0.99] flex items-center gap-4"
+                    data-testid={`ronda-plano-${plano.id}`}
+                  >
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: color + '20' }}>
+                      <Icon size={24} style={{ color }} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-slate-100 font-semibold">{plano.nome}</p>
+                      <p className="text-xs text-slate-500">{(plano.perguntas || []).length} perguntas • v{plano.versao || 1}</p>
+                    </div>
+                    <ChevronRight className="text-slate-600" />
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="glass-card p-8 text-center">
+              <ClipboardCheck size={40} className="text-slate-600 mx-auto mb-3" />
+              <p className="text-slate-400 font-medium">Nenhum plano aprovado</p>
+              <p className="text-xs text-slate-600 mt-1">O PCM precisa criar e aprovar planos para este ativo.</p>
+            </div>
+          )}
         </div>
       )}
       
@@ -5102,7 +5157,7 @@ const RondaPage = () => {
               <span className="font-mono text-emerald-400 text-sm">{selectedAtivo.tag}</span>
               <span className="text-slate-400 text-sm ml-2">{selectedAtivo.nome}</span>
             </div>
-            <span className="text-xs bg-slate-800 px-2 py-1 rounded capitalize">{tipoInspecao}</span>
+            <span className="text-xs bg-slate-800 px-2 py-1 rounded">{tipoInspecao?.nome || ''}</span>
           </div>
           
           {/* Checklist items */}
@@ -6539,6 +6594,14 @@ const AdminTemplatesPage = () => {
     } catch { toast.error('Erro ao excluir'); }
   };
 
+  const handleAprovar = async (plano) => {
+    try {
+      await api.patch(`/planos-inspecao/${plano.id}/aprovar`);
+      toast.success(`Plano "${plano.nome}" aprovado para execução!`);
+      fetchData();
+    } catch (error) { toast.error(normalizeError(error)); }
+  };
+
   const addItem = () => {
     setForm(prev => ({ ...prev, itens: [...prev.itens, { id: `new-${Date.now()}`, descricao: '', tipo: 'boolean', obrigatorio: true, unidade: '', tolerancia_min: null, tolerancia_max: null }] }));
   };
@@ -6693,29 +6756,43 @@ const AdminTemplatesPage = () => {
 
       {templates.length > 0 ? (
         <div className="space-y-2">
-          {templates.map(t => (
+          {templates.map(t => {
+            const isAprovado = t.status === 'aprovado';
+            const statusLabel = isAprovado ? 'Aprovado' : (t.status === 'ativo' ? 'Ativo' : (t.status || 'Rascunho'));
+            const statusColor = isAprovado ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+            return (
             <div key={t.id} className="glass-card p-4 hover:border-slate-600 transition-all group" data-testid={`template-card-${t.id}`}>
               <div className="flex items-center justify-between">
                 <div className="cursor-pointer flex-1" onClick={() => openEdit(t)}>
                   <div className="flex items-center gap-2 mb-1">
                     <ClipboardCheck size={16} className="text-emerald-400" />
                     <span className="text-slate-100 font-medium">{t.nome}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusColor}`}>{statusLabel}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded">{t.tipo_equipamento || t.tipo || t.categoria || ''}</span>
+                    <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{t.tipo || t.categoria || ''}</span>
                     {t.disciplina && <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{t.disciplina}</span>}
-                    <span>{(t.perguntas || t.itens || []).length} itens</span>
+                    <span>{(t.perguntas || []).length} perguntas</span>
+                    <span>v{t.versao || 1}</span>
                     {t.ativo_id && <span className="text-emerald-400/60">Vinculado a ativo</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(t)} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar"><Edit size={16} className="text-slate-400" /></button>
-                  <button onClick={() => handleDuplicate(t)} className="p-2 hover:bg-blue-500/10 rounded-lg" title="Duplicar"><Copy size={16} className="text-blue-400" /></button>
-                  <button onClick={() => setDeleteItem(t)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir"><Trash2 size={16} className="text-red-400" /></button>
+                <div className="flex items-center gap-1">
+                  {!isAprovado && (t.perguntas || []).length > 0 && (
+                    <button onClick={() => handleAprovar(t)} className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium rounded-lg border border-emerald-500/30 transition-all" title="Aprovar para execução" data-testid={`aprovar-plano-${t.id}`}>
+                      Aprovar
+                    </button>
+                  )}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => openEdit(t)} className="p-2 hover:bg-slate-700 rounded-lg" title="Editar"><Edit size={16} className="text-slate-400" /></button>
+                    <button onClick={() => handleDuplicate(t)} className="p-2 hover:bg-blue-500/10 rounded-lg" title="Duplicar"><Copy size={16} className="text-blue-400" /></button>
+                    <button onClick={() => setDeleteItem(t)} className="p-2 hover:bg-red-500/10 rounded-lg" title="Excluir"><Trash2 size={16} className="text-red-400" /></button>
+                  </div>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <EmptyState icon={ClipboardCheck} title="Nenhum plano" description="Crie planos de inspeção para cada tipo de equipamento" actionLabel="Novo Plano" onAction={openNew} />
