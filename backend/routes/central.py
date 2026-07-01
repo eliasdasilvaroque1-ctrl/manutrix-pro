@@ -127,11 +127,12 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
     }
 
     # ===== SEM DATA (backlog) =====
-    sem_data_os = await db.ordens_servico.find(
-        {**os_query_base, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]},
-         "$or": [{"data_planejada": None}, {"data_planejada": {"$exists": False}}]},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(30)
+    # Use $and to avoid overwriting visibility $or
+    sem_data_q = {**os_query_base, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}}
+    sem_data_q.setdefault("$and", []).append(
+        {"$or": [{"data_planejada": None}, {"data_planejada": {"$exists": False}}, {"data_planejada": ""}]}
+    )
+    sem_data_os = await db.ordens_servico.find(sem_data_q, {"_id": 0}).sort("created_at", -1).to_list(30)
     for o in sem_data_os:
         a = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
         o['ativo'] = a

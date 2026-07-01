@@ -1,71 +1,53 @@
 # MAINTRIX ENTERPRISE — Product Requirements Document
 
-## Versão: 6.0.0
+## Versão: 6.1.0
 
 ---
 
-## CORREÇÃO CRÍTICA: Fluxo de Execução de Inspeções ✅ (iteration_51 — 11/11 + 3/3)
+## CENTRAL DE TRABALHO ✅ (iteration_52 — 11/12 backend + 12/12 frontend → bug fix applied)
 
-### Problema Resolvido
-O módulo de Inspeções NÃO utilizava os Planos criados pelo PCM. Criava inspeções genéricas com checklist padrão, tornando inútil todo o módulo de Planos.
+### Conceito
+"O que eu tenho para fazer hoje?" — O sistema ENTREGA o trabalho ao usuário.
 
-### Novo Fluxo Implementado
-```
-PCM: Criar Plano → Vincular ao Ativo → Aprovar → Permanente
-Técnico: Acessar Ativo → Ver Planos Aprovados → Executar → Execução vinculada
-```
+### Implementação
+- **Endpoint**: `GET /api/central` — retorna atividades agrupadas por urgência, adaptado ao perfil
+- **Seções**: Vencidas, Em Execução, Para Hoje, Esta Semana, Sem Data
+- **Role-specific**: resumo executivo (admin/master), planos pendentes (pcm/supervisor), OS críticas
 
-### Arquitetura Plano Permanente → Execuções Recorrentes ✅
-| Entidade | Descrição |
-|----------|-----------|
-| Plano | Permanente, criado pelo PCM, status: rascunho → aprovado |
-| Execução | Histórica, vinculada ao Plano (plano_id, plano_versao) |
+### Roteamento por Perfil ✅
+| Perfil | Tela Inicial | Título |
+|--------|-------------|--------|
+| Master | Central Executiva | Resumo + OS Críticas + Planos |
+| Admin | Central Administrativa | Resumo + OS Críticas |
+| PCM | Central PCM | Planos pendentes + Programações |
+| Supervisor | Central Supervisor | Equipe + Aprovações + Críticas |
+| Técnico | Minha Jornada | Inspeções + OS + Preventivas |
+| Operador | Central Operacional | Rondas + Inspeções operacionais |
 
-### Mudanças Backend ✅
-- `POST /api/inspecoes` EXIGE `plano_id` — 422 se ausente
-- Plano deve ter status "aprovado" — 400 se rascunho/inativo
-- Checklist genérico **REMOVIDO DEFINITIVAMENTE**
-- `PATCH /api/planos-inspecao/{id}/aprovar` — aprovação explícita
-- `GET /api/planos-inspecao/por-ativo/{id}` — somente planos aprovados
-- Execução preserva: `plano_id`, `plano_nome`, `plano_versao`
-- Novo plano inicia como "rascunho" (não mais "ativo")
+### Menu Lateral ✅
+- PRINCIPAL: Central de Trabalho (ou "Minha Jornada" para operacionais) + Dashboard
+- Dashboard (gráficos) movido para /dashboard como módulo de análise
 
-### Mudanças Frontend ✅
-- ModalNovaInspecao: mostra Planos Aprovados como cards selecionáveis
-- RondaPage: mostra planos aprovados do ativo (não mais tipos hardcoded)
-- AdminTemplatesPage: badge de status + botão "Aprovar"
-- Tabs hardcoded Mecânica/Elétrica/Lubrificação **REMOVIDAS**
+### Migração Planos Legados ✅
+- `POST /api/migrate/planos-legados` — converte "ativo" → "aprovado" com auditoria
 
 ---
 
-## ADITIVO ARQUITETURAL Nº 002 ✅ (iteration_50)
+## CORREÇÃO CRÍTICA: Fluxo Inspeções ✅ (iteration_51)
+- Plano Permanente → Execução → Histórico
+- Checklist genérico REMOVIDO
+- Aprovação explícita obrigatória
 
-### Segurança de Visibilidade Backend (RBAC) ✅
-| Perfil | Visibilidade |
-|--------|-------------|
-| MASTER | Todo o sistema |
-| Admin/PCM/Supervisor | Todos da empresa |
-| Técnico | Disciplinas + áreas + atividades atribuídas |
-| Operador | Apenas producao/civil, NUNCA mecanica/eletrica |
+## ADITIVO 002: RBAC ✅ (iteration_50)
+## ADITIVO 001: Biblioteca ✅ (iteration_48)
 
-### Bug Fix: Plano de Inspeção "Field required" ✅
-- `normalizeError` mostra nome do campo em português
-- Formulário com campos completos
+## HISTÓRICO: Blocos A/B, Enterprise, Rebranding ✅
 
----
+## PRÓXIMO: Sprint de Homologação
+- Revisar fluxos completos
+- Cadastrar equipamentos reais
+- Executar inspeções reais
+- Validar com usuários diferentes
 
-## ADITIVO ARQUITETURAL Nº 001 ✅ (iteration_48)
-- Biblioteca de Modelos, Classificação, Deep Copy, Códigos Automáticos
-
-## HISTÓRICO
-- Bloco A/B: Kanban, Filtros, Cronômetro, Equipe, Ranking ✅
-- Enterprise: org_config, Terminologia, White-label ✅
-- Rebranding: MANUTRIX → MAINTRIX ✅
-
-## PRÓXIMO: BLOCO C
-- Dashboard Supervisor Executivo
-- Indicadores de Qualidade
-- Exportação Excel/PDF/CSV
-
-## BACKLOG (P2)
-- IA Features, Subconjuntos, Integrações ERP/SAP
+## DEPOIS: BLOCO C
+- Dashboard Supervisor Executivo, Indicadores, Exportação
