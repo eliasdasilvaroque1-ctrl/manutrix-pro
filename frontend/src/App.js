@@ -6975,7 +6975,7 @@ const AdminTemplatesPage = () => {
           <FormInput label="Vincular a Ativo (opcional)">
             <select value={form.ativo_id} onChange={e => setForm({...form, ativo_id: e.target.value})} className="input-industrial w-full px-4" data-testid="template-ativo">
               <option value="">Plano genérico (sem ativo)</option>
-              {ativos.map(a => <option key={a.id} value={a.id}>{a.sector?.nome || ''} {'\u203A'} {a.tag} — {a.nome} {a.tipo_equipamento ? `(${a.tipo_equipamento})` : ''} {a.fabricante || ''}</option>)}
+              {ativos.map(a => <option key={a.id} value={a.id}>{`${a.sector?.nome || ''} \u203A ${a.tag} \u2014 ${a.nome} ${a.tipo_equipamento ? '(' + a.tipo_equipamento + ')' : ''} ${a.fabricante || ''}`}</option>)}
             </select>
           </FormInput>
         </div>
