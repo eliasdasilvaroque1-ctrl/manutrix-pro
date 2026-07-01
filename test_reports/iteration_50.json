@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration 50 - Bug fix verification for PlanoInspecaoCreate (ativo_id optional), normalizeError field names, and supervisor full-visibility. Backend: 12/12 pytest cases PASS. Frontend: manual Playwright flow PASS — Planos de Inspeção page loads, 'Novo Plano' modal exposes ALL six required fields (Nome, Tipo do Plano, Tipo de Equipamento, Disciplina, Vincular a Ativo, Descrição), plan creation with 3 items succeeds ('Plano criado!' toast), edit view maps perguntas -> itens correctly (10 items loaded for existing plan). Supervisor now sees ALL 5 OS (same as PCM/master), while mecânico still sees 1 (mecanica) and operador still sees 2 (producao+civil).",
+  "pass_fail_matrix": {
+    "POST /api/planos-inspecao WITHOUT ativo_id (generic)": "PASS",
+    "POST /api/planos-inspecao WITH ativo_id": "PASS",
+    "POST /api/planos-inspecao 10 perguntas returns 10": "PASS",
+    "POST /api/planos-inspecao 50 perguntas returns 50": "PASS",
+    "POST /api/planos-inspecao 100 perguntas returns 100": "PASS",
+    "POST /api/planos-inspecao missing 'nome' -> 422 with 'nome' in loc": "PASS",
+    "GET /api/planos-inspecao returns 'perguntas' key": "PASS",
+    "Supervisor sees ALL 5 OS (was 1 before)": "PASS",
+    "Supervisor dashboard/stats abertas >= 5": "PASS",
+    "Mecânico still sees 1 OS (mecanica)": "PASS",
+    "Operador still sees 2 OS (producao+civil), never mecanica/eletrica/instrumentacao": "PASS",
+    "Frontend: Planos de Inspeção page loads at /admin/templates": "PASS",
+    "Frontend: 'Novo Plano' form has Nome/Tipo/Equipamento/Disciplina/Ativo fields (data-testid verified)": "PASS",
+    "Frontend: Create new plan with 3 items via UI -> 'Plano criado!' toast + item visible in list": "PASS",
+    "Frontend: Edit existing plan loads perguntas mapped as itens (10 loaded)": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard (initial load)", "issues": ["Recharts console warnings: 'width(-1) height(-1) of chart should be greater than 0' — cosmetic, not blocking."]},
+      {"screen": "AdminTemplatesPage editor - Vincular a Ativo <select>", "issues": ["React hydration warning: '<span> cannot be a child of <option>'. Caused by Emergent dev instrumentation (data-ve-dynamic spans) wrapping option contents. Doesn't affect functionality but pollutes console. If it appears in production build too, wrap the option label in a template string only (already is `{a.tag} - {a.nome}`) — likely a dev-only artifact."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration50_planos_supervisor.py",
+    "/app/test_reports/pytest/iteration50_planos_supervisor.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:967-973 create_plano_inspecao stores both `tipo` and `categoria` (categoria = tipo if not provided) — duplicate storage. Consider dropping `categoria` in new writes and only reading it for backward-compat.",
+    "server.py:996-1010 update_plano_inspecao only supports updating `nome` and `perguntas`. The PUT endpoint IGNORES tipo/ativo_id/disciplina/frequencia/responsavel_id/status/versao changes from PlanoInspecaoUpdate — inconsistent with the model. Frontend handleSave (App.js:6576) sends full payload expecting these to be updated; they will be silently dropped. Bug: editing a plan cannot change its ativo/tipo/disciplina.",
+    "App.js:6554-6583 handleSave payload maps `tolerancia_max` -> `limite_normal` on line 6568 (`limite_normal: it.tolerancia_max || it.limite_normal`). This is semantically wrong — tolerancia_max is an upper bound, limite_normal is a target midpoint. Field mapping should be separated.",
+    "deps.py:150-153 user_has_full_visibility now includes 'supervisor'. Correct per spec, but note that this also means `check_pcm_or_admin` (deps.py:114-117) still EXCLUDES supervisor from POSTing to stock/spares/templates — so supervisor has FULL READ but no write. Confirmed by design; document in the RBAC matrix.",
+    "App.js:6467 form default `disciplina: ''` sends empty string to backend if not selected. Backend PlanoInspecaoCreate.disciplina is Optional[str] so it accepts '' but persists ''. Better: send null when empty (already handled via `form.disciplina || null` in payload line 6564 — OK).",
+    "App.js dashboard renders Recharts with parent container width -1: check that `ResponsiveContainer` has an explicit min-height or the parent element has a stable size on first paint."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration50_planos_supervisor.py (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (5/5 UI flows verified)"},
+  "test_credentials": "All 4 requested credentials work (master, sup_mec, mecanico, operador). File /app/memory/test_credentials.md is accurate.",
+  "seed_data_creation": "POST /api/seed/test-users re-applied. Created 5 TEST_ITER50_* plans via pytest fixture — teardown deletes them. Created 1 TEST_UI_ITER50_* plan via Playwright UI — manually deleted via API after test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 50 confirms: (1) PlanoInspecaoCreate.ativo_id is Optional and generic plans persist with ativo_id=null; (2) 422 responses expose the field name in detail[].loc — frontend normalizeError can extract it; (3) Bulk perguntas up to 100 items work in a single POST (~<1s); (4) Supervisor role now returns from build_visibility_query with the base org filter only (deps.py:203) — verified via GET /api/ordens-servico and /api/dashboard/stats. IMPORTANT — Discovered code issue during review: PUT /api/planos-inspecao/{id} only updates 'nome' and 'perguntas' (server.py:996-1010) even though PlanoInspecaoUpdate model exposes many more fields. Editing tipo/ativo_id/disciplina/frequencia from UI will silently fail. Not blocking current bug fix but worth flagging to main agent for a future iteration.",
+  "rca of the issue": "Original bug: React frontend was submitting POST /api/planos-inspecao without 'ativo_id', which was mandatory in Pydantic. Backend returned 422 with `loc=['body','ativo_id']` and generic detail 'Field required' — frontend normalizeError swallowed the loc and showed only 'Field required' without a field name. Fix chain (all verified): backend made ativo_id Optional[str]=None (models.py:474) → backend still returns proper 422 with loc[] for other missing fields → frontend normalizeError parses detail[].loc to show 'Campo \\\"Nome\\\" é obrigatório'. Supervisor full-visibility fix: deps.py:203 includes 'supervisor' in the full-visibility group (same branch as admin/pcm/gerente), so build_visibility_query returns only the base org filter. Confirmed via pytest — sup_mec now sees 5 OS instead of 1."
+}

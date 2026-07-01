@@ -3215,7 +3215,7 @@ async def powerbi_kpis(user: Dict = Depends(get_current_user)):
     if org_id:
         asset_query['organization_id'] = org_id
     role = user.get('role', '')
-    if role in ('supervisor', 'tecnico', 'inspetor', 'operador'):
+    if role in ('tecnico', 'inspetor', 'operador'):
         area_ids = user.get('area_ids') or []
         if area_ids:
             asset_query['sector_id'] = {"$in": area_ids}

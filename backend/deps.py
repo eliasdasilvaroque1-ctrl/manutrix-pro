@@ -148,8 +148,9 @@ def get_user_disciplinas(user: Dict) -> list:
     return disciplinas
 
 def user_has_full_visibility(user: Dict) -> bool:
-    """Roles that see ALL data regardless of discipline/area."""
-    return user.get('role') in ('master', 'admin', 'pcm', 'gerente')
+    """Roles that see ALL data regardless of discipline/area.
+    Supervisor de Manutenção tem mesmo acesso que PCM."""
+    return user.get('role') in ('master', 'admin', 'pcm', 'gerente', 'supervisor')
 
 def build_disciplina_filter(user: Dict) -> dict:
     """Build MongoDB filter for discipline-scoped queries. Returns {} for full-visibility roles."""
@@ -199,35 +200,7 @@ async def build_visibility_query(user: Dict, entity_type: str = "os") -> dict:
     # --- Full visibility roles ---
     if role == 'master':
         return base
-    if role in ('admin', 'pcm', 'gerente'):
-        return base
-
-    # --- Supervisor: disciplines AND areas (combined), plus direct assignments ---
-    if role == 'supervisor':
-        disciplinas = get_user_disciplinas(user)
-        area_ids = user.get('area_ids') or []
-
-        # Build scope filter (discipline AND area)
-        scope_filter = {}
-        if disciplinas:
-            scope_filter["disciplina"] = {"$in": disciplinas}
-        if area_ids:
-            asset_ids = await _get_asset_ids_for_areas(org_id, area_ids)
-            if asset_ids is not None:
-                scope_filter["ativo_id"] = {"$in": asset_ids}
-
-        # OR: in scope, OR directly assigned
-        or_conditions = []
-        if scope_filter:
-            or_conditions.append(scope_filter)
-        or_conditions.append({"responsavel_id": user_id})
-        if entity_type == "os":
-            or_conditions.append({"equipe": user_id})
-        elif entity_type == "inspecao":
-            or_conditions.append({"executantes": user_id})
-
-        if or_conditions:
-            base["$or"] = or_conditions
+    if role in ('admin', 'pcm', 'gerente', 'supervisor'):
         return base
 
     # --- Técnico / Inspetor: disciplines AND areas (combined), plus direct assignments ---
@@ -303,21 +276,7 @@ async def build_dashboard_visibility(user: Dict) -> dict:
     if org_id:
         base['organization_id'] = org_id
 
-    if role in ('master', 'admin', 'pcm', 'gerente'):
-        return base
-
-    # Supervisor: scope to their disciplines and areas
-    if role == 'supervisor':
-        conditions = {}
-        disciplinas = get_user_disciplinas(user)
-        area_ids = user.get('area_ids') or []
-        if disciplinas:
-            conditions["disciplina"] = {"$in": disciplinas}
-        if area_ids:
-            asset_ids = await _get_asset_ids_for_areas(org_id, area_ids)
-            if asset_ids is not None:
-                conditions["ativo_id"] = {"$in": asset_ids}
-        base.update(conditions)
+    if role in ('master', 'admin', 'pcm', 'gerente', 'supervisor'):
         return base
 
     # Técnico/Inspetor: scope to their disciplines and areas

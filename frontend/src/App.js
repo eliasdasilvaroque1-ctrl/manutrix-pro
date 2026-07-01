@@ -24,12 +24,33 @@ import axios from "axios";
 registerServiceWorker();
 
 // Global error normalizer — handles Pydantic validation arrays, objects, and strings
+const FIELD_LABEL_MAP = {
+  nome: 'Nome', ativo_id: 'Ativo', tipo: 'Tipo', disciplina: 'Disciplina',
+  titulo: 'Título', descricao: 'Descrição', prioridade: 'Prioridade', email: 'Email',
+  password: 'Senha', frequencia: 'Frequência', responsavel_id: 'Responsável',
+  tipo_equipamento: 'Tipo Equipamento', categoria: 'Categoria', sector_id: 'Área',
+  perguntas: 'Perguntas', checklist: 'Checklist',
+};
+
 const normalizeError = (error) => {
   const detail = error?.response?.data?.detail;
   if (!detail) return error?.message || 'Erro desconhecido';
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail)) {
-    return detail.map(d => typeof d === 'object' ? (d.msg || JSON.stringify(d)) : String(d)).join('; ');
+    return detail.map(d => {
+      if (typeof d === 'object') {
+        const loc = d.loc || [];
+        const fieldName = loc[loc.length - 1];
+        const label = FIELD_LABEL_MAP[fieldName] || fieldName;
+        const msg = d.msg || '';
+        if (fieldName && msg.toLowerCase().includes('required')) {
+          return `Campo '${label}' é obrigatório`;
+        }
+        if (fieldName) return `${label}: ${msg}`;
+        return msg || JSON.stringify(d);
+      }
+      return String(d);
+    }).join('; ');
   }
   if (typeof detail === 'object') return detail.msg || JSON.stringify(detail);
   return String(detail);
@@ -6443,37 +6464,67 @@ const AdminTemplatesPage = () => {
   const [equipTypes, setEquipTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null); // null = list, object = editing
-  const [form, setForm] = useState({ nome: '', tipo_equipamento: '', descricao: '', itens: [] });
+  const [form, setForm] = useState({ nome: '', tipo_equipamento: '', descricao: '', tipo: 'inspecao', disciplina: '', ativo_id: '', itens: [] });
   const [saving, setSaving] = useState(false);
   const [deleteItem, setDeleteItem] = useState(null);
+  const [ativos, setAtivos] = useState([]);
   const { user } = useAuth();
 
   const fetchData = async () => {
     try {
-      const [tRes, eRes] = await Promise.all([
+      const [tRes, eRes, aRes] = await Promise.all([
         api.get('/planos-inspecao'),
-        api.get('/equipment-types').catch(() => ({ data: [] }))
+        api.get('/equipment-types').catch(() => ({ data: [] })),
+        api.get('/ativos').catch(() => ({ data: [] }))
       ]);
       setTemplates(tRes.data);
       setEquipTypes(eRes.data);
+      setAtivos(aRes.data);
     } catch { toast.error('Erro ao carregar planos'); }
     finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); }, []);
 
   const openNew = () => {
-    setForm({ nome: '', tipo_equipamento: '', descricao: '', itens: [] });
+    setForm({ nome: '', tipo_equipamento: '', descricao: '', tipo: 'inspecao', disciplina: '', ativo_id: '', itens: [] });
     setEditing('new');
   };
 
   const openEdit = (t) => {
-    setForm({ nome: t.nome, tipo_equipamento: t.tipo_equipamento, descricao: t.descricao || '', itens: t.itens || [] });
+    setForm({
+      nome: t.nome, tipo_equipamento: t.tipo_equipamento || '', descricao: t.descricao || '',
+      tipo: t.tipo || t.categoria || 'inspecao', disciplina: t.disciplina || '',
+      ativo_id: t.ativo_id || '',
+      itens: (t.perguntas || t.itens || []).map(p => ({
+        id: p.id || `edit-${Date.now()}-${Math.random()}`,
+        descricao: p.texto || p.descricao || '',
+        tipo: p.tipo_campo || p.tipo || 'boolean',
+        obrigatorio: p.obrigatoria ?? p.obrigatorio ?? true,
+        unidade: p.unidade || '',
+        tolerancia_min: p.valor_min ?? p.tolerancia_min ?? null,
+        tolerancia_max: p.valor_max ?? p.tolerancia_max ?? null,
+        limite_normal: p.limite_normal ?? null,
+        limite_alerta: p.limite_alerta ?? null,
+        limite_critico: p.limite_critico ?? null,
+        foto_obrigatoria_nc: p.foto_obrigatoria_nc || false,
+        periodicidade: p.periodicidade || null,
+        opcoes: p.opcoes || null,
+      }))
+    });
     setEditing(t);
   };
 
   const handleDuplicate = async (t) => {
     try {
-      await api.post(`/planos-inspecao`, { ...t, nome: `${t.nome} (Cópia)`, perguntas: t.perguntas || [] });
+      await api.post(`/planos-inspecao`, {
+        nome: `${t.nome} (Cópia)`,
+        tipo: t.tipo || t.categoria || 'inspecao',
+        tipo_equipamento: t.tipo_equipamento,
+        categoria: t.categoria || t.tipo,
+        disciplina: t.disciplina,
+        ativo_id: t.ativo_id || null,
+        perguntas: t.perguntas || []
+      });
       toast.success('Plano duplicado!');
       fetchData();
     } catch { toast.error('Erro ao duplicar'); }
@@ -6501,20 +6552,28 @@ const AdminTemplatesPage = () => {
   };
 
   const handleSave = async () => {
-    if (!form.nome || !form.tipo_equipamento) { toast.error('Preencha nome e tipo de equipamento'); return; }
+    if (!form.nome) { toast.error("Campo 'Nome do Plano' é obrigatório"); return; }
     if (form.itens.length === 0) { toast.error('Adicione pelo menos uma pergunta'); return; }
     setSaving(true);
     try {
-      const payload = { nome: form.nome, tipo_equipamento: form.tipo_equipamento, categoria: form.categoria || 'mecanica', perguntas: form.itens.map(it => ({
-        descricao: it.descricao, tipo: it.tipo, obrigatorio: it.obrigatorio, unidade: it.unidade,
-        limite_normal: it.tolerancia_max || it.limite_normal, limite_alerta: it.limite_alerta, limite_critico: it.limite_critico,
-        periodicidade: it.periodicidade, foto_obrigatoria_nc: it.foto_obrigatoria_nc || false, opcoes: it.opcoes, ordem: 0
-      })) };
+      const payload = {
+        nome: form.nome,
+        tipo: form.tipo || 'inspecao',
+        tipo_equipamento: form.tipo_equipamento || null,
+        categoria: form.tipo || 'inspecao',
+        disciplina: form.disciplina || null,
+        ativo_id: form.ativo_id || null,
+        perguntas: form.itens.map((it, idx) => ({
+          descricao: it.descricao, tipo: it.tipo, obrigatorio: it.obrigatorio, unidade: it.unidade,
+          limite_normal: it.tolerancia_max || it.limite_normal, limite_alerta: it.limite_alerta, limite_critico: it.limite_critico,
+          periodicidade: it.periodicidade, foto_obrigatoria_nc: it.foto_obrigatoria_nc || false, opcoes: it.opcoes, ordem: idx
+        }))
+      };
       if (editing === 'new') {
         await api.post('/planos-inspecao', payload);
         toast.success('Plano criado!');
       } else {
-        await api.put(`/planos-inspecao/${editing.id}`, { nome: payload.nome, perguntas: payload.perguntas });
+        await api.put(`/planos-inspecao/${editing.id}`, payload);
         toast.success('Plano atualizado!');
       }
       setEditing(null);
@@ -6538,9 +6597,36 @@ const AdminTemplatesPage = () => {
           <FormInput label="Nome do Plano" required>
             <input value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-4" placeholder="Ex: Inspeção Alimentador Vibratório" data-testid="template-nome" />
           </FormInput>
-          <FormInput label="Tipo de Equipamento" required>
+          <FormInput label="Tipo do Plano" required>
+            <select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} className="input-industrial w-full px-4" data-testid="template-tipo-plano">
+              <option value="inspecao">Inspeção</option>
+              <option value="preventiva">Preventiva</option>
+              <option value="lubrificacao">Lubrificação</option>
+              <option value="limpeza">Limpeza</option>
+              <option value="melhoria">Melhoria</option>
+            </select>
+          </FormInput>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <FormInput label="Tipo de Equipamento">
             <input value={form.tipo_equipamento} onChange={e => setForm({...form, tipo_equipamento: e.target.value})} list="equip-types" className="input-industrial w-full px-4" placeholder="Ex: Alimentador Vibratório" data-testid="template-tipo" />
             <datalist id="equip-types">{equipTypes.map(t => <option key={t} value={t} />)}</datalist>
+          </FormInput>
+          <FormInput label="Disciplina">
+            <select value={form.disciplina} onChange={e => setForm({...form, disciplina: e.target.value})} className="input-industrial w-full px-4" data-testid="template-disciplina">
+              <option value="">Todas</option>
+              <option value="mecanica">Mecânica</option>
+              <option value="eletrica">Elétrica</option>
+              <option value="instrumentacao">Instrumentação</option>
+              <option value="civil">Civil</option>
+              <option value="producao">Produção</option>
+            </select>
+          </FormInput>
+          <FormInput label="Vincular a Ativo (opcional)">
+            <select value={form.ativo_id} onChange={e => setForm({...form, ativo_id: e.target.value})} className="input-industrial w-full px-4" data-testid="template-ativo">
+              <option value="">Plano genérico (sem ativo)</option>
+              {ativos.map(a => <option key={a.id} value={a.id}>{a.tag} - {a.nome}</option>)}
+            </select>
           </FormInput>
         </div>
         <FormInput label="Descrição">
@@ -6616,8 +6702,10 @@ const AdminTemplatesPage = () => {
                     <span className="text-slate-100 font-medium">{t.nome}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded">{t.tipo_equipamento}</span>
-                    <span>{t.itens?.length || 0} itens</span>
+                    <span className="bg-slate-800 px-2 py-0.5 rounded">{t.tipo_equipamento || t.tipo || t.categoria || ''}</span>
+                    {t.disciplina && <span className="bg-slate-800 px-2 py-0.5 rounded capitalize">{t.disciplina}</span>}
+                    <span>{(t.perguntas || t.itens || []).length} itens</span>
+                    {t.ativo_id && <span className="text-emerald-400/60">Vinculado a ativo</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -471,7 +471,7 @@ class PlanoPerguntaCreate(BaseModel):
 class PlanoInspecaoCreate(BaseModel):
     nome: str
     tipo: str = "inspecao"  # inspecao, preventiva, lubrificacao, limpeza, melhoria
-    ativo_id: str  # OBRIGATÓRIO — plano SEMPRE vinculado a um ativo
+    ativo_id: Optional[str] = None  # opcional — planos genéricos (por tipo_equipamento) não precisam de ativo
     frequencia: Optional[str] = None  # diaria, semanal, quinzenal, mensal, trimestral, semestral, anual
     responsavel_id: Optional[str] = None
     disciplina: Optional[str] = None  # mecanica, eletrica, instrumentacao (informativo)
