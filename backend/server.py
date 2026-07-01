@@ -950,7 +950,7 @@ async def list_planos_inspecao(
 
 @api_router.post("/planos-inspecao")
 async def create_plano_inspecao(data: PlanoInspecaoCreate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'pcm'])
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
     org_id = user.get('organization_id', '')
     perguntas = []
     for i, p in enumerate(data.perguntas):
@@ -989,13 +989,16 @@ async def create_plano_inspecao(data: PlanoInspecaoCreate, user: Dict = Depends(
 
 @api_router.put("/planos-inspecao/{plano_id}")
 async def update_plano_inspecao(plano_id: str, data: PlanoInspecaoUpdate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'pcm'])
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
     existing = await db.planos_inspecao.find_one({"id": plano_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Plano não encontrado")
     update = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    if data.nome is not None:
-        update['nome'] = data.nome
+    # Update all provided fields
+    for field in ('nome', 'tipo', 'ativo_id', 'frequencia', 'responsavel_id', 'disciplina', 'status', 'versao'):
+        val = getattr(data, field, None)
+        if val is not None:
+            update[field] = val
     if data.perguntas is not None:
         perguntas = []
         for i, p in enumerate(data.perguntas):
@@ -1003,6 +1006,10 @@ async def update_plano_inspecao(plano_id: str, data: PlanoInspecaoUpdate, user: 
             if not d.get('id'):
                 d['id'] = str(uuid.uuid4())
             d['ordem'] = d.get('ordem', 0) or i
+            if d.get('descricao') and not d.get('texto'):
+                d['texto'] = d['descricao']
+            if d.get('tipo') and not d.get('tipo_campo'):
+                d['tipo_campo'] = d['tipo']
             perguntas.append(d)
         update['perguntas'] = perguntas
     await db.planos_inspecao.update_one({"id": plano_id}, {"$set": update})
@@ -1011,7 +1018,7 @@ async def update_plano_inspecao(plano_id: str, data: PlanoInspecaoUpdate, user: 
 
 @api_router.delete("/planos-inspecao/{plano_id}")
 async def delete_plano_inspecao(plano_id: str, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'pcm'])
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
     await db.planos_inspecao.update_one({"id": plano_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
     await audit_log("delete", "plano_inspecao", plano_id, user, "Plano excluído")
     return {"success": True}

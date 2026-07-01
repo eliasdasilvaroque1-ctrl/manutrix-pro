@@ -1,10 +1,10 @@
 # MAINTRIX ENTERPRISE — Product Requirements Document
 
-## Versão: 5.3.0
+## Versão: 5.3.1
 
 ---
 
-## ADITIVO ARQUITETURAL Nº 002 ✅ (iteration_49 — 17/17 PASS)
+## ADITIVO ARQUITETURAL Nº 002 ✅ (iteration_50 — 12/12 backend + 5/5 frontend)
 
 ### 1. Segurança de Visibilidade Backend (RBAC por Disciplina/Área) ✅
 - **Motor de Visibilidade**: `build_visibility_query(user, entity_type)` e `build_dashboard_visibility(user)` em `deps.py`
@@ -17,51 +17,39 @@
 | MASTER | Todo o sistema |
 | Admin | Todos os registros da empresa |
 | PCM | Todas as disciplinas da empresa |
+| Supervisor | Todas disciplinas da empresa (mesmo acesso que PCM) |
 | Gerente | Todos (somente leitura) |
-| Supervisor | Apenas disciplinas + áreas sob responsabilidade (AND) |
 | Técnico | Apenas disciplinas + áreas permitidas + atividades atribuídas |
 | Inspetor | Mesmo que Técnico para inspeções |
 | Operador | Apenas producao/civil. NUNCA vê mecanica/eletrica/instrumentacao |
 
-### 3. Campos Obrigatórios Denormalizados ✅
+### 3. Campos Denormalizados ✅
 - OS: `disciplina` (obrigatório), `sector_id` (denormalizado do ativo)
 - Inspeções: `disciplina` (derivado do tipo/plano), `sector_id` (denormalizado do ativo)
 - Endpoint de migração: `POST /api/migrate/denormalize-sector`
 
 ### 4. Dashboard Scoped ✅
-- Todos os endpoints de dashboard usam `build_dashboard_visibility`
-- KPIs, stats, trend, os-por-setor, os-por-disciplina, ativos-mais-falhas
-- Exportações (Excel/PDF) e Power BI também filtrados
+- Todos os endpoints usam `build_dashboard_visibility`
 
-### 5. Usuários de Teste ✅
+### 5. Bug Fix: Plano de Inspeção "Field required" ✅
+- `ativo_id` agora é `Optional[str] = None` em `PlanoInspecaoCreate`
+- `normalizeError` no frontend mostra nome do campo em português (ex: "Campo 'Nome' é obrigatório")
+- Formulário atualizado com campos: Tipo do Plano, Disciplina, Vincular a Ativo
+- Mapeamento `perguntas` ↔ `itens` corrigido no frontend
+- PUT endpoint atualiza todos os campos (não apenas nome/perguntas)
+- Testado com 10, 50 e 100 itens de checklist
+
+### 6. Usuários de Teste ✅
 - `POST /api/seed/test-users` cria 7 perfis com disciplinas e áreas
-- Testados: master, admin, pcm, sup.mec, sup.ele, mecânico, eletricista, operador
 
 ---
 
 ## ADITIVO ARQUITETURAL Nº 001 ✅ (iteration_48 — 22/22)
-
-### 1. Biblioteca de Modelos ✅
-- `categorias_equipamento` — CRUD com auto-código CAT-000001
-- `fabricantes` — CRUD com auto-código FAB-000001, vinculado a categoria
-- `modelos_mestre` — CRUD com auto-código MM-000001, contém planos mestres com perguntas
-- Página frontend com 3 abas (Categorias, Fabricantes, Modelos Mestres) + busca + paginação
-
-### 2. Classificação Técnica dos Ativos ✅
-- Novos campos: categoria_id, fabricante_id, modelo_id, familia, classe_equipamento, criticidade
-- Formulário de Ativos atualizado com dropdowns dos catálogos corporativos
-
-### 3. Deep Copy (Modelo → Ativo) ✅
-- POST /api/biblioteca/modelos-mestre/{id}/aplicar/{ativo_id}
-- Cria planos independentes com IDs novos para perguntas
-- Rastreabilidade: modelo_origem_id, modelo_versao, plano_origem_id, motivo_criacao
-
-### 4. Códigos Automáticos ✅
-- CAT-000001, FAB-000001, MM-000001, PLA-000001
-- Contadores atômicos via collection `contadores`
-
-### 5. Preparação para Subconjuntos ✅
-- Campos parent_ativo_id e nivel preparados no modelo (nullable)
+- Biblioteca de Modelos (Categorias, Fabricantes, Modelos Mestres)
+- Classificação Técnica dos Ativos
+- Deep Copy (Modelo → Ativo)
+- Códigos Automáticos
+- Preparação para Subconjuntos
 
 ---
 
@@ -73,7 +61,7 @@
 - Planos Enterprise: Auto-load por ativo ✅
 - Rebranding: MANUTRIX → MAINTRIX ✅
 - Aditivo 001: Biblioteca, Classificação, Deep Copy ✅
-- Aditivo 002: Visibilidade RBAC por Disciplina/Área ✅
+- Aditivo 002: Visibilidade RBAC, Bug Plano Inspeção, Supervisor=PCM ✅
 
 ## PRÓXIMO: BLOCO C
 - Dashboard Supervisor Executivo
