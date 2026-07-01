@@ -6790,6 +6790,9 @@ const AdminTemplatesPage = () => {
   const [saving, setSaving] = useState(false);
   const [deleteItem, setDeleteItem] = useState(null);
   const [ativos, setAtivos] = useState([]);
+  const [searchPlano, setSearchPlano] = useState('');
+  const [filterDisciplina, setFilterDisciplina] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const { user } = useAuth();
 
   const fetchData = async () => {
@@ -6934,6 +6937,23 @@ const AdminTemplatesPage = () => {
 
   if (loading) return <Loading rows={3} />;
 
+  // Apply search and filters
+  const filteredTemplates = templates.filter(t => {
+    if (searchPlano) {
+      const s = searchPlano.toLowerCase();
+      const match = (t.nome || '').toLowerCase().includes(s)
+        || (t.ativo_tag || '').toLowerCase().includes(s)
+        || (t.ativo_nome || '').toLowerCase().includes(s)
+        || (t.area_nome || '').toLowerCase().includes(s)
+        || (t.tipo_equipamento || '').toLowerCase().includes(s)
+        || (t.disciplina || '').toLowerCase().includes(s);
+      if (!match) return false;
+    }
+    if (filterDisciplina && t.disciplina !== filterDisciplina) return false;
+    if (filterStatus && t.status !== filterStatus) return false;
+    return true;
+  });
+
   // EDIT VIEW
   if (editing) return (
     <div className="space-y-4" data-testid="template-editor">
@@ -7041,9 +7061,30 @@ const AdminTemplatesPage = () => {
         <button onClick={openNew} className="btn-primary flex items-center gap-2" data-testid="new-template-btn"><Plus size={20} /> Novo Plano</button>
       </div>
 
-      {templates.length > 0 ? (
+      {/* Search and Filters */}
+      <div className="glass-card p-3 flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[200px]">
+          <input value={searchPlano} onChange={e => setSearchPlano(e.target.value)} className="input-industrial w-full px-3 text-sm" placeholder="Buscar plano, ativo, área..." data-testid="plano-search" />
+        </div>
+        <select value={filterDisciplina} onChange={e => setFilterDisciplina(e.target.value)} className="input-industrial px-3 text-sm" data-testid="plano-filter-disciplina">
+          <option value="">Todas disciplinas</option>
+          <option value="mecanica">Mecânica</option>
+          <option value="eletrica">Elétrica</option>
+          <option value="instrumentacao">Instrumentação</option>
+          <option value="producao">Produção</option>
+          <option value="lubrificacao">Lubrificação</option>
+        </select>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="input-industrial px-3 text-sm" data-testid="plano-filter-status">
+          <option value="">Todos status</option>
+          <option value="aprovado">Aprovado</option>
+          <option value="rascunho">Rascunho</option>
+        </select>
+        <span className="text-xs text-slate-500">{filteredTemplates.length} de {templates.length}</span>
+      </div>
+
+      {filteredTemplates.length > 0 ? (
         <div className="space-y-2">
-          {templates.map(t => {
+          {filteredTemplates.map(t => {
             const isAprovado = t.status === 'aprovado';
             const statusLabel = isAprovado ? 'Aprovado' : (t.status === 'ativo' ? 'Ativo' : (t.status || 'Rascunho'));
             const statusColor = isAprovado ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';

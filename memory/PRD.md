@@ -1,45 +1,49 @@
 # MAINTRIX ENTERPRISE — Product Requirements Document
 
-## Versão: 6.2.0
+## Versão: 7.0.0
 
 ---
 
-## Sprint de Homologação — Melhorias de Usabilidade ✅ (iteration_53 — 100%)
+## SPRINT DE HOMOLOGAÇÃO ✅ (iteration_54 — 12/12 backend + 6/6 frontend)
 
-### Vinculação de Planos com Hierarquia Completa ✅
-- Lista de planos mostra breadcrumb: **Área → TAG → Ativo → Plano**
-- Cada card exibe: tipo, disciplina, versão, perguntas, status, data revisão, fabricante/modelo
-- Seletor de ativo no formulário: `Área › TAG — Nome (Tipo) Fabricante`
+### Planta ASTEC Cedro — Operacional
+| Item | Quantidade |
+|------|-----------|
+| Áreas | 4 (Britagem Primária, Britagem Secundária, Pátio de Estocagem, Expedição) |
+| Ativos | 61 (Britadores, Alimentadores, Correias, Peneiras, Motores, Redutores, Bombas, Compressores, Balança) |
+| Planos Aprovados | 86 (Mecânica, Elétrica, Lubrificação, Operacional) |
+| Ordens de Serviço | 24 (variados status/prioridades/datas) |
+| Inspeções Pendentes | 45 (distribuídas na semana) |
 
-### Validação de Duplicidade ✅
-- Backend retorna **409** ao tentar criar plano com mesmo tipo+disciplina+ativo
-- Mensagem clara: "Já existe plano 'X' (v1) do tipo 'inspecao' disciplina 'mecanica'"
-- Opções: Abrir existente, Criar nova versão (force_override), Cancelar
-- Planos genéricos (sem ativo) não sofrem validação de duplicidade
+### Resultados da Homologação
+- **0 bugs funcionais** encontrados
+- **Visibilidade RBAC** validada end-to-end (master/admin/pcm/supervisor/técnico/operador)
+- **Central de Trabalho** adaptativa por perfil: confirmada
+- **Planos → Execuções** fluxo completo: confirmado
+- **OS com sector_id denormalizado**: confirmado
 
-### Painel "Planos Vinculados" no Ativo ✅
-- Nova tab "Planos" na página de detalhe do ativo
-- Mostra todos planos aprovados vinculados com nome, tipo, disciplina, versão, perguntas, data revisão
-
-### Bug Fix: Central sem_data (operador) ✅
-- Query `sem_data` não vaza mais OS de disciplinas bloqueadas
+### Melhorias implementadas
+- Filtro de busca na página de Planos (pesquisa + disciplina + status)
+- Seletor de ativo com hierarquia completa
+- Validação de duplicidade de planos
 
 ---
 
-## Central de Trabalho ✅ (iteration_52)
-- Roteamento por perfil: Master→Central Executiva, Técnico→Minha Jornada etc
-- Dashboard gráficos movido para /dashboard
+## Versões Anteriores
+- 6.2: Usabilidade planos (hierarquia, duplicidade, painel planos no ativo)
+- 6.1: Central de Trabalho adaptativa por perfil
+- 6.0: Fluxo Inspeções (Plano Permanente → Execução)
+- 5.3: RBAC por Disciplina/Área, Bug Plano "Field required"
+- 5.0: Biblioteca de Modelos, Classificação Técnica
+- 4.0: Enterprise org_config, White Label, Terminologia
+- 3.0: Event Sourcing, Cronômetro, Equipe
+- 2.0: Admin Master, Kanban, Filtros
+- 1.0: MVP inicial
 
-## Fluxo Inspeções (Plano Permanente) ✅ (iteration_51)
-## RBAC por Disciplina/Área ✅ (iteration_50)
-## Biblioteca de Modelos ✅ (iteration_48)
-
-## PRÓXIMO: Continuar Sprint de Homologação
-- Cadastrar equipamentos reais
-- Criar planos reais, aprovar e executar inspeções
-- Testar preventivas, lubrificações, OS com HH
-- Validar Central de Trabalho com dados reais
-- Histórico no Ativo (última/próxima inspeção, preventiva, OS)
+## PRÓXIMO
+- Wizard "Criar Planos ao Cadastrar Ativo" (deseja criar planos agora? Sim/Depois)
+- Histórico resumido no Ativo (última inspeção/preventiva/OS/lubrificação)
+- Ciclo de vida: Programada → Disponível → Em Execução → Pausada → Concluída → Reprogramada
 
 ## DEPOIS: BLOCO C
 - Dashboard Supervisor Executivo, Indicadores, Exportação
