@@ -1,7 +1,9 @@
 import axios from "axios";
 import { createContext, useContext } from "react";
 
-export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+// In production (Vercel): REACT_APP_BACKEND_URL can be empty → uses relative /api (Vercel rewrites to Railway)
+// In development (Emergent): REACT_APP_BACKEND_URL = https://procure-manutrix.preview.emergentagent.com
+export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
 
 // Auth Context
