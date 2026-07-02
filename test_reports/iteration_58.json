@@ -1,0 +1,44 @@
+{
+  "summary": "Auth module + Bootstrap audit COMPLETE. 17/17 pytest PASS covering: (a) live login on Emergent env with master@manutrix.com/master123 → 200 with access_token; (b) /auth/me returns email+role=master+organization_id and does not leak password_hash; (c) wrong password → 401 'Credenciais inválidas'; (d) unknown email → 401; (e) invalid JWT → 401; (f) tampered/expired JWT → 401; (g) JWT payload contains sub+role+org+exp; (h) deps.hash_password produces $2b$ bcrypt and verify_password validates both bcrypt and legacy SHA-256 (backward compat); (i) master user's stored password_hash in Mongo starts with $2b$; (j) server.py bootstrap block is present at run_migrations startup event, gated by count_documents({role: {$in: [admin, master]}}) == 0, creates master@maintrix.com with hash_password('master123'), role='master', force_password_change=True, plus org_config with company_name='MAINTRIX'; (k) bootstrap is idempotent on Emergent env — exactly 1 row for master@manutrix.com, no duplicates; (l) Railway https://manutrix-pro-production.up.railway.app/api/auth/login is reachable and returns 401 (not 405/404), confirming the /api routes are wired but DB does not have the bootstrap user yet — the fix will activate on next Railway deploy. UI smoke: Login page renders on preview URL, form submission with master credentials redirects to Central Executiva showing 66 atividades/25 OS abertas/45 inspeções/55 ativos/1 parado. Token IS stored (verified functionally — Central loads scoped data), under sessionStorage key 'maintrix_token' (not 'token').",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration58_auth_bootstrap.py",
+    "/app/test_reports/pytest/iteration58.xml"
+  ],
+  "action_items": [
+    "DEPLOY the current /app/backend/server.py to Railway. Current Railway prod still returns 401 for both master@manutrix.com and master@maintrix.com, meaning either (a) the code with the bootstrap block has not been deployed yet, or (b) the Railway DB already has some admin/master row that is not the expected bootstrap user (so count > 0 and bootstrap is skipped). Verify by looking at Railway startup logs for the message 'BOOTSTRAP: Master user created (master@maintrix.com / master123) org=…' OR 'Bootstrap: N admin/master user(s) found — no action needed'. If deploy is fresh with empty DB, that log message must appear on first boot.",
+    "OPTIONAL: server.py has a broad try/except around the entire run_migrations() body (line 3755). If bootstrap fails silently (e.g., Mongo write timeout, index conflict), the log 'Migration error: …' is emitted but the app boots without a master user, and every /api/auth/login returns 401. Consider making the bootstrap-write failure fatal (re-raise or sys.exit) so that Railway restarts the container until the admin user is present.",
+    "OPTIONAL: Bootstrap email is master@maintrix.com (with I) but the pre-existing Emergent seed uses master@manutrix.com (with U). Docs/support material and /app/memory/test_credentials.md only reference master@manutrix.com. Consider aligning: either (i) change bootstrap to master@manutrix.com to match existing seed convention, or (ii) document that Railway boot creates a distinct 'master@maintrix.com' account and update test_credentials.md and any onboarding docs accordingly."
+  ],
+  "critical_code_review_comments": [
+    "server.py:3755 — broad `except Exception as e: logger.error(...)` around the entire run_migrations() body swallows bootstrap failures. If bcrypt/hash_password or db.users.insert_one fails, the app still boots with an empty users collection and every login returns 401 with zero visibility. Should fail fast on bootstrap-write failure.",
+    "Bootstrap email mismatch (master@maintrix.com vs master@manutrix.com) — inconsistency between the bootstrap default and the documented/seeded master. Not a bug per se but a documentation trap.",
+    "deps.py:31 — JWT_SECRET falls back to secrets.token_hex(32) if env is unset, which means every backend restart invalidates ALL previously issued tokens. In production JWT_SECRET MUST be a stable env var. Verify JWT_SECRET is set in Railway env.",
+    "verify_password (deps.py:61-64) supports both bcrypt and legacy SHA-256 hashes — good for migration but consider adding a background job that rehashes SHA-256 rows to bcrypt on next successful login and eventually removing the SHA-256 branch.",
+    "get_current_user does not check for 'active/enabled' user flag — a soft-deleted user is filtered by deleted_at, but if the user is disabled/locked via a different flag (e.g., ativo=False, locked_until), the JWT will still authenticate them. Verify whether the model supports account lock and enforce it here.",
+    "No brute-force protection on POST /api/auth/login (no rate limiting / lockout after N failed attempts). auth_testing.md guideline (5) calls for brute-force lockout — currently absent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration58_auth_bootstrap.py",
+    "/app/test_reports/iteration_58.json",
+    "/app/test_reports/pytest/iteration58.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 pytest)",
+    "frontend": "100% (login → Central Executiva redirect verified on preview URL)"
+  },
+  "test_credentials": "master@manutrix.com / master123 — VERIFIED on Emergent env (200 + access_token). Bootstrap default is master@maintrix.com / master123 which will only exist after code is deployed to a fresh Railway DB.",
+  "seed_data_creation": "None — all assertions read existing data. No TEST_ rows created or left behind.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 58 validated the auth fix: bootstrap block is correctly implemented in server.py run_migrations (line 3720-3751), guarded by admin_count==0, produces bcrypt hash via deps.hash_password, sets force_password_change=True, and also creates a default org_config with MAINTRIX branding. Login/JWT/me flow works end-to-end on the Emergent preview URL. Railway prod at https://manutrix-pro-production.up.railway.app STILL returns 401 for both master@manutrix.com and master@maintrix.com — either the code isn't deployed yet or the Railway Mongo already has an admin row that is not the bootstrap user. Next step for main agent: (1) push to Railway; (2) tail Railway logs for the 'BOOTSTRAP: Master user created' message on cold start; (3) if the log says 'N admin/master user(s) found — no action needed' but login still fails, the DB has stale/mismatched admin data that needs manual clean-up.",
+  "rca_of_the_issue": "Root cause of Railway 401s: the Railway Mongo did not contain any user matching the login credentials. Fix implemented in server.py adds an @app.on_event('startup') hook that, if no admin/master user exists, creates master@maintrix.com/master123 (bcrypt) plus a default org_config. The fix is verified correct locally (17/17 tests). Deployment to Railway is still required — Railway currently returns 401 for both bootstrap and pre-existing master credentials, indicating either the deploy hasn't happened yet or the Mongo has some non-matching admin row that keeps admin_count > 0 and prevents bootstrap. Mitigation post-deploy: check Railway logs for the 'BOOTSTRAP' info line and, if bootstrap was skipped due to existing admin row, manually inspect db.users to find and update or remove the offending record."
+}

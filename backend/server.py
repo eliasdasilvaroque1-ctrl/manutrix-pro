@@ -3717,6 +3717,41 @@ async def run_migrations():
         await db.ativos.update_many({}, {"$unset": {"plant_id": "", "area_id": ""}})
         logger.info("Migration: plant_id removed from sectors and ativos")
         
+        # Bootstrap: Ensure at least one master user exists
+        admin_count = await db.users.count_documents({"role": {"$in": ["admin", "master"]}, "deleted_at": None})
+        if admin_count == 0:
+            master_id = str(uuid.uuid4())
+            org_id = str(uuid.uuid4())
+            master_doc = {
+                "id": master_id,
+                "email": "master@maintrix.com",
+                "nome": "Master MAINTRIX",
+                "role": "master",
+                "organization_id": org_id,
+                "password_hash": hash_password("master123"),
+                "disciplina_principal": None,
+                "disciplinas_secundarias": [],
+                "area_ids": [],
+                "unidade_ids": [],
+                "turno": "ADM",
+                "telefone": None,
+                "force_password_change": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "deleted_at": None,
+            }
+            await db.users.insert_one(master_doc)
+            # Create default org_config
+            await db.org_config.insert_one({
+                "organization_id": org_id,
+                "white_label": {"company_name": "MAINTRIX", "primary_color": "#10b981"},
+                "terminologia": {},
+                "numeracao": {"prefixo": "OS", "proximo": 1},
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            logger.info(f"BOOTSTRAP: Master user created (master@maintrix.com / master123) org={org_id}")
+        else:
+            logger.info(f"Bootstrap: {admin_count} admin/master user(s) found — no action needed")
+        
     except Exception as e:
         logger.error(f"Migration error: {e}")
 
