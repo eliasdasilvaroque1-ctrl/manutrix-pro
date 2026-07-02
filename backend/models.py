@@ -378,7 +378,7 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
+    current_password: Optional[str] = None  # Optional when force_password_change=true
     new_password: str
 
 class ChatMessage(BaseModel):

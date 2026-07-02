@@ -1,0 +1,62 @@
+{
+  "summary": "Iteration 60 — Verified the 422 bug fix on POST /api/auth/change-password. Backend: 7/8 pytest PASS (all requested scenarios pass). Frontend: full force-password-change flow works end-to-end (login master@maintrix.com/master123 → 'Troca de Senha Obrigatória' screen → new password → 'Senha alterada!' → new login → Central Executiva). The 1 failing test (test_07) is an UNRELATED and SEVERE Supabase-sync security bug uncovered while verifying the request: after change-password, the old password STILL logs in successfully because /api/auth/login tries Supabase first and change-password only updates MongoDB.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/auth/change-password + /api/auth/login",
+        "issue": "SECURITY: After change-password, the OLD password STILL succeeds at /api/auth/login (returns 200 access_token). Root cause: server.py:141 tries supabase_client.auth.sign_in_with_password FIRST; server.py:278-282 only updates MongoDB password_hash without calling supabase_client.auth.admin.update_user_by_id. Effect: any user who has ever logged in (and got auto-synced to Supabase at server.py:180-189) retains their old password indefinitely — password changes have zero effect on the Supabase auth path. This directly contradicts the review-request requirement 'After change-password, login with OLD password returns 401'. Reproduce: (1) login master@maintrix.com/master123 → 200 (Supabase syncs the user); (2) POST /api/auth/change-password with {current_password:'master123', new_password:'newpass123'} → 200; (3) POST /api/auth/login {email:master@maintrix.com, password:'master123'} → 200 (BUG — should be 401). Fix: after successfully updating password_hash in MongoDB, if user.supabase_id is set AND supabase_client is initialized, call supabase_client.auth.admin.update_user_by_id(user['supabase_id'], {'password': new_password}). Apply the same fix to /api/auth/reset-password and /api/admin/users/{id}/reset-password.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/auth/change-password",
+        "issue": "When force_password_change=false and payload is missing current_password, endpoint returns 400 'Senha atual é obrigatória' (good), but there is no explicit response schema; consider a stable Pydantic response model for docs."
+      },
+      {
+        "endpoint": "/api/auth/change-password",
+        "issue": "No rate-limiting on this endpoint. An attacker with a stolen access_token can brute-force current_password guesses (400 vs 200) unbounded."
+      },
+      {
+        "endpoint": "backend/deps.py",
+        "issue": "passlib bcrypt backend logs 'AttributeError: module bcrypt has no attribute __about__' at every hash call because bcrypt>=4 removed __about__ but passlib<1.7.5 still probes it. Not fatal (falls back), but produces noisy logs. Pin bcrypt<4 or upgrade passlib."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration60_change_password.py",
+    "/app/test_reports/pytest/iteration60.xml"
+  ],
+  "action_items": [
+    "CRITICAL — patch server.py:264 change_password() and server.py:240 reset_password() and server.py:286 admin_reset_password() to propagate the new password to Supabase Auth when supabase_client and user['supabase_id'] are present. Otherwise old passwords keep working via the Supabase Auth path in /api/auth/login (server.py:141-172). Suggested patch inside change_password after `new_hash = hash_password(...)`:\n\n    if supabase_client and user.get('supabase_id'):\n        try:\n            supabase_client.auth.admin.update_user_by_id(user['supabase_id'], {'password': data.new_password})\n        except Exception as e:\n            logger.warning(f'Supabase password sync failed: {e}')\n\n  After patching, re-run test_iteration60_change_password.py — test_07 should turn green.",
+    "OPTIONAL — Add a lockout / rate limiter on /api/auth/change-password (e.g., 10 attempts / 15 min per user_id) to prevent current_password brute force.",
+    "OPTIONAL — Pin bcrypt<4 in backend/requirements.txt (or upgrade passlib to 1.7.5+) to silence the '__about__' warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py:141 — login tries Supabase Auth first, then falls back to MongoDB. This dual-source design means any write path (change-password, reset-password, admin_reset_password) MUST update BOTH stores or the older store keeps validating credentials. Currently NONE of the three password-write endpoints touches Supabase, making all password rotations effectively no-ops from a security standpoint for any user that has a supabase_id.",
+    "server.py:180-189 — the auto-sync-on-login block writes the CURRENT password into Supabase every time a user logs in via the Mongo fallback. That means: (a) if a user resets their password in Mongo, the very NEXT successful Mongo login re-syncs the new password into Supabase — but only if the user tries the new password first; if they use the old one, Supabase happily authenticates them and no re-sync occurs. This masks the bug intermittently and is worth documenting.",
+    "server.py:264 change_password — the endpoint uses get_current_user which yields a lean dict; but at line 274 the code re-fetches full_user to read password_hash. That's fine, but the second query could be merged into the first via a targeted projection to avoid the extra round-trip.",
+    "models.py:381 — current_password is Optional[str] = None which is correct for the force-change flow, but there is no length/complexity validation on new_password at the schema level (only at server.py:267). Prefer pydantic Field(min_length=6) so 422 is returned uniformly for invalid input instead of the current mix of 400/422.",
+    "server.py:267-268 — only length check is done (>=6). Consider adding a check that new_password != current_password when both are supplied, and against a password-blocklist for well-known values like 'master123', '123456', etc."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration60_change_password.py",
+    "/app/test_reports/iteration_60.json",
+    "/app/test_reports/pytest/iteration60.xml"
+  ],
+  "success_rate": {
+    "backend": "87.5% (7/8 pytest). The single failing test (test_07) is an UNRELATED Supabase-sync security bug, NOT the 422 bug under test. The 422 → 200 fix is fully verified (test_01, test_05).",
+    "frontend": "100% — force-password-change UI flow works end-to-end and lands on Central Executiva."
+  },
+  "test_credentials": "master@maintrix.com / master123 — RESTORED. Verified via curl POST /api/auth/login → 200 after all tests. force_password_change=false. bcrypt hash starts with $2b$.",
+  "seed_data_creation": "None — only mutated master@maintrix.com's password/force_password_change during tests, and restored to master123/false at teardown.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "The specific bug in the request (Pydantic 422 on /api/auth/change-password when force_password_change=true) is FIXED and verified — see test_01 and test_05. FE flow works. However, test_07 in the same file exposes a much bigger security issue: password changes never propagate to Supabase Auth, so the old password keeps working via server.py:141. Main agent should patch change_password, reset_password and admin_reset_password to call supabase_client.auth.admin.update_user_by_id when user.supabase_id is present. After the fix, re-run: pytest /app/backend/tests/test_iteration60_change_password.py -v. Also: master@maintrix.com password is currently master123 / force_password_change=false in preview Mongo (restored at end of run).",
+  "rca_of_the_issue": "Original bug (422 on POST /api/auth/change-password with only {new_password}): Pydantic ChangePasswordRequest declared current_password as a required str. When the frontend LoginPage.handleForceChange (App.js:1806) sent only {new_password} on the forced-change flow, FastAPI's validation short-circuited with 422 before the route body could special-case force_password_change=true. Fix (models.py:381 + server.py:271-276): current_password is now Optional[str]=None; the route only requires it when user.force_password_change is falsy, and returns 400 'Senha atual é obrigatória' if missing in that branch. Verified: (a) force-change flow with only {new_password} → 200 and force_password_change flips to false in /api/auth/me; (b) normal flow with {current_password, new_password} → 200; (c) missing current_password when force=false → 400 (NOT 422 — proves schema fix); (d) wrong current_password → 400 'Senha atual incorreta'; (e) new_password <6 chars → 400. Frontend E2E: login master@maintrix.com/master123 with force_password_change=true → 'Troca de Senha Obrigatória' screen renders → typed newpass123 → 'Senha alterada!' toast → auto-return to login → login with newpass123 → 'Login realizado!' toast → Central Executiva page renders with sidebar+cards. All working."
+}
