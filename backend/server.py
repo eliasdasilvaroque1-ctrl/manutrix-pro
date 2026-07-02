@@ -137,59 +137,13 @@ async def register(user_data: UserCreate):
 async def login(credentials: UserLogin):
     email = credentials.email.lower().strip()
     
-    # Try Supabase Auth first
-    if supabase_client:
-        try:
-            auth_response = supabase_client.auth.sign_in_with_password({
-                "email": email,
-                "password": credentials.password,
-            })
-            if auth_response.session and auth_response.user:
-                user = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0})
-                if not user:
-                    user_id = str(uuid.uuid4())
-                    user = {
-                        "id": user_id, "email": email,
-                        "nome": auth_response.user.user_metadata.get('nome', email.split('@')[0]),
-                        "role": "tecnico", "organization_id": "",
-                        "supabase_id": auth_response.user.id,
-                        "created_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None
-                    }
-                    await db.users.insert_one(user)
-                    user.pop('_id', None)
-                elif not user.get('supabase_id'):
-                    await db.users.update_one({"id": user['id']}, {"$set": {"supabase_id": auth_response.user.id}})
-                
-                token = create_token(user['id'], user.get('role', 'tecnico'), user.get('organization_id', ''))
-                await audit_log("login", "auth", user['id'], user, f"Login via Supabase: {email}")
-                return TokenResponse(
-                    access_token=token,
-                    user={"id": user['id'], "email": user['email'], "nome": user.get('nome', ''),
-                          "role": user.get('role', 'tecnico'), "organization_id": user.get('organization_id'),
-                          "telefone": user.get('telefone'), "force_password_change": user.get('force_password_change', False)}
-                )
-        except Exception as e:
-            logger.debug(f"Supabase auth failed: {e}")
-    
-    # Fallback to MongoDB auth
+    # MongoDB is the SINGLE SOURCE OF TRUTH for authentication
     user = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0})
     if not user or not verify_password(credentials.password, user.get('password_hash', '')):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
     
-    # Auto-sync user to Supabase
-    if supabase_client and not user.get('supabase_id'):
-        try:
-            sb_resp = supabase_client.auth.admin.create_user({
-                "email": email, "password": credentials.password,
-                "email_confirm": True, "user_metadata": {"nome": user.get('nome', ''), "role": user.get('role', '')}
-            })
-            if sb_resp.user:
-                await db.users.update_one({"id": user['id']}, {"$set": {"supabase_id": sb_resp.user.id}})
-        except Exception as e:
-            logger.warning(f"Supabase sync: {e}")
-    
-    token = create_token(user['id'], user['role'], user.get('organization_id', ''))
-    await audit_log("login", "auth", user['id'], user, f"Login local: {email}")
+    token = create_token(user['id'], user.get('role', 'tecnico'), user.get('organization_id', ''))
+    await audit_log("login", "auth", user['id'], user, f"Login: {email}")
     return TokenResponse(
         access_token=token,
         user={"id": user['id'], "email": user['email'], "nome": user['nome'],
@@ -259,6 +213,14 @@ async def reset_password(data: ResetPasswordRequest):
     )
     await db.password_reset_tokens.update_one({"token": data.token}, {"$set": {"used": True}})
     
+    # Sync to Supabase Auth
+    reset_user = await db.users.find_one({"id": reset_doc['user_id']}, {"_id": 0, "supabase_id": 1})
+    if supabase_client and reset_user and reset_user.get('supabase_id'):
+        try:
+            supabase_client.auth.admin.update_user_by_id(reset_user['supabase_id'], {"password": data.new_password})
+        except Exception as e:
+            logger.warning(f"Supabase password sync (reset): {e}")
+    
     return {"success": True, "message": "Senha redefinida com sucesso"}
 
 @api_router.post("/auth/change-password")
@@ -280,6 +242,14 @@ async def change_password(data: ChangePasswordRequest, user: Dict = Depends(get_
         {"id": user['id']},
         {"$set": {"password_hash": new_hash, "force_password_change": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
+    
+    # Sync password to Supabase Auth if user has supabase_id
+    full_user_for_sync = await db.users.find_one({"id": user['id']}, {"_id": 0, "supabase_id": 1})
+    if supabase_client and full_user_for_sync and full_user_for_sync.get('supabase_id'):
+        try:
+            supabase_client.auth.admin.update_user_by_id(full_user_for_sync['supabase_id'], {"password": data.new_password})
+        except Exception as e:
+            logger.warning(f"Supabase password sync failed: {e}")
     
     return {"success": True, "message": "Senha alterada com sucesso"}
 
@@ -304,6 +274,13 @@ async def admin_reset_password(user_id: str, user: Dict = Depends(get_current_us
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
+    
+    # Sync to Supabase Auth
+    if supabase_client and target.get('supabase_id'):
+        try:
+            supabase_client.auth.admin.update_user_by_id(target['supabase_id'], {"password": temp_password})
+        except Exception as e:
+            logger.warning(f"Supabase password sync (admin reset): {e}")
     
     return {"success": True, "temp_password": temp_password, "message": f"Senha temporária gerada. O usuário será obrigado a trocar no próximo login."}
 
