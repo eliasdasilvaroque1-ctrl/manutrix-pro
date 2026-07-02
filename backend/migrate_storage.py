@@ -1,4 +1,4 @@
-"""Migration script: Move existing local files to Emergent Object Storage.
+"""Migration script: Move existing local files to cloud Object Storage.
 Run once: python migrate_storage.py
 """
 import asyncio

@@ -1,4 +1,4 @@
-"""Emergent Object Storage integration for MAINTRIX file uploads"""
+"""Object Storage integration for MAINTRIX file uploads"""
 import os
 import logging
 import requests

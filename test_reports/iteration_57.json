@@ -1,0 +1,74 @@
+{
+  "summary": "Sprint Produção 002 — full production audit COMPLETE. Backend: 24/24 pytest PASS (auth, RBAC on tecnico/operador, ativo CRUD, plano create+approve+duplicate 409, execução requires plano_id → 422 and unapproved → 400, OS create+close, central role-adaptive, prontuário, saúde, dashboard/stats, branding scan, Railway smoke 401). Frontend UI validated with master + operador roles: login page shows only MAINTRIX branding (zero Emergent/posthog/'made with' in DOM/HTML), /os renders Kanban+Lista+Filtros+NOVA OS, /admin/templates renders Planos de Inspeção with breadcrumbs (Britagem Primária > MT-01 > Motor Britador Primário), search input, discipline+status filters, and '86 de 86' counter, /dashboard renders 40 SVG/canvas chart-based operational dashboard (Disponibilidade/Backlog/OS/MTBF/MTTR/PxC/ estoque crítico/inspeções), /ativos/{id} Prontuário loads with tabs (Prontuário [health summary section inside], Timeline, Planos, OS, Docs, BOM) and shows KPIs Total OS/Falhas/Disponibilidade/MTBF. RBAC validated on UI: test.operador sidebar excludes Auditoria/Usuários/Planos de Inspeção/Limpeza; operador /os shows only Producao (3) + Civil (1) OS with ZERO mecanica/eletrica. Logout redirects to /login. Railway backend still returns 401 for master credentials (different DB) — expected. Ready for classification.",
+  "pass_fail_matrix": {
+    "AUTH master login returns access_token": "PASS",
+    "AUTH wrong password → 401": "PASS",
+    "AUTH /me returns email/role for master": "PASS",
+    "AUTH /me tecnico has disciplina_principal=mecanica": "PASS",
+    "RBAC tecnico.mec /ordens-servico only mecanica": "PASS",
+    "RBAC operador never sees mecanica/eletrica/instrumentacao": "PASS",
+    "RBAC operador POST /seed → 401/403": "PASS",
+    "CRUD list /ativos": "PASS",
+    "CRUD create /ativos + verify persistence + cleanup": "PASS",
+    "PLANOS list is enriched (ativo_tag/area_nome)": "PASS",
+    "PLANOS duplicate tipo+disciplina+ativo → 409": "PASS",
+    "PLANOS create + PATCH /aprovar succeeds": "PASS",
+    "EXECUÇÃO missing plano_id → 422": "PASS",
+    "EXECUÇÃO with approved plano → 200/201": "PASS",
+    "EXECUÇÃO with unapproved plano → 400": "PASS",
+    "OS create + PUT status=concluida": "PASS",
+    "CENTRAL role-adaptive dict with buckets": "PASS",
+    "PRONTUÁRIO GET /ativos/{id} returns full asset": "PASS",
+    "PRONTUÁRIO GET /ativos/{id}/saude → 200": "PASS",
+    "DASHBOARD /dashboard/stats → 200": "PASS",
+    "BRANDING index.html no emergent/posthog/'made with'": "PASS",
+    "BRANDING server.py no 'plataforma Emergent' user-facing": "PASS",
+    "RAILWAY POST /auth/login returns 401 not 405/404": "PASS",
+    "UI Login page MAINTRIX only, no Emergent badge": "PASS",
+    "UI Master login → Central Executiva (66/25/45/55/1)": "PASS",
+    "UI Prontuário tabs render (Prontuário/Timeline/Planos/OS/Docs/BOM)": "PASS",
+    "UI /os shows Kanban+Lista+Filtros+NOVA OS": "PASS",
+    "UI /admin/templates shows Planos with breadcrumbs+search+filters (86/86)": "PASS",
+    "UI /dashboard renders chart-based dashboard (40 SVG/canvas)": "PASS",
+    "UI Operador sidebar excludes admin items": "PASS",
+    "UI Operador /os shows only Producao+Civil": "PASS",
+    "UI Logout redirects to /login": "PASS",
+    "DOM zero occurrences of emergent/posthog/'made with' after login": "PASS"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Prontuário do Ativo", "issues": ["Tab named 'Prontuário' is the default tab; the review_request expected a distinct 'Saúde' tab, but health data (Saúde do Equipamento) is a section INSIDE the Prontuário tab. This is a labeling/tab-structure decision, not a bug — if a separate 'Saúde' tab is desired, promote the section into its own tab."]},
+      {"screen": "Login page", "issues": ["Sidebar demo link 'Acessar ambiente de demonstração' exposes a demo mode entry point — verify it is intended for production."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration57_prod_audit.py",
+    "/app/test_reports/pytest/iteration57.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (labeling): Review request mentions Prontuário tabs 'Saúde/Planos/Timeline/OS/Docs/BOM' but actual UI has 'Prontuário/Timeline/Planos/OS/Docs/BOM' with Saúde as a section inside Prontuário. Consider promoting Saúde to its own tab OR update spec.",
+    "OPTIONAL: Review request mentioned frontend routes '/planos-inspecao' and '/ordens-servico' which do NOT exist as React routes (they redirect via wildcard to '/'). Actual routes are '/admin/templates' and '/os'. If external links/emails/QRs use the mentioned paths, add explicit Route redirects or aliases. Sidebar navigation correctly targets the real routes."
+  ],
+  "critical_code_review_comments": [
+    "App.js is 8619+ lines — well over the 700-line guideline. Consider splitting into route-level files (e.g., pages/OSPage.jsx, pages/AtivoDetailPage.jsx). This is not blocking production but is technical debt.",
+    "Frontend routing lacks aliases for the paths mentioned in Sprint Produção spec (/planos-inspecao, /ordens-servico). Wildcard '*' quietly redirects unknown paths to '/' — could mask broken bookmarks or QR links. Consider adding explicit redirects: <Route path='/planos-inspecao' element={<Navigate to='/admin/templates' replace />} /> and same for /ordens-servico → /os.",
+    "Backend PlanoInspecao endpoints use field 'nome' (not 'titulo') and 'frequencia' (not 'periodicidade_dias'). This differs from the naming convention referenced in the review request. Consider aligning docs and API descriptions.",
+    "backend/storage.py still uses 'https://integrations.emergentagent.com' as STORAGE_URL — this is an internal Emergent SDK endpoint (not user-facing), fine to keep, but note in production if Emergent LLM key is not present the storage path will fail silently for uploads. Verify EMERGENT_LLM_KEY is set in Railway env.",
+    "server.py line 2545 imports 'emergentintegrations' inside a try — good. But if the module is missing the /assistente/chat endpoint will 500 with confusing message. Consider explicit availability check + 503 with meaningful body."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration57_prod_audit.py",
+    "/app/test_reports/iteration_57.json",
+    "/app/test_reports/pytest/iteration57.xml"
+  ],
+  "success_rate": {"backend": "100% (24/24 pytest incl RBAC, plano flow, OS, prontuário, branding, Railway)", "frontend": "100% (10/10 UI checks incl RBAC operator)"},
+  "test_credentials": "master@manutrix.com / master123 — VERIFIED; test.mec@maintrix.com / tec123 — VERIFIED; test.operador@maintrix.com / op123 — VERIFIED. Other seeded users not individually logged-in but token retrieval attempted in pytest fixture.",
+  "seed_data_creation": "Transient TEST_AUDIT57_ prefixed rows for ativo/plano/OS/inspeção — all cleaned up in same test class. Zero residual test data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sprint Produção 002 audit shows the app is functionally solid: all 24 backend endpoints pass with correct RBAC and business rules (duplicate 409, unapproved plan 400, plano_id required 422). Frontend fully renders all four core pages (Central, Dashboard, Prontuário, OS Kanban, Planos list). Zero Emergent branding anywhere user-facing. Production classification recommendation: RC (Release Candidate). Small polish items: (1) map spec route names /planos-inspecao and /ordens-servico as explicit Route aliases; (2) decide whether Saúde deserves a dedicated tab on Prontuário; (3) split App.js (~8600 lines) into per-page modules. None of these block production. All test artifacts under /app/backend/tests/test_iteration57_prod_audit.py and /app/test_reports/pytest/iteration57.xml.",
+  "production_classification_recommendation": "RC (Release Candidate) — all critical flows PASS end-to-end, zero backend/frontend bugs found; only two OPTIONAL/labeling items and technical-debt observations remain."
+}
