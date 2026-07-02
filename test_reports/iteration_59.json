@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 59 auth audit — 20/20 pytest PASS on Emergent preview. Verified: (a) POST /api/auth/login master@maintrix.com/master123 → 200 with valid JWT access_token (role=master, org=9a232bf2-…); (b) POST /api/auth/login master@maintrix.com wrong-password → 401 'Credenciais inválidas'; (c) legacy master@manutrix.com login endpoint reachable (200 in preview); (d) GET /api/auth/me returns email=master@maintrix.com, role=master, organization_id, force_password_change, and does NOT leak password_hash; (e) GET /api/diag/auth-audit?key=maintrix-diag-2026 → 200 with total_users=22, admin_master_count=7, master_maintrix_exists=true, bootstrap_would_run=false; user list contains id/email/role/organization_id/hash_format/hash_length; no password_hash leaked; (f) diag with wrong key → 403 'Invalid diagnostic key'; diag with no key → 403; (g) master@maintrix.com row in preview DB has hash_format=bcrypt, hash_length=60 (starts with $2b$); (h) server.py bootstrap block (line 3756-3808) now checks specifically for master@maintrix.com via find_one({email: bootstrap_email}) — NOT gated by admin_count==0 — so it creates the user even if other admins exist; (i) bootstrap reuses org_config.organization_id if any exists, else generates new UUID; (j) bootstrap uses hash_password('master123') (bcrypt) and sets force_password_change=True; (k) diag endpoint @app.get('/api/diag/auth-audit') with DIAG_KEY env fallback 'maintrix-diag-2026' is present in server.py line 3664. Railway audit: POST /api/auth/login → 401 (route wired, but master@maintrix.com absent from Railway DB); GET /api/diag/auth-audit → 404 (old code, diag not deployed). Confirms the assumption in the request: Railway is still running the pre-audit code and awaits deploy.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration59_auth_audit.py",
+    "/app/test_reports/pytest/iteration59.xml"
+  ],
+  "action_items": [
+    "DEPLOY /app/backend/server.py to Railway. Preview env is fully green (login + /me + diag + bcrypt all verified). Railway still runs pre-audit code: /api/diag/auth-audit returns 404 (endpoint not present) and /api/auth/login with master@maintrix.com returns 401 (user missing). After deploy, call GET https://manutrix-pro-production.up.railway.app/api/diag/auth-audit?key=maintrix-diag-2026 to confirm: (i) endpoint returns 200; (ii) master_maintrix_exists=true; (iii) master row shows hash_format=bcrypt. Then POST /api/auth/login master@maintrix.com/master123 must return 200.",
+    "OPTIONAL: /api/diag/auth-audit is a temporary debug endpoint that exposes user emails/roles/org ids/hash formats to anyone who knows DIAG_KEY. After the Railway audit is complete, remove or gate behind an env flag (e.g., ENABLE_DIAG=true) and rotate DIAG_KEY. Currently the default 'maintrix-diag-2026' is hard-coded in server.py:3667 as a fallback — attacker-guessable if env is unset.",
+    "OPTIONAL: /api/diag/auth-audit is mounted directly on `app` (line 3664) BEFORE the CORSMiddleware is added (line 3699), while all other /api routes go through api_router with prefix. This works but is inconsistent — consider moving to api_router or moving the middleware add() up so CORS covers the diag route uniformly."
+  ],
+  "critical_code_review_comments": [
+    "server.py:3664 — /api/diag/auth-audit uses a hard-coded default key 'maintrix-diag-2026' if DIAG_KEY env var is unset. This means Railway (which likely has no DIAG_KEY set) will accept the well-known default. Enforce env var presence (raise on startup if missing) or fail closed when DIAG_KEY is unset.",
+    "server.py:3699 — CORSMiddleware is add_middleware()'d AFTER app.include_router(api_router) and AFTER the diag route is registered. FastAPI applies middlewares to all routes regardless of order, but reads like a bug. Prefer registering middleware before routes for clarity.",
+    "server.py:3810 — run_migrations() still has a broad `except Exception as e: logger.error(...)` wrapping the entire body. If bootstrap fails (bcrypt error, Mongo write timeout, duplicate _id collision), the app boots without master@maintrix.com and every login returns 401 with no fatal exit. Consider re-raising bootstrap-write failures so Railway restarts the container.",
+    "server.py:3776 — bootstrap uses org_config.find_one({}) to reuse an existing org id. If Railway DB has MULTIPLE org_config rows (multi-tenant), the query returns an arbitrary one and the master user is attached to it. Not clearly a bug for a single-tenant seed but worth documenting the assumption.",
+    "diag endpoint (3671-3686) makes N+1 queries: it fetches all users then does a separate find_one per user just to read password_hash. Fine for the current size (22 rows) but should be rewritten to include password_hash in the initial projection and mask it in the response.",
+    "Bootstrap creates default org_config with hard-coded terminologia={} and numeracao prefix='OS' — new tenants get baseline defaults, which is fine, but there is no migration path if the schema of org_config later changes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration59_auth_audit.py",
+    "/app/test_reports/iteration_59.json",
+    "/app/test_reports/pytest/iteration59.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 pytest)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "master@maintrix.com / master123 — VERIFIED on Emergent preview (200 access_token, role=master, org=9a232bf2-fc01-4253-813f-8df356be31c1). master@manutrix.com / master123 also works on preview. Diag key: maintrix-diag-2026.",
+  "seed_data_creation": "None. All tests read existing data. No TEST_ rows created or left behind.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 59 confirmed the Jan-2026 auth fix on Emergent preview: bootstrap now checks find_one({email:'master@maintrix.com'}) instead of just admin count, so it creates the user even when other admins pre-exist. New diagnostic endpoint /api/diag/auth-audit?key=maintrix-diag-2026 is live on preview and reports total_users=22, admin_master_count=7, master_maintrix_exists=true, bootstrap_would_run=false. Master user hash is bcrypt (60 chars, $2b$…). Railway still runs OLD code (diag returns 404, master@maintrix.com login returns 401). Once main agent deploys, next testing agent should hit https://manutrix-pro-production.up.railway.app/api/diag/auth-audit?key=maintrix-diag-2026 to confirm (a) 200, (b) master_maintrix_exists=true, (c) bootstrap_would_run=false; then verify POST /api/auth/login master@maintrix.com/master123 → 200 on Railway. Reuse /app/backend/tests/test_iteration59_auth_audit.py — the TestRailway class already covers post-deploy expectations (accepts 200 or 401 for login, and prints diag JSON if 200).",
+  "rca_of_the_issue": "Root cause (identified in iteration 58 and now VERIFIED FIXED in preview by iteration 59): the original bootstrap in server.py gated the master-user creation on `admin_count == 0`. If Railway's Mongo happened to have any admin/master row with a DIFFERENT email (e.g., legacy admin@manutrix.com), admin_count > 0 so bootstrap was skipped and master@maintrix.com was never created — resulting in permanent 401s for the documented credentials. Fix: bootstrap now does `find_one({email:'master@maintrix.com'})` and inserts the doc if the specific row is missing, regardless of admin_count. It also reuses any pre-existing org_config.organization_id so the new master user joins the existing tenant instead of creating an orphan org. Additionally a diagnostic endpoint GET /api/diag/auth-audit?key=maintrix-diag-2026 was added for post-deploy verification. Preview env now shows master_maintrix_exists=true, hash_format=bcrypt, login 200. Mitigation for Railway: DEPLOY the current server.py; on cold start the @app.on_event('startup') hook will find master@maintrix.com missing and insert it into the existing organization. Verify via /api/diag/auth-audit."
+}

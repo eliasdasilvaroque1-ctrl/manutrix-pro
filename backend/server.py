@@ -3660,6 +3660,42 @@ async def root():
 
 app.include_router(api_router)
 
+# Diagnostic endpoint (secret-key protected, no JWT needed)
+@app.get("/api/diag/auth-audit")
+async def diag_auth_audit(key: str = ""):
+    """Temporary diagnostic: list admin users in DB. Protected by DIAG_KEY."""
+    expected_key = os.environ.get('DIAG_KEY', 'maintrix-diag-2026')
+    if key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid diagnostic key")
+    
+    all_users = await db.users.find(
+        {"deleted_at": None},
+        {"_id": 0, "id": 1, "email": 1, "role": 1, "organization_id": 1,
+         "force_password_change": 1, "created_at": 1, "nome": 1,
+         "disciplina_principal": 1, "turno": 1}
+    ).to_list(100)
+    
+    admin_users = [u for u in all_users if u.get('role') in ('admin', 'master')]
+    
+    # Check password hash format (without exposing the hash)
+    for u in all_users:
+        raw = await db.users.find_one({"id": u['id']}, {"_id": 0, "password_hash": 1})
+        h = raw.get('password_hash', '') if raw else ''
+        u['hash_format'] = 'bcrypt' if h.startswith('$2b$') or h.startswith('$2a$') else ('sha256' if len(h) == 64 else 'unknown')
+        u['hash_length'] = len(h)
+    
+    # Check if master@maintrix.com exists
+    master_exists = any(u['email'] == 'master@maintrix.com' for u in all_users)
+    
+    return {
+        "total_users": len(all_users),
+        "admin_master_count": len(admin_users),
+        "master_maintrix_exists": master_exists,
+        "users": all_users,
+        "db_name": os.environ.get('DB_NAME', '?'),
+        "bootstrap_would_run": len(admin_users) == 0,
+    }
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -3717,14 +3753,31 @@ async def run_migrations():
         await db.ativos.update_many({}, {"$unset": {"plant_id": "", "area_id": ""}})
         logger.info("Migration: plant_id removed from sectors and ativos")
         
-        # Bootstrap: Ensure at least one master user exists
-        admin_count = await db.users.count_documents({"role": {"$in": ["admin", "master"]}, "deleted_at": None})
-        if admin_count == 0:
+        # Bootstrap: Ensure master@maintrix.com exists
+        # Check specifically for the bootstrap email, not just admin count
+        bootstrap_email = "master@maintrix.com"
+        master_user = await db.users.find_one({"email": bootstrap_email, "deleted_at": None})
+        if not master_user:
+            # Check if ANY admin/master exists (different email)
+            admin_count = await db.users.count_documents({"role": {"$in": ["admin", "master"]}, "deleted_at": None})
+            if admin_count > 0:
+                # Log existing admins for debugging
+                existing = await db.users.find(
+                    {"role": {"$in": ["admin", "master"]}, "deleted_at": None},
+                    {"_id": 0, "email": 1, "role": 1}
+                ).to_list(10)
+                emails = [u['email'] for u in existing]
+                logger.warning(f"BOOTSTRAP: {bootstrap_email} NOT found, but {admin_count} other admin(s) exist: {emails}")
+            
+            # Always create master@maintrix.com if it doesn't exist
             master_id = str(uuid.uuid4())
-            org_id = str(uuid.uuid4())
+            # Use existing org_id if any org exists, otherwise create new
+            existing_org = await db.org_config.find_one({}, {"_id": 0, "organization_id": 1})
+            org_id = existing_org['organization_id'] if existing_org else str(uuid.uuid4())
+            
             master_doc = {
                 "id": master_id,
-                "email": "master@maintrix.com",
+                "email": bootstrap_email,
                 "nome": "Master MAINTRIX",
                 "role": "master",
                 "organization_id": org_id,
@@ -3740,17 +3793,19 @@ async def run_migrations():
                 "deleted_at": None,
             }
             await db.users.insert_one(master_doc)
-            # Create default org_config
-            await db.org_config.insert_one({
-                "organization_id": org_id,
-                "white_label": {"company_name": "MAINTRIX", "primary_color": "#10b981"},
-                "terminologia": {},
-                "numeracao": {"prefixo": "OS", "proximo": 1},
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-            logger.info(f"BOOTSTRAP: Master user created (master@maintrix.com / master123) org={org_id}")
+            
+            # Create org_config if none exists
+            if not existing_org:
+                await db.org_config.insert_one({
+                    "organization_id": org_id,
+                    "white_label": {"company_name": "MAINTRIX", "primary_color": "#10b981"},
+                    "terminologia": {},
+                    "numeracao": {"prefixo": "OS", "proximo": 1},
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+            logger.info(f"BOOTSTRAP: Master user created ({bootstrap_email} / master123) org={org_id}")
         else:
-            logger.info(f"Bootstrap: {admin_count} admin/master user(s) found — no action needed")
+            logger.info(f"Bootstrap: {bootstrap_email} exists — no action needed")
         
     except Exception as e:
         logger.error(f"Migration error: {e}")
