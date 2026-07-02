@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 62 — VERIFIED the circular-structure JSON bug fix on Planos de Inspeção. Backend (pytest 7/7 PASS) confirms POST /api/planos-inspecao accepts force_override as a strict boolean, returns 409 on duplicate tipo+disciplina+ativo, bypasses on force_override=true, and REJECTS non-boolean force_override (Event-shaped dict) with 422 — proving Pydantic catches the exact payload shape that was crashing the FE. Frontend E2E confirms the fix at App.js:7117 (onClick={() => handleSave(false)}): full happy-path Salvar Plano flow succeeds end-to-end (login → Planos de Inspeção → Novo Plano → nome + 3 perguntas → Salvar Plano → toast 'Plano criado!' → plan appears in list with rascunho status, 3 perguntas, v1). No 'Converting circular structure to JSON' error appears in the console across any of the flows tested (create, edit, approve, ativo-linked). Also verified: Aprovar toggles status to 'Aprovado' (toast 'Plano ... aprovado para execução!'), Edit updates nome (toast 'Plano atualizado!'), and Ativo-linked creation reaches backend (409 duplicate is expected when picking an ativo that already has a plan — the FE handles it correctly with a confirm dialog).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/planos-inspecao",
+        "issue": "Duplicate-check uses tipo+disciplina+ativo but the query fallback logic (server.py:968) uses `data.tipo or data.categoria or 'inspecao'`. If a plan was created historically with categoria='inspecao' and tipo missing/None, and a new plan with tipo='inspecao' + same ativo/disciplina is posted, the query only matches on tipo. Consider also checking categoria for backward-compat completeness."
+      },
+      {
+        "endpoint": "PlanoInspecaoUpdate (models.py:487)",
+        "issue": "PlanoInspecaoUpdate does NOT expose `tipo_equipamento` or `categoria` fields — only tipo. If a user edits a plan and changes tipo_equipamento in the FE form, that field is silently dropped by the backend. Not blocking for this bug but a data-integrity gap on Edit."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Planos de Inspeção / Novo Plano",
+        "issues": [
+          "The 'Descrição' field of the plan has no data-testid, and its placeholder ('Descrição opcional') closely resembles the checklist item placeholder ('Descrição do item') — makes automated testing selector-fragile. Suggest data-testid=\"plano-descricao\" and data-testid=\"pergunta-descricao-{idx}\".",
+          "The 'Nome do Plano' field has no data-testid — using placeholder-based selector. Suggest data-testid=\"plano-nome\".",
+          "The 'Vincular a Ativo' select has no data-testid — Suggest data-testid=\"plano-ativo-select\"."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration62_planos_save.py",
+    "/app/test_reports/pytest/iteration62.xml"
+  ],
+  "action_items": [
+    "OPTIONAL — Add data-testid to Nome/Descrição/Ativo select fields on the Planos de Inspeção form for future E2E reliability.",
+    "OPTIONAL — Expand PlanoInspecaoUpdate to accept tipo_equipamento and categoria so the edit form can update those fields (currently they are silently ignored by the backend on PUT).",
+    "OPTIONAL — Duplicate-check query at server.py:968 uses tipo only; consider including categoria as fallback for legacy rows."
+  ],
+  "critical_code_review_comments": [
+    "App.js:7117 — Fix is correctly applied: `onClick={() => handleSave(false)}`. This is the exact right pattern; other onClick handlers in this file were audited and all use arrow wrappers or no-arg calls, so the class of bug is contained.",
+    "App.js:6959 — handleSave(forceOverride = false) — default arg is fine; the 409-retry path at line 6997 calls handleSave(true) explicitly, so recursion is bounded and the payload is guaranteed boolean.",
+    "server.py:961 — POST /planos-inspecao correctly relies on Pydantic (PlanoInspecaoCreate.force_override: Optional[bool] = False) to guard against non-boolean payloads. Verified with test_04 which posts an Event-shaped dict and gets a 422 (defense in depth confirmed).",
+    "server.py:976 — 409 conflict payload shape {message, existing_plan_id, existing_plan_nome, action_required} is what the FE at App.js:6989 branches on. Contract is intact."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration62_planos_save.py",
+    "/app/test_reports/pytest/iteration62.xml",
+    "/app/test_reports/iteration_62.json"
+  ],
+  "success_rate": {
+    "backend": "100% (7/7 pytest — create/duplicate-409/force-override-true/non-boolean-422/update/approve/cleanup)",
+    "frontend": "100% (create+save no circular error, edit+save works, approve works, ativo-linked reaches backend as expected)"
+  },
+  "test_credentials": "master@manutrix.com / master123 (unchanged, verified working)",
+  "seed_data_creation": "Created and CLEANED UP 4 test plans (TEST_UI_Plano_15052, TEST_UI_Plano_15052_EDITED via UI; TEST_DupA/B/Override/BadOverride via pytest). All deleted at end of run. Verified via GET /api/planos-inspecao — no TEST_ residue remaining.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The circular-structure fix is COMPLETE and VERIFIED. If any regression testing on Planos de Inspeção is needed, run `pytest /app/backend/tests/test_iteration62_planos_save.py -v` — expect 7/7 PASS. Key regression signal to watch: on the FE, opening browser DevTools console while clicking 'Salvar Plano' must NOT emit `TypeError: Converting circular structure to JSON` (that would mean somebody re-introduced onClick={handleSave} instead of onClick={() => handleSave(false)}). Also note: the FE window.confirm() 409-retry path at App.js:6993 will be auto-dismissed by Playwright, so E2E tests that pick an ativo which already has a plan for that tipo+disciplina will silently fail to save — this is not a bug, just a test artifact.",
+  "rca_of_the_issue": "ROOT CAUSE (confirmed): React's synthetic onClick handlers receive the SyntheticEvent as their first positional arg. The old JSX `onClick={handleSave}` passed the Event directly into handleSave's `forceOverride` parameter. Inside handleSave, `force_override: forceOverride` was serialized in the axios POST payload — but SyntheticEvent contains DOM references (target, currentTarget, view) which are circular, so JSON.stringify threw 'Converting circular structure to JSON' before the request ever left the browser. FIX (applied at App.js:7117): wrap the handler as `onClick={() => handleSave(false)}` so React's Event is discarded and forceOverride receives the intended boolean literal `false`. VERIFICATION: (1) Backend pytest test_04 posts an Event-shaped dict as force_override and receives 422 — defense in depth. (2) FE E2E clicks 'Salvar Plano' with 3 perguntas and produces zero console errors, toast 'Plano criado!' fires, and the plan appears in the list. (3) FE E2E also exercises edit+save, approve, and ativo-linked flows — all clean. No regression signal observed."
+}

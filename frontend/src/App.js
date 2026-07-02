@@ -7114,7 +7114,7 @@ const AdminTemplatesPage = () => {
 
       <div className="flex gap-3 justify-end">
         <button onClick={() => setEditing(null)} className="btn-secondary">Cancelar</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary flex items-center gap-2" data-testid="save-template">
+        <button onClick={() => handleSave(false)} disabled={saving} className="btn-primary flex items-center gap-2" data-testid="save-template">
           {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
           {saving ? 'Salvando...' : 'Salvar Plano'}
         </button>
