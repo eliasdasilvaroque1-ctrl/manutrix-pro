@@ -143,9 +143,40 @@ DEFAULT_PREFERENCES = {
     "fuso_horario": "America/Sao_Paulo",
     "idioma": "pt-BR",
     "moeda": "BRL",
-    "aprovacao_os": {"requer_aprovacao": False, "niveis": []},
     "fluxo_assinatura": {"habilitado": False, "etapas": []},
     "prefixo_empresa": "",
+}
+
+# ============== TIPOS DE OS CONFIGURÁVEIS ==============
+
+DEFAULT_TIPOS_OS = [
+    {"id": "corretiva", "nome": "Corretiva", "ativo": True},
+    {"id": "preventiva", "nome": "Preventiva", "ativo": True},
+    {"id": "melhoria", "nome": "Melhoria", "ativo": True},
+    {"id": "projeto", "nome": "Projeto", "ativo": True},
+    {"id": "seguranca", "nome": "Segurança", "ativo": True},
+    {"id": "meio_ambiente", "nome": "Meio Ambiente", "ativo": True},
+    {"id": "lubrificacao", "nome": "Lubrificação", "ativo": True},
+    {"id": "calibracao", "nome": "Calibração", "ativo": True},
+]
+
+DEFAULT_ORIGENS_OS = [
+    {"id": "operador", "nome": "Operador"},
+    {"id": "supervisor", "nome": "Supervisor"},
+    {"id": "pcm", "nome": "PCM"},
+    {"id": "inspecao", "nome": "Inspeção"},
+    {"id": "preventiva", "nome": "Preventiva"},
+    {"id": "lubrificacao", "nome": "Lubrificação"},
+    {"id": "qr_code", "nome": "QR Code"},
+]
+
+# ============== WORKFLOW / REGRAS DA EMPRESA ==============
+
+DEFAULT_WORKFLOW = {
+    "aprovacao_gerente_acima": 10000,
+    "tipos_que_precisam_aprovacao": ["melhoria", "projeto"],
+    "foto_obrigatoria_corretiva": True,
+    "justificativa_obrigatoria_solicitacao": True,
 }
 
 
@@ -184,6 +215,9 @@ def build_default_org_config(org_id: str, org_nome: str = "") -> dict:
         "terminologia": {**DEFAULT_TERMINOLOGY},
         "numeracao": {**DEFAULT_NUMERACAO},
         "preferencias": prefs,
+        "tipos_os": [*DEFAULT_TIPOS_OS],
+        "origens_os": [*DEFAULT_ORIGENS_OS],
+        "workflow": {**DEFAULT_WORKFLOW},
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }

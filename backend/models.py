@@ -32,27 +32,37 @@ class Prioridade(str, Enum):
     EMERGENCIA = "emergencia"
 
 class OSStatus(str, Enum):
-    ABERTA = "aberta"
-    PLANEJADA = "planejada"
+    SOLICITADA = "solicitada"
+    EM_ANALISE = "em_analise"
+    AGUARDANDO_APROVACAO = "aguardando_aprovacao"
+    AGUARDANDO_MATERIAL = "aguardando_material"
+    PROGRAMADA = "programada"
+    DISPONIVEL = "disponivel"
     EM_EXECUCAO = "em_execucao"
     PAUSADA = "pausada"
     CONCLUIDA = "concluida"
+    ENCERRADA = "encerrada"
     CANCELADA = "cancelada"
+    # Backward compat aliases
+    ABERTA = "aberta"
+    PLANEJADA = "planejada"
 
-class OSTipo(str, Enum):
-    CORRETIVA = "corretiva"
-    PREVENTIVA = "preventiva"
-    LUBRIFICACAO = "lubrificacao"
-    INSPECAO = "inspecao"
-    FABRICACAO = "fabricacao"
-    PREPARACAO_MATERIAL = "preparacao_material"
-    MELHORIA = "melhoria"
-    CALIBRACAO = "calibracao"
-    INSTALACAO = "instalacao"
-    REFORMA = "reforma"
-    EMERGENCIAL = "emergencial"
-    LIMPEZA_ORGANIZACAO = "limpeza_organizacao"
-    FABRICACAO_MELHORIAS = "fabricacao_melhorias"
+# Tipos de OS — valores configuráveis por empresa via org_config.tipos_os
+# Defaults: corretiva, preventiva, melhoria, projeto, seguranca, meio_ambiente, lubrificacao, calibracao
+# Mantidos como referência, mas NÃO validados por enum — aceita qualquer string
+
+OS_TIPOS_PADRAO = [
+    "corretiva", "preventiva", "melhoria", "projeto",
+    "seguranca", "meio_ambiente", "lubrificacao", "calibracao",
+    # Backward compat
+    "inspecao", "fabricacao", "preparacao_material", "instalacao",
+    "reforma", "emergencial", "limpeza_organizacao",
+]
+
+OS_ORIGENS_PADRAO = [
+    "operador", "supervisor", "pcm", "inspecao",
+    "preventiva", "lubrificacao", "qr_code", "manual",
+]
 
 class Disciplina(str, Enum):
     MECANICA = "mecanica"
@@ -61,14 +71,7 @@ class Disciplina(str, Enum):
     CIVIL = "civil"
     PRODUCAO = "producao"
 
-class OSOrigem(str, Enum):
-    INSPECAO = "inspecao"
-    MANUAL = "manual"
-    PREVENTIVA = "preventiva"
-    PREDITIVA = "preditiva"
-    EMERGENCIA = "emergencia"
-    AGENDAMENTO_IA = "agendamento_ia"
-    FALHA = "falha"
+# OSOrigem removido como enum — valores livres (ver OS_ORIGENS_PADRAO)
 
 class InspecaoTipo(str, Enum):
     INSPECAO = "inspecao"
@@ -216,12 +219,13 @@ class AtivoMaterialCreate(BaseModel):
 # OS
 class OSCreate(BaseModel):
     ativo_id: str
-    tipo: OSTipo
-    disciplina: Disciplina
-    prioridade: Prioridade = Prioridade.MEDIA
+    tipo: str = "corretiva"
+    disciplina: Optional[str] = None
+    prioridade: str = "media"
     titulo: str
     descricao: Optional[str] = None
-    origem: OSOrigem = OSOrigem.MANUAL
+    justificativa: Optional[str] = None
+    origem: str = "manual"
     responsavel_id: Optional[str] = None
     equipe: List[str] = []
     data_planejada: Optional[str] = None
@@ -232,11 +236,12 @@ class OSCreate(BaseModel):
     horas_parada: Optional[float] = None
 
 class OSUpdate(BaseModel):
-    tipo: Optional[OSTipo] = None
-    disciplina: Optional[Disciplina] = None
-    prioridade: Optional[Prioridade] = None
+    tipo: Optional[str] = None
+    disciplina: Optional[str] = None
+    prioridade: Optional[str] = None
     titulo: Optional[str] = None
     descricao: Optional[str] = None
+    justificativa: Optional[str] = None
     responsavel_id: Optional[str] = None
     equipe: Optional[List[str]] = None
     data_planejada: Optional[str] = None
@@ -246,6 +251,7 @@ class OSUpdate(BaseModel):
     causa_falha: Optional[str] = None
     equipamento_parado: Optional[bool] = None
     horas_parada: Optional[float] = None
+    status: Optional[str] = None
 
 class KanbanMoveBody(BaseModel):
     new_status: str

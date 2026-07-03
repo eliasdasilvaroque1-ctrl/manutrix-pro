@@ -11,7 +11,7 @@ from deps import (
     build_visibility_query, build_dashboard_visibility
 )
 from models import (
-    OSCreate, OSUpdate, OSStatus, OSTipo, Prioridade, Disciplina,
+    OSCreate, OSUpdate, OSStatus,
     NotificacaoTipo, KanbanMoveBody, ConcluirOSBody
 )
 
@@ -20,13 +20,14 @@ router = APIRouter()
 
 @router.get("/ordens-servico")
 async def list_os(
-    status: Optional[OSStatus] = None,
-    tipo: Optional[OSTipo] = None,
-    disciplina: Optional[Disciplina] = None,
-    prioridade: Optional[Prioridade] = None,
+    status: Optional[str] = None,
+    tipo: Optional[str] = None,
+    disciplina: Optional[str] = None,
+    prioridade: Optional[str] = None,
     responsavel_id: Optional[str] = None,
     ativo_id: Optional[str] = None,
     sector_id: Optional[str] = None,
+    origem: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
     # Start with role-based visibility filter
@@ -34,17 +35,19 @@ async def list_os(
 
     # Apply optional frontend filters (visual only)
     if status:
-        query['status'] = status.value
+        query['status'] = status
     if tipo:
-        query['tipo'] = tipo.value
+        query['tipo'] = tipo
     if disciplina:
-        query['disciplina'] = disciplina.value
+        query['disciplina'] = disciplina
     if prioridade:
-        query['prioridade'] = prioridade.value
+        query['prioridade'] = prioridade
     if responsavel_id:
         query['responsavel_id'] = responsavel_id
     if ativo_id:
         query['ativo_id'] = ativo_id
+    if origem:
+        query['origem'] = origem
 
     if sector_id:
         asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), sector_id=sector_id)
@@ -88,35 +91,57 @@ async def list_os(
 async def os_estatisticas(user: Dict = Depends(get_current_user)):
     query = await build_dashboard_visibility(user)
 
+    # Status counts (all known statuses)
+    all_statuses = ["solicitada", "em_analise", "aguardando_aprovacao", "aguardando_material",
+                    "programada", "disponivel", "em_execucao", "pausada",
+                    "concluida", "encerrada", "cancelada",
+                    "aberta", "planejada"]
     status_counts = {}
-    for s in OSStatus:
-        status_counts[s.value] = await db.ordens_servico.count_documents({**query, "status": s.value})
+    for s in all_statuses:
+        c = await db.ordens_servico.count_documents({**query, "status": s})
+        if c > 0:
+            status_counts[s] = c
 
-    tipo_counts = {}
-    for t in OSTipo:
-        tipo_counts[t.value] = await db.ordens_servico.count_documents({**query, "tipo": t.value})
+    # Type counts (dynamic from data)
+    pipeline = [{"$match": query}, {"$group": {"_id": "$tipo", "count": {"$sum": 1}}}]
+    tipo_results = await db.ordens_servico.aggregate(pipeline).to_list(50)
+    tipo_counts = {r['_id']: r['count'] for r in tipo_results if r['_id']}
 
-    disciplina_counts = {}
-    for d in Disciplina:
-        disciplina_counts[d.value] = await db.ordens_servico.count_documents({**query, "disciplina": d.value})
+    # Disciplina counts (dynamic)
+    pipeline_d = [{"$match": query}, {"$group": {"_id": "$disciplina", "count": {"$sum": 1}}}]
+    disc_results = await db.ordens_servico.aggregate(pipeline_d).to_list(20)
+    disciplina_counts = {r['_id']: r['count'] for r in disc_results if r['_id']}
+
+    # Origem counts (new)
+    pipeline_o = [{"$match": query}, {"$group": {"_id": "$origem", "count": {"$sum": 1}}}]
+    origem_results = await db.ordens_servico.aggregate(pipeline_o).to_list(20)
+    origem_counts = {r['_id']: r['count'] for r in origem_results if r['_id']}
 
     now = datetime.now(timezone.utc).isoformat()
-    atrasadas = await db.ordens_servico.count_documents({**query, "status": {"$nin": ["concluida", "cancelada"]}, "data_planejada": {"$lt": now}})
+    atrasadas = await db.ordens_servico.count_documents({**query, "status": {"$nin": ["concluida", "encerrada", "cancelada"]}, "data_planejada": {"$lt": now, "$ne": None}})
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0).isoformat()
-    concluidas_mes = await db.ordens_servico.count_documents({**query, "status": "concluida", "data_conclusao": {"$gte": month_start}})
+    concluidas_mes = await db.ordens_servico.count_documents({**query, "status": {"$in": ["concluida", "encerrada"]}, "data_conclusao": {"$gte": month_start}})
+    aguardando_aprovacao = status_counts.get("aguardando_aprovacao", 0)
+    aguardando_material = status_counts.get("aguardando_material", 0)
+
+    active_statuses = ["solicitada", "em_analise", "aguardando_aprovacao", "aguardando_material",
+                       "programada", "disponivel", "em_execucao", "pausada", "aberta", "planejada"]
 
     return {
         "por_status": status_counts, "por_tipo": tipo_counts,
-        "por_disciplina": disciplina_counts,
+        "por_disciplina": disciplina_counts, "por_origem": origem_counts,
         "atrasadas": atrasadas, "concluidas_mes": concluidas_mes,
-        "total_abertas": sum(status_counts.get(s, 0) for s in ['aberta', 'planejada', 'em_execucao', 'pausada'])
+        "aguardando_aprovacao": aguardando_aprovacao,
+        "aguardando_material": aguardando_material,
+        "total_abertas": sum(status_counts.get(s, 0) for s in active_statuses)
     }
 
 
 @router.get("/ordens-servico/backlog")
 async def get_backlog(user: Dict = Depends(get_current_user)):
     query = await build_visibility_query(user, entity_type="os")
-    query['status'] = {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}
+    query['status'] = {"$in": ["solicitada", "em_analise", "aguardando_aprovacao", "aguardando_material",
+                                "programada", "disponivel", "em_execucao", "pausada", "aberta", "planejada"]}
     os_list = await db.ordens_servico.find(query, {"_id": 0}).sort("created_at", 1).to_list(500)
     enriched = []
     for os in os_list:
@@ -158,7 +183,9 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
 
 @router.post("/ordens-servico")
 async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'pcm', 'supervisor', 'tecnico'])
+    # Operador pode criar solicitação, gerente não
+    allowed_roles = ['admin', 'master', 'pcm', 'supervisor', 'tecnico', 'operador', 'inspetor']
+    check_write_permission(user, allowed_roles)
     check_not_gerente(user)
     ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
@@ -167,27 +194,51 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
     org_id = ativo.get('organization_id', user.get('organization_id', ''))
     numero = await generate_os_numero(org_id)
 
-    # Suggest materials from asset's BOM
-    materiais = await db.ativo_materiais.find({"ativo_id": data.ativo_id, "deleted_at": None}, {"_id": 0}).to_list(50)
+    role = user.get('role', '')
+    is_operacional = role in ('operador', 'inspetor', 'tecnico')
+
+    # Determine initial status based on role
+    if role == 'operador':
+        status_inicial = "solicitada"
+        origem = data.origem or "operador"
+    elif role in ('supervisor',):
+        status_inicial = data.status if hasattr(data, 'status') and data.status else "em_analise"
+        origem = data.origem or "supervisor"
+    else:
+        status_inicial = "programada"
+        origem = data.origem or "pcm"
+
+    # Check if approval is needed (from org_config workflow rules)
+    aprovacao = {"necessaria": False, "status": "nao_requer", "aprovador": None, "data": None, "observacao": ""}
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "workflow": 1})
+    workflow = config.get("workflow", {}) if config else {}
+    tipos_aprovacao = workflow.get("tipos_que_precisam_aprovacao", [])
+    limite_custo = workflow.get("aprovacao_gerente_acima", 10000)
+    custo_total = (data.custo_pecas or 0) + (data.custo_mao_obra or 0)
+    if data.tipo in tipos_aprovacao or custo_total >= limite_custo:
+        aprovacao["necessaria"] = True
+        aprovacao["status"] = "pendente"
 
     os_id = str(uuid.uuid4())
     os_doc = {
         "id": os_id, "numero": numero, "ativo_id": data.ativo_id,
-        "organization_id": org_id, "tipo": data.tipo.value,
-        "disciplina": data.disciplina.value,
+        "organization_id": org_id, "tipo": data.tipo,
+        "disciplina": data.disciplina or ativo.get('disciplina', 'mecanica'),
         "sector_id": ativo.get('sector_id', ''),
-        "origem": data.origem.value,
-        "prioridade": data.prioridade.value, "titulo": data.titulo,
-        "descricao": data.descricao, "status": "aberta",
+        "origem": origem,
+        "prioridade": data.prioridade, "titulo": data.titulo,
+        "descricao": data.descricao, "justificativa": data.justificativa,
+        "status": status_inicial,
+        "aprovacao": aprovacao,
         "responsavel_id": data.responsavel_id, "equipe": data.equipe or [],
         "data_abertura": datetime.now(timezone.utc).isoformat(),
         "data_planejada": data.data_planejada, "data_inicio": None, "data_conclusao": None,
         "custo_pecas": data.custo_pecas, "custo_mao_obra": data.custo_mao_obra,
-        "custo_total": data.custo_pecas + data.custo_mao_obra,
+        "custo_total": custo_total,
         "causa_falha": data.causa_falha,
         "equipamento_parado": data.equipamento_parado,
         "horas_parada": data.horas_parada,
-        "tempo_execucao_minutos": None, "observacoes": None,
+        "tempo_execucao_minutos": None, "observacoes": None, "servicos_realizados": None,
         "criado_por": user.get('id'),
         "planejado_por": None, "data_planejamento": None,
         "iniciado_por": None, "concluido_por": None,
@@ -205,13 +256,19 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
 
 @router.put("/ordens-servico/{os_id}")
 async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'pcm'])
+    role = user.get('role', '')
+    # PCM/admin can edit anything; supervisor can edit most; gerente only status changes
+    if role == 'gerente':
+        if data.status not in (None, 'aguardando_aprovacao', 'programada', 'cancelada'):
+            pass  # allow approval-related changes only
+    else:
+        check_write_permission(user, ['admin', 'master', 'pcm', 'supervisor'])
     existing = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="OS não encontrada")
     verify_org_access(user, existing, "OS")
 
-    update_data = {k: v.value if isinstance(v, Enum) else v for k, v in data.model_dump().items() if v is not None}
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     update_data['alterado_por'] = user.get('id')
 
@@ -467,3 +524,68 @@ async def remove_os_material(os_id: str, material_id: str, user: Dict = Depends(
         f"Devolvido: {mat.get('codigo','')} {mat.get('descricao','')} x{mat['quantidade']} da OS #{mat.get('os_numero','')}")
     
     return {"success": True}
+
+
+# ============== APROVAÇÃO (GERENTE) ==============
+
+@router.post("/ordens-servico/{os_id}/aprovar")
+async def aprovar_os(os_id: str, data: dict, user: Dict = Depends(get_current_user)):
+    """Gerente/Admin aprova ou rejeita OS."""
+    check_write_permission(user, ['admin', 'master', 'gerente'])
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os_doc, "OS")
+
+    decisao = data.get("decisao", "")  # "aprovada" | "rejeitada" | "revisao"
+    observacao = data.get("observacao", "")
+
+    if decisao == "aprovada":
+        new_status = "programada"
+        aprov_status = "aprovada"
+    elif decisao == "rejeitada":
+        new_status = "cancelada"
+        aprov_status = "rejeitada"
+    elif decisao == "revisao":
+        new_status = "em_analise"
+        aprov_status = "revisao"
+    else:
+        raise HTTPException(status_code=400, detail="Decisão inválida: aprovada, rejeitada, revisao")
+
+    aprovacao = {
+        "necessaria": True,
+        "status": aprov_status,
+        "aprovador": user.get("id"),
+        "aprovador_nome": user.get("nome", ""),
+        "data": datetime.now(timezone.utc).isoformat(),
+        "observacao": observacao,
+    }
+
+    await db.ordens_servico.update_one({"id": os_id}, {"$set": {
+        "aprovacao": aprovacao,
+        "status": new_status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    await audit_log("aprovacao", "ordens_servico", os_id, user,
+        f"OS #{os_doc.get('numero','')} {aprov_status}: {observacao}")
+    return await db.ordens_servico.find_one({"id": os_id}, {"_id": 0})
+
+
+@router.post("/ordens-servico/{os_id}/enviar-aprovacao")
+async def enviar_para_aprovacao(os_id: str, user: Dict = Depends(get_current_user)):
+    """PCM/Supervisor envia OS para aprovação do gerente."""
+    check_write_permission(user, ['admin', 'master', 'pcm', 'supervisor'])
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os_doc, "OS")
+
+    await db.ordens_servico.update_one({"id": os_id}, {"$set": {
+        "status": "aguardando_aprovacao",
+        "aprovacao.status": "pendente",
+        "aprovacao.necessaria": True,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    await audit_log("enviar_aprovacao", "ordens_servico", os_id, user,
+        f"OS #{os_doc.get('numero','')} enviada para aprovação")
+    return await db.ordens_servico.find_one({"id": os_id}, {"_id": 0})

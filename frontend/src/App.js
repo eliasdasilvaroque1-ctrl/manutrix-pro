@@ -14,7 +14,7 @@ import {
   Phone, Mail, Building, Hash, Thermometer, Volume2, Droplet, Cog,
   DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
   Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy, Factory,
-  Building2, Palette, BookOpen, CheckCircle2, Sparkles
+  Building2, Palette, BookOpen, CheckCircle2, Sparkles, Send
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
 import { BrandingProvider, useBranding } from "@/lib/branding";
@@ -118,12 +118,22 @@ const Select = ({ value, onChange, options, placeholder, className = "" }) => (
 // Status Badge
 const StatusBadge = ({ status, size = 'md' }) => {
   const config = {
-    aberta: { class: 'bg-blue-500/10 text-blue-400 border-blue-500/30', label: 'Aberta', icon: Clock },
-    planejada: { class: 'bg-purple-500/10 text-purple-400 border-purple-500/30', label: 'Planejada', icon: Calendar },
+    // Novo ciclo de vida OS
+    solicitada: { class: 'bg-blue-500/10 text-blue-400 border-blue-500/30', label: 'Solicitada', icon: Clock },
+    em_analise: { class: 'bg-purple-500/10 text-purple-400 border-purple-500/30', label: 'Em Análise', icon: Search },
+    aguardando_aprovacao: { class: 'bg-amber-500/10 text-amber-400 border-amber-500/30', label: 'Aguard. Aprovação', icon: Shield },
+    aguardando_material: { class: 'bg-orange-500/10 text-orange-400 border-orange-500/30', label: 'Aguard. Material', icon: Package },
+    programada: { class: 'bg-purple-500/10 text-purple-400 border-purple-500/30', label: 'Programada', icon: Calendar },
+    disponivel: { class: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30', label: 'Disponível', icon: CheckCircle },
     em_execucao: { class: 'bg-brand-10 text-emerald-400 border-emerald-500/30', label: 'Em Execução', icon: Play },
     pausada: { class: 'bg-amber-500/10 text-amber-400 border-amber-500/30', label: 'Pausada', icon: Pause },
     concluida: { class: 'bg-brand-10 text-emerald-400 border-emerald-500/30', label: 'Concluída', icon: CheckCircle },
+    encerrada: { class: 'bg-slate-500/10 text-slate-400 border-slate-500/30', label: 'Encerrada', icon: Lock },
     cancelada: { class: 'bg-red-500/10 text-red-400 border-red-500/30', label: 'Cancelada', icon: XCircle },
+    // Backward compat
+    aberta: { class: 'bg-blue-500/10 text-blue-400 border-blue-500/30', label: 'Aberta', icon: Clock },
+    planejada: { class: 'bg-purple-500/10 text-purple-400 border-purple-500/30', label: 'Planejada', icon: Calendar },
+    // Inspeções
     pendente: { class: 'bg-amber-500/10 text-amber-400 border-amber-500/30', label: 'Pendente', icon: Clock },
     em_andamento: { class: 'bg-blue-500/10 text-blue-400 border-blue-500/30', label: 'Em Andamento', icon: Activity },
     com_pendencias: { class: 'bg-red-500/10 text-red-400 border-red-500/30', label: 'Com Pendências', icon: AlertTriangle },
@@ -1561,6 +1571,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const isOperacional = ['tecnico', 'operador', 'inspetor'].includes(role);
   const isPCM = role === 'pcm';
   const isSupervisor = role === 'supervisor';
+  const isGerente = role === 'gerente';
   
   const menuGroups = [
     {
@@ -1577,7 +1588,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         { icon: Box, label: 'Ativos', path: '/ativos' },
         ...(!isOperacional ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
         { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
-        { icon: AlertTriangle, label: 'Anomalias', path: '/anomalias' },
+        { icon: AlertTriangle, label: isOperacional ? 'Solicitar Serviço' : 'Anomalias', path: isOperacional ? '/solicitar' : '/anomalias' },
         ...(isOperacional ? [{ icon: QrCode, label: 'Scanner', path: '/scanner' }] : []),
         ...(isOperacional ? [{ icon: Target, label: 'Ronda', path: '/ronda' }] : []),
       ]
@@ -1615,8 +1626,11 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       ]
     }] : []),
     ...(role === 'gerente' ? [{
-      label: 'ADMIN',
+      label: 'GESTÃO',
       items: [
+        { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+        { icon: Wrench, label: 'Ordens de Serviço', path: '/os' },
+        { icon: Box, label: 'Ativos', path: '/ativos' },
         { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
       ]
     }] : []),
@@ -3974,6 +3988,35 @@ const OSDetailPage = () => {
           {os.data_planejada && <div><span className="text-slate-500">Data Planejada</span><span className="text-slate-200 float-right">{new Date(os.data_planejada + 'T00:00:00').toLocaleDateString('pt-BR')}</span></div>}
           {os.equipamento_parado && <div className="col-span-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 flex items-center gap-2"><AlertTriangle size={14} className="text-red-400" /><span className="text-red-400 text-xs font-semibold">EQUIPAMENTO PARADO</span>{os.horas_parada && <span className="text-red-300 text-xs ml-auto">{os.horas_parada}h de parada</span>}</div>}
         </div>
+
+        {/* Justificativa (Solicitação) */}
+        {os.justificativa && (
+          <div className="border-t border-slate-800 pt-2">
+            <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider mb-1">Justificativa da Solicitação</p>
+            <p className="text-sm text-slate-300 bg-slate-900/50 rounded-lg px-3 py-2">{os.justificativa}</p>
+          </div>
+        )}
+
+        {/* Aprovação */}
+        {os.aprovacao?.necessaria && (
+          <div className={`border-t border-slate-800 pt-2 p-3 rounded-lg ${os.aprovacao.status === 'aprovada' ? 'bg-emerald-500/5 border border-emerald-500/20' : os.aprovacao.status === 'rejeitada' ? 'bg-red-500/5 border border-red-500/20' : 'bg-amber-500/5 border border-amber-500/20'}`} data-testid="os-aprovacao">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Aprovação Gerencial</p>
+              <StatusBadge status={os.aprovacao.status === 'aprovada' ? 'concluida' : os.aprovacao.status === 'rejeitada' ? 'cancelada' : 'aguardando_aprovacao'} size="sm" />
+            </div>
+            {os.aprovacao.aprovador_nome && <p className="text-xs text-slate-400">Aprovador: {os.aprovacao.aprovador_nome}</p>}
+            {os.aprovacao.data && <p className="text-xs text-slate-500">Data: {new Date(os.aprovacao.data).toLocaleString('pt-BR')}</p>}
+            {os.aprovacao.observacao && <p className="text-xs text-slate-300 mt-1 italic">"{os.aprovacao.observacao}"</p>}
+            {/* Gerente action buttons */}
+            {user?.role === 'gerente' && os.aprovacao.status === 'pendente' && os.status === 'aguardando_aprovacao' && (
+              <div className="flex gap-2 mt-3" data-testid="os-aprovar-btns">
+                <button onClick={async () => { try { await api.post(`/ordens-servico/${os.id}/aprovar`, { decisao: 'aprovada', observacao: '' }); toast.success('OS Aprovada!'); loadOS(); } catch(e) { toast.error(normalizeError(e)); }}} className="flex-1 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg text-sm font-semibold hover:bg-emerald-500/30 transition-all" data-testid="os-btn-aprovar"><CheckCircle size={14} className="inline mr-1" /> Aprovar</button>
+                <button onClick={async () => { const obs = prompt('Motivo da rejeição:'); if (obs !== null) { try { await api.post(`/ordens-servico/${os.id}/aprovar`, { decisao: 'rejeitada', observacao: obs }); toast.success('OS Rejeitada'); loadOS(); } catch(e) { toast.error(normalizeError(e)); }}}} className="flex-1 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm font-semibold hover:bg-red-500/30 transition-all" data-testid="os-btn-rejeitar"><XCircle size={14} className="inline mr-1" /> Rejeitar</button>
+                <button onClick={async () => { const obs = prompt('Observação para revisão:'); if (obs !== null) { try { await api.post(`/ordens-servico/${os.id}/aprovar`, { decisao: 'revisao', observacao: obs }); toast.success('Enviada para revisão'); loadOS(); } catch(e) { toast.error(normalizeError(e)); }}}} className="flex-1 py-2 bg-amber-500/20 text-amber-400 rounded-lg text-sm font-semibold hover:bg-amber-500/30 transition-all"><Edit3 size={14} className="inline mr-1" /> Revisão</button>
+              </div>
+            )}
+          </div>
+        )}
         
         {/* Responsável + Executantes */}
         {os.responsavel && <div className="flex justify-between text-sm border-t border-slate-800 pt-2"><span className="text-slate-500">Responsável</span><span className="text-slate-200">{os.responsavel.nome}</span></div>}
@@ -6211,6 +6254,157 @@ const SobressalentesPage = () => {
     </div>
   );
 };
+
+
+// ============== SOLICITAÇÃO DE SERVIÇO PAGE (OPERADOR) ==============
+
+const SolicitacaoServicoPage = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [ativos, setAtivos] = useState([]);
+  const [busca, setBusca] = useState('');
+  const [selectedAtivo, setSelectedAtivo] = useState(null);
+  const [form, setForm] = useState({ titulo: '', justificativa: '', prioridade: 'media', equipamento_parado: false });
+  const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState(1); // 1=select ativo, 2=describe problem
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get('/ativos');
+        setAtivos(res.data);
+      } catch {}
+    })();
+  }, []);
+
+  const filteredAtivos = busca.trim()
+    ? ativos.filter(a => `${a.tag} ${a.nome}`.toLowerCase().includes(busca.toLowerCase()))
+    : ativos.slice(0, 20);
+
+  const handleSubmit = async () => {
+    if (!selectedAtivo || !form.titulo.trim()) { toast.error('Preencha o equipamento e o problema'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        ativo_id: selectedAtivo.id,
+        titulo: form.titulo.trim(),
+        justificativa: form.justificativa.trim(),
+        descricao: form.justificativa.trim(),
+        prioridade: form.prioridade,
+        tipo: 'corretiva',
+        origem: 'operador',
+        equipamento_parado: form.equipamento_parado,
+      };
+      const res = await api.post('/ordens-servico', payload);
+      toast.success(`Solicitação #${res.data.numero} criada com sucesso!`);
+      navigate('/');
+    } catch (err) { toast.error(normalizeError(err)); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-4 animate-fadeInUp max-w-2xl mx-auto" data-testid="solicitar-servico-page">
+      <div className="flex items-center gap-3">
+        <button onClick={() => step === 1 ? navigate(-1) : setStep(1)} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg">
+          <ArrowLeft size={18} className="text-slate-400" />
+        </button>
+        <div>
+          <h1 className="text-xl font-bold text-slate-100">Nova Solicitação de Serviço</h1>
+          <p className="text-xs text-slate-500">Descreva o problema encontrado</p>
+        </div>
+      </div>
+
+      {/* Step indicator */}
+      <div className="flex gap-2">
+        <div className={`flex-1 h-1 rounded-full ${step >= 1 ? 'bg-brand' : 'bg-slate-800'}`} />
+        <div className={`flex-1 h-1 rounded-full ${step >= 2 ? 'bg-brand' : 'bg-slate-800'}`} />
+      </div>
+
+      {step === 1 && (
+        <div className="space-y-3" data-testid="solicitar-step1">
+          <p className="text-sm text-slate-300 font-medium">Qual equipamento precisa de serviço?</p>
+          <input value={busca} onChange={e => setBusca(e.target.value)} className="input-industrial w-full px-4"
+            placeholder="Buscar por TAG ou nome..." data-testid="solicitar-busca-ativo" autoFocus />
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            {filteredAtivos.map(a => (
+              <button key={a.id} onClick={() => { setSelectedAtivo(a); setStep(2); }}
+                className={`w-full glass-card p-4 text-left flex items-center gap-3 hover:border-brand transition-all ${selectedAtivo?.id === a.id ? 'border-brand bg-brand-10' : ''}`}
+                data-testid={`solicitar-ativo-${a.id}`}>
+                <div className="w-10 h-10 rounded-lg bg-brand-10 flex items-center justify-center shrink-0">
+                  <Box size={18} className="text-brand" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-mono text-brand font-bold">{a.tag}</p>
+                  <p className="text-sm text-slate-200 truncate">{a.nome}</p>
+                  <p className="text-[10px] text-slate-500">{a.tipo_equipamento || ''}</p>
+                </div>
+                <ChevronRight size={16} className="text-slate-600 ml-auto shrink-0" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 2 && selectedAtivo && (
+        <div className="space-y-4" data-testid="solicitar-step2">
+          {/* Selected ativo summary */}
+          <div className="glass-card p-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-brand-10 flex items-center justify-center shrink-0">
+              <Box size={16} className="text-brand" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-mono text-brand font-bold">{selectedAtivo.tag}</p>
+              <p className="text-xs text-slate-400">{selectedAtivo.nome}</p>
+            </div>
+            <button onClick={() => setStep(1)} className="text-xs text-brand ml-auto">Trocar</button>
+          </div>
+
+          <FormInput label="Qual o problema? *">
+            <input value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})}
+              className="input-industrial w-full px-4" placeholder="Ex: Vazamento na bomba, Iluminação queimada..."
+              data-testid="solicitar-titulo" autoFocus />
+          </FormInput>
+
+          <FormInput label="Justificativa / Detalhes">
+            <textarea value={form.justificativa} onChange={e => setForm({...form, justificativa: e.target.value})}
+              className="input-industrial w-full px-4 py-3 min-h-[100px] resize-y"
+              placeholder="Descreva o que você observou. Quando começou? Há risco de segurança? O equipamento parou?"
+              data-testid="solicitar-justificativa" />
+          </FormInput>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FormInput label="Urgência">
+              <select value={form.prioridade} onChange={e => setForm({...form, prioridade: e.target.value})}
+                className="input-industrial w-full px-4" data-testid="solicitar-prioridade">
+                <option value="baixa">Baixa — pode esperar</option>
+                <option value="media">Média — próximos dias</option>
+                <option value="alta">Alta — precisa logo</option>
+                <option value="critica">Urgente — agora!</option>
+              </select>
+            </FormInput>
+            <FormInput label="Equipamento Parado?">
+              <div className="flex items-center gap-3 h-12">
+                <button onClick={() => setForm({...form, equipamento_parado: true})}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-all ${form.equipamento_parado ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                  data-testid="solicitar-parado-sim">Sim</button>
+                <button onClick={() => setForm({...form, equipamento_parado: false})}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-all ${!form.equipamento_parado ? 'bg-brand-20 text-brand border-brand-30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                  data-testid="solicitar-parado-nao">Não</button>
+              </div>
+            </FormInput>
+          </div>
+
+          <button onClick={handleSubmit} disabled={saving || !form.titulo.trim()}
+            className="w-full btn-primary py-4 text-lg font-bold flex items-center justify-center gap-2"
+            data-testid="solicitar-enviar">
+            <Send size={20} /> {saving ? 'Enviando...' : 'Enviar Solicitação'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 // ============== ANOMALIAS PAGE ==============
 
@@ -8969,8 +9163,8 @@ const PortalTecnicoPage = () => {
 
   const quickActions = [
     { icon: ClipboardCheck, label: 'Executar Inspeção', desc: 'Iniciar inspeção neste equipamento', action: () => navigate(`/inspecoes?ativo_id=${id}`) },
-    { icon: Wrench, label: 'Abrir OS', desc: 'Criar ordem de serviço', action: () => navigate(`/os?novo=1&ativo_id=${id}&ativo_tag=${ativo.tag}&ativo_nome=${ativo.nome}`) },
-    { icon: AlertTriangle, label: 'Registrar Anomalia', desc: 'Reportar problema encontrado', action: () => navigate(`/anomalias?nova=1&ativo_id=${id}&ativo_tag=${ativo.tag}`) },
+    { icon: Wrench, label: 'Solicitar Serviço', desc: 'Criar solicitação de manutenção', action: () => navigate(`/solicitar?ativo_id=${id}&ativo_tag=${ativo.tag}&ativo_nome=${ativo.nome}`) },
+    { icon: AlertTriangle, label: 'Registrar Problema', desc: 'Reportar problema encontrado', action: () => navigate(`/solicitar?ativo_id=${id}&ativo_tag=${ativo.tag}`) },
     { icon: Camera, label: 'Adicionar Fotos', desc: 'Registrar foto do equipamento', action: () => navigate(`/ativos/${id}?tab=docs`) },
     { icon: Clock, label: 'Registrar HH', desc: 'Apontar hora trabalhada', action: () => navigate(`/os?ativo_id=${id}`) },
     { icon: Eye, label: 'Ver Prontuário', desc: 'Prontuário completo do ativo', action: () => navigate(`/ativos/${id}`) },
@@ -9537,6 +9731,7 @@ function App() {
               <Route path="/sobressalentes" element={<ProtectedRoute><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
               <Route path="/paradas" element={<ProtectedRoute><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
               <Route path="/anomalias" element={<ProtectedRoute><AppLayout><AnomaliasPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/solicitar" element={<ProtectedRoute><AppLayout><SolicitacaoServicoPage /></AppLayout></ProtectedRoute>} />
               <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/templates" element={<ProtectedRoute><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
