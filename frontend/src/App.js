@@ -8129,7 +8129,7 @@ const EquipePage = () => {
 
 const PRESET_THEMES = [
   { id: 'industrial_dark', name: 'Industrial Dark', colors: { cor_primaria: '#10b981', cor_secundaria: '#3b82f6', cor_fundo: '#020617', cor_texto: '#e2e8f0', cor_destaque: '#f59e0b', cor_menu: '#0f172a', cor_login: '#020617', cor_header: '#0f172a' } },
-  { id: 'industrial_light', name: 'Industrial Light', colors: { cor_primaria: '#059669', cor_secundaria: '#2563eb', cor_fundo: '#f8fafc', cor_texto: '#1e293b', cor_destaque: '#d97706', cor_menu: '#1e293b', cor_login: '#f1f5f9', cor_header: '#1e293b' } },
+  { id: 'midnight_steel', name: 'Midnight Steel', colors: { cor_primaria: '#6366f1', cor_secundaria: '#ec4899', cor_fundo: '#09090b', cor_texto: '#e4e4e7', cor_destaque: '#f59e0b', cor_menu: '#18181b', cor_login: '#09090b', cor_header: '#18181b' } },
   { id: 'corp_blue', name: 'Corporativo Azul', colors: { cor_primaria: '#2563eb', cor_secundaria: '#7c3aed', cor_fundo: '#0f172a', cor_texto: '#e2e8f0', cor_destaque: '#f59e0b', cor_menu: '#1e3a5f', cor_login: '#0c1524', cor_header: '#1e3a5f' } },
   { id: 'corp_green', name: 'Corporativo Verde', colors: { cor_primaria: '#16a34a', cor_secundaria: '#0891b2', cor_fundo: '#052e16', cor_texto: '#dcfce7', cor_destaque: '#facc15', cor_menu: '#14532d', cor_login: '#022c22', cor_header: '#14532d' } },
   { id: 'custom', name: 'Personalizado', colors: null },
@@ -8276,6 +8276,7 @@ const WhiteLabelDesignerPage = () => {
   const [showNewOrg, setShowNewOrg] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const { user } = useAuth();
+  const configReqVer = useRef(0);
 
   const loadOrgs = async () => {
     setLoading(true);
@@ -8293,11 +8294,12 @@ const WhiteLabelDesignerPage = () => {
 
   useEffect(() => {
     if (!selectedOrgId) { setConfig(null); return; }
+    const ver = ++configReqVer.current;
     (async () => {
       try {
         const res = await api.get(`/master/organizations/${selectedOrgId}/config`);
-        setConfig(res.data);
-      } catch (err) { toast.error(normalizeError(err)); }
+        if (configReqVer.current === ver) setConfig(res.data);
+      } catch (err) { if (configReqVer.current === ver) toast.error(normalizeError(err)); }
     })();
   }, [selectedOrgId]);
 

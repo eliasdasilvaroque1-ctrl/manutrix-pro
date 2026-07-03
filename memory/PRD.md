@@ -26,6 +26,21 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Completed Sprints
 
+### Sprint 63 — FASE 2: Central White Label / Designer de Marca ✅ (2026-07-03)
+- **WhiteLabelDesignerPage**: Full admin UI for MASTER to configure any organization's brand
+- **Org Selector**: Visual selector showing all organizations with logos/initials
+- **5 Configuration Tabs**: Identidade, Cores, Login, Domínios, Temas
+- **Identity**: nome_empresa, nome_sistema, subtitulo, rodape, mostrar_powered_by, 4 asset uploaders (logo, logo_branca, favicon, wallpaper)
+- **Colors**: 8 color pickers with hex input (primária, secundária, menu, header, login, fundo, texto, destaque)
+- **Login Customization**: texto_login, texto_institucional, wallpaper upload, cor_login
+- **Domains**: subdomínio + domínio customizado configuration
+- **Preset Themes**: Industrial Dark, Midnight Steel, Corporativo Azul, Corporativo Verde — one-click apply
+- **Live Preview**: Real-time preview of Login, Sidebar, and Asset Card — updates instantly without saving
+- **New Org Creation**: Modal to create new organizations with auto-generated default config
+- **Race condition protection**: Request versioning on org config loading (same pattern as branding.js)
+- **Backend**: 5 new MASTER-only endpoints (list orgs, create org, get/put config, upload assets)
+- **Testing**: Backend 10/10 pytest, Frontend ~95% (all tabs, save, create, preview, isolation verified)
+
 ### Sprint 63 — FASE 1: White Label Enterprise ✅ (2026-07-03)
 - **BrandingProvider** wraps entire app, provides `useBranding()` hook
 - **BrandingLoader** loads org branding after auth automatically
@@ -51,14 +66,7 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Pending / Backlog (Prioritized)
 
-### FASE 2: Central White Label para MASTER (P0 - Next)
-- Admin screen for MASTER to configure White Label per org
-- Fields: nome_empresa, nome_exibicao, logo, logo_branca, favicon, cor_primaria, cor_secundaria, cor_menu, cor_login, imagem_fundo, texto_boas_vindas, rodape, mostrar_powered_by, dominio, subdominio, tema
-- Upload logo/favicon/wallpaper via Emergent Object Storage
-- Live preview of changes
-- Changes reflect immediately in the application
-
-### FASE 3: QR Code Enterprise (P0)
+### FASE 3: QR Code Enterprise (P0 - Next)
 - QR Code generator with company logo + QR + TAG + equipment name + "Powered by MAINTRIX"
 - Label formats: 50x30, 60x40, 80x50, A4
 - Uses organization's visual identity automatically
