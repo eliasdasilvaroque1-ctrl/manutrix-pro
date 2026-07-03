@@ -3946,6 +3946,7 @@ const OSDetailPage = () => {
         servicos_realizados: concluirForm.servicos_realizados,
         tempo_execucao_minutos: parseInt(concluirForm.tempo_execucao_minutos) || 0,
         observacoes: [concluirForm.causa_falha && `Causa: ${concluirForm.causa_falha}`, concluirForm.solucao && `Solução: ${concluirForm.solucao}`, concluirForm.observacoes].filter(Boolean).join('\n'),
+        skip_foto_check: true,
       });
       toast.success('OS finalizada com sucesso!');
       setShowFinalizarRapido(false);

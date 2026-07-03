@@ -26,6 +26,13 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Completed Sprints
 
+### Sprint 58 — Fluxo de Execução de OS ✅ (2026-07-03)
+- **HH Manual**: Endpoint POST `/api/os/{id}/hh-manual` aceita {horas, data_inicio, data_fim, executante_id, descricao}. Calcula timestamps corretamente quando apenas horas é fornecido (data_fim=now, data_inicio=now-horas)
+- **Seção HH compacta**: Timer inline (1 linha) + botão "Lançar HH" abre form com executante/horas/início/fim/descrição + resumo por executante
+- **Finalizar Rapidamente (⚡)**: Modal único com: serviço executado, causa da falha, solução aplicada, HH, observações. Skip foto check na finalização rápida. Botão proeminente (primário) para em_execucao e pausada
+- **modo_hh configurável**: `org_config.workflow.modo_hh` = "manual" | "cronometro" | "ambos"
+- **Botões redesenhados**: ⚡Finalizar Rapidamente (primário) + Concluir/Pausar (secundários compactos)
+
 ### Sprint 58 — Estabilidade e Experiência de Login ✅ (2026-07-03)
 - **Login redesenhado**: Formulário único com campo Empresa (autocomplete) + Email + Senha — sem tela separada de seleção
 - **Autocomplete empresa**: Busca por nome, mostra logo/iniciais, carrega branding instantaneamente ao selecionar

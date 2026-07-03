@@ -262,6 +262,7 @@ class ConcluirOSBody(BaseModel):
     tempo_execucao_minutos: Optional[int] = None
     custo_pecas: Optional[float] = None
     custo_mao_obra: Optional[float] = None
+    skip_foto_check: Optional[bool] = False
 
 # Inspections
 class ChecklistItem(BaseModel):

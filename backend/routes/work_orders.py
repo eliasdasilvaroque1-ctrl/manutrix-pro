@@ -349,10 +349,15 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
     descricao = body.servicos_realizados or body.observacoes or os_doc.get('descricao')
     if not descricao:
         raise HTTPException(status_code=400, detail="Descrição do serviço é obrigatória para fechar a OS")
-    if os_doc.get('tipo') in ['corretiva']:
-        attachments = await db.attachments.count_documents({"entity_type": "work_order", "entity_id": os_id})
-        if attachments == 0:
-            raise HTTPException(status_code=400, detail="OS corretiva exige pelo menos uma foto/evidência anexada")
+    # Photo check: skip for rapid finish
+    if not body.skip_foto_check and os_doc.get('tipo') in ['corretiva']:
+        org_id = os_doc.get('organization_id', '')
+        config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "workflow": 1})
+        foto_obr = config.get('workflow', {}).get('foto_obrigatoria_corretiva', True) if config else True
+        if foto_obr:
+            attachments = await db.attachments.count_documents({"entity_type": "work_order", "entity_id": os_id})
+            if attachments == 0:
+                raise HTTPException(status_code=400, detail="OS corretiva exige pelo menos uma foto/evidência anexada. Adicione fotos antes de concluir.")
     tempo = body.tempo_execucao_minutos
     if not tempo and os_doc.get('data_inicio'):
         start = datetime.fromisoformat(os_doc['data_inicio'].replace('Z', '+00:00'))

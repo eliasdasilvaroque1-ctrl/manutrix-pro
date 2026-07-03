@@ -208,6 +208,13 @@ async def create_hh_manual(os_id: str, data: dict, user: Dict = Depends(get_curr
     if minutos <= 0:
         raise HTTPException(status_code=400, detail="Informe as horas ou datas de início/fim")
 
+    # Compute realistic timestamps when only horas is provided
+    now_dt = datetime.now(timezone.utc)
+    if not data_inicio or not data_fim:
+        from datetime import timedelta
+        data_fim = data_fim or now_dt.isoformat()
+        data_inicio = data_inicio or (now_dt - timedelta(minutes=minutos)).isoformat()
+
     exec_user = await db.users.find_one({"id": executante_id}, {"_id": 0, "nome": 1})
     org_id = os_doc.get("organization_id", user.get("organization_id", ""))
 
@@ -215,7 +222,7 @@ async def create_hh_manual(os_id: str, data: dict, user: Dict = Depends(get_curr
         "id": str(uuid.uuid4()), "os_id": os_id, "organization_id": org_id,
         "user_id": executante_id, "user_nome": exec_user.get("nome", "") if exec_user else "",
         "evento": "iniciar", "observacao": descricao,
-        "timestamp": data_inicio or datetime.now(timezone.utc).isoformat(),
+        "timestamp": data_inicio,
         "created_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None,
         "manual": True,
     }
@@ -223,7 +230,7 @@ async def create_hh_manual(os_id: str, data: dict, user: Dict = Depends(get_curr
         "id": str(uuid.uuid4()), "os_id": os_id, "organization_id": org_id,
         "user_id": executante_id, "user_nome": exec_user.get("nome", "") if exec_user else "",
         "evento": "finalizar", "observacao": descricao,
-        "timestamp": data_fim or datetime.now(timezone.utc).isoformat(),
+        "timestamp": data_fim,
         "created_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None,
         "manual": True,
     }
