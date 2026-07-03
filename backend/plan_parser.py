@@ -154,6 +154,7 @@ def parse_text(text: str) -> Dict:
                 pergunta["limite_min"] = ""
                 pergunta["limite_max"] = limit["valor"]
                 pergunta["unidade"] = limit["unidade"]
+                pergunta["tipo_campo"] = "numerico"  # Override: if limit detected, force numeric
                 limites.append(limit)
 
             perguntas.append(pergunta)

@@ -26,6 +26,24 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Completed Sprints
 
+### Sprint 57 — Assistente Inteligente de Criação de Planos ✅ (2026-07-03)
+**Backend:**
+- `plan_parser.py`: Parser baseado em regras (sem IA) para extração de checklists de texto/PDF/Excel/Word/TXT
+- Reconhece: listas numeradas (1. 2. 3.), bullets (- • ☐ □ ✓), checkboxes, tabelas, limites (°C, bar, RPM, %), frequências (diária, semanal, mensal), observações (OBS:, NOTA:)
+- Detecta tipo de campo automaticamente (numerico, conforme_nao_conforme, foto, texto)
+- Endpoints: POST `/api/planos-inspecao/parse-text`, POST `/api/planos-inspecao/parse-file`
+- PCM pode criar/editar templates e planos (permissão atualizada de admin_only para pcm_or_admin)
+
+**Frontend:**
+- `PlanImportWizard`: Wizard 4 passos (Método → Configurar → Preview → Salvar)
+- Método "Copiar e Colar" — textarea para texto do ChatGPT/manual
+- Método "Arquivo" — upload PDF/Excel/Word/TXT com drag-and-drop
+- Configuração: tipo plano, disciplina, equipamento, destino (Plano ou Modelo Mestre)
+- Preview: resumo (X perguntas, Y obs, Z limites, frequência), lista editável, botão IA (futuro)
+- Botão "Importar" na página de Planos de Inspeção
+
+**Testing:** Backend 15/16 pytest ✅ | Frontend 88→100% após fix (schema template corrigido)
+
 ### Sprint 56 — Governança Operacional (Versão Leve) ✅ (2026-07-03)
 **Backend:**
 - OS tipos livres (enum removido) — valores vêm do `org_config.tipos_os` (configurável por empresa)

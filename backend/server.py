@@ -818,7 +818,7 @@ async def list_inspection_templates(tipo_equipamento: Optional[str] = None, user
 
 @api_router.post("/inspection-templates")
 async def create_inspection_template(data: InspectionTemplateCreate, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_pcm_or_admin(user)
     org_id = user.get('organization_id', '')
     itens = []
     for item in data.itens:
@@ -850,7 +850,7 @@ async def get_inspection_template(template_id: str, user: Dict = Depends(get_cur
 
 @api_router.put("/inspection-templates/{template_id}")
 async def update_inspection_template(template_id: str, data: InspectionTemplateUpdate, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_pcm_or_admin(user)
     t = await db.inspection_templates.find_one({"id": template_id, "deleted_at": None})
     if not t:
         raise HTTPException(status_code=404, detail="Template não encontrado")
@@ -876,7 +876,7 @@ async def delete_inspection_template(template_id: str, user: Dict = Depends(get_
 
 @api_router.post("/inspection-templates/{template_id}/duplicate")
 async def duplicate_inspection_template(template_id: str, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_pcm_or_admin(user)
     org_id = user.get('organization_id', '')
     original = await db.inspection_templates.find_one({"id": template_id, "deleted_at": None}, {"_id": 0})
     if not original:

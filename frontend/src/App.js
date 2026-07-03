@@ -7139,15 +7139,18 @@ const PlanImportWizard = ({ onClose, onImported }) => {
     setSaving(true);
     try {
       if (config.save_as === 'template') {
-        // Save as master template (Biblioteca)
+        // Save as master template (Biblioteca) — map field names to TemplateItemCreate schema
+        const tipoMap = { conforme_nao_conforme: 'boolean', foto: 'observacao' };
         const payload = {
           nome: config.nome, tipo_equipamento: '',
           descricao: `Importado via Assistente — ${preview.metadata.total_perguntas} perguntas`,
           itens: preview.perguntas.map((p, i) => ({
-            texto: p.texto, tipo_campo: p.tipo_campo || 'conforme_nao_conforme',
-            obrigatorio: p.obrigatorio !== false, ordem: i,
-            limite_min: p.limite_min || '', limite_max: p.limite_max || '', unidade: p.unidade || '',
-            grupo: p.grupo || '',
+            descricao: p.texto,
+            tipo: tipoMap[p.tipo_campo] || p.tipo_campo || 'boolean',
+            obrigatorio: p.obrigatorio !== false,
+            unidade: p.unidade || '',
+            tolerancia_min: p.limite_min ? parseFloat(p.limite_min) : null,
+            tolerancia_max: p.limite_max ? parseFloat(p.limite_max) : null,
           })),
         };
         await api.post('/inspection-templates', payload);
