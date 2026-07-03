@@ -26,6 +26,29 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Completed Sprints
 
+### Sprint 63 — FASE 3: QR Code Enterprise ✅ (2026-07-03)
+- **QR Label Modal**: Accessible from asset detail page (Prontuário) via "Etiqueta QR" button
+- **4 Label Formats**: 50×30mm, 60×40mm, 80×50mm (compact), A4 (full prontuário)
+- **Branded Labels**: Company logo/name + QR Code + TAG + Equipment name + "Powered by MAINTRIX"
+- **QR URL**: Points to `/portal/equipamento/{ativo_id}` (public portal)
+- **Print**: One-click print via browser print dialog
+
+### Sprint 63 — FASE 4: Portal Público do Equipamento ✅ (2026-07-03)
+- **Public Route**: `/portal/equipamento/{ativo_id}` — no authentication required
+- **Mobile-first**: Optimized for QR code scanning on phones
+- **Branded Header**: Dynamic company logo and name from org_config
+- **Hero Card**: Asset photo/icon, TAG, name, type, status badge, area
+- **KPI Cards**: Disponibilidade, Total OS, Total Inspeções
+- **3 Tabs**: Informações (fabricante/modelo/série/área/tipo), Histórico (últimas 5 inspeções + OS), Manuais (PDFs downloadable)
+- **Error Handling**: 404 page for invalid asset IDs
+- **Backend**: Enriched endpoint with ultimas_inspecoes/os/manutencoes (limit 5), full branding payload
+
+### Sprint 63 — FASE 5: Portal do Técnico ✅ (2026-07-03)
+- **Auth Route**: `/portal/tecnico/{ativo_id}` — requires authentication
+- **Quick Actions Grid**: 6 action buttons (Executar Inspeção, Abrir OS, Registrar Anomalia, Adicionar Fotos, Registrar HH, Ver Prontuário)
+- **Scanner Integration**: QR scanner redirects authenticated users to Portal do Técnico (not public portal)
+- **Asset Info**: TAG, name, area, type displayed in header
+
 ### Sprint 63 — FASE 2: Central White Label / Designer de Marca ✅ (2026-07-03)
 - **WhiteLabelDesignerPage**: Full admin UI for MASTER to configure any organization's brand
 - **Org Selector**: Visual selector showing all organizations with logos/initials
@@ -66,18 +89,13 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Pending / Backlog (Prioritized)
 
-### FASE 3: QR Code Enterprise (P0 - Next)
+### FASE 3-5 QR/Portals — COMPLETED
+### P1 — Sprint 56: Wizard "Criar Planos ao Cadastrar Ativo" (Next)
 - QR Code generator with company logo + QR + TAG + equipment name + "Powered by MAINTRIX"
 - Label formats: 50x30, 60x40, 80x50, A4
 - Uses organization's visual identity automatically
 
-### FASE 4: Portal Público do Equipamento (P0)
-- Read-only public page accessible via QR code scan (no auth)
-- Shows: Foto, TAG, Nome, Área, Fabricante, Modelo, Manual, Últimas inspeções, Últimas manutenções, Últimas OS, Disponibilidade
-
-### FASE 5: Portal do Técnico (P0)
-- Authenticated portal via QR scan
-- Opens equipment directly, execute inspection, open OS, register anomaly, add photos, register HH
+### FASE 3-5 — COMPLETED (see Completed Sprints above)
 
 ### P1 — Sprint 56: Wizard "Criar Planos ao Cadastrar Ativo"
 ### P1 — Sprint 57: Padronização do ciclo de vida
