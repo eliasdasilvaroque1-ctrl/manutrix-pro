@@ -1,0 +1,74 @@
+{
+  "summary": "Iteration 67 HOMOLOGACAO sprint. Backend pytest 28/30 PASS (1 skipped, 1 legitimate BUG). RBAC visibility engine works correctly — Operador NEVER sees mecanica/eletrica/instrumentacao OS or inspections (verified via API), Mecanico only sees mecanica, Eletricista only sees eletrica+instrumentacao. All 8 test accounts login OK with proper disciplina_principal/disciplinas_secundarias. Portal Publico loads without auth with full ASTEC branding + hero + KPIs + tabs (Info/Historico/Manuais) + 404 handling. Portal Tecnico loads with 6 quick-action buttons; Ver Prontuario navigates to /ativos/{id} correctly. Prontuario page renders all 6 tabs (Prontuario, Timeline(3), Planos(0), OS(2), Docs(3), BOM(1)) + Saude do Equipamento panel + Etiqueta QR modal with 4 sizes. TWO PROBLEMS FOUND: (1) BACKEND BUG — POST /api/ativos uses check_admin_only, blocking PCM from creating ativos (403). Spec explicitly requires PCM to create ativos. Same for PUT. (2) FRONTEND SIDEBAR MISMATCH — Operador sidebar shows 'Ordens de Servico' (spec forbids), and MISSES 'Anomalias' + 'Scan' (spec requires). PCM sidebar MISSES 'Ordens de Servico' link entirely.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/ativos (routes/assets.py:181)",
+        "issue": "Uses check_admin_only(user), returns 403 for PCM role. Sprint spec requires PCM to be able to create ativos (nome/tag/tipo/fabricante/modelo). Fix: replace check_admin_only with check_pcm_or_admin(user). Same issue on PUT /api/ativos/{id} (line 213).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Sidebar (App.js)",
+        "issue": "OPERADOR sidebar shows 'Ordens de Servico' link — spec explicitly says operador should NOT have OS link. Currently: [Minha Jornada, Ativos, Ordens de Servico, Inspecoes, Ronda, Estoque]. Expected: [Minha Jornada, Inspecoes, Scan, Ativos, Anomalias, Ronda].",
+        "selector": "aside a:has-text('Ordens de Servico')",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Sidebar (App.js)",
+        "issue": "OPERADOR sidebar is MISSING 'Anomalias' link (spec requires it) and 'Scan' link (spec requires it). Operador cannot register anomalias from the sidebar.",
+        "selector": "aside",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Sidebar (App.js)",
+        "issue": "PCM sidebar is MISSING 'Ordens de Servico' link entirely. Actual: [Central de Trabalho, Dashboard, Equipe, Ativos, Inspecoes, Anomalias, Areas, Estoque, Sobressalentes, Paradas, Biblioteca, Planos de Inspecao, Auditoria]. PCM cannot navigate to /os from sidebar even though PCM is the role expected to manage OS.",
+        "selector": "aside (PCM role)",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Login success",
+        "issues": ["Success toast ('Login realizado!') is centered and overlaps content — consider top-right toast placement to avoid covering header."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration67_homologacao.py",
+    "/app/test_reports/pytest/iteration67.xml"
+  ],
+  "action_items": [
+    "FIX BACKEND: routes/assets.py POST /ativos line 181 and PUT /ativos/{id} line 213 — replace check_admin_only(user) with check_pcm_or_admin(user) so PCM can create/update ativos. This blocks the PCM_FLOW from the sprint.",
+    "FIX FRONTEND SIDEBAR (Operador): remove 'Ordens de Servico' item; add 'Anomalias' and 'Scan' items. Verify against menu definition for role==='operador' in App.js Sidebar component.",
+    "FIX FRONTEND SIDEBAR (PCM): add 'Ordens de Servico' link in the PCM menu; without it PCM has no direct nav to /os.",
+    "OPTIONAL UX: Reposition login success toast to top-right to avoid overlapping header/content.",
+    "OPTIONAL from prev iterations still valid: (a) SW forced reload on Portal Publico first load swallows first tab click; (b) portalUrl uses window.location.origin (bakes preview hostname into printed QR labels)."
+  ],
+  "critical_code_review_comments": [
+    "routes/assets.py:181 — check_admin_only on POST /ativos contradicts business role model where PCM owns asset creation. Also PUT (line 213) blocks PCM edits (fabricante/modelo/nome updates), which is central to the PCM daily workflow described in the sprint.",
+    "App.js Sidebar (search 'Minha Jornada' / role branches) — operador role menu diverges from documented spec. Recommend centralising the menu-per-role definition in a single map (e.g., MENU_BY_ROLE = { operador: [...], pcm: [...], tecnico: [...] }) to prevent drift.",
+    "deps.py:190-198 build_visibility_query returns unrestricted base for supervisor. Supervisors are documented as 'only their disciplines + their areas' but implementation gives them full-org visibility (same as PCM/Admin). Not necessarily wrong for MVP but is inconsistent with the docstring lines 186-188.",
+    "deps.py:279 — Same discrepancy in build_dashboard_visibility: supervisor gets base (org-wide) instead of discipline-scoped as documented."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration67_homologacao.py",
+    "/app/test_reports/pytest/iteration67.xml",
+    "/app/test_reports/iteration_67.json"
+  ],
+  "success_rate": {
+    "backend": "93% (28/30 pytest — 1 real bug on POST /ativos PCM permission, 1 skipped white-label GET endpoint discovery)",
+    "frontend": "85% — Prontuario, QR modal, Portal Publico, Portal Tecnico all working. Operador+PCM sidebars have menu drift from spec (3 sidebar bugs)."
+  },
+  "test_credentials": "All 8 accounts verified working: master@maintrix.com/master123, test.admin@maintrix.com/admin123, test.pcm@maintrix.com/pcm123, test.sup.mec@maintrix.com/sup123, test.sup.ele@maintrix.com/sup123, test.mec@maintrix.com/tec123, test.ele@maintrix.com/tec123, test.operador@maintrix.com/op123. Org used: ASTEC Cedro. Ativo: 5af42d90-4654-4067-b67d-92d7e7f6f78d (AV-01).",
+  "seed_data_creation": "None. Test that would create TEST_Bomba Centrifuga was blocked by the check_admin_only bug on POST /ativos (see backend_issues.critical).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "White Label 'change cor_primaria and verify sidebar accent updates on next login' was not exercised end-to-end (only the master org listing endpoint was validated). Recommend a Playwright pass: master login -> /master/white-label -> select ASTEC Cedro -> change cor_primaria -> save -> logout -> re-login -> inspect getComputedStyle of a known accent element. The 3 sidebar drift bugs found are declarative fixes in the Sidebar menu-per-role table in App.js — retest by looking up 'operador' branch and confirming: (a) no OS item, (b) has Anomalias + Scan; for pcm, ensure OS is present.",
+  "rca_of_the_issue": "Backend bug root cause: routes/assets.py hardcodes check_admin_only(user) on both POST /ativos and PUT /ativos/{id}. deps.py exposes check_pcm_or_admin (line 114) but assets.py does not call it. Fix is a 1-line swap in each of the two endpoints. Frontend sidebar drift RCA: the operador menu (App.js Sidebar) was hand-tailored but never brought up to date with the sprint spec — Anomalias/Scan items exist in other role menus but not in operador's; conversely operador retains an OS link from an earlier iteration where operators could see producao OS. Reconciling with the RBAC engine (which already correctly filters OS visibility) means operador SHOULD have Anomalias + Scan + Ronda + Ativos + Inspecoes + Minha Jornada, and should NOT have direct OS nav."
+}
