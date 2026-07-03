@@ -1,0 +1,87 @@
+{
+  "summary": "Iteration 72 tested all 10 export endpoints (5 entities × Excel/PDF) end-to-end with pytest + Playwright browser downloads. Backend endpoints all return 200 with valid xlsx/pdf. Excel headers for ativos/os/estoque/inspecoes are correctly formatted (bold, white text, brand color fill #10b981) and include ALL new spec'd columns (OS: Origem, Disciplina, Justificativa, Aprovação; Inspecoes: Disciplina). PDF titles correctly use empresa name from org_config.identidade.nome_empresa ('ASTEC Cedro — Relatório de X') for ativos/os/estoque/inspecoes. HOWEVER two blocking defects remain: (1) the sobressalentes PDF still hardcodes 'MAINTRIX' in title and filename 'sobressalentes_maintrix.pdf' — the branding refactor was NOT applied to that endpoint; (2) the frontend ExportButtons component (App.js:8244) and Dashboard handleExport (App.js:2287) ignore the empresa-branded filename returned by the backend Content-Disposition header and hardcode 'ativos_export.xlsx', 'ordens-servico_export.pdf', etc. — so end-users NEVER see 'ativos_ASTEC_Cedro.xlsx'. This fails requirement #9 of the review request outright.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/export/sobressalentes?format=pdf",
+        "issue": "Still uses hardcoded 'MAINTRIX' in both title and filename. In /app/backend/server.py:3475 `elements.append(Paragraph('MAINTRIX — Sobressalentes', styles['Title']))` and line 3503 `filename=sobressalentes_maintrix.pdf`. Extracted PDF text confirms first line = 'MAINTRIX — Sobressalentes'. All other 4 PDFs (ativos/os/estoque/inspecoes) correctly show 'ASTEC Cedro — Relatório de X'. Also: header BG uses hardcoded '#1e293b' instead of org_config.tema.cor_primaria. Fix: mirror the ativos/os/estoque/inspecoes pattern — fetch empresa+cor_primaria from org_config and interpolate into the Paragraph and filename.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/export/sobressalentes?format=excel",
+        "issue": "Excel headers are NOT formatted (no bold, no white text, no brand-color fill, no auto column width) unlike the other 4 Excel exports. server.py:3453-3458 just does ws.append with defaults. Requirement #5 states 'Todos os Excel têm headers formatados (negrito, cor, centralizado) e colunas auto-dimensionadas' — sobressalentes is left out."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ExportButtons (App.js:8234-8257)",
+        "issue": "handleExport hardcodes link.download = `${entity}_export.${format === 'excel' ? 'xlsx' : 'pdf'}` — completely ignoring the empresa-branded filename that the backend sends in the Content-Disposition header (e.g. 'ativos_ASTEC_Cedro.xlsx'). Verified via Playwright: downloaded filenames are 'ativos_export.xlsx', 'ativos_export.pdf', 'ordens-servico_export.xlsx', 'inspecoes_export.pdf', 'estoque_export.xlsx', 'sobressalentes_export.xlsx' — none contain the empresa name. Fix: parse Content-Disposition header (res.headers['content-disposition']) with a regex like /filename=([^;]+)/ and use that value; fall back to the current default only when the header is missing.",
+        "selector": "button[title='Excel'], button[title='PDF']",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "Dashboard handleExport (App.js:2281-2292)",
+        "issue": "Same problem as ExportButtons — filename hardcoded as `${entity}_export.${format === 'excel' ? 'xlsx' : 'csv'}`. Note the SECOND bug: when format is 'pdf', extension falls through to 'csv' (should be 'pdf'). Also this dropdown only exposes Excel variants (5 items), no PDF option.",
+        "selector": "[data-testid='export-data-btn']",
+        "priority": "HIGH"
+      },
+      {
+        "component": "ExportButtons — accessibility",
+        "issue": "No data-testid on the two <button> elements (only title='Excel'/'PDF'). Both buttons show the same <FileText size={16}/> icon and no visible text label, so visually it looks like two identical icons side-by-side. Consider distinct icons (FileText for Excel, FilePdf/FileX for PDF) and add data-testid='export-excel-btn' / 'export-pdf-btn'.",
+        "selector": "ExportButtons",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Empresa-branded filename",
+        "issue": "Backend sets Content-Disposition: attachment; filename=ativos_ASTEC_Cedro.xlsx but frontend overrides it with generic 'ativos_export.xlsx'. End-to-end, requirement #9 of the review request is NOT met.",
+        "affected_selectors": ["ExportButtons (all 4 pages)", "[data-testid='spare-export-excel']", "[data-testid='spare-export-pdf']"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Login",
+        "issues": ["Login autocomplete for empresa requires typing at least 1 char before dropdown appears — clicking the empty field does not show all orgs. Not blocking but 'select from list' UX would be smoother."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration72_export_branding.py",
+    "/app/test_reports/pytest/iteration72.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Rewrite /api/export/sobressalentes (both format=excel and format=pdf) in /app/backend/server.py:3439-3503 to mirror the ativos/os pattern — fetch org_config.identidade.nome_empresa and tema.cor_primaria, use them in the Paragraph title, in the filename (`sobressalentes_{empresa.replace(' ','_')}.pdf/.xlsx`), and in the Excel header styling (Font bold+white, PatternFill with cor_primaria, Alignment center, auto column width).",
+    "CRITICAL: Fix frontend ExportButtons (App.js:8238-8249) and Dashboard handleExport (App.js:2281-2292) to honour the Content-Disposition filename returned by the backend. Suggested patch: `const cd = res.headers['content-disposition'] || ''; const match = cd.match(/filename=([^;]+)/); link.download = match ? match[1].replace(/^\"|\"$/g,'').trim() : `${entity}_export.${format==='excel'?'xlsx':'pdf'}`;`. Note: axios responseType:'blob' returns headers on res.headers — verify case sensitivity (lowercased by axios).",
+    "MEDIUM: Fix the .csv typo on App.js:2287 — for the Dashboard 'Exportar Dados' dropdown, PDF format currently saves with '.csv' extension.",
+    "MEDIUM: Add PDF variants to the Dashboard 'Exportar Dados' dropdown (currently only Excel).",
+    "LOW: Add data-testid='export-excel-btn'/'export-pdf-btn' on ExportButtons for reliable automated testing; use distinct icons for the two buttons."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:3439-3503 (export_spares) was NOT touched during the Iteration 72 refactor even though the requirements explicitly call out all 5 entities × 2 formats. The other four endpoints (2660-2884) were correctly updated. This is a copy-paste omission — the same 30-line branding+styling boilerplate needs to be inlined here.",
+    "/app/backend/server.py:2660-2884 — the same 30-line block (org branding fetch + Font/PatternFill/Alignment + reportlab TableStyle) is duplicated 4 times. Consider extracting `_apply_excel_header_style(ws, cor_primaria)` and `_pdf_header_style(cor_primaria)` helpers plus a `_get_org_branding(user)` helper to avoid future drift like the sobressalentes miss.",
+    "/app/frontend/src/App.js:8244 — same pattern of hardcoding filename appears in at least 3 places (2287, 6168, 7990, 8244). Extract into `downloadBlobFromResponse(res, fallback)` utility.",
+    "/app/backend/server.py:2732-2735 — the OS enrichment loop does an `await db.ativos.find_one(...)` per OS row inside a for loop (N+1). For an org with 5000 OS the export will do 5000 sequential DB round trips. Should batch: collect ativo_ids, do one `find({id:{$in: ids}})`, build a map, then join in memory.",
+    "/app/backend/server.py:2843-2846 — same N+1 pattern in inspecoes export (per-inspecao ativos lookup). Refactor with a single $in query.",
+    "/app/frontend/src/App.js:1940 — login submit button correctly disables until orgId is set, but the empresa autocomplete only opens the dropdown once the user starts typing. Consider showing the dropdown on focus (single-org tenants would get one-click selection)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration72_export_branding.py",
+    "/app/test_reports/pytest/iteration72.xml",
+    "/app/test_reports/iteration_72.json"
+  ],
+  "success_rate": {
+    "backend": "95% (19/20 pytest — 4 endpoints × 2 formats fully compliant; only sobressalentes PDF fails empresa-branding assertion)",
+    "frontend": "60% — all 10 buttons work and file downloads succeed, but end-user filename never contains empresa name (blocker for requirement #9)"
+  },
+  "test_credentials": "master@maintrix.com / master123 (Org: ASTEC Cedro). Login flow verified: type 'A' in empresa field → dropdown → click org → email/pwd → Entrar.",
+  "seed_data_creation": "None. Only downloaded files stored in /tmp/dl inside the browser test container.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_iteration72_export_branding.py to re-validate after fixes. Extend the frontend test to check download.suggested_filename contains empresa name. Two spots need change: (1) server.py:3439-3503 sobressalentes — replicate branding pattern; (2) App.js:8238-8249 + 2281-2292 (and 6168, 7990) — parse Content-Disposition instead of hardcoding. After both, downloaded filenames from all 10 buttons must match 'ativos_ASTEC_Cedro.xlsx' style and no PDF body should contain 'MAINTRIX'.",
+  "rca_of_the_issue": "Two independent regressions: (a) Backend — /api/export/sobressalentes was overlooked in the branding refactor. The endpoint reads empresa from config for the Excel filename correctly (line 3462), but the PDF branch on lines 3475 & 3503 keeps the pre-refactor hardcoded 'MAINTRIX' string. Fix at those two lines. (b) Frontend — the Content-Disposition header (which the backend correctly builds with empresa name) is discarded because both handleExport implementations use `link.download = \"${entity}_export.xxx\"` instead of reading the header. This is a client-side name override that supersedes any server-provided filename hint. Fix: extract filename via `res.headers['content-disposition']` regex on the axios response before creating the download link."
+}

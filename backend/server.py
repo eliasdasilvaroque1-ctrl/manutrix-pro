@@ -2663,50 +2663,58 @@ async def export_ativos(format: str = "excel", user: Dict = Depends(get_current_
         raise HTTPException(status_code=403, detail="Sem permissão para exportar")
     
     query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    org_id = user.get('organization_id', '')
+    if org_id:
+        query['organization_id'] = org_id
     ativos = await db.ativos.find(query, {"_id": 0}).to_list(5000)
     
+    # Org branding
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1, "tema": 1}) if org_id else None
+    empresa = config.get('identidade', {}).get('nome_empresa', 'CMMS') if config else 'CMMS'
+    cor_primaria = config.get('tema', {}).get('cor_primaria', '#10b981') if config else '#10b981'
+
+    # Enrich with area names
+    sid_list = list(set(a.get('sector_id') for a in ativos if a.get('sector_id')))
+    sectors = await db.sectors.find({"id": {"$in": sid_list}}, {"_id": 0}).to_list(len(sid_list)) if sid_list else []
+    sector_map = {s['id']: s.get('nome','') for s in sectors}
+
     if format == "excel":
         import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Ativos"
-        # Enrich with area names
-        sid_list = list(set(a.get('sector_id') for a in ativos if a.get('sector_id')))
-        sectors = await db.sectors.find({"id": {"$in": sid_list}}, {"_id": 0}).to_list(len(sid_list)) if sid_list else []
-        sector_map = {s['id']: s.get('nome','') for s in sectors}
-        headers = ["Área", "TAG", "Nome", "Tipo", "Fabricante", "Modelo", "Número de Série", "Observações"]
+        headers = ["Área", "TAG", "Nome", "Tipo", "Fabricante", "Modelo", "Nº Série", "Criticidade", "Status", "Observações"]
         ws.append(headers)
+        hfill = PatternFill(start_color=cor_primaria.replace('#',''), end_color=cor_primaria.replace('#',''), fill_type="solid")
+        hfont = Font(bold=True, color="FFFFFF", size=11)
+        for i, cell in enumerate(ws[1], 1):
+            cell.fill = hfill; cell.font = hfont; cell.alignment = Alignment(horizontal='center')
         for a in ativos:
-            ws.append([sector_map.get(a.get('sector_id',''),''), a.get('tag',''), a.get('nome',''), a.get('tipo_equipamento',''), a.get('fabricante',''), a.get('modelo',''), a.get('numero_serie',''), a.get('observacoes','')])
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=ativos_maintrix.xlsx"})
+            ws.append([sector_map.get(a.get('sector_id',''),''), a.get('tag',''), a.get('nome',''), a.get('tipo_equipamento',''), a.get('fabricante',''), a.get('modelo',''), a.get('numero_serie',''), a.get('criticidade',''), a.get('status','operacional'), a.get('observacoes','')])
+        for col in ws.columns:
+            max_len = max(len(str(c.value or '')) for c in col)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+        buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=ativos_{empresa.replace(' ','_')}.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib import colors
-        # Enrich with area names
-        sid_list = list(set(a.get('sector_id') for a in ativos if a.get('sector_id')))
-        sectors = await db.sectors.find({"id": {"$in": sid_list}}, {"_id": 0}).to_list(len(sid_list)) if sid_list else []
-        sector_map = {s['id']: s.get('nome','') for s in sectors}
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
-        elements = [Paragraph("MAINTRIX - Relatório de Ativos", styles['Title']), Spacer(1, 12)]
-        data = [["Área", "TAG", "Nome", "Tipo", "Fabricante", "Modelo"]]
+        elements = [Paragraph(f"{empresa} — Relatório de Ativos", styles['Title']), Spacer(1, 12)]
+        data = [["Área", "TAG", "Nome", "Tipo", "Fabricante", "Modelo", "Criticidade", "Status"]]
         for a in ativos:
-            data.append([sector_map.get(a.get('sector_id',''),''), a.get('tag','') or '', (a.get('nome','') or '')[:30], (a.get('tipo_equipamento','') or '')[:20], (a.get('fabricante','') or '')[:20], (a.get('modelo','') or '')[:20]])
-        t = Table(data)
-        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#10b981')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
+            data.append([sector_map.get(a.get('sector_id',''),''), a.get('tag',''), (a.get('nome','') or '')[:30], (a.get('tipo_equipamento','') or '')[:20], (a.get('fabricante','') or '')[:20], (a.get('modelo','') or '')[:20], a.get('criticidade',''), a.get('status','operacional')])
+        t = Table(data, repeatRows=1)
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor(cor_primaria)), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,0), 9), ('FONTSIZE', (0,1), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8fafc')])]))
         elements.append(t)
-        doc.build(elements)
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=ativos_maintrix.pdf"})
+        doc.build(elements); buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=ativos_{empresa.replace(' ','_')}.pdf"})
 
 @api_router.get("/export/ordens-servico")
 async def export_os(format: str = "excel", user: Dict = Depends(get_current_user)):
@@ -2716,6 +2724,11 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
     query = await build_visibility_query(user, entity_type="os")
     os_list = await db.ordens_servico.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
     
+    org_id = user.get('organization_id', '')
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1, "tema": 1}) if org_id else None
+    empresa = config.get('identidade', {}).get('nome_empresa', 'CMMS') if config else 'CMMS'
+    cor_primaria = config.get('tema', {}).get('cor_primaria', '#3b82f6') if config else '#3b82f6'
+
     for os_item in os_list:
         ativo = await db.ativos.find_one({"id": os_item.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
         os_item['ativo_tag'] = ativo.get('tag', '') if ativo else ''
@@ -2723,17 +2736,24 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
     
     if format == "excel":
         import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Ordens de Serviço"
-        headers = ["Número", "Ativo TAG", "Ativo", "Tipo", "Prioridade", "Status", "Título", "Data Abertura", "Data Conclusão", "Tempo (min)", "Custo Total"]
+        headers = ["Número", "TAG", "Ativo", "Tipo", "Origem", "Disciplina", "Prioridade", "Status", "Título", "Justificativa", "Data Abertura", "Data Conclusão", "Tempo (min)", "Custo Total", "Aprovação"]
         ws.append(headers)
+        hfill = PatternFill(start_color=cor_primaria.replace('#',''), end_color=cor_primaria.replace('#',''), fill_type="solid")
+        hfont = Font(bold=True, color="FFFFFF", size=11)
+        for cell in ws[1]:
+            cell.fill = hfill; cell.font = hfont; cell.alignment = Alignment(horizontal='center')
         for o in os_list:
-            ws.append([o.get('numero',''), o.get('ativo_tag',''), o.get('ativo_nome',''), o.get('tipo',''), o.get('prioridade',''), o.get('status',''), o.get('titulo',''), o.get('data_abertura',''), o.get('data_conclusao',''), o.get('tempo_execucao_minutos',''), o.get('custo_total',0)])
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=ordens_servico_maintrix.xlsx"})
+            aprov = o.get('aprovacao', {})
+            ws.append([o.get('numero',''), o.get('ativo_tag',''), o.get('ativo_nome',''), o.get('tipo',''), o.get('origem',''), o.get('disciplina',''), o.get('prioridade',''), o.get('status',''), o.get('titulo',''), o.get('justificativa',''), (o.get('data_abertura','') or '')[:19], (o.get('data_conclusao','') or '')[:19], o.get('tempo_execucao_minutos',''), o.get('custo_total',0), aprov.get('status','') if isinstance(aprov, dict) else ''])
+        for col in ws.columns:
+            max_len = max(len(str(c.value or '')) for c in col)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+        buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=os_{empresa.replace(' ','_')}.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
@@ -2743,17 +2763,16 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
-        elements = [Paragraph("MAINTRIX - Relatório de Ordens de Serviço", styles['Title']), Spacer(1, 12)]
-        data = [["Nº", "TAG", "Tipo", "Prioridade", "Status", "Título", "Custo"]]
+        elements = [Paragraph(f"{empresa} — Relatório de Ordens de Serviço", styles['Title']), Spacer(1, 12)]
+        data = [["Nº", "TAG", "Tipo", "Origem", "Disciplina", "Prioridade", "Status", "Título", "Custo"]]
         for o in os_list:
             custo = o.get('custo_total') or 0
-            data.append([str(o.get('numero','')), str(o.get('ativo_tag','')), str(o.get('tipo','')), str(o.get('prioridade','')), str(o.get('status','')), str(o.get('titulo',''))[:25], f"R${float(custo):.2f}"])
-        t = Table(data)
-        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#3b82f6')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
+            data.append([str(o.get('numero','')), str(o.get('ativo_tag','')), str(o.get('tipo','')), str(o.get('origem','')), str(o.get('disciplina','')), str(o.get('prioridade','')), str(o.get('status','')), str(o.get('titulo',''))[:25], f"R${float(custo):.2f}"])
+        t = Table(data, repeatRows=1)
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor(cor_primaria)), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,0), 9), ('FONTSIZE', (0,1), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8fafc')])]))
         elements.append(t)
-        doc.build(elements)
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=ordens_servico_maintrix.pdf"})
+        doc.build(elements); buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=os_{empresa.replace(' ','_')}.pdf"})
 
 @api_router.get("/export/estoque")
 async def export_estoque(format: str = "excel", user: Dict = Depends(get_current_user)):
@@ -2761,23 +2780,34 @@ async def export_estoque(format: str = "excel", user: Dict = Depends(get_current
         raise HTTPException(status_code=403, detail="Sem permissão para exportar")
     
     query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
+    org_id = user.get('organization_id', '')
+    if org_id:
+        query['organization_id'] = org_id
     items = await db.itens_estoque.find(query, {"_id": 0}).to_list(5000)
+    
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1, "tema": 1}) if org_id else None
+    empresa = config.get('identidade', {}).get('nome_empresa', 'CMMS') if config else 'CMMS'
+    cor_primaria = config.get('tema', {}).get('cor_primaria', '#8b5cf6') if config else '#8b5cf6'
     
     if format == "excel":
         import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Estoque"
         headers = ["Código", "Nome", "Categoria", "Quantidade", "Unidade", "Mínimo", "Custo Unit.", "Almoxarifado"]
         ws.append(headers)
+        hfill = PatternFill(start_color=cor_primaria.replace('#',''), end_color=cor_primaria.replace('#',''), fill_type="solid")
+        hfont = Font(bold=True, color="FFFFFF", size=11)
+        for cell in ws[1]:
+            cell.fill = hfill; cell.font = hfont; cell.alignment = Alignment(horizontal='center')
         for i in items:
             ws.append([i.get('sku',''), i.get('nome',''), i.get('categoria',''), i.get('quantidade',0), i.get('unidade',''), i.get('estoque_minimo',0), i.get('custo_unitario',0), i.get('almoxarifado','')])
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=estoque_maintrix.xlsx"})
+        for col in ws.columns:
+            max_len = max(len(str(c.value or '')) for c in col)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+        buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=estoque_{empresa.replace(' ','_')}.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
@@ -2787,16 +2817,15 @@ async def export_estoque(format: str = "excel", user: Dict = Depends(get_current
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
-        elements = [Paragraph("MAINTRIX - Relatório de Estoque", styles['Title']), Spacer(1, 12)]
+        elements = [Paragraph(f"{empresa} — Relatório de Estoque", styles['Title']), Spacer(1, 12)]
         data = [["Código", "Nome", "Categoria", "Qtd", "Un", "Mín", "Custo Unit."]]
         for i in items:
             data.append([i.get('sku',''), (i.get('nome','') or '')[:25], i.get('categoria',''), i.get('quantidade',0), i.get('unidade',''), i.get('estoque_minimo',0), f"R${i.get('custo_unitario',0):.2f}"])
-        t = Table(data)
-        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#8b5cf6')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
+        t = Table(data, repeatRows=1)
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor(cor_primaria)), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,0), 9), ('FONTSIZE', (0,1), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8fafc')])]))
         elements.append(t)
-        doc.build(elements)
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=estoque_maintrix.pdf"})
+        doc.build(elements); buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=estoque_{empresa.replace(' ','_')}.pdf"})
 
 @api_router.get("/export/inspecoes")
 async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_current_user)):
@@ -2806,6 +2835,11 @@ async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_curre
     query = await build_visibility_query(user, entity_type="inspecao")
     inspecoes = await db.inspecoes.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
     
+    org_id = user.get('organization_id', '')
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1, "tema": 1}) if org_id else None
+    empresa = config.get('identidade', {}).get('nome_empresa', 'CMMS') if config else 'CMMS'
+    cor_primaria = config.get('tema', {}).get('cor_primaria', '#f59e0b') if config else '#f59e0b'
+
     for insp in inspecoes:
         ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
         insp['ativo_tag'] = ativo.get('tag', '') if ativo else ''
@@ -2813,17 +2847,23 @@ async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_curre
     
     if format == "excel":
         import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Inspeções"
-        headers = ["Ativo TAG", "Ativo", "Tipo", "Frequência", "Status", "Resultado", "Data Programada", "Data Conclusão", "Duração (min)", "Lubrificante", "Ponto Lubrificação"]
+        headers = ["TAG", "Ativo", "Tipo", "Disciplina", "Frequência", "Status", "Resultado", "Data Programada", "Data Conclusão", "Duração (min)", "Executor"]
         ws.append(headers)
+        hfill = PatternFill(start_color=cor_primaria.replace('#',''), end_color=cor_primaria.replace('#',''), fill_type="solid")
+        hfont = Font(bold=True, color="FFFFFF", size=11)
+        for cell in ws[1]:
+            cell.fill = hfill; cell.font = hfont; cell.alignment = Alignment(horizontal='center')
         for i in inspecoes:
-            ws.append([i.get('ativo_tag',''), i.get('ativo_nome',''), i.get('tipo',''), i.get('frequencia',''), i.get('status',''), i.get('resultado',''), i.get('data_programada',''), i.get('data_conclusao',''), i.get('duracao_minutos',''), i.get('tipo_lubrificante',''), i.get('ponto_lubrificacao','')])
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=inspecoes_maintrix.xlsx"})
+            ws.append([i.get('ativo_tag',''), i.get('ativo_nome',''), i.get('tipo',''), i.get('disciplina',''), i.get('frequencia',''), i.get('status',''), i.get('resultado',''), (i.get('data_programada','') or '')[:19], (i.get('data_conclusao','') or '')[:19], i.get('duracao_minutos',''), i.get('executor_nome','')])
+        for col in ws.columns:
+            max_len = max(len(str(c.value or '')) for c in col)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+        buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=inspecoes_{empresa.replace(' ','_')}.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
@@ -2833,16 +2873,15 @@ async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_curre
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         styles = getSampleStyleSheet()
-        elements = [Paragraph("MAINTRIX - Relatório de Inspeções", styles['Title']), Spacer(1, 12)]
-        data = [["TAG", "Ativo", "Tipo", "Freq.", "Status", "Resultado", "Data"]]
+        elements = [Paragraph(f"{empresa} — Relatório de Inspeções", styles['Title']), Spacer(1, 12)]
+        data = [["TAG", "Ativo", "Tipo", "Disciplina", "Freq.", "Status", "Resultado", "Data"]]
         for i in inspecoes:
-            data.append([i.get('ativo_tag',''), i.get('ativo_nome','')[:20], i.get('tipo',''), i.get('frequencia',''), i.get('status',''), i.get('resultado',''), i.get('data_programada','')[:10]])
-        t = Table(data)
-        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f59e0b')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey)]))
+            data.append([i.get('ativo_tag',''), (i.get('ativo_nome','') or '')[:20], i.get('tipo',''), i.get('disciplina',''), i.get('frequencia',''), i.get('status',''), i.get('resultado',''), (i.get('data_programada','') or '')[:10]])
+        t = Table(data, repeatRows=1)
+        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor(cor_primaria)), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('FONTSIZE', (0,0), (-1,0), 9), ('FONTSIZE', (0,1), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8fafc')])]))
         elements.append(t)
-        doc.build(elements)
-        buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=inspecoes_maintrix.pdf"})
+        doc.build(elements); buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=inspecoes_{empresa.replace(' ','_')}.pdf"})
 
 # ============== ATTACHMENTS ==============
 
@@ -3406,7 +3445,9 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
     if user.get('organization_id'):
         query['organization_id'] = user['organization_id']
     spares = await db.spare_assets.find(query, {"_id": 0}).to_list(5000)
-    
+    org_id = user.get('organization_id', '')
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1}) if org_id else None
+    empresa = config.get('identidade', {}).get('nome_empresa', 'CMMS') if config else 'CMMS'
     if format == "excel":
         import openpyxl
         wb = openpyxl.Workbook()
@@ -3418,7 +3459,7 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=sobressalentes_maintrix.xlsx"})
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=sobressalentes_{empresa.replace(' ','_')}.xlsx"})
     
     elif format == "pdf":
         from reportlab.lib.pagesizes import A4, landscape
