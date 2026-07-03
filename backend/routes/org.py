@@ -440,3 +440,154 @@ async def update_branding_completo(data: dict, user: Dict = Depends(get_current_
     await audit_log("update", "org_config", org_id, user, f"Branding atualizado: {list(data.keys())}")
 
     return await db.org_config.find_one({"organization_id": org_id}, {"_id": 0})
+
+
+# ============== MASTER WHITE LABEL ENDPOINTS ==============
+
+@router.get("/master/organizations")
+async def master_list_organizations(user: Dict = Depends(get_current_user)):
+    """MASTER: List all organizations with their full config."""
+    check_master_only(user)
+    orgs = await db.organizations.find({"deleted_at": None}, {"_id": 0}).to_list(200)
+    result = []
+    for org in orgs:
+        config = await db.org_config.find_one(
+            {"organization_id": org["id"]}, {"_id": 0}
+        )
+        result.append({**org, "config": config})
+    return result
+
+
+@router.post("/master/organizations")
+async def master_create_organization(data: dict, user: Dict = Depends(get_current_user)):
+    """MASTER: Create a new organization."""
+    check_master_only(user)
+    nome = data.get("nome", "").strip()
+    if not nome:
+        raise HTTPException(status_code=400, detail="Nome da empresa é obrigatório")
+
+    org_id = str(uuid.uuid4())
+    org = {
+        "id": org_id,
+        "nome": nome,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("id", ""),
+        "deleted_at": None,
+    }
+    await db.organizations.insert_one(org)
+
+    # Create default org_config
+    config = build_default_org_config(org_id, nome)
+    await db.org_config.insert_one({**config})
+    config.pop("_id", None)
+
+    await audit_log("create", "organization", org_id, user, f"Organização criada: {nome}")
+    org.pop("_id", None)
+    return {**org, "config": config}
+
+
+@router.get("/master/organizations/{org_id}/config")
+async def master_get_org_config(org_id: str, user: Dict = Depends(get_current_user)):
+    """MASTER: Get full config for any organization."""
+    check_master_only(user)
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0})
+    if not config:
+        org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "nome": 1})
+        if not org:
+            raise HTTPException(status_code=404, detail="Organização não encontrada")
+        config = build_default_org_config(org_id, org.get("nome", ""))
+        await db.org_config.insert_one({**config})
+        config.pop("_id", None)
+    return config
+
+
+@router.put("/master/organizations/{org_id}/config")
+async def master_update_org_config(org_id: str, data: dict, user: Dict = Depends(get_current_user)):
+    """MASTER: Update full branding config for any organization."""
+    check_master_only(user)
+
+    existing = await db.org_config.find_one({"organization_id": org_id})
+    if not existing:
+        org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "nome": 1})
+        if not org:
+            raise HTTPException(status_code=404, detail="Organização não encontrada")
+        config = build_default_org_config(org_id, org.get("nome", ""))
+        await db.org_config.insert_one({**config})
+
+    update = {"updated_at": datetime.now(timezone.utc).isoformat()}
+
+    ident_fields = [
+        "nome_sistema", "nome_empresa", "subtitulo", "rodape",
+        "texto_institucional", "texto_login", "mostrar_powered_by",
+    ]
+    for k in ident_fields:
+        if k in data:
+            update[f"identidade.{k}"] = data[k]
+
+    tema_fields = [
+        "cor_primaria", "cor_secundaria", "cor_fundo", "cor_texto",
+        "cor_destaque", "cor_menu", "cor_login", "cor_header",
+        "cor_sucesso", "cor_alerta", "cor_erro",
+        "cor_botoes", "cor_cards", "cor_indicadores",
+    ]
+    for k in tema_fields:
+        if k in data:
+            update[f"tema.{k}"] = data[k]
+
+    if "subdominio" in data:
+        update["dominio.subdominio"] = data["subdominio"].lower().strip()
+    if "dominio_customizado" in data:
+        update["dominio.dominio_customizado"] = data["dominio_customizado"].lower().strip()
+
+    await db.org_config.update_one({"organization_id": org_id}, {"$set": update})
+    await audit_log("update", "org_config", org_id, user, f"White Label MASTER: {list(data.keys())}")
+
+    return await db.org_config.find_one({"organization_id": org_id}, {"_id": 0})
+
+
+@router.post("/master/organizations/{org_id}/upload/{asset_type}")
+async def master_upload_asset(
+    org_id: str,
+    asset_type: str,
+    file: UploadFile = File(...),
+    user: Dict = Depends(get_current_user),
+):
+    """MASTER: Upload logo/logo_branca/favicon/wallpaper for any org."""
+    check_master_only(user)
+    allowed_types = ["logo", "logo_branca", "favicon", "wallpaper"]
+    if asset_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"Tipo deve ser: {', '.join(allowed_types)}")
+
+    org = await db.organizations.find_one({"id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organização não encontrada")
+
+    content = await file.read()
+    content_type = file.content_type or "image/png"
+
+    if objstore.is_available():
+        path = objstore.upload_file("org_assets", org_id, f"{asset_type}_{file.filename}", content, content_type)
+        url = f"/api/storage/{path}"
+    else:
+        from pathlib import Path as PathLib
+        from deps import UPLOAD_DIR
+        import aiofiles
+        ext = PathLib(file.filename).suffix or ".png"
+        fname = f"{asset_type}_{org_id}_{uuid.uuid4().hex[:6]}{ext}"
+        async with aiofiles.open(UPLOAD_DIR / fname, 'wb') as f:
+            await f.write(content)
+        url = f"/api/uploads/{fname}"
+
+    field_map = {
+        "logo": "identidade.logo_url",
+        "logo_branca": "identidade.logo_branca_url",
+        "favicon": "identidade.favicon_url",
+        "wallpaper": "identidade.wallpaper_url",
+    }
+    await db.org_config.update_one(
+        {"organization_id": org_id},
+        {"$set": {field_map[asset_type]: url, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    await audit_log("upload", "org_config", org_id, user, f"Upload {asset_type}")
+    return {"url": url, "type": asset_type}

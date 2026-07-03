@@ -1,0 +1,54 @@
+{
+  "summary": "FASE 2 White Label MASTER Designer — VERIFIED PASS. Backend 10/10 pytest PASS (master login, GET /api/master/organizations returns 4 orgs w/ config, POST creates org + default config, GET/PUT /master/organizations/{id}/config work with all identidade+tema+dominio fields, validation for empty name → 400, missing org → 404, non-master receives 403, isolation between orgs verified: updating org1 didn't affect org2). Frontend E2E VERIFIED: master login redirects, Sidebar shows 'White Label' menu (1 occurrence), /master/white-label page loads with title 'Designer de Marca', org selector displays 4 orgs with logos/initials, all 5 section tabs work (Identidade / Cores / Login / Domínios / Temas), IDENTIDADE shows nome_empresa/nome_sistema/subtitulo/rodape + mostrar_powered_by checkbox + 4 asset uploaders (Logo, Logo Branca, Favicon, Wallpaper), CORES shows 8 color pickers + 8 hex text inputs, LOGIN shows texto_login/texto_institucional/wallpaper/cor_login, DOMINIOS shows subdomínio/domínio inputs, TEMAS shows all 4 preset themes (Industrial Dark/Light, Corp Azul/Verde), applying a theme fires toast success and updates preview in real-time, SAVE persists to backend (verified via login page later showing updated nome), Nova Empresa modal creates org and new org appears in selector, live preview panel (Login + Sidebar + Cartão do Ativo) reflects config in real-time. Org switching WORKS visually (org highlight moves, sidebar preview name changes, colors reload — confirmed VALE colors loaded after clicking VALE).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Org switching in Designer",
+        "issue": "Rapid successive org clicks (ASTEC→VALE→CSN within 2.5s each) can leave the identidade form displaying data from a non-final org while highlight/preview render the last-clicked org. Likely a small race condition — the useEffect that fetches /master/organizations/{id}/config doesn't cancel in-flight requests when selectedOrgId changes again. Consider AbortController or a request version ref (same pattern used in branding.js iteration_64) to guarantee only the latest selection wins.",
+        "affected_selectors": ["[data-testid^=\"wl-org-\"]", "[data-testid=\"wl-nome-empresa\"]"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Designer de Marca — Toasts",
+        "issues": ["Toast (react-hot-toast) 'Tema aplicado!' overlays the org selector row at top-center; if a user tries to click an org while the toast is showing the click may be swallowed. Consider offsetting the toast container below the org selector or making toasts non-interactive (pointerEvents: none)."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration65_whitelabel_master.py",
+    "/app/test_reports/pytest/iteration65.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Fix org-switch race condition in WhiteLabelDesignerPage useEffect ([selectedOrgId]) — apply requestVersion ref pattern or AbortController so late-arriving fetch responses for previous org can't overwrite state for the current org.",
+    "OPTIONAL: Reposition or add pointer-events:none to react-hot-toast container so it doesn't sit on top of the org selector buttons.",
+    "OPTIONAL cosmetic: /app/backend/routes/org.py L316-321 — public/organizations still filters out orgs whose org_config exists but has no identidade.nome_empresa; ensure new orgs created via POST /master/organizations always land in list_organizations_public (verified — new org appeared in login selector, so this is fine)."
+  ],
+  "critical_code_review_comments": [
+    "WhiteLabelDesignerPage useEffect on [selectedOrgId] (App.js:8294-8302) — no cancellation guard. If user clicks orgs quickly, older fetch may resolve after newer one and overwrite state. Same class of bug as the one fixed in branding.js iteration_63/64. Recommend: const reqVer = useRef(0); const v = ++reqVer.current; const res = await api.get(...); if (v === reqVer.current) setConfig(res.data);",
+    "App.js:8330-8336 handleSave — payload flattens identidade+tema+dominio into a single object. Note this includes ALL identidade keys (e.g. logo_url, favicon_url, wallpaper_url) even those not in the backend's ident_fields whitelist. Backend safely ignores unknown keys (org.py:524-526) so this is harmless, but conceptually the save button re-sends every field the frontend has cached, not just what changed. Consider sending only dirty fields for efficiency / audit-log noise reduction.",
+    "org.py:505-546 master_update_org_config — uses lower().strip() on subdominio/dominio_customizado but never validates uniqueness. Two orgs could claim the same subdomain and later /public/branding/{subdomain} would return whichever matches first (arbitrary). Consider a unique-check + 409 response.",
+    "org.py:549-593 master_upload_asset — file size / MIME type not validated. A master user could upload a 500MB file or non-image. Add max size (e.g. 5MB) and content_type startswith('image/') check.",
+    "PRESET_THEMES (App.js:8130-8136) — 'Industrial Light' has cor_fundo=#f8fafc (light bg) but cor_texto=#1e293b works, however the app's global CSS uses dark-theme classes throughout (bg-slate-900/50 etc). The 'Industrial Light' preset will likely produce a broken UI in practice because component background classes still apply dark colors. Confirm whether light theme is actually supported end-to-end before advertising it."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration65_whitelabel_master.py",
+    "/app/test_reports/pytest/iteration65.xml",
+    "/app/test_reports/iteration_65.json"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 pytest)",
+    "frontend": "~95% — all specified UI elements render correctly, all tabs work, save persists, nova empresa creates, live preview reactive, theme presets apply. Minor race condition on rapid org switching visible in identidade form state (visual highlight + colors update correctly)."
+  },
+  "test_credentials": "master@maintrix.com / master123 (verified working, role=master, redirects post-login).",
+  "seed_data_creation": "Backend tests created ~7 TEST_WL_* orgs during pytest run, all cleaned up after run. Frontend Nova Empresa test created TEST_UI_* org, also cleaned up. Verified 4 seeded orgs remain: Indústria Demo, Org de Admin ASTEC, Org de Admin VALE, Org de Admin CSN. Indústria Demo's nome_empresa (ASTEC Cedro) was inadvertently overwritten during E2E save-test and manually restored via mongo.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "FASE 2 Designer de Marca fully functional. Backend endpoints /api/master/organizations (GET/POST) and /api/master/organizations/{id}/config (GET/PUT) confirmed working with proper master-role guard. Frontend page /master/white-label renders correctly for master users. If future iterations add per-org subdomain routing or file-upload validations, retest master_upload_asset with oversized files + non-image content types, and add uniqueness check on dominio.subdominio. Also consider hardening WhiteLabelDesignerPage against rapid org-selector clicks (see critical_code_review_comments item #1).",
+  "rca_of_the_issue": "No blocking bugs. Minor race-condition risk in org-switching useEffect noted; not currently causing user-visible defects (visual state stays consistent) but could produce stale form data under fast interactions. Fix pattern identical to the one applied in branding.js iteration_64."
+}
