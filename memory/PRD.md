@@ -26,6 +26,13 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Completed Sprints
 
+### Sprint 58 — Estabilidade e Experiência de Login ✅ (2026-07-03)
+- **Login redesenhado**: Formulário único com campo Empresa (autocomplete) + Email + Senha — sem tela separada de seleção
+- **Autocomplete empresa**: Busca por nome, mostra logo/iniciais, carrega branding instantaneamente ao selecionar
+- **localStorage**: Salva última empresa usada (`maintrix_last_org`) para preenchimento automático
+- **Dashboard KPIs novos**: Solicitações, Aguardando Aprovação, Aguardando Material, OS por Origem (operador/pcm/manual)
+- **Testing**: Backend 8/8 pytest ✅ | Frontend 100% ✅
+
 ### Sprint 57 — Assistente Inteligente de Criação de Planos ✅ (2026-07-03)
 **Backend:**
 - `plan_parser.py`: Parser baseado em regras (sem IA) para extração de checklists de texto/PDF/Excel/Word/TXT
