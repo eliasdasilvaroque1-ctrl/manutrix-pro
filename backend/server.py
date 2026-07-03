@@ -160,6 +160,21 @@ async def get_me(user: Dict = Depends(get_current_user)):
     full = await db.users.find_one({"id": user['id']}, {"_id": 0, "password_hash": 0})
     return full or user
 
+@api_router.get("/auth/permissions")
+async def get_my_permissions(user: Dict = Depends(get_current_user)):
+    """Return the user's role permissions and the full RBAC matrix."""
+    from deps import get_role_permissions, ROLE_LABELS, PERMISSIONS, SYSTEM_ROLES
+    role = user.get('role', '')
+    return {
+        "role": role,
+        "role_label": ROLE_LABELS.get(role, role),
+        "permissions": get_role_permissions(role),
+        "available_roles": [{
+            "id": r, "label": ROLE_LABELS.get(r, r),
+            "permissions": get_role_permissions(r)
+        } for r in SYSTEM_ROLES if r != 'tecnico'],
+    }
+
 # ============== PASSWORD RESET ==============
 
 

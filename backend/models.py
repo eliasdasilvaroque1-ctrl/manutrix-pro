@@ -14,9 +14,15 @@ class UserRole(str, Enum):
     GERENTE = "gerente"
     PCM = "pcm"
     SUPERVISOR = "supervisor"
-    TECNICO = "tecnico"
+    TEC_MECANICO = "tec_mecanico"
+    TEC_ELETRICO = "tec_eletrico"
+    INSTRUMENTISTA = "instrumentista"
+    LUBRIFICADOR = "lubrificador"
     OPERADOR = "operador"
     INSPETOR = "inspetor"
+    VISUALIZADOR = "visualizador"
+    # Backward compat
+    TECNICO = "tecnico"
     VIEWER = "viewer"
 
 class AssetStatus(str, Enum):

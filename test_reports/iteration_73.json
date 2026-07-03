@@ -1,0 +1,55 @@
+{
+  "summary": "Sprint 59 RBAC consolidation validated end-to-end. Created /app/backend/tests/test_sprint59_rbac.py with 13 pytest tests covering the centralized permission matrix (via GET /api/auth/permissions), estoque write enforcement, and export gating. All 13 backend tests PASS (100%). Playwright frontend checks confirm: (a) tec_mecanico sidebar shows exactly the 7 required items (Minha Jornada, Ativos, Inspeções, Solicitar Serviço, Scanner, Ronda, Estoque) with none of the forbidden ones (Dashboard, Equipe, OS, Admin, Sobressalentes, Paradas, Unidades, Biblioteca); (b) master → /admin/usuarios → Novo Usuário role dropdown lists ALL 11 expected roles (Administrador, Gerente, PCM, Supervisor, Técnico Mecânico, Técnico Elétrico, Instrumentista, Lubrificador, Operador, Inspetor, Visualizador). Permission counts match spec exactly: tec_mecanico=16, operador=10, pcm=31, gerente=15; total matrix has 46 unique permissions across 12 roles (legacy 'tecnico' correctly excluded from available_roles). Endpoint enforcement verified: POST /api/estoque as operador→403 / as pcm→201; GET /api/export/ativos as operador→403 / as tec_mecanico→403 / as pcm→200 / as gerente→200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Sidebar user card (App.js ~ user card at bottom)",
+        "issue": "Under user name the role is rendered as raw enum value with underscore + capitalize (shows 'Tec_mecanico' instead of 'Técnico Mecânico'). The roleLabels dict exists at App.js:8154 but is not used in the sidebar bottom card. Same defect will occur for tec_eletrico ('Tec_eletrico'), etc.",
+        "selector": "aside .user-card, sidebar bottom (see screenshot tec_mec_sidebar.png)",
+        "priority": "LOW"
+      },
+      {
+        "component": "AdminUsuarios → Novo Usuário modal — 'Permissões por perfil' help text",
+        "issue": "The static help block inside the Novo Usuário modal still lists old roles: 'Admin: Controle total | Gerente: Dashboard e relatórios | PCM: Gerencia OS, estoque | Técnico: Preenche inspeções, abre anomalias'. Sprint 59 eliminated the generic 'Técnico' role — the help text should be updated to reflect the new discipline-specific tech roles (Técnico Mecânico/Elétrico/Instrumentista/Lubrificador) and mention Supervisor/Operador/Inspetor/Visualizador. The dropdown values are correct; only the descriptive text is stale.",
+        "selector": ".modal 'Permissões por perfil:' section",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint59_rbac.py",
+    "/app/test_reports/pytest/iteration73.xml"
+  ],
+  "action_items": [
+    "LOW: In App.js sidebar user card use `roleLabels[user.role] || user.role` (or import ROLE_LABELS from a shared file) instead of the current capitalize() to render 'Técnico Mecânico' etc.",
+    "LOW: Update the 'Permissões por perfil' static description inside the Novo Usuário modal to reflect the new Sprint 59 role list (drop generic 'Técnico', add the four discipline-specific tech roles + Operador/Inspetor/Visualizador)."
+  ],
+  "critical_code_review_comments": [
+    "deps.py: PERMISSIONS matrix is well-consolidated (46 entries), but there is redundant coexistence of the new has_permission()/require_permission() and the legacy check_write_permission/check_admin_only/check_not_gerente/check_pcm_or_admin helpers. Several endpoints (e.g. /api/estoque line 430 uses check_write_permission instead of require_permission(user,'estoque.criar')). Consider migrating call-sites to the centralized require_permission for a single source of truth — otherwise a future permission update to PERMISSIONS['estoque.criar'] would NOT affect /api/estoque behavior.",
+    "deps.py:210 has_permission has an unused inline comment 'Backward compat: tecnico → treat as execution role' but there is no actual mapping logic; legacy 'tecnico' role currently gets whatever permissions the matrix lists for it (via ROLE_GROUPS['execucao']). Either implement the mapping or remove the misleading comment.",
+    "server.py:145 create_token defaults role to 'tecnico' if missing — with 'tecnico' now marked legacy, prefer defaulting to 'visualizador' (least-privilege) instead of a legacy role, or refuse tokenization when role is missing.",
+    "App.js:1571 hard-codes the execution role list ['tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor']. This duplicates ROLE_GROUPS['execucao'] from deps.py. To prevent drift, either fetch the effective role/permissions from GET /api/auth/permissions on login and drive the sidebar off `permissions.includes('os.executar')` etc., or expose ROLE_GROUPS via a config endpoint. This is exactly the type of duplicated policy Sprint 59 was meant to eliminate.",
+    "The new GET /api/auth/permissions correctly returns role_label + permissions + available_roles, but 'available_roles' exposes the FULL matrix for every user — a Visualizador or Operador can enumerate every permission of every other role. If that's a leak concern, gate available_roles behind admin/master or return only the caller's role permissions to non-admins."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint59_rbac.py",
+    "/app/test_reports/pytest/iteration73.xml",
+    "/app/test_reports/iteration_73.json"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 pytest — permission matrix, estoque gating, export gating, tec_mec visibility)",
+    "frontend": "100% for the two functional scenarios in scope (tec_mecanico sidebar composition + master role dropdown list). Two cosmetic label bugs noted separately."
+  },
+  "test_credentials": "master@maintrix.com/master123, test.mec@maintrix.com/tec123, test.operador@maintrix.com/op123, test.pcm@maintrix.com/pcm123, test.gerente@maintrix.com/ger123 (all validated). Note: /app/memory/test_credentials.md does NOT yet list a visualizador password — DB has visualizador@maintrix.com (role=viewer) but the password is unknown, so the 'Login as visualizador' scenario was validated indirectly via the master's available_roles matrix (visualizador → 4 perms: ativos.visualizar, os.visualizar, inspecoes.visualizar, estoque.visualizar).",
+  "seed_data_creation": "None persistent — the PCM 'test_pcm_can_create_estoque' test creates a TEST_RBAC_PCM_ITEM and best-effort DELETEs it in the same test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run `pytest /app/backend/tests/test_sprint59_rbac.py -v` after any RBAC change. If a visualizador seed with known password is added, extend TestAuthPermissionsMatrix with a test_visualizador_permissions asserting 4 perms and 0 write actions, plus a Playwright login test verifying the 4-item CONSULTA sidebar (Dashboard, Ativos, OS, Inspeções). The two cosmetic bugs (sidebar user-card role display, Novo Usuário modal help text) are LOW priority and self-testable — no re-run required.",
+  "rca_of_the_issue": "N/A — all Sprint 59 acceptance criteria in the review request are met on both backend and frontend. The two observed issues are pre-existing cosmetic gaps (raw role enum shown in sidebar user card; stale static help text in Novo Usuário modal) that do not affect any RBAC decision."
+}

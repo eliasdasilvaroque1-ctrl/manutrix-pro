@@ -85,7 +85,144 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Token inválido")
 
 
-# ============== PERMISSION HELPERS ==============
+# ============== RBAC CENTRALIZADO ==============
+
+# Roles do sistema (ordem hierárquica)
+SYSTEM_ROLES = [
+    'master', 'admin', 'pcm', 'supervisor', 'gerente',
+    'tec_mecanico', 'tec_eletrico', 'instrumentista', 'lubrificador',
+    'operador', 'inspetor', 'visualizador',
+    'tecnico',  # Backward compat — mapped to discipline-specific role
+]
+
+# Grupos de roles para simplificar verificações
+ROLE_GROUPS = {
+    'gestao': ['master', 'admin', 'pcm', 'supervisor', 'gerente'],
+    'admin_pcm': ['master', 'admin', 'pcm'],
+    'execucao': ['tec_mecanico', 'tec_eletrico', 'instrumentista', 'lubrificador', 'tecnico', 'inspetor'],
+    'operacional': ['tec_mecanico', 'tec_eletrico', 'instrumentista', 'lubrificador', 'tecnico', 'inspetor', 'operador'],
+    'todos_menos_visualizador': ['master', 'admin', 'pcm', 'supervisor', 'gerente', 'tec_mecanico', 'tec_eletrico', 'instrumentista', 'lubrificador', 'tecnico', 'inspetor', 'operador'],
+}
+
+# Matriz de permissões centralizada
+# Cada ação mapeia para a lista de roles que podem executá-la
+PERMISSIONS = {
+    # === ATIVOS ===
+    'ativos.visualizar':     ROLE_GROUPS['todos_menos_visualizador'] + ['visualizador'],
+    'ativos.criar':          ['master', 'admin', 'pcm'],
+    'ativos.editar':         ['master', 'admin', 'pcm'],
+    'ativos.excluir':        ['master', 'admin'],
+    
+    # === ORDENS DE SERVIÇO ===
+    'os.visualizar':         ROLE_GROUPS['todos_menos_visualizador'] + ['visualizador'],
+    'os.criar':              ['master', 'admin', 'pcm', 'supervisor'] + ROLE_GROUPS['execucao'] + ['operador'],
+    'os.editar':             ['master', 'admin', 'pcm', 'supervisor'],
+    'os.excluir':            ['master', 'admin'],
+    'os.executar':           ['master', 'admin', 'supervisor'] + ROLE_GROUPS['execucao'],
+    'os.concluir':           ['master', 'admin', 'supervisor'] + ROLE_GROUPS['execucao'],
+    'os.aprovar':            ['master', 'admin', 'gerente'],
+    'os.programar':          ['master', 'admin', 'pcm'],
+    
+    # === INSPEÇÕES ===
+    'inspecoes.visualizar':  ROLE_GROUPS['todos_menos_visualizador'] + ['visualizador'],
+    'inspecoes.criar':       ['master', 'admin', 'pcm', 'supervisor'],
+    'inspecoes.executar':    ['master', 'admin', 'supervisor'] + ROLE_GROUPS['execucao'] + ['operador'],
+    'inspecoes.editar':      ['master', 'admin', 'pcm'],
+    
+    # === PLANOS / TEMPLATES ===
+    'planos.visualizar':     ['master', 'admin', 'pcm', 'supervisor', 'gerente'],
+    'planos.criar':          ['master', 'admin', 'pcm'],
+    'planos.editar':         ['master', 'admin', 'pcm'],
+    'planos.importar':       ['master', 'admin', 'pcm', 'supervisor'],
+    
+    # === ESTOQUE / SOBRESSALENTES ===
+    'estoque.visualizar':    ROLE_GROUPS['todos_menos_visualizador'] + ['visualizador'],
+    'estoque.criar':         ['master', 'admin', 'pcm'],
+    'estoque.editar':        ['master', 'admin', 'pcm'],
+    'estoque.movimentar':    ['master', 'admin', 'pcm', 'supervisor'],
+    
+    # === EXPORTAR / IMPRIMIR ===
+    'exportar':              ['master', 'admin', 'pcm', 'supervisor', 'gerente'],
+    'imprimir_etiqueta':     ['master', 'admin', 'pcm', 'supervisor', 'gerente'],
+    
+    # === DASHBOARD ===
+    'dashboard.visualizar':  ['master', 'admin', 'pcm', 'supervisor', 'gerente'],
+    'dashboard.equipe':      ['master', 'admin', 'pcm', 'supervisor'],
+    
+    # === ADMIN ===
+    'admin.usuarios':        ['master', 'admin'],
+    'admin.config':          ['master', 'admin'],
+    'admin.auditoria':       ['master', 'admin', 'gerente', 'supervisor'],
+    'admin.white_label':     ['master'],
+    'admin.limpeza':         ['master'],
+    
+    # === SOLICITAÇÕES (OPERADOR) ===
+    'solicitacao.criar':     ROLE_GROUPS['todos_menos_visualizador'],
+    
+    # === HH ===
+    'hh.registrar':          ['master', 'admin', 'supervisor'] + ROLE_GROUPS['execucao'],
+    'hh.manual':             ['master', 'admin', 'pcm', 'supervisor'] + ROLE_GROUPS['execucao'],
+    
+    # === AREAS / UNIDADES ===
+    'areas.visualizar':      ['master', 'admin', 'pcm', 'supervisor', 'gerente'],
+    'areas.criar':           ['master', 'admin'],
+    'unidades.gerenciar':    ['master', 'admin'],
+    
+    # === ANOMALIAS (legacy) ===
+    'anomalias.visualizar':  ['master', 'admin', 'pcm', 'supervisor', 'gerente'] + ROLE_GROUPS['execucao'],
+    'anomalias.criar':       ['master', 'admin', 'pcm', 'supervisor'] + ROLE_GROUPS['execucao'],
+    
+    # === QR / PORTAL ===
+    'qr.escanear':           ROLE_GROUPS['todos_menos_visualizador'],
+    'portal.tecnico':        ROLE_GROUPS['todos_menos_visualizador'],
+    
+    # === RONDA ===
+    'ronda.executar':        ROLE_GROUPS['operacional'],
+    
+    # === BIBLIOTECA ===
+    'biblioteca.visualizar': ['master', 'admin', 'pcm'],
+    'biblioteca.gerenciar':  ['master', 'admin', 'pcm'],
+}
+
+# Role display labels
+ROLE_LABELS = {
+    'master': 'Master',
+    'admin': 'Administrador',
+    'pcm': 'PCM',
+    'supervisor': 'Supervisor',
+    'gerente': 'Gerente',
+    'tec_mecanico': 'Técnico Mecânico',
+    'tec_eletrico': 'Técnico Elétrico',
+    'instrumentista': 'Instrumentista',
+    'lubrificador': 'Lubrificador',
+    'operador': 'Operador',
+    'inspetor': 'Inspetor',
+    'visualizador': 'Visualizador',
+    'tecnico': 'Técnico',  # legacy
+}
+
+
+def has_permission(user: Dict, permission: str) -> bool:
+    """Check if user has a specific permission. Central RBAC check."""
+    role = user.get('role', '')
+    # Backward compat: 'tecnico' → treat as execution role
+    allowed = PERMISSIONS.get(permission, [])
+    return role in allowed
+
+
+def require_permission(user: Dict, permission: str):
+    """Raise 403 if user doesn't have the permission."""
+    if not has_permission(user, permission):
+        label = ROLE_LABELS.get(user.get('role',''), user.get('role',''))
+        raise HTTPException(status_code=403, detail=f"Perfil '{label}' não possui permissão para: {permission}")
+
+
+def get_role_permissions(role: str) -> list:
+    """Return all permissions for a given role."""
+    return [perm for perm, roles in PERMISSIONS.items() if role in roles]
+
+
+# ============== LEGACY PERMISSION HELPERS (kept for compatibility) ==============
 
 def is_admin(user: Dict) -> bool:
     return user.get('role') in ('admin', 'master')
@@ -95,8 +232,10 @@ def is_master(user: Dict) -> bool:
 
 def check_write_permission(user: Dict, allowed_roles: list = None):
     role = user.get('role', '')
+    if role == 'visualizador':
+        raise HTTPException(status_code=403, detail="Perfil Visualizador possui apenas acesso de leitura")
     if role == 'gerente':
-        raise HTTPException(status_code=403, detail="Perfil Gerente possui apenas acesso de leitura")
+        raise HTTPException(status_code=403, detail="Perfil Gerente possui apenas acesso de leitura para esta operação")
     if role in ('admin', 'master'):
         return True
     if allowed_roles and role in allowed_roles:
@@ -112,29 +251,24 @@ def check_master_only(user: Dict):
         raise HTTPException(status_code=403, detail="Apenas o Administrador Master pode realizar esta operação")
 
 def check_pcm_or_admin(user: Dict):
-    """PCM: estoque, sobressalentes, templates, relatórios, exportações"""
     if user.get('role') not in ['admin', 'master', 'pcm']:
         raise HTTPException(status_code=403, detail="Apenas Admin ou PCM podem realizar esta operação")
 
 def check_not_gerente(user: Dict):
-    """Gerente: somente leitura"""
-    if user.get('role') == 'gerente':
-        raise HTTPException(status_code=403, detail="Perfil Gerente possui apenas acesso de leitura")
+    if user.get('role') in ('gerente', 'visualizador'):
+        raise HTTPException(status_code=403, detail="Perfil sem permissão de escrita")
 
 def verify_org_access(user: Dict, document: dict, entity_name: str = "Registro"):
-    """Verify that the user's organization matches the document's organization.
-    Skips check if user has no org (legacy) or document has no org."""
     user_org = user.get('organization_id', '')
     doc_org = document.get('organization_id', '')
     if user_org and doc_org and user_org != doc_org:
         raise HTTPException(status_code=404, detail=f"{entity_name} não encontrado")
 
-
 def can_export(user: Dict) -> bool:
-    return user.get('role') in ['admin', 'master', 'pcm', 'gerente', 'supervisor']
+    return has_permission(user, 'exportar')
 
 def can_view_dashboard(user: Dict) -> bool:
-    return user.get('role') in ['admin', 'master', 'pcm', 'gerente', 'supervisor']
+    return has_permission(user, 'dashboard.visualizar')
 
 def get_user_disciplinas(user: Dict) -> list:
     """Get all disciplines a user can see (principal + secondary)."""

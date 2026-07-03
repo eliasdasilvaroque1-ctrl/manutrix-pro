@@ -1565,15 +1565,27 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const { branding } = useBranding() || {};
   const b = branding || {};
   
-  const role = user?.role || 'tecnico';
+  const role = user?.role || 'visualizador';
   const isAdmin = role === 'admin' || role === 'master';
   const isMaster = role === 'master';
-  const isOperacional = ['tecnico', 'operador', 'inspetor'].includes(role);
+  const isExecucao = ['tec_mecanico', 'tec_eletrico', 'instrumentista', 'lubrificador', 'tecnico', 'inspetor'].includes(role);
+  const isOperacional = isExecucao || role === 'operador';
   const isPCM = role === 'pcm';
   const isSupervisor = role === 'supervisor';
   const isGerente = role === 'gerente';
+  const isVisualizador = role === 'visualizador' || role === 'viewer';
   
-  const menuGroups = isGerente ? [
+  const menuGroups = isVisualizador ? [
+    {
+      label: 'CONSULTA',
+      items: [
+        { icon: BarChart3, label: 'Dashboard', path: '/dashboard' },
+        { icon: Box, label: 'Ativos', path: '/ativos' },
+        { icon: Wrench, label: 'Ordens de Serviço', path: '/os' },
+        { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
+      ]
+    },
+  ] : isGerente ? [
     {
       label: 'GESTÃO',
       items: [
@@ -8139,7 +8151,7 @@ const AdminUsuariosPage = () => {
     finally { setSaving(false); }
   };
 
-  const roleLabels = { master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tecnico: 'Técnico', operador: 'Operador', inspetor: 'Inspetor', viewer: 'Visualizador' };
+  const roleLabels = { master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tec_mecanico: 'Técnico Mecânico', tec_eletrico: 'Técnico Elétrico', instrumentista: 'Instrumentista', lubrificador: 'Lubrificador', tecnico: 'Técnico (legado)', operador: 'Operador', inspetor: 'Inspetor', visualizador: 'Visualizador', viewer: 'Visualizador' };
   const roleColors = { master: 'text-pink-400 bg-pink-500/10', admin: 'text-red-400 bg-red-500/10', gerente: 'text-purple-400 bg-purple-500/10', pcm: 'text-blue-400 bg-blue-500/10', supervisor: 'text-amber-400 bg-amber-500/10', tecnico: 'text-emerald-400 bg-brand-10', operador: 'text-teal-400 bg-teal-500/10', inspetor: 'text-cyan-400 bg-cyan-500/10', viewer: 'text-slate-400 bg-slate-500/10' };
   const disciplinaLabels = { mecanica: 'Mecânica', eletrica: 'Elétrica', instrumentacao: 'Instrumentação', operacao: 'Operação', civil: 'Civil', producao: 'Produção', lubrificacao: 'Lubrificação' };
 
@@ -8194,7 +8206,7 @@ const AdminUsuariosPage = () => {
             <FormInput label="Perfil" required>
               <Select value={form.role} onChange={(v) => setForm({...form, role: v})} options={[
                 {value:'admin',label:'Administrador'},{value:'gerente',label:'Gerente'},{value:'pcm',label:'PCM'},
-                {value:'supervisor',label:'Supervisor'},{value:'tecnico',label:'Técnico'},{value:'inspetor',label:'Inspetor'},{value:'viewer',label:'Visualizador'}
+                {value:'supervisor',label:'Supervisor'},{value:'tec_mecanico',label:'Técnico Mecânico'},{value:'tec_eletrico',label:'Técnico Elétrico'},{value:'instrumentista',label:'Instrumentista'},{value:'lubrificador',label:'Lubrificador'},{value:'operador',label:'Operador'},{value:'inspetor',label:'Inspetor'},{value:'visualizador',label:'Visualizador'}
               ]} />
             </FormInput>
             <FormInput label="Telefone"><input value={form.telefone} onChange={(e) => setForm({...form, telefone: e.target.value})} className="input-industrial w-full px-4" /></FormInput>
