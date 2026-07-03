@@ -1573,7 +1573,18 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const isSupervisor = role === 'supervisor';
   const isGerente = role === 'gerente';
   
-  const menuGroups = [
+  const menuGroups = isGerente ? [
+    {
+      label: 'GESTÃO',
+      items: [
+        { icon: LayoutDashboard, label: 'Central de Trabalho', path: '/' },
+        { icon: BarChart3, label: 'Dashboard', path: '/dashboard' },
+        { icon: Wrench, label: 'Ordens de Serviço', path: '/os' },
+        { icon: Box, label: 'Ativos', path: '/ativos' },
+        { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
+      ]
+    },
+  ] : [
     {
       label: 'PRINCIPAL',
       items: [
@@ -1623,15 +1634,6 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         ...(isAdmin ? [{ icon: Cog, label: 'Configurações', path: '/admin/config' }] : []),
         ...(isMaster ? [{ icon: Palette, label: 'White Label', path: '/master/white-label' }] : []),
         ...(isMaster ? [{ icon: Trash2, label: 'Limpeza', path: '/master/cleanup' }] : []),
-      ]
-    }] : []),
-    ...(role === 'gerente' ? [{
-      label: 'GESTÃO',
-      items: [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-        { icon: Wrench, label: 'Ordens de Serviço', path: '/os' },
-        { icon: Box, label: 'Ativos', path: '/ativos' },
-        { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
       ]
     }] : []),
   ];
@@ -3599,11 +3601,16 @@ const OSPage = () => {
   const activeFilterCount = [filterPriority, filterTipo, filterArea, filterResponsavel, filterDisciplina].filter(Boolean).length;
 
   const kanbanColumns = [
-    { id: 'aberta', title: 'Abertas', color: 'border-blue-500/40', bg: 'bg-blue-500/5', badge: 'bg-blue-500' },
-    { id: 'planejada', title: 'Planejadas', color: 'border-purple-500/40', bg: 'bg-purple-500/5', badge: 'bg-purple-500' },
-    { id: 'em_execucao', title: 'Em Execução', color: 'border-amber-500/40', bg: 'bg-amber-500/5', badge: 'bg-amber-500' },
-    { id: 'pausada', title: 'Pausadas', color: 'border-slate-500/40', bg: 'bg-slate-500/5', badge: 'bg-slate-500' },
-    { id: 'concluida', title: 'Concluídas', color: 'border-emerald-500/40', bg: 'bg-emerald-500/5', badge: 'bg-emerald-500' },
+    { id: 'solicitada', title: 'Solicitadas', color: 'border-blue-500/40', bg: 'bg-blue-500/5', badge: 'bg-blue-500' },
+    { id: 'em_analise', title: 'Em Análise', color: 'border-purple-500/40', bg: 'bg-purple-500/5', badge: 'bg-purple-500' },
+    { id: 'aguardando_aprovacao', title: 'Aguard. Aprovação', color: 'border-amber-500/40', bg: 'bg-amber-500/5', badge: 'bg-amber-500' },
+    { id: 'programada', title: 'Programadas', color: 'border-cyan-500/40', bg: 'bg-cyan-500/5', badge: 'bg-cyan-500' },
+    { id: 'disponivel', title: 'Disponíveis', color: 'border-teal-500/40', bg: 'bg-teal-500/5', badge: 'bg-teal-500' },
+    { id: 'em_execucao', title: 'Em Execução', color: 'border-emerald-500/40', bg: 'bg-emerald-500/5', badge: 'bg-emerald-500' },
+    { id: 'pausada', title: 'Pausadas', color: 'border-amber-500/40', bg: 'bg-amber-500/5', badge: 'bg-amber-500' },
+    // Legacy compat
+    { id: 'aberta', title: 'Abertas (legado)', color: 'border-blue-500/40', bg: 'bg-blue-500/5', badge: 'bg-blue-500', hidden: true },
+    { id: 'planejada', title: 'Planejadas (legado)', color: 'border-purple-500/40', bg: 'bg-purple-500/5', badge: 'bg-purple-500', hidden: true },
   ];
   
   return (
@@ -3710,8 +3717,12 @@ const OSPage = () => {
           <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
             {[
               { value: '', label: 'Todas' },
-              { value: 'aberta', label: 'Abertas' },
-              { value: 'planejada', label: 'Planejadas' },
+              { value: 'solicitada', label: 'Solicitadas' },
+              { value: 'em_analise', label: 'Em Análise' },
+              { value: 'aguardando_aprovacao', label: 'Aguard. Aprovação' },
+              { value: 'aguardando_material', label: 'Aguard. Material' },
+              { value: 'programada', label: 'Programadas' },
+              { value: 'disponivel', label: 'Disponíveis' },
               { value: 'em_execucao', label: 'Em Execução' },
               { value: 'pausada', label: 'Pausadas' },
               { value: 'concluida', label: 'Concluídas' },

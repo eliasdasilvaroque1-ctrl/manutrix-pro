@@ -26,6 +26,31 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Completed Sprints
 
+### Sprint 56 — Governança Operacional (Versão Leve) ✅ (2026-07-03)
+**Backend:**
+- OS tipos livres (enum removido) — valores vêm do `org_config.tipos_os` (configurável por empresa)
+- OS origens livres — `org_config.origens_os` (operador, supervisor, pcm, inspecao, etc.)
+- Novo campo `justificativa` na OS (para solicitações do operador)
+- Objeto `aprovacao` embutido na OS ({necessaria, status, aprovador, data, observacao})
+- Regras de workflow em `org_config.workflow` (tipos_que_precisam_aprovacao, aprovacao_gerente_acima)
+- Novos status: solicitada → em_analise → aguardando_aprovacao → aguardando_material → programada → disponivel → em_execucao → pausada → concluida → encerrada → cancelada
+- Endpoints aprovação: POST /api/ordens-servico/{id}/aprovar, POST /api/ordens-servico/{id}/enviar-aprovacao
+- Dashboard estatísticas: por_origem, por_tipo, por_disciplina (aggregation), aguardando_aprovacao, aguardando_material
+- Operador pode criar OS (origin=operador, status=solicitada)
+- Kanban PATCH aceita todos os novos status
+- Validação: aprovar só funciona se status=aguardando_aprovacao
+
+**Frontend:**
+- Nova tela "Solicitação de Serviço" (wizard 2 passos: selecionar ativo → descrever problema + justificativa + prioridade + equipamento parado)
+- Sidebar Operador: "Solicitar Serviço" substitui "Anomalias"
+- Sidebar Gerente: menu exclusivo (Central, Dashboard, OS, Ativos, Auditoria — apenas 5 itens)
+- StatusBadge: 11 novos status com cores/ícones distintos + backward compat
+- Kanban: 7 colunas novas (solicitada, em_analise, aguardando_aprovacao, programada, disponivel, em_execucao, pausada)
+- OS Detail: seção "Justificativa da Solicitação" + painel "Aprovação Gerencial" com botões Aprovar/Rejeitar/Revisão (gerente only)
+- Filtros OS: novos status disponíveis
+
+**Testing:** Backend 13/13 pytest ✅ | Frontend 90% ✅
+
 ### Sprint de Homologação Operacional ✅ (2026-07-03)
 - **RBAC por disciplina validado**: Mecânico vê só mecânica, Eletricista só elétrica+instrumentação, Operador só produção/civil
 - **Bug fix: PCM criar/editar ativos**: `check_admin_only` → `check_pcm_or_admin` em POST/PUT `/api/ativos`

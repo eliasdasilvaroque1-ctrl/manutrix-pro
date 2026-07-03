@@ -1,30 +1,29 @@
-# MAINTRIX Test Credentials
+# MAINTRIX — Test Credentials
 
-## Production (Railway) — Auto-bootstrapped
-- Email: master@maintrix.com
-- Password: master123
-- Role: master
-- Note: Created automatically on first startup. force_password_change=true. Trocar senha no primeiro acesso.
+## Master
+- master@maintrix.com / master123
 
-## Emergent Preview Environment
-### Master Account
-- Email: master@manutrix.com
-- Password: master123
-- Role: master
+## Admin
+- test.admin@maintrix.com / admin123
 
-### Test Users (Homologação)
-| Perfil | Email | Senha |
-|--------|-------|-------|
-| Admin | test.admin@maintrix.com | admin123 |
-| PCM | test.pcm@maintrix.com | pcm123 |
-| Supervisor Mecânico | test.sup.mec@maintrix.com | sup123 |
-| Supervisor Elétrico | test.sup.ele@maintrix.com | sup123 |
-| Mecânico (Técnico) | test.mec@maintrix.com | tec123 |
-| Eletricista (Técnico) | test.ele@maintrix.com | tec123 |
-| Operador | test.operador@maintrix.com | op123 |
+## PCM
+- test.pcm@maintrix.com / pcm123
 
-### Legacy Users
-- admin@manutrix.com / admin123
-- supervisor@manutrix.com / supervisor123
-- tecnico@manutrix.com / tecnico123
-- pcm@manutrix.com / pcm123
+## Gerente
+- test.gerente@maintrix.com / ger123
+
+## Supervisores
+- test.sup.mec@maintrix.com / sup123 (Mecânico)
+- test.sup.ele@maintrix.com / sup123 (Elétrico)
+
+## Técnicos
+- test.mec@maintrix.com / tec123 (Mecânico)
+- test.ele@maintrix.com / tec123 (Eletricista)
+
+## Operador
+- test.operador@maintrix.com / op123
+
+## Login Flow
+1. Select organization first (ASTEC Cedro)
+2. Enter email/password
+3. Click Entrar

@@ -318,7 +318,9 @@ async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
 async def update_os_status(os_id: str, body: KanbanMoveBody, user: Dict = Depends(get_current_user)):
     """Kanban drag-and-drop status update"""
     check_write_permission(user, ['admin', 'pcm', 'supervisor'])
-    valid = ['aberta', 'planejada', 'em_execucao', 'pausada']
+    valid = ['solicitada', 'em_analise', 'aguardando_aprovacao', 'aguardando_material',
+             'programada', 'disponivel', 'em_execucao', 'pausada',
+             'aberta', 'planejada']
     if body.new_status not in valid:
         raise HTTPException(status_code=400, detail=f"Status inválido. Use: {', '.join(valid)}.")
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
@@ -536,8 +538,10 @@ async def aprovar_os(os_id: str, data: dict, user: Dict = Depends(get_current_us
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
     verify_org_access(user, os_doc, "OS")
+    if os_doc.get('status') != 'aguardando_aprovacao':
+        raise HTTPException(status_code=400, detail="OS não está aguardando aprovação")
 
-    decisao = data.get("decisao", "")  # "aprovada" | "rejeitada" | "revisao"
+    decisao = data.get("decisao", "")
     observacao = data.get("observacao", "")
 
     if decisao == "aprovada":
