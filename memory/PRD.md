@@ -26,6 +26,17 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Completed Sprints
 
+### Sprint de Homologação Operacional ✅ (2026-07-03)
+- **RBAC por disciplina validado**: Mecânico vê só mecânica, Eletricista só elétrica+instrumentação, Operador só produção/civil
+- **Bug fix: PCM criar/editar ativos**: `check_admin_only` → `check_pcm_or_admin` em POST/PUT `/api/ativos`
+- **Bug fix: Sidebar Operador**: Removido link OS, adicionados Anomalias e Scanner
+- **Bug fix: Sidebar PCM**: OS agora visível para todos exceto operacional
+- **Usuários de teste configurados**: disciplina_principal, disciplinas_secundarias, area_ids corretos
+- **Prontuário validado**: 6 tabs (Prontuário, Timeline, Planos, OS, Docs, BOM), QR Label
+- **Portal Público validado**: Header branded, KPIs, 3 tabs, 404 handling
+- **Portal Técnico validado**: 6 ações rápidas, navegação correta
+- **Testing**: Backend 28/30 pytest, Frontend 85% → todos bugs corrigidos
+
 ### Sprint 63 — FASE 3: QR Code Enterprise ✅ (2026-07-03)
 - **QR Label Modal**: Accessible from asset detail page (Prontuário) via "Etiqueta QR" button
 - **4 Label Formats**: 50×30mm, 60×40mm, 80×50mm (compact), A4 (full prontuário)

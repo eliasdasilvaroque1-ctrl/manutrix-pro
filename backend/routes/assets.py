@@ -6,7 +6,7 @@ from enum import Enum
 import uuid
 
 from deps import (
-    db, get_current_user, check_admin_only, check_write_permission,
+    db, get_current_user, check_admin_only, check_pcm_or_admin, check_write_permission,
     audit_log, criar_notificacao, generate_tag, verify_org_access, audit_field_changes
 )
 from models import (
@@ -178,7 +178,7 @@ async def get_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
 
 @router.post("/ativos")
 async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_pcm_or_admin(user)
     org_id = user.get('organization_id', '')
 
     sector = await db.sectors.find_one({"id": data.sector_id, "deleted_at": None})
@@ -210,7 +210,7 @@ async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)
 
 @router.put("/ativos/{ativo_id}")
 async def update_ativo(ativo_id: str, data: AtivoUpdate, user: Dict = Depends(get_current_user)):
-    check_admin_only(user)
+    check_pcm_or_admin(user)
     existing = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")

@@ -1575,9 +1575,10 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       label: 'OPERAÇÃO',
       items: [
         { icon: Box, label: 'Ativos', path: '/ativos' },
-        ...(role !== 'pcm' ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
+        ...(!isOperacional ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
         { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
-        ...(role !== 'operador' ? [{ icon: AlertTriangle, label: 'Anomalias', path: '/anomalias' }] : []),
+        { icon: AlertTriangle, label: 'Anomalias', path: '/anomalias' },
+        ...(isOperacional ? [{ icon: QrCode, label: 'Scanner', path: '/scanner' }] : []),
         ...(isOperacional ? [{ icon: Target, label: 'Ronda', path: '/ronda' }] : []),
       ]
     },
