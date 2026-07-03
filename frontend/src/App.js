@@ -3841,7 +3841,10 @@ const OSDetailPage = () => {
   const [updating, setUpdating] = useState(false);
   const [historico, setHistorico] = useState([]);
   const [showConcluir, setShowConcluir] = useState(false);
-  const [concluirForm, setConcluirForm] = useState({ servicos_realizados: '', tempo_execucao_minutos: '', observacoes: '' });
+  const [showFinalizarRapido, setShowFinalizarRapido] = useState(false);
+  const [concluirForm, setConcluirForm] = useState({ servicos_realizados: '', causa_falha: '', solucao: '', tempo_execucao_minutos: '', observacoes: '' });
+  const [hhManualForm, setHhManualForm] = useState({ executante_id: '', data_inicio: '', data_fim: '', horas: '', descricao: '' });
+  const [showHhManual, setShowHhManual] = useState(false);
   const [materiais, setMateriais] = useState([]);
   const [estoqueItems, setEstoqueItems] = useState([]);
   const [showMatModal, setShowMatModal] = useState(false);
@@ -3917,6 +3920,38 @@ const OSDetailPage = () => {
       setTimerSeconds(0);
       fetchOS();
     } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleHhManual = async () => {
+    try {
+      await api.post(`/os/${id}/hh-manual`, hhManualForm);
+      toast.success('HH registrado!');
+      setShowHhManual(false);
+      setHhManualForm({ executante_id: '', data_inicio: '', data_fim: '', horas: '', descricao: '' });
+      fetchOS();
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleFinalizarRapido = async () => {
+    if (!concluirForm.servicos_realizados?.trim()) { toast.error('Descreva o serviço executado'); return; }
+    setUpdating(true);
+    try {
+      // Save HH manual if provided
+      if (concluirForm.tempo_execucao_minutos) {
+        const horas = parseFloat(concluirForm.tempo_execucao_minutos) / 60;
+        await api.post(`/os/${id}/hh-manual`, { horas, descricao: 'HH da finalização rápida' }).catch(() => {});
+      }
+      // Conclude OS
+      await api.post(`/ordens-servico/${id}/concluir`, {
+        servicos_realizados: concluirForm.servicos_realizados,
+        tempo_execucao_minutos: parseInt(concluirForm.tempo_execucao_minutos) || 0,
+        observacoes: [concluirForm.causa_falha && `Causa: ${concluirForm.causa_falha}`, concluirForm.solucao && `Solução: ${concluirForm.solucao}`, concluirForm.observacoes].filter(Boolean).join('\n'),
+      });
+      toast.success('OS finalizada com sucesso!');
+      setShowFinalizarRapido(false);
+      fetchOS();
+    } catch (e) { toast.error(normalizeError(e)); }
+    finally { setUpdating(false); }
   };
 
   const handleAddExec = async () => {
@@ -4141,76 +4176,86 @@ const OSDetailPage = () => {
         </div>
       )}
 
-      {/* ============ CRONÔMETRO HH ============ */}
-      {!['concluida','cancelada'].includes(os.status) && (
-        <div className="glass-card p-4" data-testid="hh-cronometro">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <Clock size={16} /> Cronômetro HH
+      {/* ============ HORAS TRABALHADAS ============ */}
+      <div className="glass-card p-4" data-testid="hh-section">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <Clock size={16} /> Horas Trabalhadas
           </h3>
-          {/* Timer display */}
-          <div className="text-center mb-4">
-            <p className={`text-4xl font-mono font-bold ${timerRunning ? 'text-emerald-400' : 'text-slate-500'}`} data-testid="hh-timer-display">
-              {formatTimer(timerSeconds)}
-            </p>
-            <p className="text-xs text-slate-600 mt-1">
-              {!hhStatus && 'Pronto para iniciar'}
-              {hhStatus === 'iniciar' && 'Trabalhando...'}
-              {hhStatus === 'retornar' && 'Trabalhando...'}
-              {hhStatus === 'pausar' && 'Em pausa'}
-              {hhStatus === 'finalizar' && 'Finalizado'}
-            </p>
-          </div>
-          {/* Buttons */}
-          <div className="flex gap-2 justify-center">
-            {(!hhStatus || hhStatus === 'finalizar') && (
-              <button onClick={() => handleHH('iniciar')} className="px-6 py-2.5 rounded-lg bg-brand-20 text-brand border border-brand-30 font-medium text-sm hover:brightness-110 flex items-center gap-2" data-testid="hh-iniciar">
-                <Play size={18} /> Iniciar
-              </button>
-            )}
-            {(hhStatus === 'iniciar' || hhStatus === 'retornar') && (
-              <>
-                <button onClick={() => handleHH('pausar')} className="px-5 py-2.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 font-medium text-sm hover:bg-amber-500/30 flex items-center gap-2" data-testid="hh-pausar">
-                  <Pause size={18} /> Pausar
-                </button>
-                <button onClick={() => handleHH('finalizar')} className="px-5 py-2.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium text-sm hover:bg-blue-500/30 flex items-center gap-2" data-testid="hh-finalizar">
-                  <CheckCircle size={18} /> Finalizar
-                </button>
-              </>
-            )}
-            {hhStatus === 'pausar' && (
-              <>
-                <button onClick={() => handleHH('retornar')} className="px-5 py-2.5 rounded-lg bg-brand-20 text-brand border border-brand-30 font-medium text-sm hover:brightness-110 flex items-center gap-2" data-testid="hh-retornar">
-                  <Play size={18} /> Retornar
-                </button>
-                <button onClick={() => handleHH('finalizar')} className="px-5 py-2.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium text-sm hover:bg-blue-500/30 flex items-center gap-2">
-                  <CheckCircle size={18} /> Finalizar
-                </button>
-              </>
-            )}
-          </div>
-          {/* HH Summary */}
-          {hhResumo && hhResumo.executantes?.length > 0 && (
-            <div className="mt-4 border-t border-slate-800 pt-3">
-              <p className="text-xs text-slate-500 mb-2">Resumo HH por executante:</p>
-              <div className="space-y-1.5">
-                {hhResumo.executantes.map(e => (
-                  <div key={e.user_id} className="flex items-center justify-between text-xs bg-slate-800/50 rounded px-3 py-2">
-                    <span className="text-slate-300">{e.user_nome}</span>
-                    <div className="flex gap-3">
-                      <span className="text-brand">Líquida: {Math.floor(e.hh_liquida_min/60)}h{Math.round(e.hh_liquida_min%60)}m</span>
-                      <span className="text-slate-500">Bruta: {Math.floor(e.hh_bruta_min/60)}h{Math.round(e.hh_bruta_min%60)}m</span>
-                      {e.tempo_parado_min > 0 && <span className="text-amber-400">Parado: {Math.round(e.tempo_parado_min)}m</span>}
-                    </div>
-                  </div>
-                ))}
-                <div className="text-right text-xs text-slate-400 pt-1">
-                  Total HH líquida: <span className="text-brand font-semibold">{Math.floor(hhResumo.hh_total_liquida_min/60)}h{Math.round(hhResumo.hh_total_liquida_min%60)}m</span>
-                </div>
-              </div>
-            </div>
+          {!['concluida','encerrada','cancelada'].includes(os.status) && (
+            <button onClick={() => setShowHhManual(!showHhManual)} className="text-xs text-brand hover:brightness-110 flex items-center gap-1" data-testid="hh-manual-toggle">
+              <Plus size={14} /> Lançar HH
+            </button>
           )}
         </div>
-      )}
+
+        {/* HH Manual Form (inline compact) */}
+        {showHhManual && (
+          <div className="bg-slate-900/60 rounded-lg p-3 mb-3 space-y-2 border border-slate-800" data-testid="hh-manual-form">
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="text-[10px] text-slate-500">Executante</label>
+                <select value={hhManualForm.executante_id || user?.id} onChange={e => setHhManualForm({...hhManualForm, executante_id: e.target.value})} className="input-industrial w-full px-2 text-xs h-9">
+                  <option value={user?.id}>{user?.nome} (eu)</option>
+                  {tecnicos.filter(t => t.id !== user?.id).map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+              </div>
+              <div><label className="text-[10px] text-slate-500">Horas Trabalhadas</label>
+                <input type="number" step="0.5" min="0.5" value={hhManualForm.horas} onChange={e => setHhManualForm({...hhManualForm, horas: e.target.value})}
+                  className="input-industrial w-full px-2 text-xs h-9" placeholder="Ex: 2.5" data-testid="hh-manual-horas" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="text-[10px] text-slate-500">Início</label>
+                <input type="datetime-local" value={hhManualForm.data_inicio} onChange={e => setHhManualForm({...hhManualForm, data_inicio: e.target.value})} className="input-industrial w-full px-2 text-xs h-9" /></div>
+              <div><label className="text-[10px] text-slate-500">Fim</label>
+                <input type="datetime-local" value={hhManualForm.data_fim} onChange={e => setHhManualForm({...hhManualForm, data_fim: e.target.value})} className="input-industrial w-full px-2 text-xs h-9" /></div>
+            </div>
+            <input value={hhManualForm.descricao} onChange={e => setHhManualForm({...hhManualForm, descricao: e.target.value})} className="input-industrial w-full px-2 text-xs h-9" placeholder="Descrição da atividade (opcional)" />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowHhManual(false)} className="text-xs text-slate-400 px-3 py-1.5">Cancelar</button>
+              <button onClick={handleHhManual} className="text-xs bg-brand-20 text-brand px-3 py-1.5 rounded-lg font-medium" data-testid="hh-manual-save">Salvar</button>
+            </div>
+          </div>
+        )}
+
+        {/* Cronômetro (compacto, apenas se ativo e OS em execução) */}
+        {!['concluida','encerrada','cancelada'].includes(os.status) && (
+          <div className="flex items-center gap-3 mb-3 bg-slate-900/40 rounded-lg px-3 py-2">
+            <p className={`text-lg font-mono font-bold ${timerRunning ? 'text-emerald-400' : 'text-slate-600'}`} data-testid="hh-timer-display">
+              {formatTimer(timerSeconds)}
+            </p>
+            <p className="text-[10px] text-slate-600 flex-1">
+              {!hhStatus && 'Pronto'}{(hhStatus === 'iniciar' || hhStatus === 'retornar') && 'Trabalhando...'}{hhStatus === 'pausar' && 'Pausado'}{hhStatus === 'finalizar' && '—'}
+            </p>
+            <div className="flex gap-1">
+              {(!hhStatus || hhStatus === 'finalizar') && <button onClick={() => handleHH('iniciar')} className="p-1.5 rounded bg-brand-20 text-brand" data-testid="hh-iniciar" title="Iniciar"><Play size={14} /></button>}
+              {(hhStatus === 'iniciar' || hhStatus === 'retornar') && <>
+                <button onClick={() => handleHH('pausar')} className="p-1.5 rounded bg-amber-500/20 text-amber-400" data-testid="hh-pausar" title="Pausar"><Pause size={14} /></button>
+                <button onClick={() => handleHH('finalizar')} className="p-1.5 rounded bg-blue-500/20 text-blue-400" data-testid="hh-finalizar" title="Finalizar"><CheckCircle size={14} /></button>
+              </>}
+              {hhStatus === 'pausar' && <>
+                <button onClick={() => handleHH('retornar')} className="p-1.5 rounded bg-brand-20 text-brand" data-testid="hh-retornar" title="Retornar"><Play size={14} /></button>
+                <button onClick={() => handleHH('finalizar')} className="p-1.5 rounded bg-blue-500/20 text-blue-400" title="Finalizar"><CheckCircle size={14} /></button>
+              </>}
+            </div>
+          </div>
+        )}
+
+        {/* HH Summary — compact */}
+        {hhResumo && hhResumo.executantes?.length > 0 && (
+          <div className="space-y-1">
+            {hhResumo.executantes.map(e => (
+              <div key={e.user_id} className="flex items-center justify-between text-xs bg-slate-800/50 rounded px-3 py-1.5">
+                <span className="text-slate-300">{e.user_nome}</span>
+                <span className="text-brand font-semibold">{Math.floor(e.hh_liquida_min/60)}h{Math.round(e.hh_liquida_min%60)}m</span>
+              </div>
+            ))}
+            <div className="text-right text-[10px] text-slate-500 pt-1">
+              Total: <span className="text-brand font-bold">{Math.floor(hhResumo.hh_total_liquida_min/60)}h{Math.round(hhResumo.hh_total_liquida_min%60)}m</span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ============ EXECUTANTES DA OS ============ */}
       <div className="glass-card p-4" data-testid="os-executantes-section">
@@ -4441,18 +4486,28 @@ const OSDetailPage = () => {
           )}
           {os.status === 'em_execucao' && (
             <>
-              <button onClick={() => handleAction('concluir')} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="os-concluir-btn">
-                <CheckCircle size={20} /> Concluir OS
+              <button onClick={() => setShowFinalizarRapido(true)} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="os-finalizar-rapido">
+                <Zap size={20} /> Finalizar Rapidamente
               </button>
-              <button onClick={() => handleAction('pausar')} disabled={updating} className="btn-secondary w-full flex items-center justify-center gap-2">
-                <Pause size={20} /> Pausar
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => handleAction('concluir')} disabled={updating} className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm" data-testid="os-concluir-btn">
+                  <CheckCircle size={16} /> Concluir
+                </button>
+                <button onClick={() => handleAction('pausar')} disabled={updating} className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm">
+                  <Pause size={16} /> Pausar
+                </button>
+              </div>
             </>
           )}
           {os.status === 'pausada' && (
-            <button onClick={() => handleAction('iniciar')} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2">
-              <Play size={20} /> {updating ? 'Retomando...' : 'Retomar OS'}
-            </button>
+            <>
+              <button onClick={() => setShowFinalizarRapido(true)} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="os-finalizar-rapido-pausada">
+                <Zap size={20} /> Finalizar Rapidamente
+              </button>
+              <button onClick={() => handleAction('iniciar')} disabled={updating} className="btn-secondary w-full flex items-center justify-center gap-2">
+                <Play size={16} /> {updating ? 'Retomando...' : 'Retomar OS'}
+              </button>
+            </>
           )}
         </div>
       )}
@@ -4460,7 +4515,6 @@ const OSDetailPage = () => {
       {/* Modal Concluir OS */}
       <Modal isOpen={showConcluir} onClose={() => setShowConcluir(false)} title="Concluir Ordem de Serviço" size="md">
         <div className="space-y-4">
-          {/* Ativo info (read-only) */}
           {os.ativo && (
             <div className="bg-slate-800/50 rounded-lg p-3">
               {os.ativo.sector && <p className="text-xs text-slate-500 uppercase">{os.ativo.sector.nome || os.ativo.sector_nome}</p>}
@@ -4469,32 +4523,16 @@ const OSDetailPage = () => {
             </div>
           )}
           <FormInput label="Serviço Executado" required>
-            <textarea
-              value={concluirForm.servicos_realizados}
-              onChange={(e) => setConcluirForm({...concluirForm, servicos_realizados: e.target.value})}
-              className="input-industrial w-full px-4 py-3 min-h-[120px]"
-              placeholder="Descreva o serviço realizado. Ex: Troca de correias, troca de rolamento, alinhamento..."
-              data-testid="os-servico-input"
-            />
+            <textarea value={concluirForm.servicos_realizados} onChange={(e) => setConcluirForm({...concluirForm, servicos_realizados: e.target.value})}
+              className="input-industrial w-full px-4 py-3 min-h-[120px]" placeholder="Descreva o serviço realizado..." data-testid="os-servico-input" />
           </FormInput>
-          <FormInput label="Tempo Gasto (minutos)" required>
-            <input
-              type="number"
-              min="1"
-              value={concluirForm.tempo_execucao_minutos}
-              onChange={(e) => setConcluirForm({...concluirForm, tempo_execucao_minutos: e.target.value})}
-              className="input-industrial w-full px-4"
-              placeholder="Ex: 60"
-              data-testid="os-tempo-input"
-            />
+          <FormInput label="Tempo Gasto (minutos)">
+            <input type="number" min="1" value={concluirForm.tempo_execucao_minutos} onChange={(e) => setConcluirForm({...concluirForm, tempo_execucao_minutos: e.target.value})}
+              className="input-industrial w-full px-4" placeholder="Ex: 60" data-testid="os-tempo-input" />
           </FormInput>
           <FormInput label="Observações">
-            <textarea
-              value={concluirForm.observacoes}
-              onChange={(e) => setConcluirForm({...concluirForm, observacoes: e.target.value})}
-              className="input-industrial w-full px-4 py-3 min-h-[60px]"
-              placeholder="Observações adicionais..."
-            />
+            <textarea value={concluirForm.observacoes} onChange={(e) => setConcluirForm({...concluirForm, observacoes: e.target.value})}
+              className="input-industrial w-full px-4 py-3 min-h-[60px]" placeholder="Observações adicionais..." />
           </FormInput>
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
             <button type="button" onClick={() => setShowConcluir(false)} className="btn-secondary">Cancelar</button>
@@ -4503,6 +4541,45 @@ const OSDetailPage = () => {
               {updating ? 'Concluindo...' : 'Confirmar Conclusão'}
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Modal Finalizar Rapidamente */}
+      <Modal isOpen={showFinalizarRapido} onClose={() => setShowFinalizarRapido(false)} title="Finalizar Rapidamente" size="md">
+        <div className="space-y-3" data-testid="finalizar-rapido-modal">
+          {os.ativo && (
+            <div className="bg-slate-800/50 rounded-lg p-2 flex items-center gap-2">
+              <span className="font-mono text-brand text-xs">{os.ativo.tag}</span>
+              <span className="text-slate-400 text-xs">{os.ativo.nome}</span>
+            </div>
+          )}
+          <FormInput label="✔ Serviço executado *">
+            <textarea value={concluirForm.servicos_realizados} onChange={(e) => setConcluirForm({...concluirForm, servicos_realizados: e.target.value})}
+              className="input-industrial w-full px-3 py-2 min-h-[80px] text-sm" placeholder="O que foi feito?" data-testid="rapido-servico" autoFocus />
+          </FormInput>
+          <div className="grid grid-cols-2 gap-2">
+            <FormInput label="✔ Causa da falha">
+              <input value={concluirForm.causa_falha || ''} onChange={(e) => setConcluirForm({...concluirForm, causa_falha: e.target.value})}
+                className="input-industrial w-full px-3 text-sm h-10" placeholder="Desgaste, folga..." data-testid="rapido-causa" />
+            </FormInput>
+            <FormInput label="✔ Solução aplicada">
+              <input value={concluirForm.solucao || ''} onChange={(e) => setConcluirForm({...concluirForm, solucao: e.target.value})}
+                className="input-industrial w-full px-3 text-sm h-10" placeholder="Troca, ajuste..." data-testid="rapido-solucao" />
+            </FormInput>
+          </div>
+          <FormInput label="✔ HH (minutos)">
+            <input type="number" min="1" value={concluirForm.tempo_execucao_minutos} onChange={(e) => setConcluirForm({...concluirForm, tempo_execucao_minutos: e.target.value})}
+              className="input-industrial w-full px-3 text-sm h-10" placeholder="60" data-testid="rapido-hh" />
+          </FormInput>
+          <FormInput label="Observações">
+            <input value={concluirForm.observacoes} onChange={(e) => setConcluirForm({...concluirForm, observacoes: e.target.value})}
+              className="input-industrial w-full px-3 text-sm h-10" placeholder="Notas adicionais..." data-testid="rapido-obs" />
+          </FormInput>
+          <button onClick={handleFinalizarRapido} disabled={updating || !concluirForm.servicos_realizados?.trim()}
+            className="w-full py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 bg-brand text-slate-950 active:scale-[0.98] transition-all disabled:opacity-50"
+            data-testid="rapido-confirmar">
+            <Zap size={18} /> {updating ? 'Finalizando...' : 'Finalizar OS'}
+          </button>
         </div>
       </Modal>
     </div>

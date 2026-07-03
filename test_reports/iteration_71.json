@@ -1,0 +1,89 @@
+{
+  "summary": "Sprint 58 Execution flow tested end-to-end for técnico role (test.mec@maintrix.com/tec123). BACKEND: POST /api/os/{id}/hh-manual with {horas: 2.5, descricao} → 200 {success:true, minutos:150}; with {data_inicio, data_fim} → 200 minutos:150 as spec'd; without either → 400. Response contract matches Sprint 58 exactly (7 pytest, 6 PASS, 1 exposed the modo_hh migration gap). FRONTEND: HH section is compact and correct — Lançar HH toggle opens inline form with Executante/Horas/Início/Fim/Descrição fields; compact timer bar with play/pause/finalizar buttons; HH Summary per executante at bottom. OS Actions layout matches spec: for em_execucao, primary='Finalizar Rapidamente' (⚡ brand-colored full-width) with 'Concluir'+'Pausar' as smaller secondary row. Finalizar Rapido modal has all 5 fields (serviço, causa, solução, HH minutos, observações) with proper data-testids. HOWEVER two blocking defects were found — see backend_issues.critical.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/os/{os_id}/hh-manual",
+        "issue": "When only 'horas' is submitted (no data_inicio/data_fim), the endpoint stores BOTH the paired 'iniciar' and 'finalizar' hh_registros with the SAME timestamp (datetime.now()). Consequently GET /api/hh/resumo/{os_id} computes hh_liquida_min = 0 for that entry, even though the response body correctly reports {minutos: 120}. Verified live on OS fec13eb4-0f73-4144-a75b-2ff4fde88391: two POSTs with horas=2 each produced 4 registros with timestamps only microseconds apart, and the summary returned hh_liquida_min: 0.0, hh_total_liquida_min: 0.0. This defeats the entire purpose of the HH-manual flow (UI displays '0h0m' after every save). Fix in /app/backend/routes/events.py line 214–229: if horas>0 and dates are empty, set data_fim = now, data_inicio = now - timedelta(hours=horas). Repro: POST /api/os/{id}/hh-manual {\"horas\":2} → then GET /api/hh/resumo/{id} → executantes[0].hh_liquida_min == 0.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "POST /api/ordens-servico/{id}/concluir (used by Finalizar Rapidamente)",
+        "issue": "Finalizar Rapidamente modal has NO photo upload field, but the backend enforces 'OS corretiva exige pelo menos uma foto/evidência anexada' (org_config.workflow.foto_obrigatoria_corretiva=True). Result: técnico fills all 5 fields (serviço, causa, solução, HH, obs), clicks 'Finalizar OS' → 400 toast 'OS corretiva exige pelo menos uma foto/evidência anexada'. The whole 'one-click finish' promise of Sprint 58 is blocked for every corretiva OS. Repro: login as test.mec, open any corretiva em_execucao OS, click ⚡ Finalizar Rapidamente, fill fields, click Finalizar OS → error toast. Options: (a) add a photo upload inside the Finalizar Rapido modal (mirror Foto Antes/Depois in existing OS detail), or (b) allow this endpoint to accept the modal payload + existing photos already uploaded on OS detail, or (c) bypass foto_obrigatoria when the OS already has any 'foto_*' field populated.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/org/config",
+        "issue": "workflow.modo_hh is MISSING from existing org_config documents (the ASTEC org returns workflow={aprovacao_gerente_acima, tipos_que_precisam_aprovacao, foto_obrigatoria_corretiva, justificativa_obrigatoria_solicitacao} — no modo_hh key). DEFAULT_WORKFLOW in /app/backend/org_config.py DOES include modo_hh:'manual', but existing tenants were not backfilled. Not blocking (frontend has no branching on modo_hh yet and shows both manual+timer regardless), but PUT /org/config/workflow or a one-shot migration is needed."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "OSDetailPage — HH manual form Executante select",
+        "issue": "React hydration warning in console: '<span> cannot be a child of <option>. This will cause a hydration error.' Emitted by the emergent visual-editor instrumentation wrapping option textContent in a <span> — cosmetic, does not affect functionality, but produces console noise on every OS detail load.",
+        "selector": "select > option (App.js line 4198)",
+        "priority": "LOW"
+      },
+      {
+        "component": "OSDetailPage — HH Summary display",
+        "issue": "After 3 successful 'Lançar HH' saves (2h + 2h + 1h from finalização), the summary card renders 'Mecânico Teste 0h0m / Total: 0h0m'. Root cause is the backend defect above (identical timestamps), but the UI has no defensive rendering — it shows the misleading 0h without any indication that the entry was accepted. Consider also displaying total manual horas count as a fallback.",
+        "selector": "[data-testid='hh-section']",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Finalizar Rapidamente → concluir",
+        "issue": "Modal reports success toast optimistically won't fire because backend returns 400 for corretiva without photos. Error toast 'OS corretiva exige pelo menos uma foto/evidência anexada' is shown, but the modal stays open with all fields filled — the técnico has no recovery path from within the modal (no upload button). Sprint 58 spec says this should be a one-form flow, but photo upload was not added.",
+        "affected_selectors": ["[data-testid='rapido-confirmar']", "[data-testid='finalizar-rapido-modal']"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "OSDetailPage — Actions area",
+        "issues": [
+          "Excellent hierarchy: ⚡ Finalizar Rapidamente is a large full-width brand-colored primary button, Concluir + Pausar are smaller side-by-side secondary buttons. Matches Sprint 58 spec exactly.",
+          "HH section is very compact — timer + Lançar HH toggle + summary all fit in ~180px. Good density.",
+          "Data alignment issue: 'Data Planejada: Invalid Date' shown for this OS (missing/malformed data_planejamento field on some seed OS) — cosmetic."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint58_hh_manual.py",
+    "/app/test_reports/pytest/iteration71.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix /app/backend/routes/events.py create_hh_manual — when 'horas' is provided without dates, compute data_fim=now(), data_inicio=now()-timedelta(hours=horas). Otherwise the paired iniciar+finalizar events share a timestamp and hh_liquida_min = 0.",
+    "CRITICAL: Resolve the photo-required conflict for Finalizar Rapidamente. Either add photo upload inside the rapido modal, allow the flow to accept the existing OS.foto_antes/foto_depois, or provide a workflow flag to skip the photo check in rapid-finish mode. As-is, técnicos cannot use the primary Sprint 58 button on any corretiva OS.",
+    "MINOR: Add a backfill/migration for existing org_config docs to set workflow.modo_hh='manual' where missing, or make GET /api/org/config merge DEFAULT_WORKFLOW so consumers always see the field.",
+    "MINOR: Clean up the <span> inside <option> that emergent's visual editor introduces — either move the label out of {t.nome} interpolation or wrap options with plain text nodes only."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routes/events.py:198-206 — The minute-calculation branch prefers 'horas' first, then falls back to date diff. But when horas is used, both timestamps are set to now() (lines 218 & 226), which is the core bug. Suggested fix (patch):\n  now_dt = datetime.now(timezone.utc)\n  if horas and float(horas) > 0 and not (data_inicio and data_fim):\n      data_fim = data_fim or now_dt.isoformat()\n      data_inicio = data_inicio or (now_dt - timedelta(hours=float(horas))).isoformat()",
+    "/app/backend/routes/events.py:184 — check_write_permission is called with a very broad allowed_roles list ['admin','master','pcm','supervisor','tecnico','operador','inspetor']. Confirm operador should be allowed to log HH; if not, tighten.",
+    "/app/backend/routes/events.py:232 — audit_log message format includes descricao verbatim; if a técnico pastes a very long descricao it could bloat the audit log. Consider truncating to ~200 chars.",
+    "/app/frontend/src/App.js:3942 — the Finalizar Rapidamente handler posts hh-manual with .catch(() => {}), silently swallowing errors. Combined with the timestamp bug above, this means a 500/400 on the hh-manual call would be invisible.",
+    "/app/frontend/src/App.js:3948 — Observations are joined as '\\n'-separated strings ('Causa: X\\nSolução: Y\\nObs'). If the backend expects a structured payload (causa_falha / solucao fields), that data is being flattened and lost — verify what /ordens-servico/{id}/concluir stores.",
+    "/app/backend/org_config.py:180 — DEFAULT_WORKFLOW.modo_hh added but there is no migration for existing rows and no /api/org/config/workflow PUT endpoint visible; admins cannot change it from the UI yet."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint58_hh_manual.py",
+    "/app/test_reports/pytest/iteration71.xml",
+    "/app/test_reports/iteration_71.json"
+  ],
+  "success_rate": {
+    "backend": "86% (6/7 pytest — 1 fail exposes the org_config modo_hh migration gap, all HH-manual contract tests PASS)",
+    "frontend": "70% — UI layout & data-testids for Sprint 58 all present and working, but two blocking defects prevent the flow from being functionally useful for corretiva OS"
+  },
+  "test_credentials": "test.mec@maintrix.com/tec123 (verified). Org: ASTEC Cedro. OS used for repro: fec13eb4-0f73-4144-a75b-2ff4fde88391 (#2026-00011 Troca rolamentos motor MT-02, corretiva, em_execucao).",
+  "seed_data_creation": "3 test HH manual records with descricao prefix 'TEST_' inserted on OS #2026-00011 during pytest + browser tests. Safe to leave — they're marked manual:true and clearly labeled.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Sprint 58 backend & frontend structure is correct. Two functional bugs to retest after main agent fixes: (1) POST /api/os/{id}/hh-manual with only 'horas' must produce iniciar/finalizar records with a time gap equal to horas — verify via GET /api/hh/resumo/{id}.executantes[].hh_liquida_min == horas*60. (2) Finalizar Rapidamente must succeed on a corretiva OS without requiring the técnico to upload photos through a separate flow (or the modal must include upload). Reuse /app/backend/tests/test_sprint58_hh_manual.py — extend TestHHManualHoras with a resumo assertion (`hh_liquida_min >= 100` after horas=2 post). The rapid-finish path also does /ordens-servico/{id}/concluir — check whether backend accepts observacoes as concatenated multi-line string or expects causa_falha/solucao as first-class fields.",
+  "rca_of_the_issue": "HH-manual 0h summary: In /app/backend/routes/events.py::create_hh_manual (line 181), when data_inicio and data_fim are omitted and only 'horas' is supplied, both doc_inicio.timestamp (line 218) and doc_fim.timestamp (line 226) fall through to datetime.now(timezone.utc).isoformat(), producing two events at effectively the same instant (microsecond diff). Subsequent /api/hh/resumo/{os_id} (line 141-153) iterates events in order, sets work_start on 'iniciar', then on 'finalizar' does hh_liquida += (t2-t1).total_seconds()/60 → ~0. The success response {minutos: round(minutos,1)} is computed correctly from the input but never persisted in the timestamps. Mitigation: derive data_inicio and data_fim from 'horas' before creating the docs (data_fim = now, data_inicio = now - horas*3600s). Finalizar Rapidamente 400: corretiva photo check runs regardless of the entry path; the rapido modal (App.js lines 4547-4584) omits a Foto Antes / Foto Depois upload, so the concluir call always fails with 400 for corretiva. Two mitigations possible: extend the modal with upload widgets, OR add a workflow option foto_obrigatoria_apenas_conclusao_completa=False and skip the check when route origin is 'rapida'."
+}

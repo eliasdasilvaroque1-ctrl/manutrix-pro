@@ -5,6 +5,7 @@ Endpoints for OS events, HH time tracking, team members, and metrics.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Dict, Optional, List
 from datetime import datetime, timezone
+import uuid
 from deps import (
     db, get_current_user, check_write_permission, check_admin_only,
     verify_org_access, audit_log, is_admin, logger
@@ -175,6 +176,63 @@ async def hh_resumo(os_id: str, user: Dict = Depends(get_current_user)):
         "executantes": resumos,
         "hh_total_liquida_min": round(sum(r["hh_liquida_min"] for r in resumos), 1),
     }
+
+
+@router.post("/os/{os_id}/hh-manual")
+async def create_hh_manual(os_id: str, data: dict, user: Dict = Depends(get_current_user)):
+    """Record manual HH entry (executante, inicio, fim, horas)."""
+    check_write_permission(user, ['admin', 'master', 'pcm', 'supervisor', 'tecnico', 'operador', 'inspetor'])
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os_doc, "OS")
+
+    executante_id = data.get("executante_id") or user["id"]
+    horas = data.get("horas", 0)
+    data_inicio = data.get("data_inicio", "")
+    data_fim = data.get("data_fim", "")
+    descricao = data.get("descricao", "")
+
+    # Calculate minutes: prefer explicit horas, fallback to date diff
+    minutos = 0
+    if horas and float(horas) > 0:
+        minutos = float(horas) * 60
+    elif data_inicio and data_fim:
+        try:
+            dt_ini = datetime.fromisoformat(data_inicio.replace('Z', '+00:00'))
+            dt_fim = datetime.fromisoformat(data_fim.replace('Z', '+00:00'))
+            minutos = (dt_fim - dt_ini).total_seconds() / 60
+        except:
+            pass
+
+    if minutos <= 0:
+        raise HTTPException(status_code=400, detail="Informe as horas ou datas de início/fim")
+
+    exec_user = await db.users.find_one({"id": executante_id}, {"_id": 0, "nome": 1})
+    org_id = os_doc.get("organization_id", user.get("organization_id", ""))
+
+    doc_inicio = {
+        "id": str(uuid.uuid4()), "os_id": os_id, "organization_id": org_id,
+        "user_id": executante_id, "user_nome": exec_user.get("nome", "") if exec_user else "",
+        "evento": "iniciar", "observacao": descricao,
+        "timestamp": data_inicio or datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None,
+        "manual": True,
+    }
+    doc_fim = {
+        "id": str(uuid.uuid4()), "os_id": os_id, "organization_id": org_id,
+        "user_id": executante_id, "user_nome": exec_user.get("nome", "") if exec_user else "",
+        "evento": "finalizar", "observacao": descricao,
+        "timestamp": data_fim or datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None,
+        "manual": True,
+    }
+    await db.hh_registros.insert_many([doc_inicio, doc_fim])
+
+    await audit_log("hh_manual", "ordens_servico", os_id, user,
+        f"HH manual: {exec_user.get('nome','?') if exec_user else '?'} — {round(minutos/60,1)}h ({descricao})")
+
+    return {"success": True, "minutos": round(minutos, 1)}
 
 
 # ============== OS EXECUTANTES (Team Members) ==============

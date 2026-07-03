@@ -177,6 +177,7 @@ DEFAULT_WORKFLOW = {
     "tipos_que_precisam_aprovacao": ["melhoria", "projeto"],
     "foto_obrigatoria_corretiva": True,
     "justificativa_obrigatoria_solicitacao": True,
+    "modo_hh": "manual",  # "manual" | "cronometro" | "ambos"
 }
 
 
