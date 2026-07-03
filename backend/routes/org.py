@@ -360,22 +360,26 @@ async def get_public_ativo(ativo_id: str):
     org_id = ativo.get('organization_id', '')
     config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1, "tema": 1})
 
-    # Sector info
     sector = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0, "nome": 1, "codigo": 1})
 
-    # Last events (public - limited info)
-    last_insp = await db.inspecoes.find_one(
-        {"ativo_id": ativo_id, "status": "concluida", "deleted_at": None},
-        {"_id": 0, "data_conclusao": 1, "plano_nome": 1, "resultado": 1, "tipo": 1},
-        sort=[("data_conclusao", -1)]
-    )
-    last_os = await db.ordens_servico.find_one(
-        {"ativo_id": ativo_id, "status": "concluida", "deleted_at": None},
-        {"_id": 0, "data_conclusao": 1, "titulo": 1, "tipo": 1},
-        sort=[("data_conclusao", -1)]
-    )
+    # Last 5 inspections
+    last_inspecoes = await db.inspecoes.find(
+        {"ativo_id": ativo_id, "deleted_at": None},
+        {"_id": 0, "id": 1, "data_conclusao": 1, "plano_nome": 1, "resultado": 1, "tipo": 1, "status": 1, "created_at": 1}
+    ).sort("created_at", -1).to_list(5)
 
-    # Manuais (public)
+    # Last 5 OS
+    last_os = await db.ordens_servico.find(
+        {"ativo_id": ativo_id, "deleted_at": None},
+        {"_id": 0, "id": 1, "numero": 1, "titulo": 1, "tipo": 1, "status": 1, "data_conclusao": 1, "created_at": 1}
+    ).sort("created_at", -1).to_list(5)
+
+    # Last 5 maintenance events
+    last_manut = await db.ordens_servico.find(
+        {"ativo_id": ativo_id, "status": "concluida", "deleted_at": None},
+        {"_id": 0, "id": 1, "numero": 1, "titulo": 1, "tipo": 1, "data_conclusao": 1}
+    ).sort("data_conclusao", -1).to_list(5)
+
     manuais = await db.manuais.find(
         {"ativo_id": ativo_id, "deleted_at": None},
         {"_id": 0, "id": 1, "nome": 1, "url": 1, "tipo_arquivo": 1}
@@ -384,6 +388,12 @@ async def get_public_ativo(ativo_id: str):
     # KPIs
     total_os = await db.ordens_servico.count_documents({"ativo_id": ativo_id, "deleted_at": None})
     total_insp = await db.inspecoes.count_documents({"ativo_id": ativo_id, "deleted_at": None})
+    os_concluidas = await db.ordens_servico.count_documents({"ativo_id": ativo_id, "status": "concluida", "deleted_at": None})
+    insp_conformes = await db.inspecoes.count_documents({"ativo_id": ativo_id, "resultado": "conforme", "deleted_at": None})
+    disponibilidade = ativo.get('kpis', {}).get('disponibilidade_percent', 100) if isinstance(ativo.get('kpis'), dict) else 100
+
+    ident = config.get('identidade', {}) if config else {}
+    tema = config.get('tema', {}) if config else {}
 
     return {
         "ativo": {
@@ -394,14 +404,25 @@ async def get_public_ativo(ativo_id: str):
             "foto_url": ativo.get('foto_url'),
         },
         "area": sector.get('nome') if sector else '',
-        "ultima_inspecao": last_insp,
-        "ultima_os": last_os,
+        "ultimas_inspecoes": last_inspecoes,
+        "ultimas_os": last_os,
+        "ultimas_manutencoes": last_manut,
         "manuais": manuais,
-        "kpis": {"total_os": total_os, "total_inspecoes": total_insp},
+        "kpis": {
+            "total_os": total_os, "total_inspecoes": total_insp,
+            "os_concluidas": os_concluidas, "insp_conformes": insp_conformes,
+            "disponibilidade": disponibilidade,
+        },
         "branding": {
-            "nome_empresa": config.get('identidade', {}).get('nome_empresa', 'MAINTRIX') if config else 'MAINTRIX',
-            "logo_url": config.get('identidade', {}).get('logo_url') if config else None,
-            "cor_primaria": config.get('tema', {}).get('cor_primaria', '#10b981') if config else '#10b981',
+            "nome_empresa": ident.get('nome_empresa', ''),
+            "logo_url": ident.get('logo_url'),
+            "logo_branca_url": ident.get('logo_branca_url'),
+            "cor_primaria": tema.get('cor_primaria', '#10b981'),
+            "cor_secundaria": tema.get('cor_secundaria', '#3b82f6'),
+            "cor_fundo": tema.get('cor_fundo', '#020617'),
+            "cor_texto": tema.get('cor_texto', '#e2e8f0'),
+            "cor_menu": tema.get('cor_menu', '#0f172a'),
+            "mostrar_powered_by": ident.get('mostrar_powered_by', True),
         },
     }
 

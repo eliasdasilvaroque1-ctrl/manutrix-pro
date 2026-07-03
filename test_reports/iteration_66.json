@@ -1,0 +1,51 @@
+{
+  "summary": "FASE 3/4/5 (QR Label + Portal Público + Portal Técnico) — ALL VERIFIED PASS. Backend 12/12 pytest PASS: GET /api/public/ativo/{id} returns full enriched payload {ativo, area, ultimas_inspecoes, ultimas_os, ultimas_manutencoes, manuais, kpis{total_os,total_inspecoes,os_concluidas,insp_conformes,disponibilidade}, branding{nome_empresa,logo_url,logo_branca_url,cor_primaria,cor_secundaria,cor_fundo,cor_texto,cor_menu,mostrar_powered_by}}. No MongoDB _id leaks. No auth required (verified with fresh session). Invalid id → 404. ultimas_* lists respect limit=5. Frontend E2E VERIFIED: (1) Portal Público /portal/equipamento/5af42d90... loads WITHOUT auth, renders branded header (ASTEC Cedro), hero card (AV-01/ALIMENTADOR/ALIMENTADOR VIBRATORIO/Em Manutenção/PLANTA-01), KPIs (100% Disponibilidade / 2 Total OS / 0 Inspeções), 3 tabs (Informações/Histórico/Manuais). Info tab shows Fabricante/Modelo/Área/Tipo. Histórico tab shows 'Últimas Ordens de Serviço' with 2 OS (Limpeza geral, Troca rolamento bomba, both aberta). Manuais tab shows 3 Manual entries. 'Powered by MAINTRIX' footer visible. (2) 404 case /portal/equipamento/invalid-id shows 'Equipamento não encontrado' + 'Verifique o QR Code e tente novamente'. (3) QR Label Modal on /ativos/{id}: 'Etiqueta QR' button opens modal with 4 size buttons (50x30mm, 60x40mm, 80x50mm, A4 Prontuário). Each size click updates preview. Compact sizes show brand name + TAG + name + 'Powered by MAINTRIX'. A4 shows detailed prontuário (Prontuário do Equipamento header, larger QR, TAG, name, fabricante/modelo/etc table, Powered by MAINTRIX). (4) Portal Técnico /portal/tecnico/{id} loads inside AppLayout with sidebar; header shows ativo TAG (AV-01) + nome + area/tipo; 6 quick-action buttons all present and labeled correctly (Executar Inspeção, Abrir OS, Registrar Anomalia, Adicionar Fotos, Registrar HH, Ver Prontuário). (5) Scanner code (App.js:5623-5638) correctly matches /portal/equipamento/{id} regex and redirects to /portal/tecnico/{id} for authenticated users.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Portal Público first-load tab click",
+        "issue": "On first cold visit to /portal/equipamento/{id}, the service worker registers and immediately reloads the page ('SW updated, reloading...' seen in console). If the user clicks a tab (e.g., Histórico) during the ~1-2s SW reload window, the click is lost — the activeTab state does not change. Subsequent clicks after page settles work correctly. Recommend deferring the SW reload with a 'skip waiting' prompt, or ensuring the SW does not force-reload on the public portal route (which is likely to be the first page a QR-scanning user hits).",
+        "affected_selectors": ["[data-testid=\"portal-tab-historico\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration66_portal_qr.py",
+    "/app/test_reports/pytest/iteration66.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Investigate service worker reload behavior on /portal/equipamento/{id} first load — SW registers, then immediately updates and reloads the page, swallowing the first user interaction (see integration_issues). This is especially impactful since Portal Público is the QR-scan landing page where users tap almost immediately.",
+    "OPTIONAL (from prev iteration, still valid): App.js:8294-8302 WhiteLabelDesignerPage useEffect on [selectedOrgId] has no cancellation guard for concurrent org-switch fetches.",
+    "OPTIONAL: /api/public/ativo/{id} does not currently rate-limit — a public unauthenticated endpoint is exposed to the internet. Consider adding a per-IP rate limit or CAPTCHA-lite check to prevent enumeration/scraping of the ativos collection (ids are UUIDs so enumeration is impractical, but noise/DDoS remains a concern)."
+  ],
+  "critical_code_review_comments": [
+    "org.py:353-427 get_public_ativo — Solid implementation. Returns ONLY whitelisted fields (no _id, no sensitive columns) which is correct for a public endpoint. Consider adding Cache-Control response header (e.g., 'public, max-age=60') so QR-code portals can cache briefly at the edge — currently every scan hits Mongo. Also consider projecting only needed fields on the `ativo` fetch (line 356 uses just `{'_id': 0}`, which pulls the full doc including possibly-sensitive fields like custo_aquisicao/valor_contabil that never get returned; safer to whitelist explicitly like other queries do).",
+    "App.js:8640 portalUrl = `${window.location.origin}/portal/equipamento/${ativo.id}` — Uses window.location.origin, which will be correct in production behind a custom subdomain. However, on preview environments this bakes the preview hostname into the printed QR code — any label printed from the preview environment would point to the preview URL, not the production URL. Consider using an env var like REACT_APP_QR_BASE_URL (fallback to window.location.origin) so labels printed from staging still point to production.",
+    "App.js:8642-8652 handlePrint — Uses window.open('', '_blank') + document.write + immediate .print(). document.write is deprecated and can be blocked by some browsers; also the immediate .print() call may fire before external fonts/QR SVG finish rendering. Wrap the print() call in a window.onload or setTimeout, or use an iframe-based print approach.",
+    "App.js:8656-8657 modal onClick={onClose} on the backdrop — if user clicks INSIDE the label preview and drags to release outside, the modal will close and lose their in-progress print action. Consider using mousedown+mouseup pair on the backdrop only.",
+    "App.js:8965-8967 PortalTecnicoPage — On error fetching ativo, navigates to '/'. If the ativo is soft-deleted or belongs to a different org, the technician gets no meaningful feedback beyond a generic toast. Consider a proper error page with 'Ativo não encontrado ou sem permissão' + a back-to-home button (mirroring the PortalPublicoPage error UI at App.js:8755-8763).",
+    "App.js:5623-5638 resolveScannedValue — For portal/equipamento matches, always redirects to /portal/tecnico/{id}. If an unauthenticated user manages to hit the scanner (should be gated by ProtectedRoute but worth verifying), this redirect would send them to the auth-required /portal/tecnico page instead of the public /portal/equipamento page they scanned. Consider checking auth state and redirecting to /portal/equipamento/{id} for anonymous users. Actual behavior in current app: scanner is inside ProtectedRoute so this is theoretical, but worth documenting.",
+    "org.py:393 disponibilidade — reads ativo.kpis.disponibilidade_percent but returns key 'disponibilidade' in the KPI block. Naming inconsistency; either store as 'disponibilidade' end-to-end or expose both keys. Minor."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration66_portal_qr.py",
+    "/app/test_reports/pytest/iteration66.xml",
+    "/app/test_reports/iteration_66.json"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 pytest — endpoint reachability, ativo core fields, area, kpis block, ultimas lists, branding block, no _id leak, no auth required, 404 for invalid id, ultimas limit=5, master login, ativo detail requires auth)",
+    "frontend": "100% — all 5 scenarios in review request VERIFIED: Portal Público loads + tabs work + 404 works + QR modal + Portal Técnico. Only issue is a transient SW-reload race on first cold visit that does not affect functionality once the page has settled."
+  },
+  "test_credentials": "master@maintrix.com / master123 (verified working). Ativo used: 5af42d90-4654-4067-b67d-92d7e7f6f78d (TAG=AV-01, ALIMENTADOR, org=ASTEC Cedro).",
+  "seed_data_creation": "None. Used existing ativo AV-01 with 2 OS, 0 inspeções, 3 manuais.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "FASE 3/4/5 fully functional. If future iterations wire up QR label printing behavior (currently uses document.write in a new window), retest actual print rendering with QRCodeSVG and any custom fonts. If Portal Público adds rate-limiting or subdomain-scoped branding lookup, retest with an unauthenticated fresh browser session and verify no auth cookies bleed into the request. Scanner-to-portal redirect (App.js:5623-5638) currently ALWAYS lands authenticated users on /portal/tecnico/{id}; if product ever wants technicians to see the public portal instead, that logic needs a role or preference gate.",
+  "rca_of_the_issue": "No blocking bugs. The transient tab-click swallow observed on first Portal Público load is a service-worker reload artifact (SW installs → SW updates → forced reload), not a portal bug. Reproduction: hard-navigate to /portal/equipamento/{id} in a browser with no prior SW, click Histórico within ~1s of first render → click is lost. Mitigation: user retry succeeds; the app becomes stable within 2s of first load. Real fix would be to inspect the SW registration in /app/frontend/public/service-worker.js (or similar) and either skip the immediate reload or exclude /portal/* routes from SW caching."
+}
