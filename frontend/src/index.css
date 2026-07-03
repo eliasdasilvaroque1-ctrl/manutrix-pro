@@ -114,7 +114,11 @@
   }
   
   .btn-primary {
-    @apply btn-industrial bg-emerald-500 text-slate-950 hover:bg-emerald-400;
+    @apply btn-industrial text-slate-950;
+    background-color: var(--brand-primary);
+  }
+  .btn-primary:hover {
+    filter: brightness(1.1);
   }
   
   .btn-secondary {
@@ -132,8 +136,11 @@
   
   /* Inputs */
   .input-industrial {
-    @apply h-12 bg-slate-950 border-slate-700 focus:border-emerald-500 text-lg rounded-md;
+    @apply h-12 bg-slate-950 border-slate-700 text-lg rounded-md;
     @apply placeholder:text-slate-500;
+  }
+  .input-industrial:focus {
+    border-color: var(--brand-primary);
   }
   
   /* Navigation */
@@ -143,15 +150,19 @@
   }
   
   .nav-item.active {
-    @apply text-emerald-400;
+    color: var(--brand-primary);
   }
   
   /* Scan Button */
   .scan-button {
-    @apply w-16 h-16 rounded-full bg-emerald-500 text-slate-950;
+    @apply w-16 h-16 rounded-full text-slate-950;
     @apply flex items-center justify-center -mt-6;
-    @apply shadow-lg shadow-emerald-500/30;
-    @apply hover:bg-emerald-400 active:scale-95 transition-all;
+    @apply active:scale-95 transition-all;
+    background-color: var(--brand-primary);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--brand-primary) 30%, transparent);
+  }
+  .scan-button:hover {
+    filter: brightness(1.1);
   }
   
   /* Priority Colors */
@@ -210,10 +221,10 @@
   /* Animation */
   @keyframes pulse-glow {
     0%, 100% {
-      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-primary) 40%, transparent);
     }
     50% {
-      box-shadow: 0 0 20px 10px rgba(16, 185, 129, 0);
+      box-shadow: 0 0 20px 10px color-mix(in srgb, var(--brand-primary) 0%, transparent);
     }
   }
   
@@ -309,6 +320,60 @@
   
   .kpi-label {
     @apply text-sm text-slate-400 uppercase tracking-wider mt-1;
+  }
+
+  /* ===== BRAND UTILITY CLASSES ===== */
+  .text-brand {
+    color: var(--brand-primary);
+  }
+  .text-brand-secondary {
+    color: var(--brand-secondary);
+  }
+  .text-brand-accent {
+    color: var(--brand-accent);
+  }
+  .bg-brand {
+    background-color: var(--brand-primary);
+  }
+  .bg-brand-10 {
+    background-color: color-mix(in srgb, var(--brand-primary) 10%, transparent);
+  }
+  .bg-brand-20 {
+    background-color: color-mix(in srgb, var(--brand-primary) 20%, transparent);
+  }
+  .border-brand {
+    border-color: var(--brand-primary);
+  }
+  .border-brand-30 {
+    border-color: color-mix(in srgb, var(--brand-primary) 30%, transparent);
+  }
+  .focus\:ring-brand:focus {
+    --tw-ring-color: var(--brand-primary);
+  }
+  .accent-brand {
+    accent-color: var(--brand-primary);
+  }
+  .glass-card {
+    @apply bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-xl;
+  }
+  .section-title {
+    color: var(--brand-primary);
+    @apply text-sm font-semibold uppercase tracking-wider flex items-center gap-2;
+  }
+  .tag-brand {
+    color: var(--brand-primary);
+    @apply font-mono text-sm;
+  }
+  .tab-active {
+    color: var(--brand-primary);
+    background-color: color-mix(in srgb, var(--brand-primary) 20%, transparent);
+    border-color: color-mix(in srgb, var(--brand-primary) 30%, transparent);
+    @apply border rounded-md;
+  }
+  .filter-active {
+    color: var(--brand-primary);
+    background-color: color-mix(in srgb, var(--brand-primary) 20%, transparent);
+    border-color: color-mix(in srgb, var(--brand-primary) 30%, transparent);
   }
 }
 

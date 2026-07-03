@@ -1,4 +1,16 @@
-/* MAINTRIX Industrial Theme */
+/* Enterprise CMMS — White Label Theme */
+
+/* Brand CSS Variables (defaults overridden by BrandingContext) */
+:root {
+  --brand-primary: #10b981;
+  --brand-secondary: #3b82f6;
+  --brand-bg: #020617;
+  --brand-text: #e2e8f0;
+  --brand-accent: #f59e0b;
+  --brand-menu: #0f172a;
+  --brand-login: #020617;
+  --brand-header: #0f172a;
+}
 
 /* Base Resets */
 * {
@@ -12,26 +24,26 @@ html {
 }
 
 body {
-  background-color: #020617;
+  background-color: var(--brand-bg);
   color: #f8fafc;
   min-height: 100vh;
 }
 
 /* Selection */
 ::selection {
-  background-color: rgba(16, 185, 129, 0.3);
+  background-color: color-mix(in srgb, var(--brand-primary) 30%, transparent);
   color: #f8fafc;
 }
 
 /* Focus States */
 *:focus-visible {
-  outline: 2px solid #10b981;
+  outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
 }
 
 /* Form Elements */
 input, select, textarea {
-  background-color: #020617;
+  background-color: var(--brand-bg);
   border: 1px solid #334155;
   color: #f8fafc;
   font-family: 'Inter', sans-serif;
@@ -47,7 +59,7 @@ select {
 }
 
 select option {
-  background-color: #0f172a;
+  background-color: var(--brand-menu);
   color: #f8fafc;
 }
 
@@ -65,7 +77,7 @@ button:disabled {
 
 /* Links */
 a {
-  color: #10b981;
+  color: var(--brand-primary);
   text-decoration: none;
 }
 
@@ -80,7 +92,7 @@ a:hover {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: var(--brand-menu);
 }
 
 ::-webkit-scrollbar-thumb {

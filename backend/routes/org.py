@@ -299,3 +299,142 @@ async def get_or_create_config(org_id: str) -> dict:
         config = build_default_org_config(org_id, org_nome)
         await db.org_config.insert_one({**config})
     return config
+
+
+# ============== PUBLIC ENDPOINTS (no auth) ==============
+
+@router.get("/public/organizations")
+async def list_organizations_public():
+    """Public: list organizations for login company selector."""
+    configs = await db.org_config.find(
+        {}, {"_id": 0, "organization_id": 1, "identidade": 1, "tema": 1, "dominio": 1}
+    ).to_list(100)
+    orgs = []
+    for c in configs:
+        ident = c.get('identidade', {})
+        orgs.append({
+            "id": c['organization_id'],
+            "nome": ident.get('nome_empresa') or ident.get('nome_sistema', 'MAINTRIX'),
+            "logo_url": ident.get('logo_url'),
+            "cor_primaria": c.get('tema', {}).get('cor_primaria', '#10b981'),
+            "subdominio": c.get('dominio', {}).get('subdominio', ''),
+        })
+    return orgs
+
+
+@router.get("/public/branding/{identifier}")
+async def get_public_branding(identifier: str):
+    """Public: get branding by org_id or subdomain. No auth required."""
+    config = await db.org_config.find_one(
+        {"$or": [
+            {"organization_id": identifier},
+            {"dominio.subdominio": identifier},
+            {"dominio.dominio_customizado": identifier},
+        ]},
+        {"_id": 0, "identidade": 1, "tema": 1, "dominio": 1, "organization_id": 1}
+    )
+    if not config:
+        return {
+            "organization_id": None,
+            "identidade": {
+                "nome_sistema": "MAINTRIX", "nome_empresa": "MAINTRIX",
+                "logo_url": None, "logo_branca_url": None, "favicon_url": None,
+                "texto_login": "Sistema de Gestão de Manutenção Industrial",
+                "mostrar_powered_by": False, "rodape": "© 2026 MAINTRIX",
+            },
+            "tema": {"cor_primaria": "#10b981", "cor_secundaria": "#3b82f6", "cor_fundo": "#020617",
+                     "cor_menu": "#0f172a", "cor_login": "#020617"},
+        }
+    return config
+
+
+@router.get("/public/ativo/{ativo_id}")
+async def get_public_ativo(ativo_id: str):
+    """Public: equipment portal via QR code. Read-only, no auth."""
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+
+    org_id = ativo.get('organization_id', '')
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1, "tema": 1})
+
+    # Sector info
+    sector = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0, "nome": 1, "codigo": 1})
+
+    # Last events (public - limited info)
+    last_insp = await db.inspecoes.find_one(
+        {"ativo_id": ativo_id, "status": "concluida", "deleted_at": None},
+        {"_id": 0, "data_conclusao": 1, "plano_nome": 1, "resultado": 1, "tipo": 1},
+        sort=[("data_conclusao", -1)]
+    )
+    last_os = await db.ordens_servico.find_one(
+        {"ativo_id": ativo_id, "status": "concluida", "deleted_at": None},
+        {"_id": 0, "data_conclusao": 1, "titulo": 1, "tipo": 1},
+        sort=[("data_conclusao", -1)]
+    )
+
+    # Manuais (public)
+    manuais = await db.manuais.find(
+        {"ativo_id": ativo_id, "deleted_at": None},
+        {"_id": 0, "id": 1, "nome": 1, "url": 1, "tipo_arquivo": 1}
+    ).to_list(20)
+
+    # KPIs
+    total_os = await db.ordens_servico.count_documents({"ativo_id": ativo_id, "deleted_at": None})
+    total_insp = await db.inspecoes.count_documents({"ativo_id": ativo_id, "deleted_at": None})
+
+    return {
+        "ativo": {
+            "id": ativo['id'], "tag": ativo.get('tag'), "nome": ativo.get('nome'),
+            "tipo_equipamento": ativo.get('tipo_equipamento'), "fabricante": ativo.get('fabricante'),
+            "modelo": ativo.get('modelo'), "numero_serie": ativo.get('numero_serie'),
+            "criticidade": ativo.get('criticidade'), "status": ativo.get('status'),
+            "foto_url": ativo.get('foto_url'),
+        },
+        "area": sector.get('nome') if sector else '',
+        "ultima_inspecao": last_insp,
+        "ultima_os": last_os,
+        "manuais": manuais,
+        "kpis": {"total_os": total_os, "total_inspecoes": total_insp},
+        "branding": {
+            "nome_empresa": config.get('identidade', {}).get('nome_empresa', 'MAINTRIX') if config else 'MAINTRIX',
+            "logo_url": config.get('identidade', {}).get('logo_url') if config else None,
+            "cor_primaria": config.get('tema', {}).get('cor_primaria', '#10b981') if config else '#10b981',
+        },
+    }
+
+
+@router.put("/org/config/branding")
+async def update_branding_completo(data: dict, user: Dict = Depends(get_current_user)):
+    """Update complete branding configuration (White Label admin)."""
+    check_admin_only(user)
+    org_id = user.get("organization_id", "")
+    await get_or_create_config(org_id)
+
+    update = {"updated_at": datetime.now(timezone.utc).isoformat()}
+
+    # Identidade fields
+    ident_fields = ["nome_sistema", "nome_empresa", "subtitulo", "rodape",
+                    "texto_institucional", "texto_login", "mostrar_powered_by"]
+    for k in ident_fields:
+        if k in data:
+            update[f"identidade.{k}"] = data[k]
+
+    # Tema fields
+    tema_fields = ["cor_primaria", "cor_secundaria", "cor_fundo", "cor_texto",
+                   "cor_destaque", "cor_menu", "cor_login", "cor_header",
+                   "cor_sucesso", "cor_alerta", "cor_erro"]
+    for k in tema_fields:
+        if k in data:
+            update[f"tema.{k}"] = data[k]
+
+    # Domínio fields
+    if "subdominio" in data:
+        update["dominio.subdominio"] = data["subdominio"].lower().strip()
+    if "dominio_customizado" in data:
+        update["dominio.dominio_customizado"] = data["dominio_customizado"].lower().strip()
+
+    await db.org_config.update_one({"organization_id": org_id}, {"$set": update})
+    await audit_log("update", "org_config", org_id, user, f"Branding atualizado: {list(data.keys())}")
+
+    return await db.org_config.find_one({"organization_id": org_id}, {"_id": 0})

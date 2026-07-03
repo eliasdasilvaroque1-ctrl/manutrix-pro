@@ -17,6 +17,7 @@ import {
   Building2, Palette, BookOpen, CheckCircle2, Sparkles
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
+import { BrandingProvider, useBranding } from "@/lib/branding";
 import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData } from "@/lib/offlineQueue";
 import axios from "axios";
 
@@ -119,14 +120,14 @@ const StatusBadge = ({ status, size = 'md' }) => {
   const config = {
     aberta: { class: 'bg-blue-500/10 text-blue-400 border-blue-500/30', label: 'Aberta', icon: Clock },
     planejada: { class: 'bg-purple-500/10 text-purple-400 border-purple-500/30', label: 'Planejada', icon: Calendar },
-    em_execucao: { class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', label: 'Em Execução', icon: Play },
+    em_execucao: { class: 'bg-brand-10 text-emerald-400 border-emerald-500/30', label: 'Em Execução', icon: Play },
     pausada: { class: 'bg-amber-500/10 text-amber-400 border-amber-500/30', label: 'Pausada', icon: Pause },
-    concluida: { class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', label: 'Concluída', icon: CheckCircle },
+    concluida: { class: 'bg-brand-10 text-emerald-400 border-emerald-500/30', label: 'Concluída', icon: CheckCircle },
     cancelada: { class: 'bg-red-500/10 text-red-400 border-red-500/30', label: 'Cancelada', icon: XCircle },
     pendente: { class: 'bg-amber-500/10 text-amber-400 border-amber-500/30', label: 'Pendente', icon: Clock },
     em_andamento: { class: 'bg-blue-500/10 text-blue-400 border-blue-500/30', label: 'Em Andamento', icon: Activity },
     com_pendencias: { class: 'bg-red-500/10 text-red-400 border-red-500/30', label: 'Com Pendências', icon: AlertTriangle },
-    conforme: { class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', label: 'Conforme', icon: CheckCircle },
+    conforme: { class: 'bg-brand-10 text-emerald-400 border-emerald-500/30', label: 'Conforme', icon: CheckCircle },
     nao_conforme: { class: 'bg-red-500/10 text-red-400 border-red-500/30', label: 'Não Conforme', icon: XCircle },
   };
   
@@ -155,9 +156,9 @@ const PriorityBadge = ({ priority }) => {
 };
 
 // KPI Card
-const KPICard = ({ value, label, icon: Icon, color = 'emerald', subtitle, trend }) => {
+const KPICard = ({ value, label, icon: Icon, color = 'brand', subtitle, trend }) => {
   const colors = {
-    emerald: 'text-emerald-400 bg-emerald-500/10',
+    brand: 'text-brand bg-brand-10',
     amber: 'text-amber-400 bg-amber-500/10',
     red: 'text-red-400 bg-red-500/10',
     blue: 'text-blue-400 bg-blue-500/10',
@@ -417,7 +418,7 @@ const NotificationBell = () => {
           <div className="p-3 border-b border-slate-800 flex items-center justify-between">
             <span className="font-semibold text-slate-200">Notificações</span>
             {count > 0 && (
-              <button onClick={markAllRead} className="text-xs text-emerald-400 hover:underline">
+              <button onClick={markAllRead} className="text-xs text-brand hover:underline">
                 Marcar todas como lidas
               </button>
             )}
@@ -566,7 +567,7 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Identificação */}
         <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-brand flex items-center gap-2">
             <Tag size={16} /> Identificação
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -671,9 +672,9 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
           {pdfFiles.length > 0 && (
             <div className="space-y-2">
               {pdfFiles.map((f, idx) => (
-                <div key={`pdf-${idx}-${f.name}`} className="flex items-center justify-between p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                <div key={`pdf-${idx}-${f.name}`} className="flex items-center justify-between p-2 bg-brand-10 border border-brand-30 rounded-lg">
                   <div className="flex items-center gap-2">
-                    <Upload size={16} className="text-emerald-400" />
+                    <Upload size={16} className="text-brand" />
                     <span className="text-sm text-slate-300">{f.name}</span>
                     <span className="text-xs text-slate-600">{(f.size / 1024).toFixed(0)}KB</span>
                   </div>
@@ -830,7 +831,7 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Identificação */}
         <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-brand flex items-center gap-2">
             <Tag size={16} /> Identificação
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -941,7 +942,7 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
             <div className="flex items-end">
               <div className="glass-card p-3 w-full">
                 <p className="text-xs text-slate-500">Valor Total em Estoque</p>
-                <p className="text-lg font-bold text-emerald-400">
+                <p className="text-lg font-bold text-brand">
                   R$ {((parseFloat(form.quantidade) || 0) * (parseFloat(form.custo_unitario) || 0)).toFixed(2)}
                 </p>
               </div>
@@ -994,7 +995,7 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
                 type="checkbox"
                 checked={form.alertar_minimo}
                 onChange={(e) => setForm({...form, alertar_minimo: e.target.checked})}
-                className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
+                className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-brand focus:ring-brand"
               />
               <span className="text-slate-300">Alertar estoque mínimo</span>
             </label>
@@ -1111,7 +1112,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Identificação */}
         <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-brand flex items-center gap-2">
             <Wrench size={16} /> Dados da OS
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1121,7 +1122,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                   {(() => { const a = ativos.find(x => x.id === preSelectedAtivoId); return a ? (
                     <div>
                       {a.sector && <p className="text-xs text-slate-500 uppercase">{a.sector.nome}</p>}
-                      <span className="font-mono text-emerald-400 text-sm">{a.tag}</span>
+                      <span className="font-mono text-brand text-sm">{a.tag}</span>
                       <span className="text-slate-300 text-sm ml-2">{a.nome}</span>
                     </div>
                   ) : <span className="text-slate-400">Ativo vinculado</span>; })()}
@@ -1207,8 +1208,8 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                   <span className="text-sm text-red-400">Sim</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="eq_parado" checked={form.equipamento_parado === false} onChange={() => setForm({...form, equipamento_parado: false})} className="accent-emerald-500" data-testid="os-eq-parado-nao" />
-                  <span className="text-sm text-emerald-400">Não</span>
+                  <input type="radio" name="eq_parado" checked={form.equipamento_parado === false} onChange={() => setForm({...form, equipamento_parado: false})} className="accent-brand" data-testid="os-eq-parado-nao" />
+                  <span className="text-sm text-brand">Não</span>
                 </label>
               </div>
             </FormInput>
@@ -1297,7 +1298,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
             <div className="flex items-end">
               <div className="glass-card p-3 w-full">
                 <p className="text-xs text-slate-500">Custo Total Estimado</p>
-                <p className="text-lg font-bold text-emerald-400">
+                <p className="text-lg font-bold text-brand">
                   R$ {((parseFloat(form.custo_pecas) || 0) + (parseFloat(form.custo_mao_obra) || 0)).toFixed(2)}
                 </p>
               </div>
@@ -1423,7 +1424,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
                   {(() => { const a = ativos.find(x => x.id === preSelectedAtivoId); return a ? (
                     <div>
                       {a.sector && <p className="text-xs text-slate-500 uppercase">{a.sector.nome}</p>}
-                      <span className="font-mono text-emerald-400 text-sm">{a.tag}</span>
+                      <span className="font-mono text-brand text-sm">{a.tag}</span>
                       <span className="text-slate-300 text-sm ml-2">{a.nome}</span>
                     </div>
                   ) : <span className="text-slate-400">Ativo vinculado</span>; })()}
@@ -1486,7 +1487,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
                     onClick={() => handleSelectPlano(plano)}
                     className={`w-full text-left p-3 rounded-lg border transition-all ${
                       selectedPlano?.id === plano.id
-                        ? 'border-emerald-500/50 bg-emerald-500/10'
+                        ? 'border-emerald-500/50 bg-brand-10'
                         : 'border-slate-700 hover:border-slate-500 bg-slate-800/30'
                     }`}
                     data-testid={`plano-option-${plano.id}`}
@@ -1502,7 +1503,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
                           {plano._generico && <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">Genérico</span>}
                         </div>
                       </div>
-                      {selectedPlano?.id === plano.id && <CheckCircle2 size={20} className="text-emerald-400" />}
+                      {selectedPlano?.id === plano.id && <CheckCircle2 size={20} className="text-brand" />}
                     </div>
                   </button>
                 ))}
@@ -1551,6 +1552,8 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { branding } = useBranding() || {};
+  const b = branding || {};
   
   const role = user?.role || 'tecnico';
   const isAdmin = role === 'admin' || role === 'master';
@@ -1618,15 +1621,21 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   ];
   
   return (
-    <aside className={`hidden md:flex flex-col bg-slate-900/95 backdrop-blur-sm border-r border-slate-800 h-screen sticky top-0 transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'}`}>
+    <aside className={`hidden md:flex flex-col backdrop-blur-sm border-r border-slate-800 h-screen sticky top-0 transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'}`}
+      style={{ backgroundColor: b.cor_menu || 'var(--brand-menu)' }} data-testid="sidebar">
       <div className={`p-4 border-b border-slate-800 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && (
-          <div>
-            <h1 className="text-xl font-bold text-emerald-400 tracking-wider">MAINTRIX</h1>
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Enterprise CMMS</p>
+          <div className="flex items-center gap-3 min-w-0">
+            {b.logo_branca_url || b.logo_url ? (
+              <img src={b.logo_branca_url || b.logo_url} alt={b.nome_empresa} className="h-8 w-auto object-contain flex-shrink-0" data-testid="sidebar-logo" />
+            ) : null}
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold tracking-wider truncate" style={{ color: b.cor_primaria || 'var(--brand-primary)' }} data-testid="sidebar-brand-name">{b.nome_empresa || 'CMMS'}</h1>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider truncate">{b.subtitulo || 'Enterprise CMMS'}</p>
+            </div>
           </div>
         )}
-        <button onClick={() => setCollapsed(!collapsed)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+        <button onClick={() => setCollapsed(!collapsed)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors flex-shrink-0">
           {collapsed ? <ChevronRight size={18} className="text-slate-400" /> : <ChevronLeft size={18} className="text-slate-400" />}
         </button>
       </div>
@@ -1645,11 +1654,17 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all ${
-                    isActive 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-l-2 border-emerald-500' 
-                      : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border-l-2 border-transparent'
-                  } ${collapsed ? 'justify-center' : ''}`}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all ${collapsed ? 'justify-center' : ''}`}
+                  style={isActive ? {
+                    backgroundColor: `${b.cor_primaria || 'var(--brand-primary)'}15`,
+                    color: b.cor_primaria || 'var(--brand-primary)',
+                    borderLeft: `2px solid ${b.cor_primaria || 'var(--brand-primary)'}`,
+                  } : {
+                    color: '#94a3b8',
+                    borderLeft: '2px solid transparent',
+                  }}
+                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.backgroundColor = 'rgba(30,41,59,0.5)'; e.currentTarget.style.color = '#e2e8f0'; }}}
+                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}}
                   title={collapsed ? item.label : undefined}
                 >
                   <Icon size={20} />
@@ -1664,8 +1679,8 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       <div className={`p-4 border-t border-slate-800 ${collapsed ? 'items-center' : ''}`}>
         {!collapsed && (
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-              <User size={18} className="text-emerald-400" />
+            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${b.cor_primaria || 'var(--brand-primary)'}20` }}>
+              <User size={18} style={{ color: b.cor_primaria || 'var(--brand-primary)' }} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-slate-200 truncate">{user?.nome}</p>
@@ -1690,6 +1705,8 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { branding } = useBranding() || {};
+  const b = branding || {};
   
   const items = [
     { icon: Home, label: 'Central', path: '/' },
@@ -1700,7 +1717,8 @@ const BottomNav = () => {
   ];
   
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-t border-slate-800 z-40 pb-safe md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 backdrop-blur-sm border-t border-slate-800 z-40 pb-safe md:hidden"
+      style={{ backgroundColor: `${b.cor_menu || 'var(--brand-menu)'}f2` }}>
       <div className="flex items-center justify-around h-16">
         {items.map((item, idx) => {
           const Icon = item.icon;
@@ -1708,7 +1726,8 @@ const BottomNav = () => {
           
           if (item.special) {
             return (
-              <button key={idx} onClick={() => navigate(item.path)} className="scan-button pulse-glow">
+              <button key={idx} onClick={() => navigate(item.path)} className="scan-button pulse-glow"
+                style={{ backgroundColor: b.cor_primaria || 'var(--brand-primary)' }}>
                 <Icon size={26} />
               </button>
             );
@@ -1718,7 +1737,8 @@ const BottomNav = () => {
             <button
               key={idx}
               onClick={() => navigate(item.path)}
-              className={`nav-item ${isActive ? 'active' : ''}`}
+              className="nav-item"
+              style={isActive ? { color: b.cor_primaria || 'var(--brand-primary)' } : {}}
             >
               <Icon size={20} />
               <span className="text-[10px] mt-1">{item.label}</span>
@@ -1737,20 +1757,34 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState('login'); // login, forgot, reset, forceChange
+  const [view, setView] = useState('selectOrg'); // selectOrg, login, forgot, reset, forceChange
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [tempToken, setTempToken] = useState('');
+  const [orgSearch, setOrgSearch] = useState('');
   const { login } = useAuth();
+  const { branding, organizations, selectOrg, orgId, loadOrganizations } = useBranding();
   const navigate = useNavigate();
-  
+
+  useEffect(() => { loadOrganizations(); }, [loadOrganizations]);
+
+  // Auto-skip org selector if only 1 org or org already selected (subdomain)
+  useEffect(() => {
+    if (orgId) setView('login');
+    else if (organizations.length === 1) { selectOrg(organizations[0].id); setView('login'); }
+  }, [organizations, orgId, selectOrg]);
+
+  const handleSelectOrg = (org) => {
+    selectOrg(org.id);
+    setView('login');
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const response = await axios.post(`${API}/auth/login`, { email, password });
-      // Check if force password change
       if (response.data.user?.force_password_change) {
         setTempToken(response.data.access_token);
         setView('forceChange');
@@ -1762,9 +1796,7 @@ const LoginPage = () => {
       }
     } catch (error) {
       toast.error(normalizeError(error));
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleForgotPassword = async (e) => {
@@ -1776,9 +1808,8 @@ const LoginPage = () => {
       setResetToken(res.data.token || '');
       setView('reset');
       toast.success('Token de redefinição gerado!');
-    } catch (error) {
-      toast.error(normalizeError(error));
-    } finally { setLoading(false); }
+    } catch (error) { toast.error(normalizeError(error)); }
+    finally { setLoading(false); }
   };
 
   const handleResetPassword = async (e) => {
@@ -1788,13 +1819,10 @@ const LoginPage = () => {
     setLoading(true);
     try {
       await axios.post(`${API}/auth/reset-password`, { token: resetToken, new_password: newPassword });
-      toast.success('Senha redefinida com sucesso! Faça login.');
-      setView('login');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (error) {
-      toast.error(normalizeError(error));
-    } finally { setLoading(false); }
+      toast.success('Senha redefinida! Faça login.');
+      setView('login'); setNewPassword(''); setConfirmPassword('');
+    } catch (error) { toast.error(normalizeError(error)); }
+    finally { setLoading(false); }
   };
 
   const handleForceChange = async (e) => {
@@ -1805,35 +1833,62 @@ const LoginPage = () => {
     try {
       await axios.post(`${API}/auth/change-password`, { new_password: newPassword }, { headers: { Authorization: `Bearer ${tempToken}` } });
       toast.success('Senha alterada! Faça login com a nova senha.');
-      setView('login');
-      setPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (error) {
-      toast.error(normalizeError(error));
-    } finally { setLoading(false); }
+      setView('login'); setPassword(''); setNewPassword(''); setConfirmPassword('');
+    } catch (error) { toast.error(normalizeError(error)); }
+    finally { setLoading(false); }
   };
-  
-  const handleSeed = async () => {
-    try {
-      await axios.post(`${API}/seed`);
-      toast.success('Dados de demonstração criados!');
-    } catch (e) {
-      toast.info('Dados já existem');
-    }
-  };
-  
+
+  const filteredOrgs = organizations.filter(o =>
+    !orgSearch || (o.nome || '').toLowerCase().includes(orgSearch.toLowerCase())
+  );
+
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: branding.cor_login }} data-testid="login-page">
       <div className="w-full max-w-md">
+        {/* Branding Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 mb-4">
-            <Cog size={32} className="text-emerald-400" />
-          </div>
-          <h1 className="text-3xl font-bold text-emerald-400 tracking-wider">MAINTRIX</h1>
-          <p className="text-slate-500 mt-1 text-sm">Enterprise CMMS Platform</p>
+          {branding.logo_url ? (
+            <img src={branding.logo_url} alt={branding.nome_empresa} className="h-16 mx-auto mb-4 object-contain" data-testid="login-logo" />
+          ) : (
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 border border-opacity-30" style={{ backgroundColor: branding.cor_primaria + '15', borderColor: branding.cor_primaria + '50' }}>
+              <Cog size={32} style={{ color: branding.cor_primaria }} />
+            </div>
+          )}
+          <h1 className="text-3xl font-bold tracking-wider" style={{ color: branding.cor_primaria }} data-testid="login-title">{branding.nome_empresa}</h1>
+          <p className="text-slate-500 mt-1 text-sm">{view === 'selectOrg' ? 'Selecione sua empresa' : branding.texto_login}</p>
         </div>
-        
+
+        {/* ORG SELECTOR */}
+        {view === 'selectOrg' && (
+          <div className="glass-card p-6 space-y-4" data-testid="org-selector">
+            {organizations.length > 5 && (
+              <input value={orgSearch} onChange={e => setOrgSearch(e.target.value)} className="input-industrial w-full px-4" placeholder="Pesquisar empresa..." data-testid="org-search" />
+            )}
+            <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+              {filteredOrgs.map(org => (
+                <button key={org.id} onClick={() => handleSelectOrg(org)}
+                  className="w-full flex items-center gap-4 p-4 rounded-lg border border-slate-800 hover:border-slate-600 bg-slate-900/50 transition-all text-left group"
+                  data-testid={`org-option-${org.id}`}
+                >
+                  {org.logo_url ? (
+                    <img src={org.logo_url} alt="" className="w-10 h-10 rounded-lg object-contain bg-slate-800 p-1" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: org.cor_primaria || '#10b981' }}>
+                      {(org.nome || 'M').substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <p className="text-slate-100 font-semibold group-hover:text-white">{org.nome}</p>
+                    {org.subdominio && <p className="text-[10px] text-slate-600">{org.subdominio}.maintrix.com.br</p>}
+                  </div>
+                  <ChevronRight size={18} className="text-slate-600 group-hover:text-slate-400" />
+                </button>
+              ))}
+              {filteredOrgs.length === 0 && <p className="text-center text-slate-500 py-4 text-sm">Nenhuma empresa encontrada</p>}
+            </div>
+          </div>
+        )}
+
         {/* LOGIN */}
         {view === 'login' && (
           <form onSubmit={handleLogin} className="glass-card p-6 space-y-4" data-testid="login-form">
@@ -1841,87 +1896,53 @@ const LoginPage = () => {
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-industrial w-full px-4" placeholder="seu@email.com" required data-testid="login-email" />
             </FormInput>
             <FormInput label="Senha">
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="••••••••" required data-testid="login-password" />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Sua senha" required data-testid="login-password" />
             </FormInput>
-            <button type="submit" disabled={loading} className="btn-primary w-full" data-testid="login-submit">
+            <button type="submit" disabled={loading} className="w-full py-3 rounded-lg font-semibold text-white transition-all" style={{ backgroundColor: branding.cor_primaria }} data-testid="login-submit">
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
-            <button type="button" onClick={() => setView('forgot')} className="w-full text-sm text-slate-400 hover:text-emerald-400 transition-colors py-2" data-testid="forgot-password-link">
-              Esqueci minha senha
-            </button>
+            <div className="flex items-center justify-between">
+              <button type="button" onClick={() => setView('forgot')} className="text-sm text-slate-400 hover:text-slate-200 transition-colors" data-testid="forgot-password-link">Esqueci minha senha</button>
+              {organizations.length > 1 && <button type="button" onClick={() => { setView('selectOrg'); }} className="text-sm text-slate-500 hover:text-slate-300">Trocar empresa</button>}
+            </div>
           </form>
         )}
 
         {/* FORGOT PASSWORD */}
         {view === 'forgot' && (
           <form onSubmit={handleForgotPassword} className="glass-card p-6 space-y-4" data-testid="forgot-form">
-            <div className="text-center mb-2">
-              <Lock size={32} className="mx-auto text-amber-400 mb-2" />
-              <h2 className="text-lg font-semibold text-slate-200">Redefinir Senha</h2>
-              <p className="text-xs text-slate-500">Informe seu email para receber o token de redefinição</p>
-            </div>
-            <FormInput label="Email cadastrado">
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-industrial w-full px-4" placeholder="seu@email.com" required data-testid="forgot-email" />
-            </FormInput>
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Enviando...' : 'Solicitar Redefinição'}
-            </button>
-            <button type="button" onClick={() => setView('login')} className="w-full text-sm text-slate-400 hover:text-slate-200 py-2">
-              Voltar ao login
-            </button>
+            <div className="text-center mb-2"><Lock size={32} className="mx-auto text-amber-400 mb-2" /><h2 className="text-lg font-semibold text-slate-200">Redefinir Senha</h2></div>
+            <FormInput label="Email cadastrado"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-industrial w-full px-4" placeholder="seu@email.com" required data-testid="forgot-email" /></FormInput>
+            <button type="submit" disabled={loading} className="btn-primary w-full">{loading ? 'Enviando...' : 'Solicitar Redefinição'}</button>
+            <button type="button" onClick={() => setView('login')} className="w-full text-sm text-slate-400 hover:text-slate-200 py-2">Voltar ao login</button>
           </form>
         )}
 
         {/* RESET PASSWORD */}
         {view === 'reset' && (
           <form onSubmit={handleResetPassword} className="glass-card p-6 space-y-4" data-testid="reset-form">
-            <div className="text-center mb-2">
-              <Shield size={32} className="mx-auto text-emerald-400 mb-2" />
-              <h2 className="text-lg font-semibold text-slate-200">Nova Senha</h2>
-              <p className="text-xs text-slate-500">Crie sua nova senha de acesso</p>
-            </div>
-            <FormInput label="Token de Redefinição">
-              <input type="text" value={resetToken} onChange={(e) => setResetToken(e.target.value)} className="input-industrial w-full px-4 font-mono text-sm" placeholder="Cole o token aqui" required data-testid="reset-token" />
-            </FormInput>
-            <FormInput label="Nova Senha">
-              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Mínimo 6 caracteres" required data-testid="reset-new-password" />
-            </FormInput>
-            <FormInput label="Confirmar Nova Senha">
-              <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Repita a senha" required />
-            </FormInput>
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Redefinindo...' : 'Redefinir Senha'}
-            </button>
-            <button type="button" onClick={() => setView('login')} className="w-full text-sm text-slate-400 hover:text-slate-200 py-2">
-              Voltar ao login
-            </button>
+            <div className="text-center mb-2"><Shield size={32} className="mx-auto text-brand mb-2" /><h2 className="text-lg font-semibold text-slate-200">Nova Senha</h2></div>
+            <FormInput label="Token"><input type="text" value={resetToken} onChange={(e) => setResetToken(e.target.value)} className="input-industrial w-full px-4 font-mono text-sm" required data-testid="reset-token" /></FormInput>
+            <FormInput label="Nova Senha"><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input-industrial w-full px-4" required data-testid="reset-new-password" /></FormInput>
+            <FormInput label="Confirmar"><input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="input-industrial w-full px-4" required /></FormInput>
+            <button type="submit" disabled={loading} className="btn-primary w-full">{loading ? 'Redefinindo...' : 'Redefinir Senha'}</button>
+            <button type="button" onClick={() => setView('login')} className="w-full text-sm text-slate-400 hover:text-slate-200 py-2">Voltar ao login</button>
           </form>
         )}
 
-        {/* FORCE PASSWORD CHANGE */}
+        {/* FORCE CHANGE */}
         {view === 'forceChange' && (
           <form onSubmit={handleForceChange} className="glass-card p-6 space-y-4" data-testid="force-change-form">
-            <div className="text-center mb-2">
-              <AlertTriangle size={32} className="mx-auto text-amber-400 mb-2" />
-              <h2 className="text-lg font-semibold text-slate-200">Troca de Senha Obrigatória</h2>
-              <p className="text-xs text-slate-500">Sua senha temporária precisa ser alterada</p>
-            </div>
-            <FormInput label="Nova Senha">
-              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Mínimo 6 caracteres" required />
-            </FormInput>
-            <FormInput label="Confirmar Nova Senha">
-              <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Repita a senha" required />
-            </FormInput>
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Alterando...' : 'Alterar Senha e Entrar'}
-            </button>
+            <div className="text-center mb-2"><AlertTriangle size={32} className="mx-auto text-amber-400 mb-2" /><h2 className="text-lg font-semibold text-slate-200">Troca de Senha Obrigatória</h2></div>
+            <FormInput label="Nova Senha"><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input-industrial w-full px-4" required /></FormInput>
+            <FormInput label="Confirmar"><input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="input-industrial w-full px-4" required /></FormInput>
+            <button type="submit" disabled={loading} className="btn-primary w-full">{loading ? 'Alterando...' : 'Alterar Senha e Entrar'}</button>
           </form>
         )}
-        
-        <div className="mt-4 text-center">
-          <button onClick={handleSeed} className="text-slate-600 hover:text-emerald-400 text-sm transition-colors flex items-center justify-center gap-2 mx-auto">
-            <Zap size={14} /> Acessar ambiente de demonstração
-          </button>
+
+        {/* Footer */}
+        <div className="mt-6 text-center">
+          {branding.mostrar_powered_by && <p className="text-[10px] text-slate-700">Powered by MAINTRIX</p>}
         </div>
       </div>
     </div>
@@ -1966,7 +1987,7 @@ const AtividadeCard = ({ item, tipo, navigate }) => {
       <div className={`w-1.5 h-12 rounded-full ${prioColor} shrink-0`} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-emerald-400 text-xs">{tag}</span>
+          <span className="font-mono text-brand text-xs">{tag}</span>
           <span className="text-slate-300 text-sm truncate">{nome}</span>
         </div>
         <p className="text-slate-100 text-sm font-medium truncate">{titulo}</p>
@@ -2224,7 +2245,7 @@ const DashboardPage = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${entity}_maintrix.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      a.download = `${entity}_export.${format === 'excel' ? 'xlsx' : 'csv'}`;
       a.click();
       window.URL.revokeObjectURL(url);
       toast.success(`${entity} exportado com sucesso`);
@@ -2366,8 +2387,8 @@ const DashboardPage = () => {
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Preventiva vs Corretiva</p>
             <div className="flex items-end gap-3 mt-1">
               <div>
-                <p className="text-3xl font-black text-emerald-400 tabular-nums">{prevPercent}<span className="text-sm">%</span></p>
-                <p className="text-[10px] text-emerald-600">preventiva</p>
+                <p className="text-3xl font-black text-brand tabular-nums">{prevPercent}<span className="text-sm">%</span></p>
+                <p className="text-[10px] text-brand">preventiva</p>
               </div>
               <div>
                 <p className="text-3xl font-black text-red-400 tabular-nums">{corrPercent}<span className="text-sm">%</span></p>
@@ -2433,7 +2454,7 @@ const DashboardPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* OS por Área */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5" data-testid="chart-os-setor">
-          <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Layers size={16} className="text-emerald-400" /> OS por Área</h3>
+          <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Layers size={16} className="text-brand" /> OS por Área</h3>
           <div className="space-y-2">
             {osPorSetor.length === 0 ? <p className="text-xs text-slate-600 text-center py-4">Sem dados</p> :
             osPorSetor.map((s, i) => (
@@ -2467,7 +2488,7 @@ const DashboardPage = () => {
             {ativosMaisFalhas.length === 0 ? <p className="text-xs text-slate-600 text-center py-4">Nenhuma falha registrada</p> :
             ativosMaisFalhas.slice(0, 5).map((a, i) => (
               <div key={i} className="flex items-center gap-2 p-2 bg-slate-800/30 rounded-lg">
-                <span className="text-xs font-mono text-emerald-400 w-16">{a.tag}</span>
+                <span className="text-xs font-mono text-brand w-16">{a.tag}</span>
                 <span className="text-xs text-slate-400 flex-1 truncate">{a.nome}</span>
                 <span className="text-xs text-slate-600">{a.sector}</span>
                 <span className="text-sm font-mono font-bold text-red-400">{a.falhas}</span>
@@ -2488,8 +2509,8 @@ const DashboardPage = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     {item.numero && <span className="font-mono text-xs text-blue-400">{item.numero}</span>}
-                    {item.ativo && <span className="font-mono text-xs text-emerald-400">{item.ativo.tag}</span>}
-                    {item.tag && <span className="font-mono text-xs text-emerald-400">{item.tag}</span>}
+                    {item.ativo && <span className="font-mono text-xs text-brand">{item.ativo.tag}</span>}
+                    {item.tag && <span className="font-mono text-xs text-brand">{item.tag}</span>}
                     {item.sku && <span className="font-mono text-xs text-purple-400">{item.sku}</span>}
                     <span className="text-slate-100">{item.nome}</span>
                     {item.prioridade && <PriorityBadge priority={item.prioridade} />}
@@ -2590,7 +2611,7 @@ const AtivosPage = () => {
     const ativoOS = osList.filter(os => os.ativo_id === ativoId && !['concluida','cancelada'].includes(os.status));
     if (ativoOS.some(os => os.equipamento_parado)) return { label: 'Parado', class: 'text-red-400 bg-red-500/10 border-red-500/30' };
     if (ativoOS.some(os => os.status === 'em_execucao')) return { label: 'Em Manutenção', class: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
-    return { label: 'Operacional', class: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
+    return { label: 'Operacional', class: 'text-emerald-400 bg-brand-10 border-emerald-500/30' };
   };
 
   // A2: Count open OS per ativo
@@ -2661,13 +2682,13 @@ const AtivosPage = () => {
             <div key={ativo.id} className="glass-card p-4 hover:border-slate-600 transition-all group" data-testid={`ativo-card-${ativo.tag}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/ativos/${ativo.id}`)}>
-                  <div className="p-2 rounded-lg bg-emerald-500/10">
-                    <Box size={22} className="text-emerald-400" />
+                  <div className="p-2 rounded-lg bg-brand-10">
+                    <Box size={22} className="text-brand" />
                   </div>
                   <div>
                     {ativo.sector && <p className="text-xs text-slate-500 font-medium uppercase">{ativo.sector.nome}</p>}
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-emerald-400 text-sm">{ativo.tag}</span>
+                      <span className="font-mono text-brand text-sm">{ativo.tag}</span>
                       {/* A1: Status dinâmico */}
                       {(() => { const st = getAtivoStatus(ativo.id); return (
                         <span className={`${st.class} border text-[10px] px-1.5 py-0.5 rounded font-medium`} data-testid={`ativo-status-${ativo.tag}`}>{st.label}</span>
@@ -2815,7 +2836,7 @@ const AtivoDetailPage = () => {
   if (!ativo) return null;
 
   const criticidadeColors = { A: 'text-red-400 bg-red-500/10', B: 'text-amber-400 bg-amber-500/10', C: 'text-blue-400 bg-blue-500/10' };
-  const statusColors = { operacional: 'text-emerald-400 bg-emerald-500/10', parado: 'text-red-400 bg-red-500/10', manutencao: 'text-amber-400 bg-amber-500/10' };
+  const statusColors = { operacional: 'text-emerald-400 bg-brand-10', parado: 'text-red-400 bg-red-500/10', manutencao: 'text-amber-400 bg-amber-500/10' };
   const tipoEventoConfig = {
     os: { color: 'border-blue-500', bg: 'bg-blue-500', icon: Wrench, label: 'OS' },
     inspecao: { color: 'border-emerald-500', bg: 'bg-emerald-500', icon: ClipboardCheck, label: 'Inspeção' },
@@ -2865,12 +2886,12 @@ const AtivoDetailPage = () => {
           {/* Left: Main info */}
           <div className="lg:col-span-2">
             <div className="flex items-start gap-4">
-              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-emerald-500/20 to-blue-500/20 flex items-center justify-center border border-slate-700 shrink-0">
-                <Cog size={28} className="text-emerald-400" />
+              <div className="w-16 h-16 rounded-xl bg-brand-20 flex items-center justify-center border border-slate-700 shrink-0">
+                <Cog size={28} className="text-brand" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="font-mono text-emerald-400 text-lg font-bold" data-testid="prontuario-tag">{ativo.tag}</span>
+                  <span className="font-mono text-brand text-lg font-bold" data-testid="prontuario-tag">{ativo.tag}</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[ativo.status] || 'text-slate-400 bg-slate-700'}`}>{ativo.status || 'Operacional'}</span>
                   {ativo.criticidade && <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${criticidadeColors[ativo.criticidade] || ''}`}>Crit. {ativo.criticidade}</span>}
                 </div>
@@ -2897,7 +2918,7 @@ const AtivoDetailPage = () => {
               <p className="text-[10px] text-slate-500 uppercase">Falhas</p>
             </div>
             <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-              <p className="text-xl font-bold text-emerald-400">{ativo.kpis?.disponibilidade_percent || 100}%</p>
+              <p className="text-xl font-bold text-brand">{ativo.kpis?.disponibilidade_percent || 100}%</p>
               <p className="text-[10px] text-slate-500 uppercase">Disponibilidade</p>
             </div>
             <div className="bg-slate-800/50 rounded-lg p-3 text-center">
@@ -2912,7 +2933,7 @@ const AtivoDetailPage = () => {
       <div className="flex gap-1 bg-slate-900/50 rounded-lg p-1 overflow-x-auto">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${activeTab === t.key ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
+            className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${activeTab === t.key ? 'bg-brand-20 text-brand border border-brand-30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
             data-testid={`tab-${t.key}`}
           >{t.label}</button>
         ))}
@@ -2923,7 +2944,7 @@ const AtivoDetailPage = () => {
         <div className="space-y-4" data-testid="prontuario-tab">
           {/* Saúde do Equipamento */}
           <div className="glass-card p-4">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Activity size={16} className="text-emerald-400" /> Saúde do Equipamento</h3>
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Activity size={16} className="text-brand" /> Saúde do Equipamento</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <SaudeItem label="Última Inspeção" data={saude?.ultima_inspecao} icon={ClipboardCheck} color="bg-emerald-600" />
               <SaudeItem label="Próxima Inspeção" data={saude?.proxima_inspecao} icon={Calendar} color="bg-blue-600" />
@@ -2941,17 +2962,17 @@ const AtivoDetailPage = () => {
 
           {/* Planos Permanentes */}
           <div className="glass-card p-4">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><ClipboardCheck size={16} className="text-emerald-400" /> Planos Permanentes ({planosVinculados.length})</h3>
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><ClipboardCheck size={16} className="text-brand" /> Planos Permanentes ({planosVinculados.length})</h3>
             {planosVinculados.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                 {planosVinculados.map(p => {
-                  const discColors = { mecanica: 'bg-emerald-500/20 text-emerald-400', eletrica: 'bg-blue-500/20 text-blue-400', lubrificacao: 'bg-amber-500/20 text-amber-400', producao: 'bg-slate-500/20 text-slate-400', instrumentacao: 'bg-purple-500/20 text-purple-400' };
+                  const discColors = { mecanica: 'bg-brand-20 text-brand', eletrica: 'bg-blue-500/20 text-blue-400', lubrificacao: 'bg-amber-500/20 text-amber-400', producao: 'bg-slate-500/20 text-slate-400', instrumentacao: 'bg-purple-500/20 text-purple-400' };
                   return (
                     <div key={p.id} className="p-3 rounded-lg border border-slate-800 bg-slate-800/30 hover:border-slate-600 transition-all" data-testid={`plano-perm-${p.id}`}>
                       <p className="text-sm text-slate-200 font-medium truncate">{p.nome}</p>
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded capitalize ${discColors[p.disciplina] || 'bg-slate-700 text-slate-400'}`}>{p.disciplina}</span>
-                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">{p.status}</span>
+                        <span className="text-[10px] text-brand bg-brand-10 px-1.5 py-0.5 rounded">{p.status}</span>
                         <span className="text-[10px] text-slate-500">{(p.perguntas || []).length}q • v{p.versao || 1}</span>
                       </div>
                     </div>
@@ -2989,7 +3010,7 @@ const AtivoDetailPage = () => {
           <div className="glass-card p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Clock size={16} className="text-slate-400" /> Últimos Eventos</h3>
-              <button onClick={() => setActiveTab('timeline')} className="text-xs text-emerald-400 hover:underline">Ver todos</button>
+              <button onClick={() => setActiveTab('timeline')} className="text-xs text-brand hover:underline">Ver todos</button>
             </div>
             {historico.length > 0 ? (
               <div className="space-y-0">
@@ -3088,7 +3109,7 @@ const AtivoDetailPage = () => {
                 })}
               </div>
               {historico.length > timelineLimit && (
-                <button onClick={() => setTimelineLimit(prev => prev + 20)} className="w-full mt-3 py-2 text-sm text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors">
+                <button onClick={() => setTimelineLimit(prev => prev + 20)} className="w-full mt-3 py-2 text-sm text-brand hover:bg-slate-800 rounded-lg transition-colors">
                   Carregar mais ({historico.length - timelineLimit} restantes)
                 </button>
               )}
@@ -3108,14 +3129,14 @@ const AtivoDetailPage = () => {
           {planosVinculados.length > 0 ? (
             <div className="space-y-2">
               {planosVinculados.map(p => {
-                const statusColor = p.status === 'aprovado' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+                const statusColor = p.status === 'aprovado' ? 'text-emerald-400 bg-brand-10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
                 const tipoLabels2 = { inspecao: 'Inspeção', preventiva: 'Preventiva', lubrificacao: 'Lubrificação', limpeza: 'Limpeza', melhoria: 'Melhoria' };
                 return (
                   <div key={p.id} className="glass-card p-4" data-testid={`plano-vinculado-${p.id}`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <ClipboardCheck size={16} className="text-emerald-400" />
+                          <ClipboardCheck size={16} className="text-brand" />
                           <span className="text-slate-100 font-medium">{p.nome}</span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusColor}`}>{p.status || 'Rascunho'}</span>
                         </div>
@@ -3399,7 +3420,7 @@ const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete }) 
                   <div className="p-2.5">
                     {/* TAG + Equipment name */}
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      {os.ativo?.tag && <span className="font-mono text-xs text-emerald-400 font-bold">{os.ativo.tag}</span>}
+                      {os.ativo?.tag && <span className="font-mono text-xs text-brand font-bold">{os.ativo.tag}</span>}
                       {os.ativo?.nome && <span className="text-[10px] text-slate-500 truncate">{os.ativo.nome}</span>}
                     </div>
                     {/* OS number + type */}
@@ -3570,10 +3591,10 @@ const OSPage = () => {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-slate-800 rounded-lg p-0.5">
-            <button onClick={() => setViewMode('kanban')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'kanban' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400'}`} data-testid="view-kanban">
+            <button onClick={() => setViewMode('kanban')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'kanban' ? 'bg-brand-20 text-brand' : 'text-slate-400'}`} data-testid="view-kanban">
               <LayoutDashboard size={14} className="inline mr-1" />Kanban
             </button>
-            <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400'}`} data-testid="view-list">
+            <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-brand-20 text-brand' : 'text-slate-400'}`} data-testid="view-list">
               <List size={14} className="inline mr-1" />Lista
             </button>
           </div>
@@ -3599,22 +3620,22 @@ const OSPage = () => {
             {searchOS && <button onClick={() => setSearchOS('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={14} /></button>}
           </div>
           <button onClick={() => setShowFilters(!showFilters)}
-            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${showFilters || activeFilterCount > 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'border-slate-700 text-slate-400 hover:text-slate-300'}`}
+            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${showFilters || activeFilterCount > 0 ? 'bg-brand-20 text-brand border-brand-30' : 'border-slate-700 text-slate-400 hover:text-slate-300'}`}
             data-testid="os-toggle-filters"
           >
             <Filter size={14} />Filtros
-            {activeFilterCount > 0 && <span className="bg-emerald-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
+            {activeFilterCount > 0 && <span className="bg-brand text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
           </button>
           <div className="flex gap-1">
             {[
               { value: '', label: 'Todas' },
               { value: 'emergencia', label: 'Emerg.', cls: 'text-red-400 bg-red-500/10 border-red-500/30' },
               { value: 'alta', label: 'Alta', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/30' },
-              { value: 'media', label: 'Média', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
+              { value: 'media', label: 'Média', cls: 'text-emerald-400 bg-brand-10 border-emerald-500/30' },
               { value: 'baixa', label: 'Baixa', cls: 'text-slate-400 bg-slate-500/10 border-slate-500/30' },
             ].map(p => (
               <button key={p.value} onClick={() => setFilterPriority(p.value)}
-                className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition-all ${filterPriority === p.value ? (p.cls || 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30') : 'border-slate-700 text-slate-500 hover:text-slate-300'}`}
+                className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition-all ${filterPriority === p.value ? (p.cls || 'bg-brand-20 text-brand border-brand-30') : 'border-slate-700 text-slate-500 hover:text-slate-300'}`}
                 data-testid={`os-filter-priority-${p.value || 'all'}`}
               >{p.label}</button>
             ))}
@@ -3644,7 +3665,7 @@ const OSPage = () => {
               ))}
             </select>
             <button onClick={() => { setFilterPriority(''); setFilterTipo(''); setFilterArea(''); setFilterResponsavel(''); setFilterDisciplina(''); setSearchOS(''); }}
-              className="text-xs text-slate-500 hover:text-emerald-400 flex items-center justify-center gap-1" data-testid="os-clear-all-filters">
+              className="text-xs text-slate-500 hover:text-brand flex items-center justify-center gap-1" data-testid="os-clear-all-filters">
               <X size={12} />Limpar filtros
             </button>
           </div>
@@ -3671,7 +3692,7 @@ const OSPage = () => {
               { value: 'pausada', label: 'Pausadas' },
               { value: 'concluida', label: 'Concluídas' },
             ].map(f => (
-              <button key={f.value} onClick={() => setFilter(f.value)} className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all ${filter === f.value ? 'bg-emerald-500 text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+              <button key={f.value} onClick={() => setFilter(f.value)} className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all ${filter === f.value ? 'bg-brand text-slate-950 font-semibold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
                 {f.label}
               </button>
             ))}
@@ -3683,7 +3704,7 @@ const OSPage = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex-1 cursor-pointer" onClick={() => navigate(`/os/${os.id}`)}>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-emerald-400">#{os.numero}</span>
+                        <span className="font-mono text-brand">#{os.numero}</span>
                         {os.ativo && <span className="text-xs text-slate-500">{os.ativo.tag}</span>}
                         {os.atrasada && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded">ATRASADA</span>}
                       </div>
@@ -3911,7 +3932,7 @@ const OSDetailPage = () => {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-emerald-400">#{os.numero}</span>
+            <span className="font-mono text-brand">#{os.numero}</span>
             <StatusBadge status={os.status} size="sm" />
             <PriorityBadge priority={os.prioridade} />
           </div>
@@ -3926,7 +3947,7 @@ const OSDetailPage = () => {
           <div className="flex items-center justify-between">
             <div>
               {os.ativo.sector && <p className="text-xs text-slate-500 uppercase font-medium">{os.ativo.sector.nome || os.ativo.sector_nome}</p>}
-              <span className="font-mono text-emerald-400">{os.ativo.tag}</span>
+              <span className="font-mono text-brand">{os.ativo.tag}</span>
               <p className="text-slate-200">{os.ativo.nome}</p>
             </div>
             <ChevronRight className="text-slate-600" />
@@ -3983,7 +4004,7 @@ const OSDetailPage = () => {
           <div className="border-t border-slate-800 pt-2 space-y-1">
             <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Execução</p>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              {os.tempo_execucao_minutos && <div><span className="text-slate-500">Tempo:</span> <span className="text-emerald-400 font-semibold">{Math.floor(os.tempo_execucao_minutos / 60)}h {os.tempo_execucao_minutos % 60}min</span></div>}
+              {os.tempo_execucao_minutos && <div><span className="text-slate-500">Tempo:</span> <span className="text-brand font-semibold">{Math.floor(os.tempo_execucao_minutos / 60)}h {os.tempo_execucao_minutos % 60}min</span></div>}
               {os.custo_pecas > 0 && <div><span className="text-slate-500">Custo Peças:</span> <span className="text-slate-300">R$ {os.custo_pecas.toFixed(2)}</span></div>}
               {os.custo_mao_obra > 0 && <div><span className="text-slate-500">Custo M.O.:</span> <span className="text-slate-300">R$ {os.custo_mao_obra.toFixed(2)}</span></div>}
               {(os.custo_pecas > 0 || os.custo_mao_obra > 0) && <div><span className="text-slate-500">Custo Total:</span> <span className="text-slate-200 font-semibold">R$ {((os.custo_pecas || 0) + (os.custo_mao_obra || 0)).toFixed(2)}</span></div>}
@@ -4021,7 +4042,7 @@ const OSDetailPage = () => {
           {/* Buttons */}
           <div className="flex gap-2 justify-center">
             {(!hhStatus || hhStatus === 'finalizar') && (
-              <button onClick={() => handleHH('iniciar')} className="px-6 py-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium text-sm hover:bg-emerald-500/30 flex items-center gap-2" data-testid="hh-iniciar">
+              <button onClick={() => handleHH('iniciar')} className="px-6 py-2.5 rounded-lg bg-brand-20 text-brand border border-brand-30 font-medium text-sm hover:brightness-110 flex items-center gap-2" data-testid="hh-iniciar">
                 <Play size={18} /> Iniciar
               </button>
             )}
@@ -4037,7 +4058,7 @@ const OSDetailPage = () => {
             )}
             {hhStatus === 'pausar' && (
               <>
-                <button onClick={() => handleHH('retornar')} className="px-5 py-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium text-sm hover:bg-emerald-500/30 flex items-center gap-2" data-testid="hh-retornar">
+                <button onClick={() => handleHH('retornar')} className="px-5 py-2.5 rounded-lg bg-brand-20 text-brand border border-brand-30 font-medium text-sm hover:brightness-110 flex items-center gap-2" data-testid="hh-retornar">
                   <Play size={18} /> Retornar
                 </button>
                 <button onClick={() => handleHH('finalizar')} className="px-5 py-2.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium text-sm hover:bg-blue-500/30 flex items-center gap-2">
@@ -4055,14 +4076,14 @@ const OSDetailPage = () => {
                   <div key={e.user_id} className="flex items-center justify-between text-xs bg-slate-800/50 rounded px-3 py-2">
                     <span className="text-slate-300">{e.user_nome}</span>
                     <div className="flex gap-3">
-                      <span className="text-emerald-400">Líquida: {Math.floor(e.hh_liquida_min/60)}h{Math.round(e.hh_liquida_min%60)}m</span>
+                      <span className="text-brand">Líquida: {Math.floor(e.hh_liquida_min/60)}h{Math.round(e.hh_liquida_min%60)}m</span>
                       <span className="text-slate-500">Bruta: {Math.floor(e.hh_bruta_min/60)}h{Math.round(e.hh_bruta_min%60)}m</span>
                       {e.tempo_parado_min > 0 && <span className="text-amber-400">Parado: {Math.round(e.tempo_parado_min)}m</span>}
                     </div>
                   </div>
                 ))}
                 <div className="text-right text-xs text-slate-400 pt-1">
-                  Total HH líquida: <span className="text-emerald-400 font-semibold">{Math.floor(hhResumo.hh_total_liquida_min/60)}h{Math.round(hhResumo.hh_total_liquida_min%60)}m</span>
+                  Total HH líquida: <span className="text-brand font-semibold">{Math.floor(hhResumo.hh_total_liquida_min/60)}h{Math.round(hhResumo.hh_total_liquida_min%60)}m</span>
                 </div>
               </div>
             </div>
@@ -4085,7 +4106,7 @@ const OSDetailPage = () => {
         {executantes.length > 0 ? (
           <div className="space-y-1.5">
             {executantes.map(e => {
-              const funcColors = { executor: 'text-emerald-400 bg-emerald-500/10', apoio: 'text-blue-400 bg-blue-500/10', supervisor_exec: 'text-amber-400 bg-amber-500/10', inspetor_exec: 'text-cyan-400 bg-cyan-500/10', lider: 'text-purple-400 bg-purple-500/10' };
+              const funcColors = { executor: 'text-emerald-400 bg-brand-10', apoio: 'text-blue-400 bg-blue-500/10', supervisor_exec: 'text-amber-400 bg-amber-500/10', inspetor_exec: 'text-cyan-400 bg-cyan-500/10', lider: 'text-purple-400 bg-purple-500/10' };
               const funcLabels = { executor: 'Executor', apoio: 'Apoio', supervisor_exec: 'Supervisor', inspetor_exec: 'Inspetor', lider: 'Líder' };
               return (
                 <div key={e.user_id} className="flex items-center justify-between bg-slate-800/50 rounded-lg px-3 py-2" data-testid={`exec-${e.user_id}`}>
@@ -4141,7 +4162,7 @@ const OSDetailPage = () => {
           </h3>
           <div className="space-y-1 max-h-[250px] overflow-y-auto">
             {osEventos.slice(-20).reverse().map((evt, idx) => {
-              const evtColors = { trabalho_iniciado: 'border-emerald-500', pausa: 'border-amber-500', retorno: 'border-blue-500', os_concluida: 'border-emerald-400', os_criada: 'border-slate-500', equipe_alterada: 'border-purple-500', campo_alterado: 'border-cyan-500' };
+              const evtColors = { trabalho_iniciado: 'border-emerald-500', pausa: 'border-amber-500', retorno: 'border-blue-500', os_concluida: 'border-brand', os_criada: 'border-slate-500', equipe_alterada: 'border-purple-500', campo_alterado: 'border-cyan-500' };
               const evtLabels = { trabalho_iniciado: 'Trabalho iniciado', pausa: 'Pausa', retorno: 'Retorno', os_concluida: 'Finalizado', os_criada: 'OS criada', equipe_alterada: 'Equipe alterada', campo_alterado: 'Campo alterado', material_utilizado: 'Material utilizado', foto_anexada: 'Foto anexada' };
               return (
                 <div key={evt.id || idx} className={`flex items-start gap-2 text-xs border-l-2 ${evtColors[evt.tipo] || 'border-slate-700'} pl-3 py-1`}>
@@ -4159,8 +4180,8 @@ const OSDetailPage = () => {
 
       {/* Serviço Executado (exibido quando concluída) */}
       {os.descricao_servico && (
-        <div className="glass-card p-4 border-l-4 border-emerald-500" data-testid="os-servico-executado">
-          <p className="text-xs text-emerald-400 font-semibold uppercase mb-1">Serviço Executado</p>
+        <div className="glass-card p-4 border-l-4 border-brand" data-testid="os-servico-executado">
+          <p className="text-xs text-brand font-semibold uppercase mb-1">Serviço Executado</p>
           <p className="text-slate-200 whitespace-pre-wrap">{os.descricao_servico}</p>
         </div>
       )}
@@ -4199,7 +4220,7 @@ const OSDetailPage = () => {
               <div key={m.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3 border border-slate-700/50" data-testid={`material-item-${m.id}`}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-emerald-400 text-sm">{m.codigo}</span>
+                    <span className="font-mono text-brand text-sm">{m.codigo}</span>
                     <span className="text-slate-300 text-sm">{m.descricao}</span>
                   </div>
                   <p className="text-xs text-slate-500">
@@ -4322,7 +4343,7 @@ const OSDetailPage = () => {
           {os.ativo && (
             <div className="bg-slate-800/50 rounded-lg p-3">
               {os.ativo.sector && <p className="text-xs text-slate-500 uppercase">{os.ativo.sector.nome || os.ativo.sector_nome}</p>}
-              <span className="font-mono text-emerald-400 text-sm">{os.ativo.tag}</span>
+              <span className="font-mono text-brand text-sm">{os.ativo.tag}</span>
               <span className="text-slate-300 text-sm ml-2">{os.ativo.nome}</span>
             </div>
           )}
@@ -4476,12 +4497,12 @@ const EstoquePage = () => {
               <div className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${item.is_critico ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
+                    <div className={`p-2 rounded-lg ${item.is_critico ? 'bg-red-500/10' : 'bg-brand-10'}`}>
                       <Package size={20} className={item.is_critico ? 'text-red-400' : 'text-emerald-400'} />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-emerald-400 text-sm">{item.sku}</span>
+                        <span className="font-mono text-brand text-sm">{item.sku}</span>
                         <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-800 rounded capitalize">{item.categoria}</span>
                       </div>
                       <p className="text-slate-100">{item.nome}</p>
@@ -4491,7 +4512,7 @@ const EstoquePage = () => {
                   <div className="flex items-center gap-3">
                     {/* E1: Expand button */}
                     <button onClick={() => toggleExpand(item.id)} className="p-2 hover:bg-slate-700 rounded-lg transition-colors" title="Ver movimentações" data-testid={`expand-estoque-${item.id}`}>
-                      {expandedItem === item.id ? <ChevronUp size={16} className="text-emerald-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+                      {expandedItem === item.id ? <ChevronUp size={16} className="text-brand" /> : <ChevronDown size={16} className="text-slate-400" />}
                     </button>
                     {['admin','master'].includes(user?.role) && (
                       <div className="hidden group-hover:flex items-center gap-1">
@@ -4655,7 +4676,7 @@ const InspecoesPage = () => {
             { value: 'com_pendencias', label: 'Com Pendências' },
           ].map(f => (
             <button key={f.value} onClick={() => setFilterStatus(f.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${filterStatus === f.value ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'border border-slate-700 text-slate-400 hover:text-slate-300'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${filterStatus === f.value ? 'bg-brand-20 text-brand border border-brand-30' : 'border border-slate-700 text-slate-400 hover:text-slate-300'}`}
               data-testid={`insp-filter-status-${f.value || 'all'}`}
             >
               {f.label}
@@ -4673,7 +4694,7 @@ const InspecoesPage = () => {
           {sectors.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
         </select>
         {(filterStatus || filterArea) && (
-          <button onClick={() => { setFilterStatus(''); setFilterArea(''); }} className="text-xs text-slate-500 hover:text-emerald-400" data-testid="insp-clear-filters">Limpar</button>
+          <button onClick={() => { setFilterStatus(''); setFilterArea(''); }} className="text-xs text-slate-500 hover:text-brand" data-testid="insp-clear-filters">Limpar</button>
         )}
       </div>
 
@@ -4689,7 +4710,7 @@ const InspecoesPage = () => {
                     {insp.ativo && (
                       <div>
                         {insp.ativo.sector && <span className="text-[10px] text-slate-600 uppercase block">{insp.ativo.sector?.nome}</span>}
-                        <span className="font-mono text-emerald-400 text-sm">{insp.ativo.tag}</span>
+                        <span className="font-mono text-brand text-sm">{insp.ativo.tag}</span>
                         <span className="text-slate-400 text-xs ml-1">{insp.ativo.nome}</span>
                       </div>
                     )}
@@ -4848,7 +4869,7 @@ const InspecaoDetailPage = () => {
           {inspecao.ativo && (
             <div className="mb-1">
               {inspecao.ativo.sector && <p className="text-xs text-slate-500 uppercase">{inspecao.ativo.sector?.nome}</p>}
-              <span className="font-mono text-emerald-400">{inspecao.ativo.tag}</span>
+              <span className="font-mono text-brand">{inspecao.ativo.tag}</span>
               <span className="text-slate-300 ml-2">{inspecao.ativo.nome}</span>
             </div>
           )}
@@ -4878,7 +4899,7 @@ const InspecaoDetailPage = () => {
           {inspecao.ativo?.fabricante && <div><span className="text-slate-500">Fabricante:</span> <span className="text-slate-200">{inspecao.ativo.fabricante}</span></div>}
           {inspecao.ativo?.modelo && <div><span className="text-slate-500">Modelo:</span> <span className="text-slate-200">{inspecao.ativo.modelo}</span></div>}
           {inspecao.ativo?.numero_serie && <div><span className="text-slate-500">Série:</span> <span className="text-slate-200 font-mono">{inspecao.ativo.numero_serie}</span></div>}
-          {inspecao.duracao_minutos && <div><span className="text-slate-500">Duração:</span> <span className="text-emerald-400 font-semibold">{inspecao.duracao_minutos} min</span></div>}
+          {inspecao.duracao_minutos && <div><span className="text-slate-500">Duração:</span> <span className="text-brand font-semibold">{inspecao.duracao_minutos} min</span></div>}
         </div>
       </div>
       
@@ -4950,7 +4971,7 @@ const InspecaoDetailPage = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-sm text-slate-400">Checklist</h3>
             <div className="flex items-center gap-3 text-xs text-slate-500">
-              {isFinished && <span className="text-emerald-400">{conformes.length} conforme(s)</span>}
+              {isFinished && <span className="text-brand">{conformes.length} conforme(s)</span>}
               {isFinished && naoConformes.length > 0 && <span className="text-red-400">{naoConformes.length} não conforme(s)</span>}
               <span>{checklist.filter(i => {
                 const t = i.tipo || 'boolean';
@@ -4970,7 +4991,7 @@ const InspecaoDetailPage = () => {
             <div key={item.id} className={`glass-card p-4 ${isFilled ? 'border-emerald-500/30' : ''}`}>
               <div className="flex items-start gap-3">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                  isFilled ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'
+                  isFilled ? 'bg-brand text-slate-950' : 'bg-slate-800 text-slate-400'
                 }`}>{idx + 1}</span>
                 <div className="flex-1">
                   <p className="text-sm text-slate-200">{item.descricao} {item.obrigatorio && <span className="text-red-400">*</span>}</p>
@@ -5060,7 +5081,7 @@ const InspecaoDetailPage = () => {
                         </span>
                       )}
                       {isOption && item.resultado && (
-                        <span className={`text-sm px-2 py-1 rounded ${item.conforme ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>{item.resultado}</span>
+                        <span className={`text-sm px-2 py-1 rounded ${item.conforme ? 'text-emerald-400 bg-brand-10' : 'text-red-400 bg-red-500/10'}`}>{item.resultado}</span>
                       )}
                       {isText && item.resultado && (
                         <p className="text-sm text-slate-300 bg-slate-800/50 rounded p-2 mt-1">{item.resultado}</p>
@@ -5093,7 +5114,7 @@ const InspecaoDetailPage = () => {
         <div className={`glass-card p-4 ${inspecao.resultado === 'conforme' ? 'border-emerald-500' : 'border-red-500'}`}>
           <div className="flex items-center gap-3">
             {inspecao.resultado === 'conforme' ? (
-              <CheckCircle size={24} className="text-emerald-400" />
+              <CheckCircle size={24} className="text-brand" />
             ) : (
               <XCircle size={24} className="text-red-400" />
             )}
@@ -5352,7 +5373,7 @@ const RondaPage = () => {
         )}
         <div>
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-            <Target size={24} className="text-emerald-400" /> Modo Ronda
+            <Target size={24} className="text-brand" /> Modo Ronda
           </h1>
           <p className="text-sm text-slate-500">
             {!selectedArea && 'Selecione uma área para iniciar'}
@@ -5371,7 +5392,7 @@ const RondaPage = () => {
           ) : areas.map(({ area, total_ativos, inspecoes_pendentes }) => (
             <div
               key={area.id}
-              className="glass-card p-4 cursor-pointer hover:border-emerald-500/50 transition-all active:scale-[0.99]"
+              className="glass-card p-4 cursor-pointer hover:border-brand transition-all active:scale-[0.99]"
               onClick={() => selectArea(area.id)}
               data-testid={`ronda-area-${area.codigo || area.id}`}
             >
@@ -5406,7 +5427,7 @@ const RondaPage = () => {
             ) : areaDetail?.ativos?.map(({ ativo, ultima_inspecao, tem_pendente, ordem }) => (
               <div
                 key={ativo.id}
-                className="glass-card p-4 cursor-pointer hover:border-emerald-500/50 transition-all active:scale-[0.99]"
+                className="glass-card p-4 cursor-pointer hover:border-brand transition-all active:scale-[0.99]"
                 onClick={() => selectAtivo(ativo)}
                 data-testid={`ronda-ativo-${ativo.tag}`}
               >
@@ -5415,7 +5436,7 @@ const RondaPage = () => {
                     <span className="text-xs text-slate-600 font-mono w-6">{ordem}</span>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-emerald-400 text-sm">{ativo.tag}</span>
+                        <span className="font-mono text-brand text-sm">{ativo.tag}</span>
                         {tem_pendente && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />}
                       </div>
                       <p className="text-slate-200 text-sm">{ativo.nome}</p>
@@ -5444,7 +5465,7 @@ const RondaPage = () => {
         <div className="space-y-4" data-testid="ronda-tipo-inspecao">
           <div className="glass-card p-4">
             <div className="flex items-center gap-3 mb-2">
-              <span className="font-mono text-emerald-400">{selectedAtivo.tag}</span>
+              <span className="font-mono text-brand">{selectedAtivo.tag}</span>
               <span className="text-slate-200">{selectedAtivo.nome}</span>
             </div>
             <p className="text-xs text-slate-500">{selectedAtivo.tipo_equipamento} {selectedAtivo.fabricante ? `• ${selectedAtivo.fabricante}` : ''}</p>
@@ -5463,7 +5484,7 @@ const RondaPage = () => {
                   <button
                     key={plano.id}
                     onClick={() => selectTipo(plano)}
-                    className="glass-card p-5 text-left hover:border-emerald-500/50 transition-all active:scale-[0.99] flex items-center gap-4"
+                    className="glass-card p-5 text-left hover:border-brand transition-all active:scale-[0.99] flex items-center gap-4"
                     data-testid={`ronda-plano-${plano.id}`}
                   >
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: color + '20' }}>
@@ -5493,7 +5514,7 @@ const RondaPage = () => {
         <div className="space-y-4" data-testid="ronda-checklist">
           <div className="glass-card p-3 flex items-center justify-between">
             <div>
-              <span className="font-mono text-emerald-400 text-sm">{selectedAtivo.tag}</span>
+              <span className="font-mono text-brand text-sm">{selectedAtivo.tag}</span>
               <span className="text-slate-400 text-sm ml-2">{selectedAtivo.nome}</span>
             </div>
             <span className="text-xs bg-slate-800 px-2 py-1 rounded">{tipoInspecao?.nome || ''}</span>
@@ -5511,7 +5532,7 @@ const RondaPage = () => {
                     {/* Boolean type: OK / NOK */}
                     {item.tipo === 'boolean' && (
                       <div className="flex gap-2 mt-2">
-                        <button onClick={() => updateChecklistItem(item.id, 'conforme', true)} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${item.conforme === true ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-slate-800/50 text-slate-500 border border-slate-700'}`}>
+                        <button onClick={() => updateChecklistItem(item.id, 'conforme', true)} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${item.conforme === true ? 'bg-brand-20 text-brand border border-emerald-500/50' : 'bg-slate-800/50 text-slate-500 border border-slate-700'}`}>
                           <CheckCircle size={16} className="inline mr-1" /> OK
                         </button>
                         <button onClick={() => updateChecklistItem(item.id, 'conforme', false)} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${item.conforme === false ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-slate-800/50 text-slate-500 border border-slate-700'}`}>
@@ -5532,7 +5553,7 @@ const RondaPage = () => {
                     {item.tipo === 'opcao' && (
                       <div className="flex gap-1 mt-2 flex-wrap">
                         {['Bom', 'Regular', 'Ruim'].map(opt => (
-                          <button key={opt} onClick={() => updateChecklistItem(item.id, 'valor', opt)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${item.valor === opt ? (opt === 'Bom' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : opt === 'Regular' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50' : 'bg-red-500/20 text-red-400 border border-red-500/50') : 'bg-slate-800/50 text-slate-500 border border-slate-700'}`}>
+                          <button key={opt} onClick={() => updateChecklistItem(item.id, 'valor', opt)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${item.valor === opt ? (opt === 'Bom' ? 'bg-brand-20 text-brand border border-emerald-500/50' : opt === 'Regular' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50' : 'bg-red-500/20 text-red-400 border border-red-500/50') : 'bg-slate-800/50 text-slate-500 border border-slate-700'}`}>
                             {opt}
                           </button>
                         ))}
@@ -5691,7 +5712,7 @@ const ScannerPage = () => {
   return (
     <div className="space-y-4" data-testid="scanner-page">
       <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
-        <QrCode size={28} className="text-emerald-400" /> Identificar Ativo
+        <QrCode size={28} className="text-brand" /> Identificar Ativo
       </h1>
       
       {scanning ? (
@@ -5702,11 +5723,11 @@ const ScannerPage = () => {
             {/* Scan overlay */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-52 h-52 relative">
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-3 border-l-3 border-emerald-400 rounded-tl-lg" />
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-3 border-r-3 border-emerald-400 rounded-tr-lg" />
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-3 border-l-3 border-emerald-400 rounded-bl-lg" />
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-3 border-r-3 border-emerald-400 rounded-br-lg" />
-                <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-emerald-400/60 animate-pulse" />
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-3 border-l-3 border-brand rounded-tl-lg" />
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-3 border-r-3 border-brand rounded-tr-lg" />
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-3 border-l-3 border-brand rounded-bl-lg" />
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-3 border-r-3 border-brand rounded-br-lg" />
+                <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-brand animate-pulse" />
               </div>
             </div>
             <div className="absolute bottom-3 left-3 right-3 text-center">
@@ -5720,8 +5741,8 @@ const ScannerPage = () => {
         </div>
       ) : (
         <div className="glass-card p-8 flex flex-col items-center justify-center gap-4">
-          <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
-            <Camera size={40} className="text-emerald-400" />
+          <div className="w-20 h-20 rounded-full bg-brand-10 flex items-center justify-center">
+            <Camera size={40} className="text-brand" />
           </div>
           <p className="text-sm text-slate-500">Câmera fechada</p>
           <button onClick={startCamera} className="btn-primary flex items-center gap-2" data-testid="open-camera-btn">
@@ -5845,7 +5866,7 @@ const PhotoUploader = ({ entityType, entityId, categoria = 'foto', label = 'Foto
 
         {/* Upload Button */}
         <label className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
-          required && photos.length === 0 ? 'border-red-500/50 hover:border-red-400 bg-red-500/5' : 'border-slate-700 hover:border-emerald-500/50 hover:bg-emerald-500/5'
+          required && photos.length === 0 ? 'border-red-500/50 hover:border-red-400 bg-red-500/5' : 'border-slate-700 hover:border-brand hover:bg-brand-10'
         }`}>
           {uploading ? (
             <><RefreshCw size={18} className="animate-spin text-slate-400" /> <span className="text-sm text-slate-400">Enviando...</span></>
@@ -5884,7 +5905,7 @@ const PhotoUploader = ({ entityType, entityId, categoria = 'foto', label = 'Foto
 // ============== SOBRESSALENTES PAGE ==============
 
 const CONDICAO_CONFIG = {
-  novo: { label: 'Novo', class: 'text-emerald-400 bg-emerald-500/10' },
+  novo: { label: 'Novo', class: 'text-emerald-400 bg-brand-10' },
   reformado: { label: 'Reformado', class: 'text-blue-400 bg-blue-500/10' },
   em_reforma: { label: 'Em Reforma', class: 'text-amber-400 bg-amber-500/10' },
   reservado: { label: 'Reservado', class: 'text-purple-400 bg-purple-500/10' },
@@ -5948,7 +5969,7 @@ const SobressalentesPage = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `sobressalentes_maintrix.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
+      link.setAttribute('download', `sobressalentes_export.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -6009,7 +6030,7 @@ const SobressalentesPage = () => {
   const filtered = search ? spares.filter(s => s.descricao?.toLowerCase().includes(search.toLowerCase()) || s.tag?.toLowerCase().includes(search.toLowerCase())) : spares;
 
   const statusConfig = {
-    estoque: { class: 'bg-emerald-500/10 text-emerald-400', label: 'Em Estoque' },
+    estoque: { class: 'bg-brand-10 text-emerald-400', label: 'Em Estoque' },
     em_uso: { class: 'bg-blue-500/10 text-blue-400', label: 'Em Uso' },
     em_reforma: { class: 'bg-amber-500/10 text-amber-400', label: 'Em Reforma' },
     descartado: { class: 'bg-red-500/10 text-red-400', label: 'Descartado' },
@@ -6043,7 +6064,7 @@ const SobressalentesPage = () => {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="font-mono text-emerald-400 text-sm">{sp.tag || sp.codigo}</span>
+                    <span className="font-mono text-brand text-sm">{sp.tag || sp.codigo}</span>
                     {origemLabel && <span className="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{origemLabel}</span>}
                     {qtTotal > 0 && <span className="text-xs font-semibold text-slate-200 bg-slate-700 px-1.5 py-0.5 rounded">Qtd: {qtTotal}</span>}
                   </div>
@@ -6151,7 +6172,7 @@ const SobressalentesPage = () => {
                       <div className="flex gap-3 text-xs text-slate-500 mt-0.5">
                         {r.data_envio && <span>Envio: {new Date(r.data_envio + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
                         {r.data_retorno && <span>Retorno: {new Date(r.data_retorno + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
-                        {r.valor && <span className="text-emerald-400">R$ {r.valor.toFixed(2)}</span>}
+                        {r.valor && <span className="text-brand">R$ {r.valor.toFixed(2)}</span>}
                       </div>
                       {r.observacao && <p className="text-xs text-slate-400 mt-1">{r.observacao}</p>}
                       <p className="text-xs text-slate-600 mt-0.5">{r.usuario_nome} · {new Date(r.created_at).toLocaleString('pt-BR')}</p>
@@ -6185,7 +6206,7 @@ const ANOMALIA_STATUS = {
   em_analise: { label: 'Em Análise', color: 'text-amber-400 bg-amber-500/10' },
   os_gerada: { label: 'OS Gerada', color: 'text-blue-400 bg-blue-500/10' },
   aguardando_execucao: { label: 'Aguardando Execução', color: 'text-purple-400 bg-purple-500/10' },
-  resolvida: { label: 'Resolvida', color: 'text-emerald-400 bg-emerald-500/10' },
+  resolvida: { label: 'Resolvida', color: 'text-emerald-400 bg-brand-10' },
   encerrada: { label: 'Encerrada', color: 'text-slate-400 bg-slate-500/10' },
 };
 
@@ -6316,7 +6337,7 @@ const AnomaliasPage = () => {
       {selected.ativo && (
         <div className="glass-card p-4 cursor-pointer hover:border-slate-600" onClick={() => navigate(`/ativos/${selected.ativo_id}`)}>
           {selected.ativo.sector && <p className="text-xs text-slate-500 uppercase">{selected.ativo.sector?.nome}</p>}
-          <span className="font-mono text-emerald-400">{selected.ativo.tag}</span>
+          <span className="font-mono text-brand">{selected.ativo.tag}</span>
           <span className="text-slate-300 ml-2">{selected.ativo.nome}</span>
         </div>
       )}
@@ -6432,7 +6453,7 @@ const AnomaliasPage = () => {
                   {a.ativo && (
                     <div className="mb-1">
                       {a.ativo.sector && <span className="text-[10px] text-slate-600 uppercase">{a.ativo.sector?.nome} • </span>}
-                      <span className="font-mono text-emerald-400 text-sm">{a.ativo.tag}</span>
+                      <span className="font-mono text-brand text-sm">{a.ativo.tag}</span>
                       <span className="text-slate-400 text-xs ml-1">{a.ativo.nome}</span>
                     </div>
                   )}
@@ -6462,7 +6483,7 @@ const AnomaliasPage = () => {
             <Select value={form.severidade} onChange={(v) => setForm({...form, severidade: v})} options={[{value:'baixa',label:'Baixa'},{value:'media',label:'Média'},{value:'alta',label:'Alta'},{value:'critica',label:'Crítica'}]} />
           </FormInput>
           <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" checked={form.gerar_os} onChange={(e) => setForm({...form, gerar_os: e.target.checked})} className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-emerald-500" />
+            <input type="checkbox" checked={form.gerar_os} onChange={(e) => setForm({...form, gerar_os: e.target.checked})} className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-brand" />
             <span className="text-slate-300">Gerar OS automaticamente</span>
           </label>
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
@@ -6556,7 +6577,7 @@ const AssistentePage = () => {
       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4"><Zap size={40} className="text-emerald-400" /></div>
+            <div className="w-20 h-20 rounded-full bg-brand-10 flex items-center justify-center mb-4"><Zap size={40} className="text-brand" /></div>
             <h3 className="text-lg text-slate-300 mb-2">Como posso ajudar?</h3>
             <p className="text-slate-500 max-w-md">Faça perguntas sobre manutenção, equipamentos, procedimentos técnicos. Se um manual estiver carregado no ativo, usarei como referência.</p>
             <div className="flex flex-wrap gap-2 mt-4 justify-center">
@@ -6706,7 +6727,7 @@ const ParadasPage = () => {
           <div><span className="text-slate-500">Tipo:</span> <span className="text-slate-200 capitalize">{detail.tipo?.replace('_',' ')}</span></div>
           <div><span className="text-slate-500">Data Início:</span> <span className="text-slate-200">{detail.data_inicio ? new Date(detail.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span></div>
           <div><span className="text-slate-500">Data Fim:</span> <span className="text-slate-200">{detail.data_fim ? new Date(detail.data_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span></div>
-          <div><span className="text-slate-500">Duração:</span> <span className="text-emerald-400 font-semibold">{detail.duracao_horas ? `${detail.duracao_horas}h` : '—'}</span></div>
+          <div><span className="text-slate-500">Duração:</span> <span className="text-brand font-semibold">{detail.duracao_horas ? `${detail.duracao_horas}h` : '—'}</span></div>
           <div><span className="text-slate-500">Responsável:</span> <span className="text-slate-200">{detail.responsavel_nome || '—'}</span></div>
           {detail.criado_por_nome && <div><span className="text-slate-500">Criado por:</span> <span className="text-slate-200">{detail.criado_por_nome}</span></div>}
         </div>
@@ -6716,12 +6737,12 @@ const ParadasPage = () => {
       {/* Indicadores */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="parada-indicadores">
         <div className="glass-card p-3 text-center"><p className="text-2xl font-bold text-blue-400">{detail.os_total}</p><p className="text-xs text-slate-500">OS Vinculadas</p></div>
-        <div className="glass-card p-3 text-center"><p className="text-2xl font-bold text-emerald-400">{detail.os_concluidas}</p><p className="text-xs text-slate-500">Concluídas</p></div>
+        <div className="glass-card p-3 text-center"><p className="text-2xl font-bold text-brand">{detail.os_concluidas}</p><p className="text-xs text-slate-500">Concluídas</p></div>
         <div className="glass-card p-3 text-center"><p className="text-2xl font-bold text-amber-400">{detail.os_pendentes}</p><p className="text-xs text-slate-500">Pendentes</p></div>
         <div className="glass-card p-3 text-center"><p className="text-2xl font-bold text-slate-200">{detail.horas_executadas?.toFixed(1) || '0'}h</p><p className="text-xs text-slate-500">Horas Executadas</p></div>
       </div>
       {detail.custo_materiais > 0 && (
-        <div className="glass-card p-3 text-center"><p className="text-xl font-bold text-emerald-400">R$ {detail.custo_materiais.toFixed(2)}</p><p className="text-xs text-slate-500">Materiais Consumidos</p></div>
+        <div className="glass-card p-3 text-center"><p className="text-xl font-bold text-brand">R$ {detail.custo_materiais.toFixed(2)}</p><p className="text-xs text-slate-500">Materiais Consumidos</p></div>
       )}
       {/* OS List */}
       {detail.os_detalhes?.length > 0 && (
@@ -6776,7 +6797,7 @@ const ParadasPage = () => {
                 </div>
                 <div className="flex items-center gap-3 text-center">
                   <div><p className="text-lg font-bold text-blue-400">{p.os_total}</p><p className="text-xs text-slate-600">OS</p></div>
-                  <div><p className="text-lg font-bold text-emerald-400">{p.os_concluidas}</p><p className="text-xs text-slate-600">OK</p></div>
+                  <div><p className="text-lg font-bold text-brand">{p.os_concluidas}</p><p className="text-xs text-slate-600">OK</p></div>
                   {['admin','master','pcm'].includes(user?.role) && (
                     <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                       <button onClick={() => handleEdit(p)} className="p-2 hover:bg-slate-700 rounded-lg" data-testid={`edit-parada-${p.id}`}><Edit3 size={14} className="text-blue-400" /></button>
@@ -7078,7 +7099,7 @@ const AdminTemplatesPage = () => {
 
       <div className="glass-card p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-emerald-400">Itens do Checklist ({form.itens.length})</h3>
+          <h3 className="text-sm font-semibold text-brand">Itens do Checklist ({form.itens.length})</h3>
           <button onClick={addItem} className="btn-primary text-sm flex items-center gap-1" data-testid="add-checklist-item"><Plus size={16} /> Adicionar Item</button>
         </div>
 
@@ -7100,7 +7121,7 @@ const AdminTemplatesPage = () => {
                     </>
                   )}
                   <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer">
-                    <input type="checkbox" checked={item.obrigatorio} onChange={e => updateItem(idx, 'obrigatorio', e.target.checked)} className="accent-emerald-500" />
+                    <input type="checkbox" checked={item.obrigatorio} onChange={e => updateItem(idx, 'obrigatorio', e.target.checked)} className="accent-brand" />
                     Obrigatório
                   </label>
                 </div>
@@ -7159,7 +7180,7 @@ const AdminTemplatesPage = () => {
           {filteredTemplates.map(t => {
             const isAprovado = t.status === 'aprovado';
             const statusLabel = isAprovado ? 'Aprovado' : (t.status === 'ativo' ? 'Ativo' : (t.status || 'Rascunho'));
-            const statusColor = isAprovado ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+            const statusColor = isAprovado ? 'text-emerald-400 bg-brand-10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
             const tipoLabels = { inspecao: 'Inspeção', preventiva: 'Preventiva', lubrificacao: 'Lubrificação', limpeza: 'Limpeza', melhoria: 'Melhoria' };
             return (
             <div key={t.id} className="glass-card p-4 hover:border-slate-600 transition-all group" data-testid={`template-card-${t.id}`}>
@@ -7169,13 +7190,13 @@ const AdminTemplatesPage = () => {
                   {t.ativo_tag && (
                     <div className="flex items-center gap-1.5 text-[10px] text-slate-600 mb-1 truncate">
                       {t.area_nome && <><span>{t.area_nome}</span><ChevronRight size={10} /></>}
-                      <span className="text-emerald-500/70 font-mono">{t.ativo_tag}</span>
+                      <span className="text-brand/70 font-mono">{t.ativo_tag}</span>
                       <ChevronRight size={10} />
                       <span className="text-slate-500">{t.ativo_nome}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <ClipboardCheck size={16} className="text-emerald-400 shrink-0" />
+                    <ClipboardCheck size={16} className="text-brand shrink-0" />
                     <span className="text-slate-100 font-medium">{t.nome}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusColor}`}>{statusLabel}</span>
                   </div>
@@ -7192,7 +7213,7 @@ const AdminTemplatesPage = () => {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {!isAprovado && (t.perguntas || []).length > 0 && (
-                    <button onClick={() => handleAprovar(t)} className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium rounded-lg border border-emerald-500/30 transition-all" title="Aprovar para execução" data-testid={`aprovar-plano-${t.id}`}>
+                    <button onClick={() => handleAprovar(t)} className="px-3 py-1.5 bg-brand-20 hover:brightness-110 text-brand text-xs font-medium rounded-lg border border-brand-30 transition-all" title="Aprovar para execução" data-testid={`aprovar-plano-${t.id}`}>
                       Aprovar
                     </button>
                   )}
@@ -7254,7 +7275,7 @@ const AuditoriaPage = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `auditoria_maintrix.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
+      link.setAttribute('download', `auditoria_export.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
       document.body.appendChild(link); link.click(); link.remove();
       window.URL.revokeObjectURL(url);
       toast.success('Exportado!');
@@ -7264,7 +7285,7 @@ const AuditoriaPage = () => {
   const modules = ['auth', 'ativos', 'ordens_servico', 'inspecoes', 'anomalias', 'estoque', 'sobressalentes', 'security'];
   const actions = ['login', 'create', 'update', 'delete', 'status_change', 'access_denied', 'duplicate'];
   const actionColors = {
-    login: 'text-blue-400 bg-blue-500/10', create: 'text-emerald-400 bg-emerald-500/10',
+    login: 'text-blue-400 bg-blue-500/10', create: 'text-emerald-400 bg-brand-10',
     update: 'text-amber-400 bg-amber-500/10', delete: 'text-red-400 bg-red-500/10',
     status_change: 'text-purple-400 bg-purple-500/10', access_denied: 'text-red-400 bg-red-500/20',
     duplicate: 'text-blue-400 bg-blue-500/10',
@@ -7398,7 +7419,7 @@ const AdminUsuariosPage = () => {
   };
 
   const roleLabels = { master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tecnico: 'Técnico', operador: 'Operador', inspetor: 'Inspetor', viewer: 'Visualizador' };
-  const roleColors = { master: 'text-pink-400 bg-pink-500/10', admin: 'text-red-400 bg-red-500/10', gerente: 'text-purple-400 bg-purple-500/10', pcm: 'text-blue-400 bg-blue-500/10', supervisor: 'text-amber-400 bg-amber-500/10', tecnico: 'text-emerald-400 bg-emerald-500/10', operador: 'text-teal-400 bg-teal-500/10', inspetor: 'text-cyan-400 bg-cyan-500/10', viewer: 'text-slate-400 bg-slate-500/10' };
+  const roleColors = { master: 'text-pink-400 bg-pink-500/10', admin: 'text-red-400 bg-red-500/10', gerente: 'text-purple-400 bg-purple-500/10', pcm: 'text-blue-400 bg-blue-500/10', supervisor: 'text-amber-400 bg-amber-500/10', tecnico: 'text-emerald-400 bg-brand-10', operador: 'text-teal-400 bg-teal-500/10', inspetor: 'text-cyan-400 bg-cyan-500/10', viewer: 'text-slate-400 bg-slate-500/10' };
   const disciplinaLabels = { mecanica: 'Mecânica', eletrica: 'Elétrica', instrumentacao: 'Instrumentação', operacao: 'Operação', civil: 'Civil', producao: 'Produção', lubrificacao: 'Lubrificação' };
 
   if (!['admin','master'].includes(user?.role)) return <EmptyState icon={Shield} title="Acesso Restrito" description="Apenas administradores podem gerenciar usuários." />;
@@ -7414,7 +7435,7 @@ const AdminUsuariosPage = () => {
           {users.map((u) => (
             <div key={u.id} className="glass-card p-4 flex items-center justify-between group">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center"><User size={20} className="text-emerald-400" /></div>
+                <div className="w-10 h-10 rounded-full bg-brand-20 flex items-center justify-center"><User size={20} className="text-brand" /></div>
                 <div>
                   <p className="text-slate-100 font-medium">{u.nome}</p>
                   <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -7462,7 +7483,7 @@ const AdminUsuariosPage = () => {
             <p><span className="text-red-400">Admin</span>: Controle total</p>
             <p><span className="text-purple-400">Gerente</span>: Dashboard e relatórios (somente leitura)</p>
             <p><span className="text-blue-400">PCM</span>: Gerencia OS, estoque, relatórios, exporta dados</p>
-            <p><span className="text-emerald-400">Técnico</span>: Preenche inspeções, abre anomalias</p>
+            <p><span className="text-brand">Técnico</span>: Preenche inspeções, abre anomalias</p>
           </div>
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
             <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
@@ -7478,7 +7499,7 @@ const AdminUsuariosPage = () => {
             <Lock size={32} className="text-amber-400" />
           </div>
           <p className="text-slate-300">Senha temporária para <strong className="text-slate-100">{resetResult?.nome}</strong>:</p>
-          <div className="bg-slate-800 rounded-lg p-4 font-mono text-xl text-emerald-400 tracking-widest select-all" data-testid="temp-password">
+          <div className="bg-slate-800 rounded-lg p-4 font-mono text-xl text-brand tracking-widest select-all" data-testid="temp-password">
             {resetResult?.temp_password}
           </div>
           <p className="text-xs text-amber-400">O usuário será obrigado a trocar a senha no próximo login.</p>
@@ -7502,7 +7523,7 @@ const ExportButtons = ({ entity }) => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${entity}_maintrix.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      link.download = `${entity}_export.${format === 'excel' ? 'xlsx' : 'pdf'}`;
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success(`Exportado em ${format.toUpperCase()}`);
@@ -7511,7 +7532,7 @@ const ExportButtons = ({ entity }) => {
 
   return (
     <div className="flex gap-1">
-      <button onClick={() => handleExport('excel')} className="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors" title="Excel"><FileText size={16} /></button>
+      <button onClick={() => handleExport('excel')} className="p-2 bg-brand-10 hover:bg-brand-20 text-brand rounded-lg transition-colors" title="Excel"><FileText size={16} /></button>
       <button onClick={() => handleExport('pdf')} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors" title="PDF"><FileText size={16} /></button>
     </div>
   );
@@ -7521,7 +7542,7 @@ const ExportButtons = ({ entity }) => {
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Cog size={48} className="text-emerald-400 animate-spin" /></div>;
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Cog size={48} className="text-brand animate-spin" /></div>;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 };
@@ -7884,7 +7905,7 @@ const BibliotecaPage = () => {
           const Icon = t.icon;
           return (
             <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }}
-              className={`px-4 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all ${tab === t.id ? 'bg-slate-800 text-emerald-400 border-b-2 border-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`px-4 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all ${tab === t.id ? 'bg-slate-800 text-brand border-b-2 border-brand' : 'text-slate-500 hover:text-slate-300'}`}
               data-testid={`bib-tab-${t.id}`}
             ><Icon size={14} />{t.label}</button>
           );
@@ -7906,10 +7927,10 @@ const BibliotecaPage = () => {
             <div key={item.id} className="glass-card p-4 hover:border-slate-600 transition-all group">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-emerald-500/10"><BookOpen size={20} className="text-emerald-400" /></div>
+                  <div className="p-2 rounded-lg bg-brand-10"><BookOpen size={20} className="text-brand" /></div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-emerald-400 text-xs">{item.codigo}</span>
+                      <span className="font-mono text-brand text-xs">{item.codigo}</span>
                       {item.status === 'inativo' && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30">Inativo</span>}
                     </div>
                     <p className="text-slate-100 font-medium">{item.nome}</p>
@@ -7997,7 +8018,7 @@ const EquipePage = () => {
         <div className="flex gap-1">
           {[{v:'hoje',l:'Hoje'},{v:'semana',l:'Semana'},{v:'mes',l:'Mês'},{v:'ano',l:'Ano'}].map(p => (
             <button key={p.v} onClick={() => setPeriodo(p.v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${periodo === p.v ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'border border-slate-700 text-slate-500 hover:text-slate-300'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${periodo === p.v ? 'bg-brand-20 text-brand border border-brand-30' : 'border border-slate-700 text-slate-500 hover:text-slate-300'}`}
               data-testid={`equipe-periodo-${p.v}`}
             >{p.l}</button>
           ))}
@@ -8007,7 +8028,7 @@ const EquipePage = () => {
       {/* KPI Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="glass-card p-4 text-center">
-          <p className="text-3xl font-bold text-emerald-400">{metricas.length}</p>
+          <p className="text-3xl font-bold text-brand">{metricas.length}</p>
           <p className="text-xs text-slate-500">Técnicos Ativos</p>
         </div>
         <div className="glass-card p-4 text-center">
@@ -8046,11 +8067,11 @@ const EquipePage = () => {
                           <span className="text-sm text-slate-200 font-medium">{m.user_nome || 'Sem nome'}</span>
                           <span className="text-[10px] text-slate-600 ml-2 capitalize">{m.user_role}</span>
                         </div>
-                        <span className="text-sm font-bold text-emerald-400">{m.os_total || 0} OS</span>
+                        <span className="text-sm font-bold text-brand">{m.os_total || 0} OS</span>
                       </div>
                       {/* Progress bar */}
                       <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500/60 rounded-full transition-all" style={{width: `${pct}%`}} />
+                        <div className="h-full bg-brand rounded-full transition-all" style={{width: `${pct}%`}} />
                       </div>
                       {/* Detail metrics */}
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-slate-500">
@@ -8062,7 +8083,7 @@ const EquipePage = () => {
                         {tipos.corretiva > 0 && <span className="text-red-400/70">Corr: {tipos.corretiva}</span>}
                         {tipos.preventiva > 0 && <span className="text-blue-400/70">Prev: {tipos.preventiva}</span>}
                         {tipos.lubrificacao > 0 && <span className="text-yellow-400/70">Lub: {tipos.lubrificacao}</span>}
-                        {tipos.melhoria > 0 && <span className="text-emerald-400/70">Melh: {tipos.melhoria}</span>}
+                        {tipos.melhoria > 0 && <span className="text-brand/70">Melh: {tipos.melhoria}</span>}
                       </div>
                     </div>
                   </div>
@@ -8080,8 +8101,8 @@ const EquipePage = () => {
         const my = metricas.find(m => m.user_id === user.id);
         const tipos = my.os_por_tipo || {};
         return (
-          <div className="glass-card p-4 border-l-4 border-emerald-500" data-testid="minha-performance">
-            <h3 className="text-sm font-semibold text-emerald-400 mb-3">Minha Performance</h3>
+          <div className="glass-card p-4 border-l-4 border-brand" data-testid="minha-performance">
+            <h3 className="text-sm font-semibold text-brand mb-3">Minha Performance</h3>
             <div className="grid grid-cols-3 gap-3 text-center">
               <div><p className="text-2xl font-bold text-slate-200">{my.os_total}</p><p className="text-[10px] text-slate-500">OS Total</p></div>
               <div><p className="text-2xl font-bold text-slate-200">{formatHH(my.hh_liquida_min || 0)}</p><p className="text-[10px] text-slate-500">HH Líquida</p></div>
@@ -8215,7 +8236,7 @@ const MasterCleanupPage = () => {
       {/* Results */}
       {results && (
         <div className="glass-card p-4" data-testid="cleanup-results">
-          <h3 className="text-sm font-semibold text-emerald-400 mb-2">Resultado da Limpeza:</h3>
+          <h3 className="text-sm font-semibold text-brand mb-2">Resultado da Limpeza:</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {Object.entries(results).map(([key, count]) => (
               <div key={key} className="bg-slate-800/50 rounded-lg p-2 text-center">
@@ -8330,7 +8351,7 @@ const OrgConfigPage = () => {
           const Icon = t.icon;
           return (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
-              className={`px-4 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 whitespace-nowrap transition-all ${activeTab === t.id ? 'bg-slate-800 text-emerald-400 border-b-2 border-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`px-4 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 whitespace-nowrap transition-all ${activeTab === t.id ? 'bg-slate-800 text-brand border-b-2 border-brand' : 'text-slate-500 hover:text-slate-300'}`}
               data-testid={`config-tab-${t.id}`}
             ><Icon size={14} />{t.label}</button>
           );
@@ -8474,7 +8495,7 @@ const NumeracaoTab = ({ config, onSave, saving, onPreview, preview }) => {
           );
         })}
       </div>
-      {preview && <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg"><p className="text-xs text-slate-400">Preview:</p><p className="text-lg font-mono text-emerald-400">{preview}</p></div>}
+      {preview && <div className="p-3 bg-brand-10 border border-brand-30 rounded-lg"><p className="text-xs text-slate-400">Preview:</p><p className="text-lg font-mono text-brand">{preview}</p></div>}
       <div className="flex justify-end gap-2">
         <button onClick={() => onPreview('ordens_servico', 'corretiva')} className="btn-secondary text-xs">Atualizar Preview</button>
         <button onClick={() => { onSave(form); if (prefixo) api.put('/org/config/preferencias', { prefixo_empresa: prefixo }); }} disabled={saving} className="btn-primary" data-testid="config-save-numeracao">{saving ? 'Salvando...' : 'Salvar'}</button>
@@ -8532,7 +8553,7 @@ const PreferenciasTab = ({ config, onSave, saving }) => {
               <button onClick={() => { const t = (form.turnos || []).filter((_,i) => i !== idx); setForm({...form, turnos: t}); }} className="text-red-400 hover:text-red-300"><X size={14} /></button>
             </div>
           ))}
-          <button onClick={() => setForm({...form, turnos: [...(form.turnos || []), {nome: '', inicio: '06:00', fim: '14:00'}]})} className="text-xs text-emerald-400 hover:text-emerald-300 mt-1">+ Adicionar turno</button>
+          <button onClick={() => setForm({...form, turnos: [...(form.turnos || []), {nome: '', inicio: '06:00', fim: '14:00'}]})} className="text-xs text-brand hover:brightness-110 mt-1">+ Adicionar turno</button>
         </div>
       </div>
       <div className="flex justify-end"><button onClick={() => onSave(form)} disabled={saving} className="btn-primary" data-testid="config-save-preferencias">{saving ? 'Salvando...' : 'Salvar'}</button></div>
@@ -8543,9 +8564,11 @@ const PreferenciasTab = ({ config, onSave, saving }) => {
 
 const AppLayout = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { branding } = useBranding() || {};
+  const b = branding || {};
   
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen flex" style={{ backgroundColor: b.cor_fundo || 'var(--brand-bg)' }}>
       <NetworkStatus />
       <Sidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
       <div className="flex-1 flex flex-col min-h-screen">
@@ -8584,43 +8607,55 @@ const AuthProvider = ({ children }) => {
   return <AuthContext.Provider value={{ user, login, logout, loading }}>{children}</AuthContext.Provider>;
 };
 
+// Branding loader — runs after auth to apply org theme
+const BrandingLoader = ({ children }) => {
+  const { user } = useAuth();
+  const { loadFromUser } = useBranding();
+  useEffect(() => { if (user) loadFromUser(user); }, [user, loadFromUser]);
+  return children;
+};
+
 // App
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<ProtectedRoute><AppLayout><CentralTrabalhoPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/ativos" element={<ProtectedRoute><AppLayout><AtivosPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/ativos/:id" element={<ProtectedRoute><AppLayout><AtivoDetailPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/os" element={<ProtectedRoute><AppLayout><OSPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/os/:id" element={<ProtectedRoute><AppLayout><OSDetailPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/estoque" element={<ProtectedRoute><AppLayout><EstoquePage /></AppLayout></ProtectedRoute>} />
-          <Route path="/inspecoes" element={<ProtectedRoute><AppLayout><InspecoesPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/inspecoes/:id" element={<ProtectedRoute><AppLayout><InspecaoDetailPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/ronda" element={<ProtectedRoute><AppLayout><RondaPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/scanner" element={<ProtectedRoute><AppLayout><ScannerPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/sobressalentes" element={<ProtectedRoute><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/paradas" element={<ProtectedRoute><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/anomalias" element={<ProtectedRoute><AppLayout><AnomaliasPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
-          <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/admin/templates" element={<ProtectedRoute><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/admin/auditoria" element={<ProtectedRoute><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/unidades" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/admin/config" element={<ProtectedRoute><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/equipe" element={<ProtectedRoute><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
-          <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
-          <Route path="/master/cleanup" element={<ProtectedRoute><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        <Toaster position="top-center" richColors />
-      </BrowserRouter>
-    </AuthProvider>
+    <BrandingProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <BrandingLoader>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/" element={<ProtectedRoute><AppLayout><CentralTrabalhoPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/ativos" element={<ProtectedRoute><AppLayout><AtivosPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/ativos/:id" element={<ProtectedRoute><AppLayout><AtivoDetailPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/os" element={<ProtectedRoute><AppLayout><OSPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/os/:id" element={<ProtectedRoute><AppLayout><OSDetailPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/estoque" element={<ProtectedRoute><AppLayout><EstoquePage /></AppLayout></ProtectedRoute>} />
+              <Route path="/inspecoes" element={<ProtectedRoute><AppLayout><InspecoesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/inspecoes/:id" element={<ProtectedRoute><AppLayout><InspecaoDetailPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/ronda" element={<ProtectedRoute><AppLayout><RondaPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/scanner" element={<ProtectedRoute><AppLayout><ScannerPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/sobressalentes" element={<ProtectedRoute><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/paradas" element={<ProtectedRoute><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/anomalias" element={<ProtectedRoute><AppLayout><AnomaliasPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/templates" element={<ProtectedRoute><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/auditoria" element={<ProtectedRoute><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/unidades" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/config" element={<ProtectedRoute><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/equipe" element={<ProtectedRoute><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
+              <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/master/cleanup" element={<ProtectedRoute><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrandingLoader>
+          <Toaster position="top-center" richColors />
+        </BrowserRouter>
+      </AuthProvider>
+    </BrandingProvider>
   );
 }
 

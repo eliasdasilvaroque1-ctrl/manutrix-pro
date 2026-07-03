@@ -1,0 +1,83 @@
+{
+  "summary": "FASE 1 White Label Enterprise — Backend 10/10 pytest PASS. Frontend: login page + post-login SPA navigation render dynamic branding correctly (org name 'Portal de Manutenção Indústria Demo', CSS vars --brand-primary/--brand-menu/--brand-bg set on :root, sidebar-brand-name colored with brand primary, active menu item uses brand primary). HOWEVER a HIGH-priority race-condition bug was found: on HARD RELOAD of any non-root route (/dashboard, /ativos, /os, /admin/config), the Sidebar reverts to hardcoded default MAINTRIX / emerald #10b981 / 'Enterprise CMMS' subtitle and never recovers (verified stable at 200ms, 800ms, 2s, 4s post-reload). Root cause identified in /app/frontend/src/lib/branding.js lines 96-106.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PUT /api/org/config/tema",
+        "issue": "Whitelist at org.py:72 does NOT include cor_menu, cor_login, cor_header — those brand colors can only be edited via PUT /api/org/config/branding (org.py:407). This is a config-surface inconsistency; the admin Tema tab in OrgConfig may not persist those keys."
+      },
+      {
+        "endpoint": "GET /api/public/branding/{identifier} (unknown identifier fallback)",
+        "issue": "Default fallback payload at org.py:337-347 does NOT include `subtitulo` in identidade nor cor_menu/cor_login/cor_header in tema. When branding.js loads this fallback (e.g. subdomain 'procure-manutrix' has no match), the sidebar shows fallback string 'Enterprise CMMS' (App.js:1634) instead of a meaningful default subtitle."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "BrandingProvider (branding.js:96-106) + Sidebar",
+        "issue": "HIGH: On hard page reload of any non-root URL (/dashboard, /ativos, /os, /admin/config, etc.) the Sidebar renders default MAINTRIX branding forever: brand-name='MAINTRIX', color=rgb(16,185,129) emerald, subtitle='Enterprise CMMS', CSS --brand-primary='#10b981'. Active menu item is emerald instead of the org's brand color (#111111 in this environment). Verified stable after 200ms / 800ms / 2000ms / 4000ms waits — never recovers to correct branding on that URL. On SPA in-app navigation, however, branding IS correct.",
+        "selector": "[data-testid=\"sidebar-brand-name\"], [data-testid=\"sidebar\"] button (active menu item)",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Sidebar (App.js:1634)",
+        "issue": "Fallback subtitle string 'Enterprise CMMS' is hardcoded. When branding is loaded but ident.subtitulo is empty (backend default-fallback path), the sidebar shows 'Enterprise CMMS' instead of the DEFAULT_BRANDING.subtitulo or the true empty state.",
+        "selector": "[data-testid=\"sidebar\"] h1 + p",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Hard reload of authenticated deep-links (all non-root routes) with subdomain not matching an org",
+        "issue": "Race condition between (a) BrandingProvider.useEffect calling loadBranding('procure-manutrix') on mount [branding.js:99-101] which returns the default MAINTRIX fallback, and (b) BrandingLoader.loadFromUser(user) [App.js:8611-8614] which returns the correct org branding. The subdomain-fallback call consistently wins the race (or fires last) and overwrites the correct branding via setBranding + applyCSS, leaving CSS vars stuck at defaults.",
+        "affected_selectors": [":root (CSS variables --brand-primary etc.)", "[data-testid=\"sidebar-brand-name\"]", "[data-testid=\"sidebar\"] button (active menu)"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "LoginPage + Sidebar (with seeded test theme)",
+        "issues": [
+          "Seeded theme uses cor_primaria=#111111 (near-black) which has very poor contrast against dark cor_login=#020617 background — 'Portal de Manutenção Indústria Demo' title is nearly invisible. Consider adding a WCAG contrast validator on save in the Tema admin tab.",
+          "On hard-reload race-loss state, active menu item is emerald #10b981 while the rest is DEFAULT branding — a very obvious visual regression to end-users."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration63_whitelabel.py",
+    "/app/test_reports/pytest/iteration63.xml"
+  ],
+  "action_items": [
+    "HIGH: Fix the race condition in /app/frontend/src/lib/branding.js:96-106. Options: (a) skip subdomain-based loadBranding when the hostname clearly is not a customer subdomain (e.g., regex /^[a-z0-9]+$/ or explicit deny list containing 'preview', 'localhost', '-'); (b) version each loadBranding call and only apply if it's the latest; (c) when user is already authenticated (JWT in localStorage), skip the subdomain autodetect entirely and rely on BrandingLoader.loadFromUser.",
+    "HIGH: Ensure BrandingLoader.loadFromUser fires AFTER any pending subdomain load, or block the subdomain fallback when a token is present.",
+    "MEDIUM: Update backend default-fallback payload at /app/backend/routes/org.py:337-347 to include `subtitulo`, `cor_menu`, `cor_login`, `cor_header` so DEFAULT branding is complete.",
+    "MEDIUM: Expand PUT /api/org/config/tema whitelist (org.py:72) to include cor_menu/cor_login/cor_header so admin Tema tab can persist all brand colors.",
+    "LOW: Replace hardcoded fallback string 'Enterprise CMMS' in App.js:1634 with a subtitulo default that isn't a marketing string, or use `branding.subtitulo` unconditionally (empty = empty).",
+    "LOW: Add a WCAG contrast warning in the OrgConfig Tema tab when cor_primaria vs cor_login/cor_menu contrast ratio < 4.5:1 (the current #111111 vs #020617 is unreadable)."
+  ],
+  "critical_code_review_comments": [
+    "branding.js:99-101 — Subdomain autodetect condition `parts[0] !== 'www' && parts[0] !== 'maintrix'` is too permissive. The preview host 'procure-manutrix.preview.emergentagent.com' has parts[0]='procure-manutrix' which falsely triggers a customer-subdomain lookup that returns the MAINTRIX default and overwrites correct branding.",
+    "branding.js:74-77 — Catch block calls setBranding(DEFAULT_BRANDING) + applyCSS(DEFAULT_BRANDING). This is a hard reset without checking if a valid branding was already loaded — worsens the race by potentially overwriting a good state with defaults on the loser call.",
+    "branding.js — There is no request-versioning/AbortController. Any two concurrent loadBranding calls will both call setBranding with their own result; the last one wins even if it's stale/wrong. Add a `let latestRequestId = 0;` guard.",
+    "org.py:72 update_tema whitelist — Missing cor_menu/cor_login/cor_header. Inconsistent with build_default_org_config which sets them (org_config.py:176-178).",
+    "org.py:337-347 public/branding fallback — Missing subtitulo, cor_menu, cor_login, cor_header. Causes downstream UI fallback strings to appear.",
+    "App.js:1634 — Hardcoded 'Enterprise CMMS' fallback defeats the White Label goal. Should be empty or use DEFAULT_BRANDING.subtitulo."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration63_whitelabel.py",
+    "/app/test_reports/pytest/iteration63.xml",
+    "/app/test_reports/iteration_63.json"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 pytest — public orgs list, public branding by org_id, public branding fallback, org/config authenticated, org/config extended color keys info, login user.organization_id, /central, /kpis, /ativos, /ordens-servico)",
+    "frontend": "70% — Login page dynamic branding, login flow, SPA-nav Sidebar branding, CSS vars, active-menu color all work. HOWEVER hard-reload of any non-root deep-link renders default MAINTRIX/emerald branding and never recovers."
+  },
+  "test_credentials": "Both master@maintrix.com/master123 AND master@manutrix.com/master123 are valid (verified via direct POST /api/auth/login — both return 200 with access_token). Seed org: 'Portal de Manutenção Indústria Demo' (id=9a232bf2-fc01-4253-813f-8df356be31c1).",
+  "seed_data_creation": "No new seed data created. Test used existing seeded org.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The White Label FASE 1 wiring (BrandingProvider, applyCSS on :root, useBranding in Sidebar/BottomNav/LoginPage) is CORRECT and works for: (a) LoginPage first-load, (b) post-login Central and SPA in-app navigation. It BREAKS on hard-reload of any non-root URL because branding.js:99-101 fires a subdomain-based loadBranding('procure-manutrix') that returns the default MAINTRIX fallback and races against BrandingLoader.loadFromUser — the fallback consistently wins. Reproduction: (1) login with master@maintrix.com / master123, (2) URL bar → /dashboard → Enter (hard reload), (3) observe sidebar shows 'MAINTRIX' (emerald green) + 'Enterprise CMMS' + CSS --brand-primary='#10b981'. When fixed, expected behaviour: after 1-2s the sidebar shows 'Portal de Manutenção Indústria Demo' + brand color and CSS --brand-primary='#111111' (or whatever tema.cor_primaria is stored). BottomNav (mobile viewport) selector [data-testid=\"bottom-nav\"] not found on mobile viewport — may need to verify whether mobile bottom nav actually renders (either not rendered, or missing data-testid).",
+  "rca_of_the_issue": "ROOT CAUSE (confirmed via 4-timepoint DOM sampling): branding.js's `BrandingProvider` runs a subdomain-detect useEffect on every mount (lines 96-106). On the Emergent preview host `procure-manutrix.preview.emergentagent.com`, `parts = ['procure-manutrix','preview','emergentagent','com']` and `parts[0]='procure-manutrix'` fails the whitelist `parts[0] !== 'www' && parts[0] !== 'maintrix'`, so `loadBranding('procure-manutrix')` is invoked. The backend at /api/public/branding/procure-manutrix has no matching org and returns the DEFAULT-MAINTRIX payload (org.py:337-347). This calls setBranding(DEFAULT-MAINTRIX-merge) and applyCSS(DEFAULT-MAINTRIX-merge), overwriting whatever BrandingLoader.loadFromUser(user) had set (or racing against it). On SPA in-app navigation the BrandingProvider is NOT re-mounted, so the subdomain useEffect does NOT re-fire, and the correct branding stays applied. FIX: (a) tighten the subdomain filter to also skip hosts containing 'preview', 'localhost', 'emergentagent', or non-alphanumeric subdomains; and/or (b) implement request-versioning so only the latest loadBranding call can apply state; and/or (c) short-circuit the subdomain autodetect when a JWT is already present in localStorage (letting loadFromUser take priority)."
+}
