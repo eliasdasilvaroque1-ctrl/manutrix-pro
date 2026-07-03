@@ -69,7 +69,7 @@ async def update_tema(data: dict, user: Dict = Depends(get_current_user)):
     await get_or_create_config(org_id)
     
     update_fields = {}
-    allowed = ["cor_primaria", "cor_secundaria", "cor_fundo", "cor_texto", "cor_destaque", "cor_sucesso", "cor_alerta", "cor_erro"]
+    allowed = ["cor_primaria", "cor_secundaria", "cor_fundo", "cor_texto", "cor_destaque", "cor_sucesso", "cor_alerta", "cor_erro", "cor_menu", "cor_login", "cor_header"]
     for k in allowed:
         if k in data:
             update_fields[f"tema.{k}"] = data[k]
@@ -337,13 +337,15 @@ async def get_public_branding(identifier: str):
         return {
             "organization_id": None,
             "identidade": {
-                "nome_sistema": "MAINTRIX", "nome_empresa": "MAINTRIX",
+                "nome_sistema": "CMMS", "nome_empresa": "CMMS",
+                "subtitulo": "Sistema de Gestão de Manutenção",
                 "logo_url": None, "logo_branca_url": None, "favicon_url": None,
                 "texto_login": "Sistema de Gestão de Manutenção Industrial",
-                "mostrar_powered_by": False, "rodape": "© 2026 MAINTRIX",
+                "mostrar_powered_by": True, "rodape": "",
             },
             "tema": {"cor_primaria": "#10b981", "cor_secundaria": "#3b82f6", "cor_fundo": "#020617",
-                     "cor_menu": "#0f172a", "cor_login": "#020617"},
+                     "cor_texto": "#e2e8f0", "cor_destaque": "#f59e0b",
+                     "cor_menu": "#0f172a", "cor_login": "#020617", "cor_header": "#0f172a"},
         }
     return config
 

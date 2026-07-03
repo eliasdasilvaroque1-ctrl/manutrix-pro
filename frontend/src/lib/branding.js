@@ -1,18 +1,18 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { api, BACKEND_URL } from './api';
 
 const BrandingContext = createContext(null);
 
 const DEFAULT_BRANDING = {
-  nome_empresa: 'MAINTRIX',
-  nome_sistema: 'MAINTRIX',
-  subtitulo: 'Sistema de Gestão de Manutenção Industrial',
+  nome_empresa: 'CMMS',
+  nome_sistema: 'CMMS',
+  subtitulo: 'Sistema de Gestão de Manutenção',
   logo_url: null,
   logo_branca_url: null,
   favicon_url: null,
   texto_login: 'Bem-vindo ao sistema de gestão de manutenção',
-  rodape: '© 2026 MAINTRIX',
-  mostrar_powered_by: false,
+  rodape: '',
+  mostrar_powered_by: true,
   cor_primaria: '#10b981',
   cor_secundaria: '#3b82f6',
   cor_fundo: '#020617',
@@ -24,11 +24,30 @@ const DEFAULT_BRANDING = {
   organization_id: null,
 };
 
+// Hostnames that should NOT trigger subdomain detection
+const SKIP_SUBDOMAIN_PATTERNS = [
+  'localhost', '127.0.0.1', 'preview', 'emergentagent', 'vercel', 'railway', 'netlify',
+];
+
+function isCustomerSubdomain(hostname) {
+  const parts = hostname.split('.');
+  if (parts.length < 3) return false;
+  const sub = parts[0].toLowerCase();
+  if (sub === 'www' || sub === 'app') return false;
+  // Skip if hostname contains known non-customer patterns
+  const full = hostname.toLowerCase();
+  if (SKIP_SUBDOMAIN_PATTERNS.some(p => full.includes(p))) return false;
+  // Only pure alphanumeric subdomains (customer identifiers)
+  if (!/^[a-z0-9]+$/.test(sub)) return false;
+  return sub;
+}
+
 export const BrandingProvider = ({ children }) => {
   const [branding, setBranding] = useState(DEFAULT_BRANDING);
   const [orgId, setOrgId] = useState(null);
   const [organizations, setOrganizations] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const requestVersion = useRef(0);
 
   // Load available organizations (public, no auth)
   const loadOrganizations = useCallback(async () => {
@@ -38,22 +57,31 @@ export const BrandingProvider = ({ children }) => {
     } catch { setOrganizations([]); }
   }, []);
 
-  // Load branding for a specific org
-  const loadBranding = useCallback(async (identifier) => {
+  // Load branding for a specific org (with request versioning to avoid races)
+  const loadBranding = useCallback(async (identifier, priority = 'normal') => {
     if (!identifier) return;
+    const version = ++requestVersion.current;
     try {
       const res = await api.get(`/public/branding/${identifier}`);
+      // Only apply if this is still the latest request (prevents race conditions)
+      if (requestVersion.current !== version) return;
       const data = res.data;
+      if (!data.organization_id && priority !== 'high') {
+        // Fallback/unknown org — only apply if no real branding is pending
+        setLoaded(true);
+        return;
+      }
       const ident = data.identidade || {};
       const tema = data.tema || {};
       const merged = {
         ...DEFAULT_BRANDING,
-        nome_empresa: ident.nome_empresa || ident.nome_sistema || 'MAINTRIX',
-        nome_sistema: ident.nome_sistema || 'MAINTRIX',
+        nome_empresa: ident.nome_empresa || ident.nome_sistema || DEFAULT_BRANDING.nome_empresa,
+        nome_sistema: ident.nome_sistema || DEFAULT_BRANDING.nome_sistema,
         subtitulo: ident.subtitulo || '',
         logo_url: ident.logo_url,
         logo_branca_url: ident.logo_branca_url,
         favicon_url: ident.favicon_url,
+        wallpaper_url: ident.wallpaper_url,
         texto_login: ident.texto_login || DEFAULT_BRANDING.texto_login,
         rodape: ident.rodape || DEFAULT_BRANDING.rodape,
         mostrar_powered_by: ident.mostrar_powered_by !== false,
@@ -70,37 +98,52 @@ export const BrandingProvider = ({ children }) => {
       setBranding(merged);
       applyCSS(merged);
       applyFavicon(merged.favicon_url);
-      document.title = merged.nome_empresa || 'MAINTRIX';
+      document.title = merged.nome_empresa || 'CMMS';
     } catch {
-      setBranding(DEFAULT_BRANDING);
-      applyCSS(DEFAULT_BRANDING);
+      if (requestVersion.current === version) {
+        // Only reset to defaults if no subsequent request superseded this one
+        setLoaded(true);
+      }
     }
-    setLoaded(true);
+    if (requestVersion.current === version) setLoaded(true);
   }, []);
 
-  // Load from authenticated user's org
+  // Load from authenticated user's org — HIGH priority, always wins over subdomain
   const loadFromUser = useCallback(async (user) => {
     if (user?.organization_id) {
       setOrgId(user.organization_id);
-      await loadBranding(user.organization_id);
+      await loadBranding(user.organization_id, 'high');
     }
   }, [loadBranding]);
 
   // Select org (from login selector)
   const selectOrg = useCallback((id) => {
     setOrgId(id);
-    loadBranding(id);
+    loadBranding(id, 'high');
   }, [loadBranding]);
 
-  // Auto-detect from subdomain
+  // Auto-detect from subdomain (only on initial mount, only for real customer subdomains)
   useEffect(() => {
     const hostname = window.location.hostname;
-    const parts = hostname.split('.');
-    // Detect subdomain: astec.maintrix.com.br → "astec"
-    if (parts.length >= 3 && parts[0] !== 'www' && parts[0] !== 'maintrix') {
-      loadBranding(parts[0]);
+    const customerSub = isCustomerSubdomain(hostname);
+    
+    if (customerSub) {
+      loadBranding(customerSub);
     } else {
-      setLoaded(true);
+      // Not a customer subdomain — check if user is already authenticated
+      const storedUser = sessionStorage.getItem('maintrix_user');
+      if (storedUser) {
+        try {
+          const user = JSON.parse(storedUser);
+          if (user?.organization_id) {
+            loadBranding(user.organization_id, 'high');
+          } else {
+            setLoaded(true);
+          }
+        } catch { setLoaded(true); }
+      } else {
+        setLoaded(true);
+      }
     }
     loadOrganizations();
   }, [loadBranding, loadOrganizations]);

@@ -1,0 +1,41 @@
+{
+  "summary": "FASE 1 White Label RETEST — ALL VERIFIED PASS. Backend 7/7 pytest PASS (public orgs returns 'ASTEC Cedro', public branding by org_id returns full tema incl. cor_menu/cor_login/cor_header, fallback payload complete, PUT /api/org/config/tema accepts extended color keys and persists them, login master@maintrix.com/master123 OK). Frontend HIGH race-condition bug from iteration_63 is FIXED: hard-reload of /dashboard, /ativos, /os, /admin/config all render Sidebar with 'ASTEC Cedro' and CSS --brand-primary='#10b981' correctly (never regresses to MAINTRIX/emerald defaults). Login page, post-login SPA nav, Dashboard KPIs, Admin Config Identidade/Tema tabs all render with brand colors. 'Powered by MAINTRIX' appears only where mostrar_powered_by=true is configured (intended per problem statement).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts console warning 'The width(-1) and height(-1) of chart should be greater than 0' fires 4x on initial /dashboard render — cosmetic, charts render correctly after container mounts. Consider giving ResponsiveContainer explicit minHeight to silence."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration64_whitelabel_retest.py",
+    "/app/test_reports/pytest/iteration64.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "branding.js — Race condition properly resolved with requestVersion ref (line 50) + isCustomerSubdomain() filter (lines 32-43). Preview host 'procure-manutrix.preview.emergentagent.com' is correctly rejected by SKIP_SUBDOMAIN_PATTERNS 'preview'/'emergentagent'. sessionStorage.maintrix_user branch (lines 134-146) correctly re-loads correct org on hard reload before any race can start. Well done.",
+    "branding.js:69-73 — When fallback returns organization_id=null, the code returns early WITHOUT applying DEFAULT_BRANDING. This is intentional (avoids overwriting a pending high-priority load) but means CSS vars remain at whatever prior state exists. On very first mount with no session and no customer subdomain, DEFAULT_BRANDING is only applied via useState initial value; verify that :root CSS vars pick up DEFAULT_BRANDING via initial applyCSS. Currently applyCSS is only called inside the async block; the initial useState default is never pushed to :root until a fetch resolves. Minor — DEFAULT_BRANDING values happen to match the App.css :root defaults so no visible issue today, but if defaults ever diverge this becomes a bug. Consider calling applyCSS(DEFAULT_BRANDING) in a useEffect once on mount.",
+    "org.py:64-82 tema whitelist — Correctly extended with cor_menu/cor_login/cor_header. Consistent now with build_default_org_config and update_branding_completo.",
+    "org.py:337-349 fallback payload — Now includes subtitulo, cor_menu, cor_login, cor_header. Complete.",
+    "org.py:319 — Still hardcodes 'MAINTRIX' as fallback nome_empresa in list_organizations_public when identidade is empty. Cosmetic since seeded orgs have nome_empresa set, but for White Label purity replace with 'CMMS' or config.get('organization_id')."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration64_whitelabel_retest.py",
+    "/app/test_reports/pytest/iteration64.xml",
+    "/app/test_reports/iteration_64.json"
+  ],
+  "success_rate": {
+    "backend": "100% (7/7 pytest)",
+    "frontend": "100% — Login shows 'ASTEC Cedro', hard-reload of /dashboard, /ativos, /os, /admin/config all preserve brand name + CSS --brand-primary=#10b981 + --brand-menu=#0f172a + --brand-bg=#020617. SPA navigation preserves branding. Active menu item colored with brand primary. Admin Config Identidade/Tema tabs load without errors."
+  },
+  "test_credentials": "master@maintrix.com / master123 (verified working — returns 200 with access_token and user.organization_id=9a232bf2-fc01-4253-813f-8df356be31c1). Seed org: 'ASTEC Cedro' with tema.cor_primaria=#10b981.",
+  "seed_data_creation": "None. Used existing seeded ASTEC Cedro org.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "FASE 1 White Label complete. If further phases add per-org file upload (logo, favicon, wallpaper), test upload endpoints and verify object storage/static paths resolve behind /api/uploads/ and /api/storage/. If FASE 2 introduces subdomain routing, verify the isCustomerSubdomain() regex (only pure [a-z0-9]+) meets your subdomain naming rules (dashes/underscores currently excluded).",
+  "rca_of_the_issue": "Previous HIGH race condition RCA (iteration_63): subdomain-detect useEffect on preview host 'procure-manutrix' fired loadBranding('procure-manutrix'), which returned the default MAINTRIX fallback and raced against BrandingLoader.loadFromUser. FIX APPLIED: (1) requestVersion ref (branding.js:50, 63, 67, 103, 108) — every loadBranding call increments version; setBranding/applyCSS only fire if the response corresponds to the latest version. (2) isCustomerSubdomain() filter (branding.js:32-43) — rejects hostnames containing 'preview', 'emergentagent', etc., so the bad subdomain call never fires on preview environments. (3) sessionStorage.maintrix_user check (branding.js:134-146) — when there's no customer subdomain but a stored user, load THAT org immediately with priority='high'. (4) Backend fallback (org.py:337-349) now includes subtitulo + cor_menu + cor_login + cor_header (defense in depth). Verified: 4 successive hard reloads to /dashboard, /ativos, /os, /admin/config all show 'ASTEC Cedro' + --brand-primary=#10b981."
+}

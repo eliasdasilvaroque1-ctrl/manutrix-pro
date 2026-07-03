@@ -1631,7 +1631,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
             ) : null}
             <div className="min-w-0">
               <h1 className="text-xl font-bold tracking-wider truncate" style={{ color: b.cor_primaria || 'var(--brand-primary)' }} data-testid="sidebar-brand-name">{b.nome_empresa || 'CMMS'}</h1>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider truncate">{b.subtitulo || 'Enterprise CMMS'}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider truncate">{b.subtitulo || 'Sistema de Gestão'}</p>
             </div>
           </div>
         )}
@@ -1718,7 +1718,7 @@ const BottomNav = () => {
   
   return (
     <nav className="fixed bottom-0 left-0 right-0 backdrop-blur-sm border-t border-slate-800 z-40 pb-safe md:hidden"
-      style={{ backgroundColor: `${b.cor_menu || 'var(--brand-menu)'}f2` }}>
+      style={{ backgroundColor: `${b.cor_menu || 'var(--brand-menu)'}f2` }} data-testid="bottom-nav">
       <div className="flex items-center justify-around h-16">
         {items.map((item, idx) => {
           const Icon = item.icon;
