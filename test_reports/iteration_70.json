@@ -1,0 +1,47 @@
+{
+  "summary": "Sprint 58 (Estabilidade e Experiência de Login) fully validated end-to-end. Backend: 8/8 pytest PASS (test_sprint58_login_dashboard.py) — GET /api/public/organizations returns ASTEC entries; POST /api/auth/login works for master and PCM without any org-select step; GET /api/ordens-servico/estatisticas returns the required Sprint 58 fields (por_origem, aguardando_aprovacao, aguardando_material) plus existing por_status/por_tipo/por_disciplina/total_abertas; POST /api/auth/forgot-password returns 200. Frontend: single-form login (Empresa autocomplete + Email + Senha) confirmed. Typing 'ASTEC' shows 2 matching orgs; clicking one loads the branding immediately (logo + colors + title 'ASTEC Cedro') and writes localStorage.maintrix_last_org. Submit button is correctly disabled until an org is picked. Login with master@maintrix.com/master123 succeeds and redirects to Central de Trabalho. After Sair (logout) + reload /login, the Empresa field is pre-filled with 'ASTEC Cedro' from localStorage. Forgot Password view shows email field + 'Solicitar Redefinição' + 'Voltar ao login'. /dashboard renders all four new KPI cards (Solicitações=2, Aguard. Aprovação=2, Aguard. Material=0, OS por Origem: Pcm 21 / Manual 11 / Operador 3). No blocking issues found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard",
+        "issues": [
+          "Recharts warns 'width(-1) and height(-1) of chart should be greater than 0' 4x on initial load — cosmetic (charts still render). Likely a race with the ResponsiveContainer parent measuring width during the loading→ready transition. Not blocking."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint58_login_dashboard.py",
+    "/app/test_reports/pytest/iteration70.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "App.js:2225-2233 DashboardPage uses .catch(() => ({ data: {} })) for /ordens-servico/estatisticas — good defensive default, keeps dashboard alive even if that endpoint is down.",
+    "App.js:1804-1807 auto-selects the ONLY org when organizations.length === 1. This is the right UX but could surprise a multi-org visitor whose localStorage was cleared — verified fine here since prod has multiple orgs.",
+    "App.js:1910 dropdown condition requires empresaBusca truthy AND filteredOrgs.length > 0 — combined with onFocus setter this means if the user tabs into an empty field, no list is shown until they type. That's an intentional UX choice (autocomplete style) but worth noting: there's no way to browse all orgs without typing.",
+    "App.js:1817-1819 filteredOrgs uses substring match on lowercased name only — subdominio is displayed but not searchable. Minor: users may want to type the subdomain to find their org.",
+    "work_orders.py:118 origem_counts is aggregated dynamically — if a document has origem=null it's excluded (good). por_origem keys are lowercase strings returned as-is; frontend uses CSS 'capitalize' which correctly renders 'Pcm', 'Manual', 'Operador'.",
+    "server.py: no 'Trocar empresa' button in the new LoginPage — confirmed removed per Sprint 58 spec. Users just re-type in the empresa field."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint58_login_dashboard.py",
+    "/app/test_reports/pytest/iteration70.xml",
+    "/app/test_reports/iteration_70.json"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 pytest)",
+    "frontend": "100% — login single-form, autocomplete, branding, localStorage prefill, dashboard KPIs, forgot password all PASS"
+  },
+  "test_credentials": "master@maintrix.com/master123 (verified). test.pcm@maintrix.com/pcm123 (verified). Org: ASTEC Cedro (id 9a232bf2-fc01-4253-813f-8df356be31c1).",
+  "seed_data_creation": "None. No test data created this iteration.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sprint 58 is stable. LoginPage single-form is fully wired: empresaBusca (state) + selectOrg() from BrandingContext + localStorage.maintrix_last_org. Autocomplete filter is a case-insensitive substring on org.nome. The submit button uses disabled={loading || !orgId} so orgId in BrandingContext MUST be truthy. Dashboard KPIs come from /api/ordens-servico/estatisticas which returns por_origem/aguardando_aprovacao/aguardando_material — the frontend safely falls back to {} on any error. New test file backend/tests/test_sprint58_login_dashboard.py can be used as a regression suite. Note: previous iteration 69 reported a Sprint 57 blocker (POST /api/inspection-templates 422 for 'Save as Modelo Mestre') — this iteration did not retest that path since it's outside Sprint 58 scope. Retest recommended after main agent fixes the payload mapping in PlanImportWizard.",
+  "rca_of_the_issue": "No issue found — all Sprint 58 acceptance criteria met."
+}

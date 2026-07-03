@@ -1775,31 +1775,52 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState('selectOrg'); // selectOrg, login, forgot, reset, forceChange
+  const [view, setView] = useState('login');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [tempToken, setTempToken] = useState('');
-  const [orgSearch, setOrgSearch] = useState('');
+  const [empresaBusca, setEmpresaBusca] = useState('');
+  const [showEmpresaDropdown, setShowEmpresaDropdown] = useState(false);
   const { login } = useAuth();
   const { branding, organizations, selectOrg, orgId, loadOrganizations } = useBranding();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => { loadOrganizations(); }, [loadOrganizations]);
 
-  // Auto-skip org selector if only 1 org or org already selected (subdomain)
+  // Auto-select from localStorage or single org
   useEffect(() => {
-    if (orgId) setView('login');
-    else if (organizations.length === 1) { selectOrg(organizations[0].id); setView('login'); }
+    if (orgId) return;
+    const saved = localStorage.getItem('maintrix_last_org');
+    if (saved) {
+      const org = organizations.find(o => o.id === saved);
+      if (org) {
+        selectOrg(org.id);
+        setEmpresaBusca(org.nome);
+        return;
+      }
+    }
+    if (organizations.length === 1) {
+      selectOrg(organizations[0].id);
+      setEmpresaBusca(organizations[0].nome);
+    }
   }, [organizations, orgId, selectOrg]);
 
-  const handleSelectOrg = (org) => {
+  const handleSelectEmpresa = (org) => {
     selectOrg(org.id);
-    setView('login');
+    setEmpresaBusca(org.nome);
+    setShowEmpresaDropdown(false);
+    localStorage.setItem('maintrix_last_org', org.id);
   };
+
+  const filteredOrgs = organizations.filter(o =>
+    !empresaBusca || (o.nome || '').toLowerCase().includes(empresaBusca.toLowerCase())
+  );
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (!orgId) { toast.error('Selecione uma empresa'); return; }
     setLoading(true);
     try {
       const response = await axios.post(`${API}/auth/login`, { email, password });
@@ -1825,7 +1846,7 @@ const LoginPage = () => {
       const res = await axios.post(`${API}/auth/forgot-password`, { email });
       setResetToken(res.data.token || '');
       setView('reset');
-      toast.success('Token de redefinição gerado!');
+      toast.success(res.data.message || 'Token de redefinição gerado!');
     } catch (error) { toast.error(normalizeError(error)); }
     finally { setLoading(false); }
   };
@@ -1856,10 +1877,6 @@ const LoginPage = () => {
     finally { setLoading(false); }
   };
 
-  const filteredOrgs = organizations.filter(o =>
-    !orgSearch || (o.nome || '').toLowerCase().includes(orgSearch.toLowerCase())
-  );
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: branding.cor_login }} data-testid="login-page">
       <div className="w-full max-w-md">
@@ -1873,55 +1890,58 @@ const LoginPage = () => {
             </div>
           )}
           <h1 className="text-3xl font-bold tracking-wider" style={{ color: branding.cor_primaria }} data-testid="login-title">{branding.nome_empresa}</h1>
-          <p className="text-slate-500 mt-1 text-sm">{view === 'selectOrg' ? 'Selecione sua empresa' : branding.texto_login}</p>
+          <p className="text-slate-500 mt-1 text-sm">{branding.texto_login || 'Sistema de Gestão de Manutenção'}</p>
         </div>
-
-        {/* ORG SELECTOR */}
-        {view === 'selectOrg' && (
-          <div className="glass-card p-6 space-y-4" data-testid="org-selector">
-            {organizations.length > 5 && (
-              <input value={orgSearch} onChange={e => setOrgSearch(e.target.value)} className="input-industrial w-full px-4" placeholder="Pesquisar empresa..." data-testid="org-search" />
-            )}
-            <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
-              {filteredOrgs.map(org => (
-                <button key={org.id} onClick={() => handleSelectOrg(org)}
-                  className="w-full flex items-center gap-4 p-4 rounded-lg border border-slate-800 hover:border-slate-600 bg-slate-900/50 transition-all text-left group"
-                  data-testid={`org-option-${org.id}`}
-                >
-                  {org.logo_url ? (
-                    <img src={org.logo_url} alt="" className="w-10 h-10 rounded-lg object-contain bg-slate-800 p-1" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: org.cor_primaria || '#10b981' }}>
-                      {(org.nome || 'M').substring(0, 2).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <p className="text-slate-100 font-semibold group-hover:text-white">{org.nome}</p>
-                    {org.subdominio && <p className="text-[10px] text-slate-600">{org.subdominio}.maintrix.com.br</p>}
-                  </div>
-                  <ChevronRight size={18} className="text-slate-600 group-hover:text-slate-400" />
-                </button>
-              ))}
-              {filteredOrgs.length === 0 && <p className="text-center text-slate-500 py-4 text-sm">Nenhuma empresa encontrada</p>}
-            </div>
-          </div>
-        )}
 
         {/* LOGIN */}
         {view === 'login' && (
           <form onSubmit={handleLogin} className="glass-card p-6 space-y-4" data-testid="login-form">
+            {/* Empresa field with autocomplete */}
+            <div className="relative" data-testid="empresa-field">
+              <FormInput label="Empresa">
+                <div className="relative">
+                  <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input value={empresaBusca} onChange={e => { setEmpresaBusca(e.target.value); setShowEmpresaDropdown(true); }}
+                    onFocus={() => setShowEmpresaDropdown(true)}
+                    className="input-industrial w-full pl-10 pr-4" placeholder="Digite o nome da empresa..."
+                    data-testid="empresa-input" />
+                </div>
+              </FormInput>
+              {showEmpresaDropdown && empresaBusca && filteredOrgs.length > 0 && (
+                <div className="absolute z-20 w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                  {filteredOrgs.map(org => (
+                    <button key={org.id} type="button" onClick={() => handleSelectEmpresa(org)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 transition-colors text-left ${orgId === org.id ? 'bg-brand-10' : ''}`}
+                      data-testid={`org-option-${org.id}`}>
+                      {org.logo_url ? (
+                        <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-800 p-0.5" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: org.cor_primaria || '#10b981' }}>
+                          {(org.nome || 'E').substring(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-200 font-medium truncate">{org.nome}</p>
+                        {org.subdominio && <p className="text-[10px] text-slate-600">{org.subdominio}.maintrix.com.br</p>}
+                      </div>
+                      {orgId === org.id && <CheckCircle size={16} className="text-brand shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <FormInput label="Email">
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-industrial w-full px-4" placeholder="seu@email.com" required data-testid="login-email" />
             </FormInput>
             <FormInput label="Senha">
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Sua senha" required data-testid="login-password" />
             </FormInput>
-            <button type="submit" disabled={loading} className="w-full py-3 rounded-lg font-semibold text-white transition-all" style={{ backgroundColor: branding.cor_primaria }} data-testid="login-submit">
+            <button type="submit" disabled={loading || !orgId} className="w-full py-3 rounded-lg font-semibold text-white transition-all disabled:opacity-50" style={{ backgroundColor: branding.cor_primaria }} data-testid="login-submit">
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
-            <div className="flex items-center justify-between">
+            <div className="text-center">
               <button type="button" onClick={() => setView('forgot')} className="text-sm text-slate-400 hover:text-slate-200 transition-colors" data-testid="forgot-password-link">Esqueci minha senha</button>
-              {organizations.length > 1 && <button type="button" onClick={() => { setView('selectOrg'); }} className="text-sm text-slate-500 hover:text-slate-300">Trocar empresa</button>}
             </div>
           </form>
         )}
@@ -1940,7 +1960,7 @@ const LoginPage = () => {
         {view === 'reset' && (
           <form onSubmit={handleResetPassword} className="glass-card p-6 space-y-4" data-testid="reset-form">
             <div className="text-center mb-2"><Shield size={32} className="mx-auto text-brand mb-2" /><h2 className="text-lg font-semibold text-slate-200">Nova Senha</h2></div>
-            <FormInput label="Token"><input type="text" value={resetToken} onChange={(e) => setResetToken(e.target.value)} className="input-industrial w-full px-4 font-mono text-sm" required data-testid="reset-token" /></FormInput>
+            <FormInput label="Código de Recuperação"><input type="text" value={resetToken} onChange={(e) => setResetToken(e.target.value)} className="input-industrial w-full px-4 font-mono text-sm tracking-widest text-center" required data-testid="reset-token" placeholder="XXXXXX" /></FormInput>
             <FormInput label="Nova Senha"><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input-industrial w-full px-4" required data-testid="reset-new-password" /></FormInput>
             <FormInput label="Confirmar"><input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="input-industrial w-full px-4" required /></FormInput>
             <button type="submit" disabled={loading} className="btn-primary w-full">{loading ? 'Redefinindo...' : 'Redefinir Senha'}</button>
@@ -2202,15 +2222,16 @@ const DashboardPage = () => {
       try {
         const params = {};
         if (filterSector) params.sector_id = filterSector;
-        const [kpisRes, statsRes, trendRes, setorRes, discRes, falhasRes] = await Promise.all([
+        const [kpisRes, statsRes, trendRes, setorRes, discRes, falhasRes, osStatsRes] = await Promise.all([
           api.get('/kpis', { params }),
           api.get('/dashboard/stats', { params }),
           api.get('/dashboard/trend', { params }),
           api.get('/dashboard/os-por-setor'),
           api.get('/dashboard/os-por-disciplina'),
-          api.get('/dashboard/ativos-mais-falhas')
+          api.get('/dashboard/ativos-mais-falhas'),
+          api.get('/ordens-servico/estatisticas').catch(() => ({ data: {} })),
         ]);
-        setKpis(kpisRes.data);
+        setKpis({...kpisRes.data, osStats: osStatsRes.data});
         setStats(statsRes.data);
         setTrend(trendRes.data);
         setOsPorSetor(setorRes.data);
@@ -2300,6 +2321,11 @@ const DashboardPage = () => {
   const estoqueCritico = stats?.estoque?.criticos || 0;
   const inspPendentes = stats?.inspecoes?.pendentes || 0;
   const naoConformes = stats?.inspecoes?.nao_conformes_mes || 0;
+  const osStats = kpis.osStats || {};
+  const aguardandoAprov = osStats.aguardando_aprovacao || 0;
+  const aguardandoMaterial = osStats.aguardando_material || 0;
+  const solicitadas = osStats.por_status?.solicitada || 0;
+  const porOrigem = osStats.por_origem || {};
   
   // OS distribution from trend data (aggregated 6 months)
   const osTrendTotals = trend.reduce((acc, m) => ({
@@ -2384,6 +2410,37 @@ const DashboardPage = () => {
             <p className={`text-4xl font-black tabular-nums ${getInverseColor(osCriticas, [0, 3])}`}>{osCriticas}</p>
             <p className="text-xs text-slate-600 mt-1">prioridade máxima</p>
           </div>
+        </div>
+        {/* Row 2 — Governança */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+          <div className={`rounded-xl border p-5 ${getInverseBg(solicitadas, [0, 3])}`} data-testid="kpi-solicitadas">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Solicitações</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(solicitadas, [0, 3])}`}>{solicitadas}</p>
+            <p className="text-xs text-slate-600 mt-1">aguardando análise</p>
+          </div>
+          <div className={`rounded-xl border p-5 ${getInverseBg(aguardandoAprov, [0, 2])}`} data-testid="kpi-aguardando-aprovacao">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Aguard. Aprovação</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(aguardandoAprov, [0, 2])}`}>{aguardandoAprov}</p>
+            <p className="text-xs text-slate-600 mt-1">pendente gerente</p>
+          </div>
+          <div className={`rounded-xl border p-5 ${getInverseBg(aguardandoMaterial, [0, 3])}`} data-testid="kpi-aguardando-material">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Aguard. Material</p>
+            <p className={`text-4xl font-black tabular-nums ${getInverseColor(aguardandoMaterial, [0, 3])}`}>{aguardandoMaterial}</p>
+            <p className="text-xs text-slate-600 mt-1">sem material</p>
+          </div>
+          {Object.keys(porOrigem).length > 0 && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5" data-testid="kpi-por-origem">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">OS por Origem</p>
+              <div className="space-y-1">
+                {Object.entries(porOrigem).sort((a,b) => b[1]-a[1]).slice(0, 4).map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400 capitalize">{k}</span>
+                    <span className="text-slate-200 font-bold">{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
