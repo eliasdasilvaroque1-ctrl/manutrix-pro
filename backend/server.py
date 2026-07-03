@@ -900,6 +900,45 @@ async def duplicate_inspection_template(template_id: str, user: Dict = Depends(g
     doc.pop('_id', None)
     return doc
 
+
+# ============== PLAN IMPORT PARSER ==============
+
+@api_router.post("/planos-inspecao/parse-text")
+async def parse_plan_text(data: dict, user: Dict = Depends(get_current_user)):
+    """Parse plain text into structured checklist questions."""
+    check_write_permission(user, ['admin', 'master', 'pcm', 'supervisor'])
+    text = data.get("text", "")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Texto vazio")
+    from plan_parser import parse_text
+    return parse_text(text)
+
+
+@api_router.post("/planos-inspecao/parse-file")
+async def parse_plan_file(file: UploadFile = File(...), user: Dict = Depends(get_current_user)):
+    """Parse uploaded file (PDF/Excel/Word/TXT) into checklist questions."""
+    check_write_permission(user, ['admin', 'master', 'pcm', 'supervisor'])
+    content = await file.read()
+    fname = (file.filename or '').lower()
+
+    if fname.endswith('.pdf'):
+        from plan_parser import parse_pdf
+        return parse_pdf(content)
+    elif fname.endswith(('.xlsx', '.xls')):
+        from plan_parser import parse_excel
+        return parse_excel(content)
+    elif fname.endswith(('.docx', '.doc')):
+        from plan_parser import parse_docx
+        return parse_docx(content)
+    elif fname.endswith('.txt') or fname.endswith('.csv'):
+        from plan_parser import parse_txt
+        return parse_txt(content)
+    else:
+        # Try as text
+        from plan_parser import parse_txt
+        return parse_txt(content)
+
+
 @api_router.get("/equipment-types")
 async def list_equipment_types(user: Dict = Depends(get_current_user)):
     """List distinct equipment types from ativos"""

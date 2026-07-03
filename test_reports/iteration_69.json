@@ -1,0 +1,82 @@
+{
+  "summary": "Sprint 57 (Plan Import Wizard) tested end-to-end. Backend pytest 15/16 PASS. Parser correctly handles numbered lists, bullets, checkboxes, temperature limits, foto detection, observations (OBS:), and frequencies. File parsers work for .txt/.docx/.xlsx (verified with real generated files). Frontend 4-step wizard fully functional for 'Save as Plan' — E2E create verified: TEST_SP57_UI_PlanoTeste with 3 perguntas / 1 observação / 1 limite appears in /admin/templates list. Accepted file extensions include .pdf/.xlsx/.docx/.txt as required. Parser detects tipo_campo=numerico for temperatura/pressão, tipo_campo=foto for foto/manômetro, ≤80°C limit_max value. HOWEVER a CRITICAL bug was found in 'Save as Modelo Mestre' flow — schema mismatch between frontend payload and backend model.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/inspection-templates (used by PlanImportWizard when save_as='template')",
+        "issue": "422 'Campo Descrição é obrigatório'. Frontend App.js:7146-7151 sends itens with keys {texto, tipo_campo, limite_min, limite_max, unidade, grupo, obrigatorio, ordem} but backend models.py:529 TemplateItemCreate requires {descricao, tipo, obrigatorio, unidade, tolerancia_min, tolerancia_max, opcoes}. Fields do not match — 'texto' vs 'descricao', 'tipo_campo' vs 'tipo', 'limite_max' vs 'tolerancia_max'. Saving as 'Modelo Mestre' is completely broken. Reproduced via UI: toast shows 'Campo Descrição é obrigatório; Campo Descrição é obrigatório; ...' and 422 in Network tab.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/planos-inspecao (Save as Plan without ativo_id)",
+        "issue": "Frontend allows creating a plan with ativo_id=null (label says 'opcional'). API accepts it and plan is created, but list shows 'Genérico' — verify this is intended per Sprint spec. Not blocking."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "PlanImportWizard — Save as Modelo Mestre",
+        "issue": "Save fails with 422 due to backend/frontend schema mismatch (see backend critical). Toast is not actionable to the user (just repeats 'Campo Descrição é obrigatório' 3x). Wizard stays open on error.",
+        "selector": "[data-testid=\"import-save-btn\"] with save_as=template",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "PlanImportWizard — field type detection edge case",
+        "issue": "'Verificar motor máximo 60°C' was detected as tipo_campo=conforme_nao_conforme instead of numerico, even though it has a numeric limit ≤60°C attached. Cause: plan_parser.detect_field_type() has 'temperatura'/'pressao' in the numeric keywords list but not the phrase 'motor máximo'. The temperature-unit-only cases only produce numerico when the sentence also contains a numeric-keyword. Suggest: if extract_limit returns a value with numeric unit (°C, bar, RPM, %), force tipo_campo='numerico'.",
+        "selector": "n/a (parser logic)",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Wizard Save as Modelo Mestre → Biblioteca",
+        "issue": "Because POST /api/inspection-templates 422s, the template never reaches the Biblioteca. Biblioteca /biblioteca page shows Modelos Mestres tab but new imports never appear.",
+        "affected_selectors": ["[data-testid=\"import-save-btn\"]", "biblioteca Modelos Mestres tab"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "PlanImportWizard Step 3 (preview)",
+        "issues": [
+          "Toast error message duplicates the same string 3x when validation fails on 3 items ('Campo Descrição é obrigatório; Campo Descrição é obrigatório; Campo Descrição é obrigatório') — cosmetic, but noisy.",
+          "Frequência card shows '—' even when parser did not detect one; consider hiding the metric or showing 'não detectada' explicitly."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint57_plan_import.py",
+    "/app/test_reports/pytest/iteration69.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix 'Save as Modelo Mestre' — either (a) transform payload in frontend App.js:7146 to map {texto→descricao, tipo_campo→tipo, limite_max→tolerancia_max as float, limite_min→tolerancia_min as float}, OR (b) update backend models.py TemplateItemCreate to accept {texto, tipo_campo, limite_max, limite_min, grupo} as aliases. Recommend option (a) — keep backend model stable and translate in the wizard handleSave.",
+    "LOW: Enhance plan_parser.detect_field_type() to force tipo_campo='numerico' when extract_limit() returned a value with recognized unit (°C, bar, RPM, %, mm, mm/s, MPa, etc). Currently 'Verificar motor máximo 60°C' is tagged conforme_nao_conforme even with limite_max=60.",
+    "LOW: Dedupe validation error toast messages in normalizeError() when the same detail repeats per array item."
+  ],
+  "critical_code_review_comments": [
+    "server.py:906 parse_plan_text and :917 parse_plan_file — permission check uses ['admin','master','pcm','supervisor']. Confirmed via test_parse_operador_forbidden: operador is correctly rejected 403. OK.",
+    "plan_parser.py:135 — fallback rule accepts any line > 10 chars as a question. This is generous. For extremely permissive inputs (paragraph text), it may over-count. Consider counting a line only if it starts with an action verb or has a checklist marker. Not a bug, but flag for tuning.",
+    "plan_parser.py:82 detect_frequency — returns the FIRST occurrence found via re.search. If a plan contains both 'diária' and 'semanal', only the first is kept. OK for MVP.",
+    "App.js:7146-7151 (PlanImportWizard.handleSave save_as='template' branch) — sends {texto, tipo_campo, limite_max, unidade, grupo} which do not match backend TemplateItemCreate. This is the CRITICAL bug. Must translate before POST.",
+    "App.js:7168 (save_as='plano' branch) — sends the correct field names for PlanoInspecao model, so 'Save as Plan' works. This asymmetry is the root of the mismatch.",
+    "server.py inspection-templates model (models.py:529) has TemplateItemCreate.tipo default 'boolean' with allowed values {boolean, numerico, texto, opcao, temperatura, vibracao, observacao} — this vocabulary does not match the parser output vocabulary {conforme_nao_conforme, numerico, foto, texto}. Even if the frontend renames texto→descricao, tipo_campo='conforme_nao_conforme' and 'foto' are NOT in the template allowed set. Suggest either broaden TemplateItemCreate.tipo to accept the new values, OR translate 'conforme_nao_conforme'→'boolean' and 'foto'→'observacao' in the wizard."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint57_plan_import.py",
+    "/app/test_reports/pytest/iteration69.xml",
+    "/app/test_reports/iteration_69.json"
+  ],
+  "success_rate": {
+    "backend": "94% (15/16 pytest — parse-text with numbered/bullets/checkboxes/frequency PASS, field-type detection PASS, empty/unauth/forbidden guards PASS, parse-file .txt/.docx/.xlsx PASS, save-as-plan PASS. Save-as-template FAILS with 422 — the sole failure is the reported bug.)",
+    "frontend": "88% — Login+nav+wizard open PASS, all 4 steps of wizard render PASS, parse-text and parse-file endpoints return correct preview, edit/remove UI works, save-as-plan e2e creates plan visible in list PASS. Save-as-template FAILS (blocking bug). File upload for .txt PASS."
+  },
+  "test_credentials": "test.pcm@maintrix.com/pcm123 (verified), test.operador@maintrix.com/op123 (verified — 403). Org selection: ASTEC Cedro required before login form.",
+  "seed_data_creation": "Created 2 TEST_SP57 planos via UI/API: TEST_SP57_UI_PlanoTeste (3 perguntas), TEST_SP57_PlanFromImport (2 perguntas), and 1 TEST_SP57_TemplateFromImport template (via backend test with proper payload). All prefixed TEST_. No cleanup performed.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sprint 57 backend parser is solid. The single blocking bug is a payload contract mismatch between PlanImportWizard.handleSave (save_as='template' branch, App.js:7141-7154) and backend TemplateItemCreate (models.py:529). To retest after fix: (1) open wizard, choose 'Copiar e Colar', paste a checklist, choose 'Modelo Mestre' radio, click Verificar e Importar → step 3 → give name → Importar → Salvar. Expect 200 and appearance in /biblioteca Modelos Mestres tab. Also verify tipo_campo values that parser emits (conforme_nao_conforme, numerico, foto, texto) map to allowed backend values. Backend test file at /app/backend/tests/test_sprint57_plan_import.py includes test_save_parsed_as_template which currently fails 422 and will start passing once the mapping is fixed.",
+  "rca_of_the_issue": "The PlanImportWizard was implemented alongside a new PlanoInspecao model (which uses texto/tipo_campo/limite_max), but the wizard's fallback 'Modelo Mestre' branch reuses the LEGACY /api/inspection-templates endpoint whose model (TemplateItemCreate) still uses descricao/tipo/tolerancia_min/tolerancia_max. When save_as='template' is selected in step 2, the wizard sends the PlanoInspecao-shaped payload to the inspection-templates endpoint, causing 422 on every item ('Field required: descricao'). The mismatch is purely a schema-translation gap. Recommended fix in App.js:7146-7151: map fields when saving as template — descricao=p.texto, tipo=(p.tipo_campo==='conforme_nao_conforme'?'boolean':p.tipo_campo==='foto'?'observacao':p.tipo_campo), tolerancia_max=parseFloat(p.limite_max)||null, tolerancia_min=parseFloat(p.limite_min)||null, unidade=p.unidade."
+}

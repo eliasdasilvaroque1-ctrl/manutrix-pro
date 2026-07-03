@@ -7092,6 +7092,363 @@ const ParadasPage = () => {
 };
 
 
+
+// ============== ASSISTENTE DE IMPORTAÇÃO DE PLANOS ==============
+
+const PlanImportWizard = ({ onClose, onImported }) => {
+  const [step, setStep] = useState(1);
+  const [method, setMethod] = useState(null); // 'text', 'file'
+  const [text, setText] = useState('');
+  const [file, setFile] = useState(null);
+  const [parsing, setParsing] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [config, setConfig] = useState({ tipo: 'inspecao', disciplina: 'mecanica', ativo_id: '', save_as: 'plano', nome: '' });
+  const [ativos, setAtivos] = useState([]);
+  const [buscaAtivo, setBuscaAtivo] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [editIdx, setEditIdx] = useState(null);
+
+  useEffect(() => {
+    (async () => { try { const r = await api.get('/ativos'); setAtivos(r.data); } catch {} })();
+  }, []);
+
+  const handleParse = async () => {
+    setParsing(true);
+    try {
+      let result;
+      if (method === 'text') {
+        const res = await api.post('/planos-inspecao/parse-text', { text });
+        result = res.data;
+      } else if (file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await api.post('/planos-inspecao/parse-file', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        result = res.data;
+      }
+      if (result) {
+        setPreview(result);
+        setStep(3);
+      }
+    } catch (err) { toast.error(normalizeError(err)); }
+    finally { setParsing(false); }
+  };
+
+  const handleSave = async () => {
+    if (!preview?.perguntas?.length) { toast.error('Nenhuma pergunta para salvar'); return; }
+    if (!config.nome.trim()) { toast.error('Nome do plano é obrigatório'); return; }
+    setSaving(true);
+    try {
+      if (config.save_as === 'template') {
+        // Save as master template (Biblioteca)
+        const payload = {
+          nome: config.nome, tipo_equipamento: '',
+          descricao: `Importado via Assistente — ${preview.metadata.total_perguntas} perguntas`,
+          itens: preview.perguntas.map((p, i) => ({
+            texto: p.texto, tipo_campo: p.tipo_campo || 'conforme_nao_conforme',
+            obrigatorio: p.obrigatorio !== false, ordem: i,
+            limite_min: p.limite_min || '', limite_max: p.limite_max || '', unidade: p.unidade || '',
+            grupo: p.grupo || '',
+          })),
+        };
+        await api.post('/inspection-templates', payload);
+        toast.success('Modelo Mestre salvo na Biblioteca!');
+      } else {
+        // Save as plan linked to ativo
+        const payload = {
+          nome: config.nome, tipo: config.tipo, disciplina: config.disciplina,
+          ativo_id: config.ativo_id || null, frequencia: preview.frequencia || 'mensal',
+          status: 'rascunho', force_override: false,
+          perguntas: preview.perguntas.map((p, i) => ({
+            texto: p.texto, tipo_campo: p.tipo_campo || 'conforme_nao_conforme',
+            obrigatorio: p.obrigatorio !== false, ordem: i,
+            limite_min: p.limite_min || '', limite_max: p.limite_max || '', unidade: p.unidade || '',
+            grupo: p.grupo || '',
+          })),
+        };
+        await api.post('/planos-inspecao', payload);
+        toast.success(`Plano "${config.nome}" criado com ${preview.perguntas.length} perguntas!`);
+      }
+      onImported?.();
+      onClose();
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      if (typeof detail === 'object' && detail.action_required === 'duplicate_conflict') {
+        toast.error(`Plano já existe: ${detail.existing_plan_nome}. Altere o nome ou use "Modelo Mestre".`);
+      } else { toast.error(normalizeError(err)); }
+    } finally { setSaving(false); }
+  };
+
+  const removeQuestion = (idx) => {
+    setPreview(prev => ({
+      ...prev,
+      perguntas: prev.perguntas.filter((_, i) => i !== idx),
+      metadata: { ...prev.metadata, total_perguntas: prev.metadata.total_perguntas - 1 },
+    }));
+  };
+
+  const updateQuestion = (idx, field, value) => {
+    setPreview(prev => ({
+      ...prev,
+      perguntas: prev.perguntas.map((p, i) => i === idx ? { ...p, [field]: value } : p),
+    }));
+  };
+
+  const filteredAtivos = buscaAtivo ? ativos.filter(a => `${a.tag} ${a.nome}`.toLowerCase().includes(buscaAtivo.toLowerCase())).slice(0, 10) : [];
+
+  const importMethods = [
+    { id: 'text', icon: ClipboardCheck, label: 'Copiar e Colar', desc: 'Cole o texto do plano ou do ChatGPT' },
+    { id: 'file', icon: FileText, label: 'Arquivo', desc: 'PDF, Excel, Word ou TXT' },
+  ];
+
+  const tipoLabels = { inspecao: 'Inspeção', preventiva: 'Preventiva', lubrificacao: 'Lubrificação', mecanica: 'Mecânica', eletrica: 'Elétrica', operacional: 'Operacional' };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="glass-card w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()} data-testid="plan-import-wizard">
+        {/* Header */}
+        <div className="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900/95 backdrop-blur-sm z-10">
+          <div>
+            <h2 className="text-lg font-bold text-slate-100">Assistente de Importação</h2>
+            <p className="text-xs text-slate-500">Importe planos em segundos — sem digitar pergunta por pergunta</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-800 rounded-lg"><X size={18} className="text-slate-400" /></button>
+        </div>
+
+        {/* Steps bar */}
+        <div className="px-5 pt-4 flex gap-2">
+          {['Método', 'Configurar', 'Preview', 'Salvar'].map((s, i) => (
+            <div key={i} className={`flex-1 h-1 rounded-full transition-all ${step > i ? 'bg-brand' : step === i + 1 ? 'bg-brand/50' : 'bg-slate-800'}`} />
+          ))}
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Step 1: Choose method */}
+          {step === 1 && (
+            <div className="space-y-3" data-testid="import-step1">
+              <p className="text-sm text-slate-300 font-medium">Como deseja importar?</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {importMethods.map(m => {
+                  const Icon = m.icon;
+                  return (
+                    <button key={m.id} onClick={() => { setMethod(m.id); setStep(2); }}
+                      className="glass-card p-5 text-left hover:border-brand transition-all group"
+                      data-testid={`import-method-${m.id}`}>
+                      <div className="w-12 h-12 rounded-xl bg-brand-10 flex items-center justify-center mb-3 group-hover:bg-brand-20 transition-colors">
+                        <Icon size={24} className="text-brand" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-200">{m.label}</p>
+                      <p className="text-xs text-slate-500 mt-1">{m.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Input + Config */}
+          {step === 2 && (
+            <div className="space-y-4" data-testid="import-step2">
+              <button onClick={() => setStep(1)} className="text-xs text-brand flex items-center gap-1"><ArrowLeft size={12} /> Voltar</button>
+
+              {method === 'text' && (
+                <div>
+                  <p className="text-sm text-slate-300 font-medium mb-2">Cole o plano aqui</p>
+                  <textarea value={text} onChange={e => setText(e.target.value)}
+                    className="input-industrial w-full px-4 py-3 min-h-[200px] resize-y font-mono text-sm"
+                    placeholder={"1. Verificar vazamentos\n2. Verificar ruído\n3. Verificar vibração\n4. Verificar temperatura dos rolamentos - máximo 80°C\n5. Verificar desgaste dos revestimentos\n\nOBS: Parar se temperatura > 90°C"}
+                    data-testid="import-text-area" autoFocus />
+                </div>
+              )}
+
+              {method === 'file' && (
+                <div>
+                  <p className="text-sm text-slate-300 font-medium mb-2">Envie o arquivo</p>
+                  <label className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-xl hover:border-brand cursor-pointer transition-all">
+                    <Upload size={32} className="text-slate-500 mb-2" />
+                    <p className="text-sm text-slate-400">{file ? file.name : 'Clique para selecionar'}</p>
+                    <p className="text-[10px] text-slate-600 mt-1">PDF, Excel (.xlsx), Word (.docx) ou TXT</p>
+                    <input type="file" accept=".pdf,.xlsx,.xls,.docx,.doc,.txt,.csv" onChange={e => setFile(e.target.files?.[0] || null)}
+                      className="hidden" data-testid="import-file-input" />
+                  </label>
+                </div>
+              )}
+
+              {/* Config section */}
+              <div className="glass-card p-4 space-y-3">
+                <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Configuração</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormInput label="Tipo do Plano">
+                    <select value={config.tipo} onChange={e => setConfig({...config, tipo: e.target.value})} className="input-industrial w-full px-4" data-testid="import-tipo">
+                      {Object.entries(tipoLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </FormInput>
+                  <FormInput label="Disciplina">
+                    <select value={config.disciplina} onChange={e => setConfig({...config, disciplina: e.target.value})} className="input-industrial w-full px-4" data-testid="import-disciplina">
+                      <option value="mecanica">Mecânica</option>
+                      <option value="eletrica">Elétrica</option>
+                      <option value="instrumentacao">Instrumentação</option>
+                      <option value="lubrificacao">Lubrificação</option>
+                      <option value="producao">Produção / Operação</option>
+                    </select>
+                  </FormInput>
+                </div>
+                <FormInput label="Equipamento (opcional)">
+                  <input value={buscaAtivo} onChange={e => setBuscaAtivo(e.target.value)} className="input-industrial w-full px-4"
+                    placeholder="Buscar ativo por TAG ou nome..." data-testid="import-ativo-busca" />
+                  {buscaAtivo && filteredAtivos.length > 0 && (
+                    <div className="mt-1 max-h-32 overflow-y-auto bg-slate-900 border border-slate-700 rounded-lg">
+                      {filteredAtivos.map(a => (
+                        <button key={a.id} onClick={() => { setConfig({...config, ativo_id: a.id}); setBuscaAtivo(`${a.tag} — ${a.nome}`); }}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-slate-800 flex items-center gap-2">
+                          <span className="font-mono text-brand text-xs">{a.tag}</span>
+                          <span className="text-slate-300">{a.nome}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </FormInput>
+                <div className="flex gap-3">
+                  <label className={`flex-1 p-3 rounded-lg border text-center cursor-pointer transition-all ${config.save_as === 'plano' ? 'border-brand bg-brand-10 text-brand' : 'border-slate-700 text-slate-400'}`}>
+                    <input type="radio" name="save_as" value="plano" checked={config.save_as === 'plano'} onChange={() => setConfig({...config, save_as: 'plano'})} className="hidden" />
+                    <p className="text-sm font-semibold">Criar Plano</p>
+                    <p className="text-[10px]">Vinculado ao equipamento</p>
+                  </label>
+                  <label className={`flex-1 p-3 rounded-lg border text-center cursor-pointer transition-all ${config.save_as === 'template' ? 'border-brand bg-brand-10 text-brand' : 'border-slate-700 text-slate-400'}`}>
+                    <input type="radio" name="save_as" value="template" checked={config.save_as === 'template'} onChange={() => setConfig({...config, save_as: 'template'})} className="hidden" />
+                    <p className="text-sm font-semibold">Modelo Mestre</p>
+                    <p className="text-[10px]">Salvar na Biblioteca</p>
+                  </label>
+                </div>
+              </div>
+
+              <button onClick={handleParse} disabled={parsing || (method === 'text' ? !text.trim() : !file)}
+                className="w-full btn-primary py-3 text-sm font-bold flex items-center justify-center gap-2"
+                data-testid="import-parse-btn">
+                {parsing ? <><Cog size={16} className="animate-spin" /> Analisando...</> : <><Search size={16} /> Verificar e Importar</>}
+              </button>
+            </div>
+          )}
+
+          {/* Step 3: Preview */}
+          {step === 3 && preview && (
+            <div className="space-y-4" data-testid="import-step3">
+              <button onClick={() => setStep(2)} className="text-xs text-brand flex items-center gap-1"><ArrowLeft size={12} /> Voltar</button>
+
+              {/* Summary */}
+              <div className="glass-card p-4 border-brand">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-20 flex items-center justify-center">
+                    <CheckCircle size={20} className="text-brand" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-200">Plano detectado</p>
+                    <p className="text-xs text-slate-500">{tipoLabels[config.tipo] || config.tipo} • {config.disciplina}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="bg-slate-900/50 rounded-lg p-2">
+                    <p className="text-lg font-bold text-brand">{preview.metadata.total_perguntas}</p>
+                    <p className="text-[9px] text-slate-500">Perguntas</p>
+                  </div>
+                  <div className="bg-slate-900/50 rounded-lg p-2">
+                    <p className="text-lg font-bold text-slate-200">{preview.metadata.total_observacoes || 0}</p>
+                    <p className="text-[9px] text-slate-500">Observações</p>
+                  </div>
+                  <div className="bg-slate-900/50 rounded-lg p-2">
+                    <p className="text-lg font-bold text-slate-200">{preview.metadata.total_limites || 0}</p>
+                    <p className="text-[9px] text-slate-500">Limites</p>
+                  </div>
+                  <div className="bg-slate-900/50 rounded-lg p-2">
+                    <p className="text-lg font-bold text-slate-200">{preview.metadata.frequencia_detectada || '—'}</p>
+                    <p className="text-[9px] text-slate-500">Frequência</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Name */}
+              <FormInput label="Nome do Plano *">
+                <input value={config.nome} onChange={e => setConfig({...config, nome: e.target.value})}
+                  className="input-industrial w-full px-4" placeholder="Ex: Inspeção Mecânica Diária — Britador"
+                  data-testid="import-nome" />
+              </FormInput>
+
+              {/* Questions list */}
+              <div className="space-y-1 max-h-[40vh] overflow-y-auto" data-testid="import-questions-list">
+                {preview.perguntas.map((p, idx) => (
+                  <div key={p.id || idx} className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/50 group">
+                    <span className="text-[10px] text-slate-600 w-6 text-center shrink-0">{idx + 1}</span>
+                    {editIdx === idx ? (
+                      <input value={p.texto} onChange={e => updateQuestion(idx, 'texto', e.target.value)}
+                        onBlur={() => setEditIdx(null)} onKeyDown={e => e.key === 'Enter' && setEditIdx(null)}
+                        className="flex-1 bg-transparent border-b border-brand text-sm text-slate-200 outline-none" autoFocus />
+                    ) : (
+                      <span className="flex-1 text-sm text-slate-300 cursor-pointer" onClick={() => setEditIdx(idx)}>{p.texto}</span>
+                    )}
+                    <span className="text-[9px] text-slate-600 bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                      {p.tipo_campo === 'numerico' ? '123' : p.tipo_campo === 'foto' ? '📷' : p.tipo_campo === 'texto' ? 'Aa' : '✓/✗'}
+                    </span>
+                    {p.limite_max && <span className="text-[9px] text-amber-400 shrink-0">≤{p.limite_max}{p.unidade || ''}</span>}
+                    <button onClick={() => removeQuestion(idx)} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all">
+                      <X size={12} className="text-red-400" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Observations */}
+              {preview.observacoes?.length > 0 && (
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
+                  <p className="text-xs text-amber-400 font-semibold mb-1">Observações Detectadas</p>
+                  {preview.observacoes.map((o, i) => <p key={i} className="text-xs text-slate-400">• {o}</p>)}
+                </div>
+              )}
+
+              {/* IA Button (future) */}
+              <button disabled className="w-full py-2 border border-dashed border-slate-700 rounded-lg text-xs text-slate-600 flex items-center justify-center gap-2">
+                <Sparkles size={14} /> Melhorar com IA (disponível futuramente)
+              </button>
+
+              <div className="flex gap-3">
+                <button onClick={() => { setEditIdx(null); setStep(4); }}
+                  className="flex-1 btn-primary py-3 text-sm font-bold flex items-center justify-center gap-2"
+                  data-testid="import-confirm-btn">
+                  <Download size={16} /> Importar {preview.perguntas.length} perguntas
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Final save */}
+          {step === 4 && (
+            <div className="space-y-4 text-center py-6" data-testid="import-step4">
+              <div className="w-16 h-16 rounded-full bg-brand-20 flex items-center justify-center mx-auto">
+                <CheckCircle size={32} className="text-brand" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-100">Pronto para salvar</h3>
+              <div className="glass-card p-4 text-left space-y-2">
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Nome</span><span className="text-slate-200">{config.nome || '(sem nome)'}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Tipo</span><span className="text-slate-200 capitalize">{tipoLabels[config.tipo] || config.tipo}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Disciplina</span><span className="text-slate-200 capitalize">{config.disciplina}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Destino</span><span className="text-brand font-semibold">{config.save_as === 'template' ? 'Modelo Mestre (Biblioteca)' : 'Plano vinculado ao ativo'}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Perguntas</span><span className="text-slate-200 font-bold">{preview?.perguntas?.length}</span></div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setStep(3)} className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-700">Voltar</button>
+                <button onClick={handleSave} disabled={saving}
+                  className="flex-1 btn-primary py-3 text-sm font-bold flex items-center justify-center gap-2"
+                  data-testid="import-save-btn">
+                  <Save size={16} /> {saving ? 'Salvando...' : 'Salvar Plano'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 const AdminTemplatesPage = () => {
   const [templates, setTemplates] = useState([]);
   const [equipTypes, setEquipTypes] = useState([]);
@@ -7104,6 +7461,7 @@ const AdminTemplatesPage = () => {
   const [searchPlano, setSearchPlano] = useState('');
   const [filterDisciplina, setFilterDisciplina] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const { user } = useAuth();
 
   const fetchData = async () => {
@@ -7369,7 +7727,10 @@ const AdminTemplatesPage = () => {
           <h1 className="text-2xl font-bold text-slate-100">Planos de Inspeção</h1>
           <p className="text-sm text-slate-500">Gerenciar perguntas por tipo de equipamento e por ativo</p>
         </div>
-        <button onClick={openNew} className="btn-primary flex items-center gap-2" data-testid="new-template-btn"><Plus size={20} /> Novo Plano</button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowImportWizard(true)} className="flex items-center gap-2 px-4 py-2 bg-brand-10 hover:bg-brand-20 text-brand rounded-lg text-sm font-medium transition-all" data-testid="import-plan-btn"><Upload size={16} /> Importar</button>
+          <button onClick={openNew} className="btn-primary flex items-center gap-2" data-testid="new-template-btn"><Plus size={20} /> Novo Plano</button>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -7450,6 +7811,7 @@ const AdminTemplatesPage = () => {
         <EmptyState icon={ClipboardCheck} title="Nenhum plano" description="Crie planos de inspeção para cada tipo de equipamento" actionLabel="Novo Plano" onAction={openNew} />
       )}
       <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Plano" message={`Excluir "${deleteItem?.nome}"?`} confirmText="Excluir" danger />
+      {showImportWizard && <PlanImportWizard onClose={() => setShowImportWizard(false)} onImported={fetchData} />}
     </div>
   );
 };
