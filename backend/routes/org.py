@@ -314,7 +314,7 @@ async def list_organizations_public():
         ident = c.get('identidade', {})
         orgs.append({
             "id": c['organization_id'],
-            "nome": ident.get('nome_empresa') or ident.get('nome_sistema', 'MAINTRIX'),
+            "nome": ident.get('nome_empresa') or ident.get('nome_sistema', ''),
             "logo_url": ident.get('logo_url'),
             "cor_primaria": c.get('tema', {}).get('cor_primaria', '#10b981'),
             "subdominio": c.get('dominio', {}).get('subdominio', ''),
