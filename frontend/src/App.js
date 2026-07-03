@@ -2284,7 +2284,10 @@ const DashboardPage = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${entity}_export.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      // Extract filename from Content-Disposition header
+      const cd = res.headers?.['content-disposition'] || '';
+      const match = cd.match(/filename=([^;]+)/);
+      a.download = match ? match[1].replace(/^"|"$/g, '').trim() : `${entity}_export.${format === 'excel' ? 'xlsx' : 'pdf'}`;
       a.click();
       window.URL.revokeObjectURL(url);
       toast.success(`${entity} exportado com sucesso`);
@@ -8233,7 +8236,7 @@ const AdminUsuariosPage = () => {
 
 const ExportButtons = ({ entity }) => {
   const { user } = useAuth();
-  if (!['admin','master','pcm','gerente'].includes(user?.role)) return null;
+  if (!['admin','master','pcm','gerente','supervisor'].includes(user?.role)) return null;
   
   const handleExport = async (format) => {
     try {
@@ -8241,7 +8244,9 @@ const ExportButtons = ({ entity }) => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${entity}_export.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      const cd = res.headers?.['content-disposition'] || '';
+      const match = cd.match(/filename=([^;]+)/);
+      link.download = match ? match[1].replace(/^"|"$/g, '').trim() : `${entity}_export.${format === 'excel' ? 'xlsx' : 'pdf'}`;
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success(`Exportado em ${format.toUpperCase()}`);
@@ -8249,9 +8254,9 @@ const ExportButtons = ({ entity }) => {
   };
 
   return (
-    <div className="flex gap-1">
-      <button onClick={() => handleExport('excel')} className="p-2 bg-brand-10 hover:bg-brand-20 text-brand rounded-lg transition-colors" title="Excel"><FileText size={16} /></button>
-      <button onClick={() => handleExport('pdf')} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors" title="PDF"><FileText size={16} /></button>
+    <div className="flex gap-1" data-testid={`export-btns-${entity}`}>
+      <button onClick={() => handleExport('excel')} className="p-2 bg-brand-10 hover:bg-brand-20 text-brand rounded-lg transition-colors" title="Excel" data-testid={`${entity}-export-excel`}><FileText size={16} /></button>
+      <button onClick={() => handleExport('pdf')} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors" title="PDF" data-testid={`${entity}-export-pdf`}><FileText size={16} /></button>
     </div>
   );
 };

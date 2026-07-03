@@ -26,6 +26,15 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Completed Sprints
 
+### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
+- **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
+- **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
+- **OS export enriquecido**: 15 colunas incluindo Origem, Disciplina, Justificativa, Aprovação
+- **Inspeções export**: Coluna Disciplina adicionada
+- **Excel formatação**: Headers negrito branco sobre cor primária, colunas auto-dimensionadas
+- **Filenames**: Usam nome da empresa (ex: `os_ASTEC_Cedro.xlsx`)
+- **Frontend**: Extrai filename do Content-Disposition header, Supervisor pode exportar
+
 ### Sprint 58 — Fluxo de Execução de OS ✅ (2026-07-03)
 - **HH Manual**: Endpoint POST `/api/os/{id}/hh-manual` aceita {horas, data_inicio, data_fim, executante_id, descricao}. Calcula timestamps corretamente quando apenas horas é fornecido (data_fim=now, data_inicio=now-horas)
 - **Seção HH compacta**: Timer inline (1 linha) + botão "Lançar HH" abre form com executante/horas/início/fim/descrição + resumo por executante

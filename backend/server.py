@@ -3446,19 +3446,27 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         query['organization_id'] = user['organization_id']
     spares = await db.spare_assets.find(query, {"_id": 0}).to_list(5000)
     org_id = user.get('organization_id', '')
-    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1}) if org_id else None
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1, "tema": 1}) if org_id else None
     empresa = config.get('identidade', {}).get('nome_empresa', 'CMMS') if config else 'CMMS'
+    cor_hex = (config.get('tema', {}).get('cor_primaria', '#10b981') if config else '#10b981').replace('#', '')
     if format == "excel":
         import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Sobressalentes"
-        ws.append(["Código", "Descrição", "Modelo", "Fabricante", "Série", "Status", "Localização", "Custo"])
+        headers = ["Código", "Descrição", "Modelo", "Fabricante", "Série", "Status", "Localização", "Custo"]
+        ws.append(headers)
+        hfill = PatternFill(start_color=cor_hex, end_color=cor_hex, fill_type="solid")
+        hfont = Font(bold=True, color="FFFFFF", size=11)
+        for cell in ws[1]:
+            cell.fill = hfill; cell.font = hfont; cell.alignment = Alignment(horizontal='center')
         for s in spares:
             ws.append([s.get('tag',''), s.get('descricao',''), s.get('modelo',''), s.get('fabricante',''), s.get('numero_serie',''), s.get('status',''), s.get('localizacao',''), s.get('custo','')])
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
+        for col in ws.columns:
+            max_len = max(len(str(c.value or '')) for c in col)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+        buf = io.BytesIO(); wb.save(buf); buf.seek(0)
         return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=sobressalentes_{empresa.replace(' ','_')}.xlsx"})
     
     elif format == "pdf":
@@ -3472,7 +3480,7 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=15*mm, bottomMargin=15*mm, leftMargin=10*mm, rightMargin=10*mm)
         styles = getSampleStyleSheet()
         elements = []
-        elements.append(Paragraph("MAINTRIX — Sobressalentes", styles['Title']))
+        elements.append(Paragraph(f"{empresa} — Sobressalentes", styles['Title']))
         elements.append(Paragraph(f"Total: {len(spares)} registro(s) — {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
         elements.append(Spacer(1, 6*mm))
         
@@ -3487,20 +3495,17 @@ async def export_spares(format: str = "excel", user: Dict = Depends(get_current_
         
         table = Table(data, repeatRows=1)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e293b')),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor(f'#{cor_hex}')),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('FONTSIZE', (0,0), (-1,0), 8),
-            ('FONTSIZE', (0,1), (-1,-1), 7),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#334155')),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#f8fafc'), colors.white]),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('LEFTPADDING', (0,0), (-1,-1), 4),
-            ('RIGHTPADDING', (0,0), (-1,-1), 4),
+            ('FONTSIZE', (0,0), (-1,0), 9),
+            ('FONTSIZE', (0,1), (-1,-1), 8),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8fafc')]),
         ]))
         elements.append(table)
         doc.build(elements)
         buf.seek(0)
-        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=sobressalentes_maintrix.pdf"})
+        return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=sobressalentes_{empresa.replace(' ','_')}.pdf"})
 
 # ============== POWER BI DATA ENDPOINTS ==============
 
