@@ -17,7 +17,7 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 /app/backend/routes/org.py      — Org config, White Label endpoints
 /app/backend/org_config.py      — Default config builder, numbering engine
 /app/backend/deps.py            — Auth, DB, RBAC logic
-/app/frontend/src/App.js        — Monolithic React app (~8600 lines)
+/app/frontend/src/App.js        — Monolithic React app (~9,900 lines)
 /app/frontend/src/lib/branding.js — BrandingContext with race-condition protection
 /app/frontend/src/lib/api.js    — Axios API client
 /app/frontend/src/index.css     — Tailwind + brand utility CSS classes
@@ -25,6 +25,22 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 ```
 
 ## Completed Sprints
+
+### Sprint 59 — Consolidação de Permissões RBAC ✅ (2026-07-04)
+- **Matriz centralizada**: `deps.py` — all permissions in a single `PERMISSION_MATRIX` dict
+- **Roles especializados**: Replaced generic 'técnico' with `tec_mecanico`, `tec_eletrico`, `instrumentista`, `lubrificador`
+- **Frontend RBAC**: Sidebar items, actions, buttons conditioned on `user.permissions[]`
+- **Backend RBAC**: All endpoints check permissions via centralized matrix
+- **ROLE_LABELS**: Consolidated top-level constant for human-readable role names (PT-BR)
+- **Testing**: Backend 12/12 pytest ✅ | Frontend 6/6 Playwright ✅
+
+### Sprint 60 — Eliminação Completa do Módulo de Anomalias ✅ (2026-07-04)
+- **Frontend**: Removido `AnomaliasPage` (~300 linhas), rota `/anomalias`, item "Anomalias" do sidebar
+- **Backend**: Removidos 7 endpoints `/api/anomalias/*`, model `AnomaliaCreate`, permissões RBAC, collections de cleanup/purge
+- **Substituição**: Operadores usam "Solicitar Serviço" → cria OS diretamente (fluxo Sprint 56)
+- **Limpeza**: Referências removidas de timeline, dashboard saúde, auditoria, exportação, numeração, org_config
+- **Role labels cosméticos**: Sidebar mostra "Técnico Mecânico" ao invés de `tec_mecanico`
+- **Testing**: Backend 12/12 pytest ✅ | Frontend 6/6 Playwright ✅
 
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
@@ -166,20 +182,19 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Pending / Backlog (Prioritized)
 
-### FASE 3-5 QR/Portals — COMPLETED
-### P1 — Sprint 56: Wizard "Criar Planos ao Cadastrar Ativo" (Next)
-- QR Code generator with company logo + QR + TAG + equipment name + "Powered by MAINTRIX"
-- Label formats: 50x30, 60x40, 80x50, A4
-- Uses organization's visual identity automatically
+### P0 — Sprint 61/Bloco C: Dashboard Supervisor Executivo
+- Indicadores avançados de manutenção (MTBF, MTTR, Disponibilidade, Backlog)
+- KPIs por área, por disciplina, por tipo de OS
+- Exportação executiva (PDF/Excel com branding)
+- Gráficos de tendência (30/60/90 dias)
 
-### FASE 3-5 — COMPLETED (see Completed Sprints above)
+### P1 — IA Features (Assistente Inteligente)
+- Botão "✨ Melhorar Plano" usando LLM para aprimorar checklists importados
+- Arquitetura preparada no Sprint 57 (parser pronto, falta integração LLM)
 
-### P1 — Sprint 56: Wizard "Criar Planos ao Cadastrar Ativo"
-### P1 — Sprint 57: Padronização do ciclo de vida
-### P2 — Sprint 58: Revisão UX
-### P2 — Sprint 59: Cliente Piloto
-### P2 — Sprint 60/Bloco C: Dashboard Supervisor Executivo, Indicadores, Exportação
-### P3 — IA Features, Subconjuntos, Integrações ERP/SAP
+### P2 — Estrutura de Subconjuntos e Integrações ERP/SAP
+- Hierarquia ativo → subconjuntos → componentes
+- Integração com sistemas ERP (SAP PM, Oracle EAM)
 
 ## Data Models
 - `users`: {id, nome, email, role, organization_id, disciplinas, turno, areas}

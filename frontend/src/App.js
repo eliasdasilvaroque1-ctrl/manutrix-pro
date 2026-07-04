@@ -33,6 +33,9 @@ const FIELD_LABEL_MAP = {
   perguntas: 'Perguntas', checklist: 'Checklist',
 };
 
+const ROLE_LABELS = { master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tec_mecanico: 'Técnico Mecânico', tec_eletrico: 'Técnico Elétrico', instrumentista: 'Instrumentista', lubrificador: 'Lubrificador', tecnico: 'Técnico (legado)', operador: 'Operador', inspetor: 'Inspetor', visualizador: 'Visualizador', viewer: 'Visualizador' };
+
+
 const normalizeError = (error) => {
   const detail = error?.response?.data?.detail;
   if (!detail) return error?.message || 'Erro desconhecido';
@@ -1714,7 +1717,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-slate-200 truncate">{user?.nome}</p>
-              <p className="text-xs text-slate-500">{{ master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tec_mecanico: 'Técnico Mecânico', tec_eletrico: 'Técnico Elétrico', instrumentista: 'Instrumentista', lubrificador: 'Lubrificador', tecnico: 'Técnico', operador: 'Operador', inspetor: 'Inspetor', visualizador: 'Visualizador', viewer: 'Visualizador' }[user?.role] || user?.role}</p>
+              <p className="text-xs text-slate-500">{ROLE_LABELS[user?.role] || user?.role}</p>
             </div>
           </div>
         )}
@@ -7852,7 +7855,7 @@ const AdminUsuariosPage = () => {
     finally { setSaving(false); }
   };
 
-  const roleLabels = { master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tec_mecanico: 'Técnico Mecânico', tec_eletrico: 'Técnico Elétrico', instrumentista: 'Instrumentista', lubrificador: 'Lubrificador', tecnico: 'Técnico (legado)', operador: 'Operador', inspetor: 'Inspetor', visualizador: 'Visualizador', viewer: 'Visualizador' };
+  const roleLabels = ROLE_LABELS;
   const roleColors = { master: 'text-pink-400 bg-pink-500/10', admin: 'text-red-400 bg-red-500/10', gerente: 'text-purple-400 bg-purple-500/10', pcm: 'text-blue-400 bg-blue-500/10', supervisor: 'text-amber-400 bg-amber-500/10', tecnico: 'text-emerald-400 bg-brand-10', operador: 'text-teal-400 bg-teal-500/10', inspetor: 'text-cyan-400 bg-cyan-500/10', viewer: 'text-slate-400 bg-slate-500/10' };
   const disciplinaLabels = { mecanica: 'Mecânica', eletrica: 'Elétrica', instrumentacao: 'Instrumentação', operacao: 'Operação', civil: 'Civil', producao: 'Produção', lubrificacao: 'Lubrificação' };
 

@@ -24,7 +24,6 @@ DEFAULT_TERMINOLOGY = {
     "os_abrev": "OS",
     "inspecao": "Inspeção",
     "lubrificacao": "Lubrificação",
-    "anomalia": "Anomalia",
     "plano_preventivo": "Plano Preventivo",
     "parada_programada": "Parada Programada",
     "estoque": "Estoque",
@@ -92,11 +91,6 @@ DEFAULT_NUMERACAO = {
         "prefixo": "{empresa}-INSP-{ano}-",
         "digitos": 6,
         "exemplo": "AST-INSP-2026-000001",
-    },
-    "anomalias": {
-        "prefixo": "{empresa}-ANOM-{ano}-",
-        "digitos": 6,
-        "exemplo": "AST-ANOM-2026-000001",
     },
     "lubrificacoes": {
         "prefixo": "{empresa}-LUB-{ano}-",
