@@ -333,8 +333,8 @@ async def build_visibility_query(user: Dict, entity_type: str = "os") -> dict:
     if role in ('admin', 'pcm', 'gerente', 'supervisor'):
         return base
 
-    # --- Técnico / Inspetor: disciplines AND areas (combined), plus direct assignments ---
-    if role in ('tecnico', 'inspetor'):
+    # --- Técnico / Inspetor / Especializados: disciplines AND areas, plus direct assignments ---
+    if role in ROLE_GROUPS['execucao']:
         disciplinas = get_user_disciplinas(user)
         area_ids = user.get('area_ids') or []
 
@@ -409,8 +409,8 @@ async def build_dashboard_visibility(user: Dict) -> dict:
     if role in ('master', 'admin', 'pcm', 'gerente', 'supervisor'):
         return base
 
-    # Técnico/Inspetor: scope to their disciplines and areas
-    if role in ('tecnico', 'inspetor'):
+    # Técnico/Inspetor/Especializados: scope to their disciplines and areas
+    if role in ROLE_GROUPS['execucao']:
         disciplinas = get_user_disciplinas(user)
         area_ids = user.get('area_ids') or []
         if disciplinas:

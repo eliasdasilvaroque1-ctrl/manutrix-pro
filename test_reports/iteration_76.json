@@ -1,0 +1,43 @@
+{
+  "summary": "Sprint RC-02 verification complete. All 8 P0/P1 fixes from AUDITORIA RC-01 confirmed working via 14 pytest cases (14/14 PASS). Verified: (P0-01) tec_mecanico now creates OS (201) and iniciar OS (200); (P0-02) tec_mecanico iniciar inspecao no longer 403; (P0-03) tec_mec /api/central now returns 21 items in 'vencidas' vs 0 previously — visibility engine correctly uses ROLE_GROUPS['execucao']; (P0-04) /api/diag/auth-audit returns 404 (endpoint removed); (P0-05) /api/auth/forgot-password no longer includes 'token' key in response body; (P0-06) POST /api/admin/users persists disciplina_principal='mecanica', turno='A', area_ids correctly (verified via subsequent GET /api/admin/users list); (P1-03) master can now GET /api/export/audit?format=excel with 200. Regressions healthy: master dashboard/stats + OS list + inspecoes list all 200; gerente reads OS (200) and cannot create OS (403); operador creates solicitation (201). No P0/P1 regressions detected in this sprint.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/users/{id}", "issue": "Still not implemented — returns 405 Method Not Allowed (carried over from RC-01; not in RC-02 scope). Tests worked around by using GET /api/admin/users list + filter."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rbac_audit_rc02.py",
+    "/app/test_reports/pytest/iteration76.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (not blocking): Implement GET /api/admin/users/{id} single-user endpoint (still 405; carried from RC-01).",
+    "OPTIONAL cleanup: 1 test OS titled 'TEST_RC02 corretiva by tec_mec ...' left in em_execucao state (created by P0-01 verification). Consider adding a cleanup fixture or manual deletion."
+  ],
+  "critical_code_review_comments": [
+    "deps.py:99 ROLE_GROUPS['execucao'] = ['tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor'] is now the single source of truth for specialized technicians — good centralization, matches iteration_75 recommendation. Used consistently in deps.py:337/413 (visibility), work_orders.py, and server.py:1487/1506 (inspecoes).",
+    "server.py:207 forgot-password no longer echoes token — response is now generic 'method' field only; matches security requirement. Recommend also logging token generation server-side for audit only.",
+    "server.py diag endpoint removal is clean (returns 404 as expected), no residual routes present.",
+    "admin_create_user now persists all UserCreate fields (disciplina_principal, turno, area_ids). Downstream RBAC visibility scoping now works end-to-end for newly created tec_mecanico users."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rbac_audit_rc02.py",
+    "/app/test_reports/pytest/iteration76.xml",
+    "/app/test_reports/iteration_76.json"
+  ],
+  "success_rate": {
+    "backend": "14/14 (100%)",
+    "frontend": "N/A - testing_type=backend only"
+  },
+  "test_credentials": "master@maintrix.com/master123, test.mec@maintrix.com/tec123, test.gerente@maintrix.com/ger123, test.operador@maintrix.com/op123. Backend /api/auth/login only needs {email,password}.",
+  "seed_data_creation": "1x user via POST /api/admin/users (email=test.rc02_<ts>@maintrix.com) — deleted at end of test. 1x OS created by tec_mec (title='TEST_RC02 corretiva by tec_mec <ts>') — NOT deleted (created in em_execucao state; no auto-cleanup). 1x solicitation OS by operador (title='TEST_RC02 solicitacao operador <ts>') — NOT deleted.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-02 P0/P1 fixes fully verified (14/14 pytest). Test suite at /app/backend/tests/test_rbac_audit_rc02.py runs in ~8s. If further changes touch RBAC or admin_create_user, re-run this file. Remaining minor from RC-01: GET /api/admin/users/{id} (405) is still not implemented but not in RC-02 scope. Also note the AUDITORIA RC-01 frontend leaks (ProtectedRoute lacking role guard, admin/config full-render for operador, master/white-label full-render for gerente) are FRONTEND issues from iteration_75 — NOT tested here since testing_type=backend only.",
+  "rca_of_the_issue": "N/A — this iteration is a verification pass, no new bugs found. All root causes (role taxonomy drift, endpoint-vs-model drift, unauthenticated diag, token echo) identified in iteration_75 have been remedied by (1) introducing ROLE_GROUPS['execucao'] constant and applying it uniformly across deps.py + work_orders.py + server.py, (2) extending admin_create_user to persist all UserCreate fields, (3) removing the diag endpoint entirely, (4) stripping token from forgot-password response body."
+}

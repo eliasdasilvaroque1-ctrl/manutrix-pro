@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import uuid
 from deps import (
     db, get_current_user, check_write_permission, check_admin_only,
-    verify_org_access, audit_log, is_admin, logger
+    verify_org_access, audit_log, is_admin, logger, ROLE_GROUPS
 )
 from data_architecture import (
     HHEvento, OSEventoTipo, FuncaoExecutante,
@@ -181,7 +181,7 @@ async def hh_resumo(os_id: str, user: Dict = Depends(get_current_user)):
 @router.post("/os/{os_id}/hh-manual")
 async def create_hh_manual(os_id: str, data: dict, user: Dict = Depends(get_current_user)):
     """Record manual HH entry (executante, inicio, fim, horas)."""
-    check_write_permission(user, ['admin', 'master', 'pcm', 'supervisor', 'tecnico', 'operador', 'inspetor'])
+    check_write_permission(user, ['admin', 'master', 'pcm', 'supervisor', 'operador'] + ROLE_GROUPS['execucao'])
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")

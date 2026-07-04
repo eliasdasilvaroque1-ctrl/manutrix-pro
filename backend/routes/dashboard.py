@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import json
 import random
 
-from deps import db, get_current_user, get_scoped_asset_ids, check_admin_only, build_dashboard_visibility, build_visibility_query, _get_asset_ids_for_areas, get_user_disciplinas
+from deps import db, get_current_user, get_scoped_asset_ids, check_admin_only, build_dashboard_visibility, build_visibility_query, _get_asset_ids_for_areas, get_user_disciplinas, ROLE_GROUPS
 from models import Disciplina
 
 router = APIRouter()
@@ -30,7 +30,7 @@ async def get_kpis(sector_id: Optional[str] = None, user: Dict = Depends(get_cur
     if org_id:
         asset_query['organization_id'] = org_id
     role = user.get('role', '')
-    if role in ('tecnico', 'inspetor', 'operador'):
+    if role in ROLE_GROUPS['operacional']:
         area_ids = user.get('area_ids') or []
         if area_ids:
             asset_query['sector_id'] = {"$in": area_ids}
@@ -89,7 +89,7 @@ async def get_dashboard_stats(sector_id: Optional[str] = None, user: Dict = Depe
     asset_query = {"deleted_at": None}
     if org_id:
         asset_query['organization_id'] = org_id
-    if role in ('tecnico', 'inspetor', 'operador'):
+    if role in ROLE_GROUPS['operacional']:
         area_ids = user.get('area_ids') or []
         if area_ids:
             asset_query['sector_id'] = {"$in": area_ids}
@@ -151,7 +151,7 @@ async def dashboard_os_por_setor(user: Dict = Depends(get_current_user)):
     if org_id:
         sector_q['organization_id'] = org_id
     # Scope sectors to user's areas if not full visibility
-    if role in ('tecnico', 'inspetor', 'operador'):
+    if role in ROLE_GROUPS['operacional']:
         area_ids = user.get('area_ids') or []
         if area_ids:
             sector_q['id'] = {"$in": area_ids}
@@ -223,7 +223,7 @@ async def get_dashboard_trend(sector_id: Optional[str] = None, user: Dict = Depe
     asset_query = {"deleted_at": None}
     if org_id:
         asset_query['organization_id'] = org_id
-    if role in ('tecnico', 'inspetor', 'operador'):
+    if role in ROLE_GROUPS['operacional']:
         area_ids = user.get('area_ids') or []
         if area_ids:
             asset_query['sector_id'] = {"$in": area_ids}

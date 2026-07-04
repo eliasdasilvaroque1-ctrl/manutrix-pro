@@ -32,7 +32,7 @@ from deps import (
     build_visibility_query, build_dashboard_visibility, _get_asset_ids_for_areas,
     generate_tag, generate_sku, generate_os_numero,
     audit_log, audit_denial, criar_notificacao, verificar_estoque_critico, get_scoped_asset_ids, verify_org_access, audit_field_changes,
-    logger
+    logger, ROLE_GROUPS
 )
 from models import *
 import storage as objstore
@@ -204,7 +204,7 @@ async def forgot_password(data: ForgotPasswordRequest):
         "used": False, "created_at": datetime.now(timezone.utc).isoformat()
     })
     logger.info(f"PASSWORD RESET TOKEN for {email}: {token}")
-    return {"success": True, "message": "Token de redefinição gerado. Verifique o console.", "token": token}
+    return {"success": True, "message": "Token de redefinição gerado. Verifique seu email."}
 
 @api_router.post("/auth/reset-password")
 async def reset_password(data: ResetPasswordRequest):
@@ -1484,7 +1484,7 @@ async def delete_inspecao(inspecao_id: str, user: Dict = Depends(get_current_use
 
 @api_router.post("/inspecoes/{inspecao_id}/iniciar")
 async def iniciar_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
+    check_write_permission(user, ['admin', 'supervisor'] + ROLE_GROUPS['execucao'] + ['operador'])
     await db.inspecoes.update_one(
         {"id": inspecao_id},
         {"$set": {
@@ -1503,7 +1503,7 @@ async def concluir_inspecao(
     body: ConcluirInspecaoBody,
     user: Dict = Depends(get_current_user)
 ):
-    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
+    check_write_permission(user, ['admin', 'supervisor'] + ROLE_GROUPS['execucao'] + ['operador'])
     checklist = body.checklist
     observacoes = body.observacoes
     insp = await db.inspecoes.find_one({"id": inspecao_id, "deleted_at": None}, {"_id": 0})
@@ -3209,7 +3209,13 @@ async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_u
         "role": data.role.value,
         "organization_id": data.organization_id or user.get('organization_id', ''),
         "telefone": data.telefone,
+        "disciplina_principal": data.disciplina_principal,
+        "disciplinas_secundarias": data.disciplinas_secundarias or [],
+        "turno": data.turno,
+        "area_ids": data.area_ids or [],
+        "unidade_ids": data.unidade_ids or [],
         "password_hash": hash_password(data.password),
+        "force_password_change": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None
     }
@@ -3379,7 +3385,7 @@ async def powerbi_kpis(user: Dict = Depends(get_current_user)):
     if org_id:
         asset_query['organization_id'] = org_id
     role = user.get('role', '')
-    if role in ('tecnico', 'inspetor', 'operador'):
+    if role in ROLE_GROUPS['operacional']:
         area_ids = user.get('area_ids') or []
         if area_ids:
             asset_query['sector_id'] = {"$in": area_ids}
@@ -3419,7 +3425,7 @@ async def get_audit_logs(
     user: Dict = Depends(get_current_user)
 ):
     """Audit logs with filters. Admin, PCM, Gerente can view."""
-    if user.get('role') not in ['admin', 'gerente', 'pcm']:
+    if user.get('role') not in ['master', 'admin', 'gerente', 'pcm', 'supervisor']:
         raise HTTPException(status_code=403, detail="Sem permissão para visualizar auditoria")
     query = {}
     if user.get('organization_id'):
@@ -3458,7 +3464,7 @@ async def get_audit_logs(
 
 @api_router.get("/admin/audit-logs/stats")
 async def get_audit_stats(user: Dict = Depends(get_current_user)):
-    if user.get('role') not in ['admin', 'gerente', 'pcm']:
+    if user.get('role') not in ['master', 'admin', 'gerente', 'pcm', 'supervisor']:
         raise HTTPException(status_code=403, detail="Sem permissão")
     pipeline = [
         {"$group": {"_id": "$entity_type", "count": {"$sum": 1}}},
@@ -3470,7 +3476,7 @@ async def get_audit_stats(user: Dict = Depends(get_current_user)):
 
 @api_router.get("/export/audit")
 async def export_audit(format: str = "excel", user: Dict = Depends(get_current_user)):
-    if user.get('role') not in ['admin', 'gerente', 'pcm']:
+    if user.get('role') not in ['master', 'admin', 'gerente', 'pcm', 'supervisor']:
         raise HTTPException(status_code=403, detail="Sem permissão")
     logs = await db.audit_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     if format == "excel":
@@ -3523,41 +3529,8 @@ async def root():
 
 app.include_router(api_router)
 
-# Diagnostic endpoint (secret-key protected, no JWT needed)
-@app.get("/api/diag/auth-audit")
-async def diag_auth_audit(key: str = ""):
-    """Temporary diagnostic: list admin users in DB. Protected by DIAG_KEY."""
-    expected_key = os.environ.get('DIAG_KEY', 'maintrix-diag-2026')
-    if key != expected_key:
-        raise HTTPException(status_code=403, detail="Invalid diagnostic key")
-    
-    all_users = await db.users.find(
-        {"deleted_at": None},
-        {"_id": 0, "id": 1, "email": 1, "role": 1, "organization_id": 1,
-         "force_password_change": 1, "created_at": 1, "nome": 1,
-         "disciplina_principal": 1, "turno": 1}
-    ).to_list(100)
-    
-    admin_users = [u for u in all_users if u.get('role') in ('admin', 'master')]
-    
-    # Check password hash format (without exposing the hash)
-    for u in all_users:
-        raw = await db.users.find_one({"id": u['id']}, {"_id": 0, "password_hash": 1})
-        h = raw.get('password_hash', '') if raw else ''
-        u['hash_format'] = 'bcrypt' if h.startswith('$2b$') or h.startswith('$2a$') else ('sha256' if len(h) == 64 else 'unknown')
-        u['hash_length'] = len(h)
-    
-    # Check if master@maintrix.com exists
-    master_exists = any(u['email'] == 'master@maintrix.com' for u in all_users)
-    
-    return {
-        "total_users": len(all_users),
-        "admin_master_count": len(admin_users),
-        "master_maintrix_exists": master_exists,
-        "users": all_users,
-        "db_name": os.environ.get('DB_NAME', '?'),
-        "bootstrap_would_run": len(admin_users) == 0,
-    }
+# Diagnostic endpoint REMOVED for security (RC-02 audit fix P0-04)
+# Previously exposed user data with hardcoded default key.
 
 app.add_middleware(
     CORSMiddleware,

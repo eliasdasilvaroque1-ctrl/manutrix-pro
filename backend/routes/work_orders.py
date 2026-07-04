@@ -8,7 +8,7 @@ import uuid
 from deps import (
     db, get_current_user, check_admin_only, check_write_permission, check_not_gerente,
     audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids, verify_org_access, audit_field_changes,
-    build_visibility_query, build_dashboard_visibility
+    build_visibility_query, build_dashboard_visibility, ROLE_GROUPS
 )
 from models import (
     OSCreate, OSUpdate, OSStatus,
@@ -184,7 +184,7 @@ async def get_os(os_id: str, user: Dict = Depends(get_current_user)):
 @router.post("/ordens-servico")
 async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
     # Operador pode criar solicitação, gerente não
-    allowed_roles = ['admin', 'master', 'pcm', 'supervisor', 'tecnico', 'operador', 'inspetor']
+    allowed_roles = ['admin', 'master', 'pcm', 'supervisor', 'operador'] + ROLE_GROUPS['execucao']
     check_write_permission(user, allowed_roles)
     check_not_gerente(user)
     ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
@@ -195,7 +195,7 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
     numero = await generate_os_numero(org_id)
 
     role = user.get('role', '')
-    is_operacional = role in ('operador', 'inspetor', 'tecnico')
+    is_operacional = role in ROLE_GROUPS['operacional']
 
     # Determine initial status based on role
     if role == 'operador':
@@ -295,7 +295,7 @@ async def delete_os(os_id: str, user: Dict = Depends(get_current_user)):
 
 @router.post("/ordens-servico/{os_id}/iniciar")
 async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
+    check_write_permission(user, ['admin', 'supervisor'] + ROLE_GROUPS['execucao'])
     os = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os:
         raise HTTPException(status_code=404, detail="OS não encontrada")
@@ -306,7 +306,7 @@ async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
 
 @router.post("/ordens-servico/{os_id}/pausar")
 async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
+    check_write_permission(user, ['admin', 'supervisor'] + ROLE_GROUPS['execucao'])
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "pausada", "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}})
     if os_doc:
@@ -342,7 +342,7 @@ async def update_os_status(os_id: str, body: KanbanMoveBody, user: Dict = Depend
 
 @router.post("/ordens-servico/{os_id}/concluir")
 async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user: Dict = Depends(get_current_user)):
-    check_write_permission(user, ['admin', 'supervisor', 'tecnico'])
+    check_write_permission(user, ['admin', 'supervisor'] + ROLE_GROUPS['execucao'])
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
@@ -399,7 +399,7 @@ async def list_os_materiais(os_id: str, user: Dict = Depends(get_current_user)):
 @router.post("/ordens-servico/{os_id}/materiais")
 async def add_os_material(os_id: str, body: dict, user: Dict = Depends(get_current_user)):
     """Add consumed material to OS — deducts from stock automatically"""
-    check_write_permission(user, ['admin', 'pcm', 'supervisor', 'tecnico'])
+    check_write_permission(user, ['admin', 'pcm', 'supervisor'] + ROLE_GROUPS['execucao'])
     
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
