@@ -49,6 +49,17 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Maior risco**: 2 bugs de segurança (endpoint diagnóstico público + token reset vazado)
 - **Testing**: 9 pytest + 8 Playwright confirmando os bugs
 
+### Sprint RC-02 — Correção P0s da Auditoria ✅ (2026-07-04)
+- **P0-04 FIXED**: Endpoint `/api/diag/auth-audit` removido completamente (expunha 27 usuários sem autenticação)
+- **P0-05 FIXED**: `/api/auth/forgot-password` não retorna mais o token no corpo da resposta
+- **P0-01 FIXED**: Técnicos especializados agora podem criar/iniciar/pausar/concluir OS (ROLE_GROUPS['execucao'])
+- **P0-02 FIXED**: Técnicos especializados agora podem iniciar/concluir inspeções
+- **P0-03 FIXED**: Motor de visibilidade (`build_visibility_query`, `build_dashboard_visibility`) reconhece roles especializados — tec_mecanico vê 21 itens vs 0 antes
+- **P0-06 FIXED**: `admin_create_user` agora persiste disciplina_principal, disciplinas_secundarias, turno, area_ids, unidade_ids
+- **P1-03 FIXED**: Master e Supervisor podem exportar auditoria (Excel/PDF)
+- **P1-04 FIXED**: HH manual permitido para técnicos especializados
+- **Testing**: Backend 14/14 pytest ✅ (100%)
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
