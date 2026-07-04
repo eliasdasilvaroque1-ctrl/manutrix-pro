@@ -1,0 +1,74 @@
+{
+  "summary": "RC-01 AUDIT (no fixes applied). Confirmed 7 critical/high issues via 9 pytest cases + Playwright UI probing across gerente, operador, tec_mecanico and master. Key confirmations: (1) tec_mecanico blocked with 403 from create/iniciar OS and iniciar Inspecao (allowed_roles use 'tecnico' not 'tec_mecanico'); (2) tec_mecanico Central de Trabalho returns 0 items vs 15 for master because visibility engine (deps.py:337, 413) only matches 'tecnico'/'inspetor'; (3) DIAG endpoint /api/diag/auth-audit?key=maintrix-diag-2026 accessible with NO login and exposes emails/roles/hash_format for 27 users (bootstrap flag) due to hardcoded default DIAG_KEY (server.py:3530); (4) POST /api/auth/forgot-password local branch (server.py:207) LEAKS the reset token in JSON body (confirmed live: 'token: snhQM…'); (5) master role blocked with 403 from GET /api/export/audit because whitelist is only admin/gerente/pcm (server.py:3473); (6) POST /api/admin/users silently drops disciplina_principal, turno, area_ids, disciplinas_secundarias — the endpoint hard-codes a doc with 9 fields ignoring UserCreate extras (server.py:3196); (7) Frontend ProtectedRoute (App.js:7982) is auth-only, no role gate — /admin/config and /admin/auditoria render FULL admin UI for operador; /master/white-label renders the Designer page shell (NOVA EMPRESA / SALVAR buttons visible) for gerente. Some pages (/admin/usuarios, /master/cleanup) still show 'Acesso Restrito' component-level guards which mitigates data leaks but not UI exposure.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/diag/auth-audit", "issue": "Hardcoded default DIAG_KEY 'maintrix-diag-2026' + no JWT check. Any unauthenticated caller retrieves list of ALL 27 users (email, nome, role, organization_id, id, created_at, hash_format, hash_length). Discloses admin/master accounts and password hash algorithm. server.py:3530.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/auth/forgot-password", "issue": "Local (non-Supabase) branch returns password-reset token in the JSON response body ({'token': '...'}). Confirmed live: any client can request a reset for any email and receive the token, then call /api/auth/reset-password. server.py:207.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/ordens-servico (and /iniciar, /pausar, /concluir)", "issue": "allowed_roles whitelists 'tecnico' but NOT tec_mecanico/tec_eletrico/instrumentista/lubrificador. All specialized technician profiles get 403 for create/start/pause/complete. Blocks the core operational flow for the ONLY user personas that should perform it. work_orders.py:187,298,309,345; models.py roles.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/inspecoes/{id}/iniciar and /concluir", "issue": "Same allow-list bug: only 'tecnico' accepted. tec_mecanico → 403. server.py:1487,1506.", "priority": "CRITICAL"},
+      {"endpoint": "GET /api/central (and dashboard visibility)", "issue": "build_visibility_query and build_dashboard_visibility (deps.py:337, 413) only branch on role in ('tecnico','inspetor'). tec_mecanico falls through to viewer/unknown branch (own assignments only). Live: master sees 15 items, tec_mecanico sees 0 with the SAME data — technicians cannot see work items from their own discipline/area.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/admin/users", "issue": "Endpoint constructs user_doc from only {id,email,nome,role,organization_id,telefone,password_hash,...}. It NEVER reads or persists disciplina_principal, disciplinas_secundarias, turno, area_ids, cargo — even though UserCreate/UserBase (models.py:143-147) declares them. Confirmed live: sent disciplina_principal='mecanica' and turno='manha' — GET returned both None. This is the ROOT of the visibility bug because tec users get created with no discipline/area to scope on. server.py:3196.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/export/audit", "issue": "Whitelist ['admin','gerente','pcm'] excludes 'master' and 'supervisor'. Master owns everything but cannot export audit → 403. server.py:3473. Same for /api/audit/stats server.py:3461."},
+      {"endpoint": "GET /api/admin/users/{id}", "issue": "Returns 405 Method Not Allowed — endpoint not defined. Only list + POST + DELETE + PUT exist. Fetching a single user by id (needed by profile-detail screens) is impossible."},
+      {"endpoint": "POST /api/ordens-servico (allowed_roles list style)", "issue": "Redundant/inconsistent: both allowed_roles + check_not_gerente are called; specialized role name mismatch causes silent 403s across many endpoints. Recommend a role-group constant TEC_ROLES = {tecnico, tec_mecanico, tec_eletrico, instrumentista, lubrificador}."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ProtectedRoute (App.js:7982)", "issue": "Only checks auth, not role. Every /admin/* and /master/* route uses this wrapper. Consequence: any authenticated user can reach the route and the page shell renders.", "selector": "ProtectedRoute", "priority": "HIGH"},
+      {"component": "/admin/config (OrgConfigPage)", "issue": "As OPERADOR the ENTIRE Configurações da Organização page renders with editable fields (Nome do Sistema, Subtítulo, Rodapé, Terminologia, Numeração...). No component-level role guard. Backend may block writes but the sensitive UI is fully exposed.", "selector": "/admin/config route", "priority": "HIGH"},
+      {"component": "/admin/auditoria (AuditoriaPage)", "issue": "As OPERADOR the Auditoria page renders with EXCEL / PDF export buttons and full filter UI (auth, ativos, ordens_servico, inspecoes, estoque, security). Only the data list is empty (backend 403). Export buttons visible — clickable — would trigger 403 downloads. Should hide UI entirely.", "selector": "/admin/auditoria route", "priority": "HIGH"},
+      {"component": "/master/white-label (WhiteLabelDesignerPage)", "issue": "As GERENTE the 'Designer de Marca' page renders including NOVA EMPRESA and SALVAR action buttons; only a toast 'Apenas o Administrador Master pode realizar esta operação' hints at restriction. Non-Master users can see white-label config UI.", "selector": "/master/white-label route", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Técnico Mecânico → Central de Trabalho → OS", "issue": "tec_mecanico logs in, /api/central returns 0 items (should show all mecanica-discipline OS in their areas). Even if OS exist and are assigned to their discipline, they cannot see or start them. Complete blocker for the Técnico Mecânico persona.", "affected_selectors": ["/api/central", "/api/ordens-servico", "/api/inspecoes"]},
+      {"flow": "Master → Auditoria Export", "issue": "Master clicks Excel/PDF export on /admin/auditoria → 403. Master must not be blocked.", "affected_selectors": ["auditoria-export-excel", "auditoria-export-pdf"]},
+      {"flow": "Admin creates user with discipline+area", "issue": "Form fields for disciplina_principal, turno, area_ids submit, backend 200s, but values are silently dropped. Downstream RBAC (visibility scoping) then fails for the new user because their disciplina/area are null.", "affected_selectors": ["admin-user-create-form"]}
+    ],
+    "design_issues": [
+      {"screen": "Login /login", "issues": ["Empresa is a free-text autocomplete but data-testid='empresa-input' has no obvious 'select first suggestion' affordance — automation and users may miss the dropdown click. Suggestion: allow submit with typed value or auto-select single match."]},
+      {"screen": "Restricted pages", "issues": ["Inconsistent lockout UX: /admin/usuarios shows 'Acesso Restrito' card, /admin/config shows the full editable UI, /admin/auditoria shows full filter+export UI. Users get mixed signals about what they can/cannot do."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rbac_audit_rc01.py",
+    "/app/test_reports/pytest/iteration75.xml"
+  ],
+  "action_items": [
+    "SECURITY: Remove hardcoded default in os.environ.get('DIAG_KEY', ...) at server.py:3530 — require env var, and ideally remove or JWT-gate the diagnostic endpoint entirely.",
+    "SECURITY: Remove 'token' field from /api/auth/forgot-password local-branch response (server.py:207). Log only server-side; send via email if available.",
+    "RBAC: Introduce TEC_ROLES = {'tecnico','tec_mecanico','tec_eletrico','instrumentista','lubrificador'} and use it everywhere in work_orders.py + server.py (iniciar_inspecao, concluir_inspecao) instead of hard-coded 'tecnico'.",
+    "RBAC: Update deps.py build_visibility_query (line 337) and build_dashboard_visibility (line 413) to include specialized tec_* roles in the discipline+area scoping branch.",
+    "RBAC: Add master + supervisor to the allow-list in /api/export/audit and /api/audit/stats (server.py:3461, 3473).",
+    "DATA: In server.py:3196 admin_create_user, persist ALL UserCreate fields: disciplina_principal, disciplinas_secundarias, turno, area_ids, cargo, is_active, force_password_change. Add PUT handler that updates the same fields. Also add GET /api/admin/users/{id} single-user endpoint.",
+    "FRONTEND: Replace ProtectedRoute with a role-aware guard (e.g. <ProtectedRoute allow={['master','admin']}>). Apply to every /admin/* and /master/* route in App.js. Redirect unauthorized users to '/' with a toast.",
+    "FRONTEND: Add early return in OrgConfigPage, AuditoriaPage, WhiteLabelDesignerPage components that renders an 'Acesso Restrito' card when user.role is not in the allowed set (defense-in-depth)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:3530 — os.environ.get('DIAG_KEY', 'maintrix-diag-2026') provides a KNOWN default. This effectively means production has NO real key protection unless the env var is set. Combined with @app.get (not @api_router with auth deps), it is completely unauthenticated. Highest-priority security fix.",
+    "server.py:207 — Reset-password endpoint returns the token as JSON. Even if intended for local dev, any deployment where Supabase is unavailable will silently expose tokens over HTTP. Split dev vs prod behavior or delete.",
+    "deps.py:229-239 check_write_permission couples 'gerente is read-only' with the allow-list check. Because ['admin','master'] always bypass, but specialized tec_* roles are never in allow_roles, the intent 'technicians can perform OS actions' is broken for 4 out of 5 tec sub-roles.",
+    "server.py:3196 admin_create_user hard-codes user_doc keys — the entire discipline/area/turno/is_active/force_password_change surface is ignored. Any UI that captures these fields is a lie. This is the ROOT CAUSE of the tec_mecanico-cannot-see-OS bug even after visibility engine is fixed.",
+    "App.js:7982 ProtectedRoute lacks role param. Consider making it accept allow=['master'] etc. and centralizing the 'restricted card' UI so that every admin/master route uses one consistent guard.",
+    "work_orders.py — the allow_roles inline literal list is repeated 6+ times; extract to a module-level constant to prevent future drift when new roles are added (this is exactly what caused the tec_mecanico bug).",
+    "server.py:3527 /api/diag/auth-audit is mounted on the raw app (not api_router) — bypasses any global auth middleware. It also exposes hash_format/hash_length which is a hash-algorithm oracle to attackers.",
+    "GET /api/admin/users/{id} is missing (405). CRUD is incomplete: create+list+update+delete exist but single-get is not — audit trail and detail screens are impossible without it."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rbac_audit_rc01.py",
+    "/app/test_reports/pytest/iteration75.xml",
+    "/app/test_reports/iteration_75.json"
+  ],
+  "success_rate": {
+    "backend": "7/9 pytest assertions PASS confirming bugs; 2 assertions FAIL by design (they document the concrete bug values: forgot-password token leak + admin_create_user field drop)",
+    "frontend": "8/8 route probes executed; 4/8 revealed UI leakage bugs (admin/config, admin/auditoria, master/white-label full render for non-privileged roles; operador reached admin/auditoria filter+export UI)"
+  },
+  "test_credentials": "master@maintrix.com/master123, test.mec@maintrix.com/tec123, test.gerente@maintrix.com/ger123, test.operador@maintrix.com/op123. Backend /api/auth/login only needs {email,password} (no org_id). Frontend login requires typing 'ASTEC' in the Empresa autocomplete AND clicking the dropdown suggestion 'ASTEC Cedro' before email/password.",
+  "seed_data_creation": "Test creates one TEST_rc01_<timestamp>@maintrix.com user via POST /api/admin/users and deletes it via DELETE /api/admin/users/{id} at end of the persistence test. No other seed data.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Reusable pytest suite: /app/backend/tests/test_rbac_audit_rc01.py — 9 tests, ~9s runtime, uses REACT_APP_BACKEND_URL. Two tests are BUG-CONFIRMATION tests that assert the buggy value and will START PASSING once fixes are applied — after fixes, INVERT their assertions. When fixes land, re-run and additionally verify: (a) tec_mecanico can POST /api/ordens-servico with 201/200; (b) /api/central returns >0 items for tec_mecanico with matching disciplina; (c) diag endpoint returns 403 without valid env-provided key; (d) forgot-password body has NO 'token' key; (e) master can export audit; (f) admin_create_user persists disciplina/area/turno; (g) frontend /admin/config for operador shows Acesso Restrito instead of the editable form. Login-in-browser needs the 'ASTEC Cedro' dropdown click.",
+  "rca_of_the_issue": "Two intertwined root-cause patterns produced the RC-01 issues: (A) Role-taxonomy drift — the codebase invented specialized technician roles (tec_mecanico, tec_eletrico, instrumentista, lubrificador) but the RBAC checkpoints (deps.py:337/413, work_orders.py allow-lists, server.py inspecoes handlers) were never updated from the legacy generic 'tecnico'. Every specialized tec falls into the viewer/unknown branch, seeing nothing and being blocked from writes. (B) Endpoint-vs-model drift — UserCreate/UserBase declares disciplina_principal/turno/area_ids but admin_create_user hard-codes a subset of fields, so RBAC-critical attributes never persist and downstream scoping is impossible even if (A) were fixed. Compounding this, security posture is weakened by (C) unauthenticated diagnostic endpoint with default key and (D) reset-token echoed in the response body. Frontend adds (E): ProtectedRoute lacks a role gate, causing admin/master pages to render for any authenticated role — mitigated inconsistently at component level."
+}
