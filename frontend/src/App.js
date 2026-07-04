@@ -1611,7 +1611,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         { icon: Box, label: 'Ativos', path: '/ativos' },
         ...(!isOperacional ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
         { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
-        { icon: AlertTriangle, label: isOperacional ? 'Solicitar Serviço' : 'Anomalias', path: isOperacional ? '/solicitar' : '/anomalias' },
+        ...(isOperacional ? [{ icon: AlertTriangle, label: 'Solicitar Serviço', path: '/solicitar' }] : []),
         ...(isOperacional ? [{ icon: QrCode, label: 'Scanner', path: '/scanner' }] : []),
         ...(isOperacional ? [{ icon: Target, label: 'Ronda', path: '/ronda' }] : []),
       ]
@@ -1714,7 +1714,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-slate-200 truncate">{user?.nome}</p>
-              <p className="text-xs text-slate-500 capitalize">{user?.role}</p>
+              <p className="text-xs text-slate-500">{{ master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tec_mecanico: 'Técnico Mecânico', tec_eletrico: 'Técnico Elétrico', instrumentista: 'Instrumentista', lubrificador: 'Lubrificador', tecnico: 'Técnico', operador: 'Operador', inspetor: 'Inspetor', visualizador: 'Visualizador', viewer: 'Visualizador' }[user?.role] || user?.role}</p>
             </div>
           </div>
         )}
@@ -2931,7 +2931,7 @@ const AtivoDetailPage = () => {
   const tipoEventoConfig = {
     os: { color: 'border-blue-500', bg: 'bg-blue-500', icon: Wrench, label: 'OS' },
     inspecao: { color: 'border-emerald-500', bg: 'bg-emerald-500', icon: ClipboardCheck, label: 'Inspeção' },
-    anomalia: { color: 'border-red-500', bg: 'bg-red-500', icon: AlertTriangle, label: 'Anomalia' },
+    anomalia: { color: 'border-red-500', bg: 'bg-red-500', icon: AlertTriangle, label: 'Solicitação' },
     material: { color: 'border-amber-500', bg: 'bg-amber-500', icon: Package, label: 'Material' },
     parada: { color: 'border-purple-500', bg: 'bg-purple-500', icon: Calendar, label: 'Parada' },
   };
@@ -3047,7 +3047,6 @@ const AtivoDetailPage = () => {
               <SaudeItem label="Próxima Preventiva" data={saude?.proxima_preventiva} icon={Calendar} color="bg-purple-500" />
               <SaudeItem label="Última Lubrificação" data={saude?.ultima_lubrificacao} icon={Droplet} color="bg-amber-600" />
               <SaudeItem label="Última OS" data={saude?.ultima_os} icon={Wrench} color="bg-blue-600" />
-              <SaudeItem label="Última Anomalia" data={saude?.ultima_anomalia} icon={AlertTriangle} color="bg-red-600" />
               <div className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/30">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-600"><Clock size={14} className="text-white" /></div>
                 <div><p className="text-[10px] text-slate-500 uppercase">MTTR</p><p className="text-xs text-slate-300">{ativo.kpis?.mttr_horas || 0}h</p></div>
@@ -3148,7 +3147,6 @@ const AtivoDetailPage = () => {
               <option value="">Todos tipos</option>
               <option value="os">OS</option>
               <option value="inspecao">Inspeção</option>
-              <option value="anomalia">Anomalia</option>
               <option value="material">Material</option>
             </select>
             <select value={histFilters.status} onChange={e => { const f = {...histFilters, status: e.target.value}; setHistFilters(f); fetchHistorico(f); }} className="input-industrial px-3 text-sm">
@@ -6567,303 +6565,6 @@ const SolicitacaoServicoPage = () => {
 };
 
 
-// ============== ANOMALIAS PAGE ==============
-
-const ANOMALIA_STATUS = {
-  aberta: { label: 'Aberta', color: 'text-red-400 bg-red-500/10' },
-  em_analise: { label: 'Em Análise', color: 'text-amber-400 bg-amber-500/10' },
-  os_gerada: { label: 'OS Gerada', color: 'text-blue-400 bg-blue-500/10' },
-  aguardando_execucao: { label: 'Aguardando Execução', color: 'text-purple-400 bg-purple-500/10' },
-  resolvida: { label: 'Resolvida', color: 'text-emerald-400 bg-brand-10' },
-  encerrada: { label: 'Encerrada', color: 'text-slate-400 bg-slate-500/10' },
-};
-
-const AnomaliasPage = () => {
-  const [anomalias, setAnomalias] = useState([]);
-  const [ativos, setAtivos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ ativo_id: '', descricao: '', severidade: 'media', gerar_os: true });
-  const [saving, setSaving] = useState(false);
-  const [selected, setSelected] = useState(null); // anomalia detail
-  const [editMode, setEditMode] = useState(false);
-  const [editForm, setEditForm] = useState({});
-  const [comment, setComment] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const navigate = useNavigate();
-  const { user } = useAuth();
-
-  const fetchData = async () => {
-    try {
-      const [anomRes, ativosRes] = await Promise.all([api.get('/anomalias'), api.get('/ativos')]);
-      setAnomalias(anomRes.data);
-      setAtivos(ativosRes.data);
-    } catch { toast.error('Erro ao carregar'); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => { fetchData(); }, []);
-
-  const fetchDetail = async (id) => {
-    try {
-      const res = await api.get(`/anomalias/${id}`);
-      setSelected(res.data);
-    } catch { toast.error('Erro ao carregar detalhe'); }
-  };
-
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    if (!form.ativo_id || !form.descricao) { toast.error('Preencha ativo e descrição'); return; }
-    setSaving(true);
-    try {
-      const res = await api.post('/anomalias', form);
-      toast.success(`Anomalia criada!${res.data.os_gerada_id ? ' OS gerada automaticamente.' : ''}`);
-      setShowModal(false);
-      setForm({ ativo_id: '', descricao: '', severidade: 'media', gerar_os: true });
-      fetchData();
-    } catch (e) { toast.error(normalizeError(e)); }
-    finally { setSaving(false); }
-  };
-
-  const handleStatusChange = async (newStatus) => {
-    try {
-      await api.post(`/anomalias/${selected.id}/status`, { status: newStatus });
-      toast.success(`Status alterado para ${ANOMALIA_STATUS[newStatus]?.label}`);
-      fetchDetail(selected.id);
-      fetchData();
-    } catch (e) { toast.error(normalizeError(e)); }
-  };
-
-  const handleEdit = async () => {
-    try {
-      await api.put(`/anomalias/${selected.id}`, editForm);
-      toast.success('Anomalia atualizada!');
-      setEditMode(false);
-      fetchDetail(selected.id);
-      fetchData();
-    } catch (e) { toast.error(normalizeError(e)); }
-  };
-
-  const handleComment = async () => {
-    if (!comment.trim()) return;
-    try {
-      await api.post(`/anomalias/${selected.id}/comentarios`, { texto: comment });
-      setComment('');
-      fetchDetail(selected.id);
-    } catch (e) { toast.error(normalizeError(e)); }
-  };
-
-  const getNextStatuses = (current) => {
-    const map = {
-      aberta: ['em_analise'],
-      em_analise: ['os_gerada', 'resolvida'],
-      os_gerada: ['aguardando_execucao', 'resolvida'],
-      aguardando_execucao: ['resolvida'],
-      resolvida: ['encerrada'],
-    };
-    return map[current] || [];
-  };
-
-  const handleDelete = async () => {
-    if (!window.confirm('Excluir esta anomalia? Esta ação não pode ser desfeita.')) return;
-    try {
-      await api.delete(`/anomalias/${selected.id}`);
-      toast.success('Anomalia excluída');
-      setSelected(null);
-      fetchData();
-    } catch (e) { toast.error(normalizeError(e)); }
-  };
-
-  const handleReopen = async () => {
-    try {
-      await api.post(`/anomalias/${selected.id}/status`, { status: 'aberta' });
-      toast.success('Anomalia reaberta');
-      fetchDetail(selected.id);
-      fetchData();
-    } catch (e) { toast.error(normalizeError(e)); }
-  };
-
-  const filtered = anomalias.filter(a => !filterStatus || a.status === filterStatus);
-
-  // DETAIL VIEW
-  if (selected) return (
-    <div className="space-y-4" data-testid="anomalia-detail">
-      <div className="flex items-center gap-3">
-        <button onClick={() => setSelected(null)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg"><ArrowLeft size={20} className="text-slate-400" /></button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className={`text-xs px-2 py-0.5 rounded ${ANOMALIA_STATUS[selected.status]?.color || ''}`}>{ANOMALIA_STATUS[selected.status]?.label}</span>
-            <PriorityBadge priority={selected.severidade} />
-          </div>
-          <h1 className="text-lg font-bold text-slate-100 mt-1">Anomalia</h1>
-        </div>
-        {!editMode && selected.status !== 'encerrada' && user?.role !== 'tecnico' && (
-          <button onClick={() => { setEditMode(true); setEditForm({ descricao: selected.descricao, severidade: selected.severidade }); }} className="btn-secondary text-sm flex items-center gap-1" data-testid="edit-anomalia"><Edit size={14} /> Editar</button>
-        )}
-      </div>
-
-      {/* Ativo */}
-      {selected.ativo && (
-        <div className="glass-card p-4 cursor-pointer hover:border-slate-600" onClick={() => navigate(`/ativos/${selected.ativo_id}`)}>
-          {selected.ativo.sector && <p className="text-xs text-slate-500 uppercase">{selected.ativo.sector?.nome}</p>}
-          <span className="font-mono text-brand">{selected.ativo.tag}</span>
-          <span className="text-slate-300 ml-2">{selected.ativo.nome}</span>
-        </div>
-      )}
-
-      {/* Descrição (edit or view) */}
-      {editMode ? (
-        <div className="glass-card p-4 space-y-3">
-          <FormInput label="Descrição"><textarea value={editForm.descricao} onChange={e => setEditForm({...editForm, descricao: e.target.value})} className="input-industrial w-full px-4 py-3 min-h-[80px]" /></FormInput>
-          <FormInput label="Severidade"><Select value={editForm.severidade} onChange={v => setEditForm({...editForm, severidade: v})} options={[{value:'baixa',label:'Baixa'},{value:'media',label:'Média'},{value:'alta',label:'Alta'},{value:'critica',label:'Crítica'}]} /></FormInput>
-          <div className="flex gap-2 justify-end"><button onClick={() => setEditMode(false)} className="btn-secondary text-sm">Cancelar</button><button onClick={handleEdit} className="btn-primary text-sm" data-testid="save-anomalia-edit">Salvar</button></div>
-        </div>
-      ) : (
-        <div className="glass-card p-4">
-          <p className="text-slate-200 whitespace-pre-wrap">{selected.descricao}</p>
-          <p className="text-xs text-slate-500 mt-2">{new Date(selected.created_at).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</p>
-          {selected.data_encerramento && <p className="text-xs text-slate-500">Encerrada em: {new Date(selected.data_encerramento).toLocaleDateString('pt-BR')}</p>}
-        </div>
-      )}
-
-      {/* Status Actions */}
-      {selected.status !== 'encerrada' && (
-        <div className="flex gap-2 flex-wrap" data-testid="anomalia-actions">
-          {getNextStatuses(selected.status).map(ns => (
-            <button key={ns} onClick={() => handleStatusChange(ns)} className="btn-primary text-sm flex items-center gap-1" data-testid={`anomalia-status-${ns}`}>
-              {ANOMALIA_STATUS[ns]?.label}
-            </button>
-          ))}
-          {user?.role !== 'tecnico' && (
-            <button onClick={() => handleStatusChange('encerrada')} className="btn-secondary text-sm flex items-center gap-1 border-slate-500/30" data-testid="anomalia-encerrar">Encerrar</button>
-          )}
-        </div>
-      )}
-      {selected.status === 'encerrada' && user?.role !== 'tecnico' && (
-        <div className="flex gap-2" data-testid="anomalia-actions-closed">
-          <button onClick={handleReopen} className="btn-primary text-sm flex items-center gap-1" data-testid="anomalia-reabrir">
-            <RefreshCw size={14} /> Reabrir Anomalia
-          </button>
-        </div>
-      )}
-
-      {/* Excluir (admin/supervisor) */}
-      {user?.role !== 'tecnico' && (
-        <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-300 mt-2" data-testid="anomalia-excluir">
-          <Trash2 size={12} className="inline mr-1" /> Excluir anomalia
-        </button>
-      )}
-
-      {/* OS Gerada */}
-      {selected.os_gerada_id && (
-        <div className="glass-card p-3 border-blue-500/30 cursor-pointer" onClick={() => navigate(`/os/${selected.os_gerada_id}`)}>
-          <span className="text-xs text-blue-400">OS Gerada</span> <ChevronRight size={14} className="inline text-slate-500" />
-        </div>
-      )}
-
-      {/* Comentários */}
-      <div className="glass-card p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-slate-400">Comentários</h3>
-        {selected.comentarios?.length > 0 ? selected.comentarios.map(c => (
-          <div key={c.id} className="bg-slate-800/50 rounded-lg p-3">
-            <p className="text-sm text-slate-200">{c.texto}</p>
-            <p className="text-xs text-slate-500 mt-1">{c.usuario_nome || 'Usuário'} • {new Date(c.created_at).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>
-          </div>
-        )) : <p className="text-xs text-slate-600">Nenhum comentário</p>}
-        {selected.status !== 'encerrada' && (
-          <div className="flex gap-2">
-            <input value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleComment()} className="input-industrial flex-1 px-3 text-sm" placeholder="Adicionar comentário..." data-testid="anomalia-comment-input" />
-            <button onClick={handleComment} className="btn-primary text-sm px-3" data-testid="anomalia-comment-send">Enviar</button>
-          </div>
-        )}
-      </div>
-
-      {/* Histórico */}
-      {selected.historico?.length > 0 && (
-        <div className="glass-card p-4 space-y-2">
-          <h3 className="text-sm font-semibold text-slate-400">Histórico</h3>
-          {selected.historico.map(h => (
-            <div key={h.id} className="flex items-center gap-2 text-xs text-slate-500 py-1 border-b border-slate-800/30">
-              <Clock size={12} /> <span>{h.descricao}</span> <span className="ml-auto">{new Date(h.created_at).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <PhotoUploader entityType="anomaly" entityId={selected.id} label="Fotos do Problema" />
-    </div>
-  );
-
-  // LIST VIEW
-  return (
-    <div className="space-y-4" data-testid="anomalias-page">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Anomalias</h1>
-        <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-anomalia-btn"><Plus size={20} /> Reportar Anomalia</button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
-        <button onClick={() => setFilterStatus('')} className={`px-3 py-1.5 rounded-lg text-xs border ${!filterStatus ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'border-slate-700 text-slate-400'}`}>Todas ({anomalias.length})</button>
-        {Object.entries(ANOMALIA_STATUS).map(([k, v]) => {
-          const count = anomalias.filter(a => a.status === k).length;
-          return count > 0 ? (
-            <button key={k} onClick={() => setFilterStatus(k)} className={`px-3 py-1.5 rounded-lg text-xs border ${filterStatus === k ? `${v.color} border-current` : 'border-slate-700 text-slate-400'}`}>{v.label} ({count})</button>
-          ) : null;
-        })}
-      </div>
-
-      {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
-        <div className="space-y-2">
-          {filtered.map((a) => (
-            <div key={a.id} className="glass-card p-4 cursor-pointer hover:border-slate-600 transition-all" onClick={() => fetchDetail(a.id)} data-testid={`anomalia-card-${a.id}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  {a.ativo && (
-                    <div className="mb-1">
-                      {a.ativo.sector && <span className="text-[10px] text-slate-600 uppercase">{a.ativo.sector?.nome} • </span>}
-                      <span className="font-mono text-brand text-sm">{a.ativo.tag}</span>
-                      <span className="text-slate-400 text-xs ml-1">{a.ativo.nome}</span>
-                    </div>
-                  )}
-                  <p className="text-slate-100 text-sm line-clamp-1">{a.descricao}</p>
-                  <p className="text-xs text-slate-500 mt-1">{new Date(a.created_at).toLocaleDateString('pt-BR')}</p>
-                </div>
-                <div className="flex items-center gap-2 ml-3">
-                  <span className={`text-xs px-2 py-0.5 rounded whitespace-nowrap ${ANOMALIA_STATUS[a.status]?.color || ''}`}>{ANOMALIA_STATUS[a.status]?.label || a.status}</span>
-                  <PriorityBadge priority={a.severidade} />
-                  <ChevronRight className="text-slate-600" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : <EmptyState icon={AlertTriangle} title="Nenhuma anomalia" description="Reporte anomalias detectadas nos equipamentos." action={() => setShowModal(true)} actionLabel="Reportar" />}
-
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Reportar Anomalia" size="md">
-        <form onSubmit={handleCreate} className="space-y-4">
-          <FormInput label="Equipamento" required>
-            <Select value={form.ativo_id} onChange={(v) => setForm({...form, ativo_id: v})} options={ativos.map(a => ({value: a.id, label: `${a.sector?.nome || ''} • ${a.tag} - ${a.nome}`}))} placeholder="Selecione..." />
-          </FormInput>
-          <FormInput label="Descrição da Anomalia" required>
-            <textarea value={form.descricao} onChange={(e) => setForm({...form, descricao: e.target.value})} className="input-industrial w-full px-4 py-3 min-h-[100px]" placeholder="Descreva o problema encontrado..." required />
-          </FormInput>
-          <FormInput label="Severidade">
-            <Select value={form.severidade} onChange={(v) => setForm({...form, severidade: v})} options={[{value:'baixa',label:'Baixa'},{value:'media',label:'Média'},{value:'alta',label:'Alta'},{value:'critica',label:'Crítica'}]} />
-          </FormInput>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" checked={form.gerar_os} onChange={(e) => setForm({...form, gerar_os: e.target.checked})} className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-brand" />
-            <span className="text-slate-300">Gerar OS automaticamente</span>
-          </label>
-          <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
-            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
-            <button type="submit" disabled={saving} className="btn-primary" data-testid="submit-anomalia">{saving ? 'Criando...' : 'Reportar'}</button>
-          </div>
-        </form>
-      </Modal>
-    </div>
-  );
-};
-
 // ============== ASSISTENTE IA PAGE ==============
 
 const AssistentePage = () => {
@@ -8015,7 +7716,7 @@ const AuditoriaPage = () => {
     } catch { toast.error('Erro ao exportar'); }
   };
 
-  const modules = ['auth', 'ativos', 'ordens_servico', 'inspecoes', 'anomalias', 'estoque', 'sobressalentes', 'security'];
+  const modules = ['auth', 'ativos', 'ordens_servico', 'inspecoes', 'estoque', 'sobressalentes', 'security'];
   const actions = ['login', 'create', 'update', 'delete', 'status_change', 'access_denied', 'duplicate'];
   const actionColors = {
     login: 'text-blue-400 bg-blue-500/10', create: 'text-emerald-400 bg-brand-10',
@@ -8216,7 +7917,7 @@ const AdminUsuariosPage = () => {
             <p><span className="text-red-400">Admin</span>: Controle total</p>
             <p><span className="text-purple-400">Gerente</span>: Dashboard e relatórios (somente leitura)</p>
             <p><span className="text-blue-400">PCM</span>: Gerencia OS, estoque, relatórios, exporta dados</p>
-            <p><span className="text-brand">Técnico</span>: Preenche inspeções, abre anomalias</p>
+            <p><span className="text-brand">Técnico</span>: Preenche inspeções, solicita serviços</p>
           </div>
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
             <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
@@ -9768,15 +9469,12 @@ const MasterCleanupPage = () => {
   const cleanableItems = [
     { key: 'ordens_servico', label: 'Ordens de Serviço', icon: Wrench },
     { key: 'inspecoes', label: 'Inspeções', icon: ClipboardCheck },
-    { key: 'anomalias', label: 'Anomalias', icon: AlertTriangle },
     { key: 'paradas_programadas', label: 'Paradas Programadas', icon: Calendar },
     { key: 'audit_logs', label: 'Auditoria', icon: Shield },
     { key: 'notificacoes', label: 'Notificações', icon: Bell },
     { key: 'movimentacoes_estoque', label: 'Movimentações de Estoque', icon: Package },
     { key: 'attachments', label: 'Fotos e Uploads', icon: Image },
     { key: 'chat_history', label: 'Histórico de Chat', icon: FileText },
-    { key: 'anomalia_historico', label: 'Histórico de Anomalias', icon: Activity },
-    { key: 'anomalia_comentarios', label: 'Comentários de Anomalias', icon: FileText },
     { key: 'os_materiais', label: 'Materiais Utilizados em OS', icon: Package },
   ];
 
@@ -9893,7 +9591,7 @@ const MasterCleanupPage = () => {
         <div className="space-y-4">
           <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
             <p className="text-sm text-red-300 font-medium">Esta ação não poderá ser desfeita.</p>
-            <p className="text-xs text-red-400/80 mt-1">Todos os dados operacionais (OS, inspeções, anomalias, paradas, auditoria, fotos, notificações) serão permanentemente excluídos. Usuários, áreas, ativos, materiais e planos serão mantidos.</p>
+            <p className="text-xs text-red-400/80 mt-1">Todos os dados operacionais (OS, inspeções, paradas, auditoria, fotos, notificações) serão permanentemente excluídos. Usuários, áreas, ativos, materiais e planos serão mantidos.</p>
           </div>
           <FormInput label="Para confirmar, digite: PREPARAR PRODUCAO">
             <input value={confirmText} onChange={e => setConfirmText(e.target.value)} className="input-industrial w-full px-4" placeholder="PREPARAR PRODUCAO" data-testid="confirm-production-input" />
@@ -10085,7 +9783,7 @@ const TerminologiaTab = ({ config, onSave, saving }) => {
 const NumeracaoTab = ({ config, onSave, saving, onPreview, preview }) => {
   const [form, setForm] = useState(config?.numeracao || {});
   const [prefixo, setPrefixo] = useState(config?.preferencias?.prefixo_empresa || '');
-  const entidades = ['ordens_servico', 'inspecoes', 'anomalias', 'lubrificacoes', 'paradas_programadas'];
+  const entidades = ['ordens_servico', 'inspecoes', 'lubrificacoes', 'paradas_programadas'];
   
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { onPreview('ordens_servico', 'corretiva'); }, []);
@@ -10258,7 +9956,6 @@ function App() {
               <Route path="/scanner" element={<ProtectedRoute><AppLayout><ScannerPage /></AppLayout></ProtectedRoute>} />
               <Route path="/sobressalentes" element={<ProtectedRoute><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
               <Route path="/paradas" element={<ProtectedRoute><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/anomalias" element={<ProtectedRoute><AppLayout><AnomaliasPage /></AppLayout></ProtectedRoute>} />
               <Route path="/solicitar" element={<ProtectedRoute><AppLayout><SolicitacaoServicoPage /></AppLayout></ProtectedRoute>} />
               <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />

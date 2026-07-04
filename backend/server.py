@@ -1275,7 +1275,6 @@ async def get_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user))
             resp = await db.users.find_one({"id": os_v['responsavel_id']}, {"_id": 0, "nome": 1})
             os_v['responsavel_nome'] = resp.get('nome') if resp else None
     insp['os_vinculadas'] = os_vinculadas
-    # Anomalias vinculadas ao ativo (from this inspection period)
     # Histórico (audit log)
     insp['historico'] = await db.audit_logs.find(
         {"entity_type": "inspecoes", "entity_id": inspecao_id},
@@ -1582,7 +1581,7 @@ async def concluir_inspecao(
         ).to_list(10)
         for admin in admins:
             await criar_notificacao(
-                admin['id'], org_id, NotificacaoTipo.ANOMALIA,
+                admin['id'], org_id, NotificacaoTipo.INSPECAO_CONCLUIDA,
                 f"Falha detectada: {ativo.get('tag', '')}",
                 f"Inspeção não conforme - OS #{numero} gerada",
                 f"/os/{os_id}"
@@ -1806,15 +1805,12 @@ async def master_cleanup(
     cleanable = {
         "ordens_servico": db.ordens_servico,
         "inspecoes": db.inspecoes,
-        "anomalias": db.anomalias,
         "paradas_programadas": db.paradas_programadas,
         "audit_logs": db.audit_logs,
         "notificacoes": db.notificacoes,
         "movimentacoes_estoque": db.movimentacoes_estoque,
         "chat_history": db.chat_history,
         "attachments": db.attachments,
-        "anomalia_historico": db.anomalia_historico,
-        "anomalia_comentarios": db.anomalia_comentarios,
         "os_materiais": db.os_materiais,
     }
     
@@ -1845,19 +1841,18 @@ async def prepare_production(user: Dict = Depends(get_current_user)):
     org_filter = {"organization_id": org_id} if org_id else {}
     
     all_targets = [
-        "ordens_servico", "inspecoes", "anomalias", "paradas_programadas",
+        "ordens_servico", "inspecoes", "paradas_programadas",
         "audit_logs", "notificacoes", "movimentacoes_estoque", "chat_history",
-        "attachments", "anomalia_historico", "anomalia_comentarios", "os_materiais"
+        "attachments", "os_materiais"
     ]
     
     results = {}
     collections_map = {
         "ordens_servico": db.ordens_servico, "inspecoes": db.inspecoes,
-        "anomalias": db.anomalias, "paradas_programadas": db.paradas_programadas,
+        "paradas_programadas": db.paradas_programadas,
         "audit_logs": db.audit_logs, "notificacoes": db.notificacoes,
         "movimentacoes_estoque": db.movimentacoes_estoque, "chat_history": db.chat_history,
-        "attachments": db.attachments, "anomalia_historico": db.anomalia_historico,
-        "anomalia_comentarios": db.anomalia_comentarios, "os_materiais": db.os_materiais,
+        "attachments": db.attachments, "os_materiais": db.os_materiais,
     }
     
     for target in all_targets:
@@ -2908,7 +2903,7 @@ async def upload_attachment(
     file: UploadFile = File(...),
     user: Dict = Depends(get_current_user)
 ):
-    """Upload attachment for any entity (inspection, work_order, anomaly, spare_asset)"""
+    """Upload attachment for any entity (inspection, work_order, spare_asset)"""
     ext = Path(file.filename).suffix.lower()
     if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf']:
         raise HTTPException(status_code=400, detail="Tipo de arquivo não permitido")
@@ -3146,215 +3141,6 @@ async def create_spare_movement(data: SpareMovementCreate, user: Dict = Depends(
     await db.spare_assets.update_one({"id": data.spare_id}, {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}})
     
     return {"success": True, "new_status": new_status}
-
-# ============== ANOMALIAS ==============
-
-
-@api_router.get("/anomalias")
-async def list_anomalias(sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
-    query = {"deleted_at": None}
-    if user.get('organization_id'):
-        query['organization_id'] = user['organization_id']
-    
-    # Scope by sector
-    if sector_id:
-        asset_ids = await get_scoped_asset_ids(user.get('organization_id', ''), sector_id=sector_id)
-        if asset_ids is not None:
-            query['ativo_id'] = {"$in": asset_ids}
-    
-    anomalias = await db.anomalias.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    for a in anomalias:
-        ativo = await db.ativos.find_one({"id": a.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
-        if ativo and ativo.get('sector_id'):
-            sector = await db.sectors.find_one({"id": ativo['sector_id']}, {"_id": 0, "nome": 1})
-            ativo['sector'] = sector
-        a['ativo'] = ativo
-    return anomalias
-
-@api_router.post("/anomalias")
-async def create_anomalia(data: AnomaliaCreate, user: Dict = Depends(get_current_user)):
-    """Técnico pode abrir anomalia. Se gerar_os=True, cria OS automaticamente com prioridade inteligente."""
-    ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
-    if not ativo:
-        raise HTTPException(status_code=404, detail="Ativo não encontrado")
-    
-    org_id = ativo.get('organization_id', user.get('organization_id', ''))
-    
-    # PRIORIZAÇÃO INTELIGENTE: severidade anomalia × criticidade ativo
-    severidade_peso = {'baixa': 1, 'media': 2, 'alta': 3, 'critica': 4}
-    criticidade_peso = {'baixa': 1, 'media': 2, 'alta': 3, 'critica': 4}
-    score = severidade_peso.get(data.severidade, 2) * criticidade_peso.get(ativo.get('criticidade', 'media'), 2)
-    
-    prioridade_os = 'media'  # default
-    if score >= 12:
-        prioridade_os = 'critica'
-    elif score >= 6:
-        prioridade_os = 'alta'
-    elif score >= 3:
-        prioridade_os = 'media'
-    else:
-        prioridade_os = 'baixa'
-    
-    anomalia_id = str(uuid.uuid4())
-    anomalia_doc = {
-        "id": anomalia_id,
-        "ativo_id": data.ativo_id,
-        "descricao": data.descricao,
-        "severidade": data.severidade,
-        "prioridade_calculada": prioridade_os,
-        "score_prioridade": score,
-        "inspecao_id": data.inspecao_id,
-        "status": "aberta",
-        "os_gerada_id": None,
-        "reportado_por": user['id'],
-        "organization_id": org_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "deleted_at": None
-    }
-    
-    os_id = None
-    if data.gerar_os:
-        numero = await generate_os_numero(org_id)
-        os_id = str(uuid.uuid4())
-        os_doc = {
-            "id": os_id,
-            "numero": numero,
-            "ativo_id": data.ativo_id,
-            "organization_id": org_id,
-            "tipo": "corretiva",
-            "origem": "falha",
-            "prioridade": prioridade_os,
-            "titulo": f"Anomalia - {ativo.get('tag', '')}",
-            "descricao": data.descricao,
-            "status": "aberta",
-            "responsavel_id": None,
-            "equipe": [],
-            "data_abertura": datetime.now(timezone.utc).isoformat(),
-            "custo_pecas": 0, "custo_mao_obra": 0, "custo_total": 0,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-            "deleted_at": None
-        }
-        await db.ordens_servico.insert_one(os_doc)
-        anomalia_doc['os_gerada_id'] = os_id
-    
-    await db.anomalias.insert_one(anomalia_doc)
-    await audit_log("create", "anomalias", anomalia_doc.get('id',''), user, f"Anomalia: {ativo.get('tag','')}")
-    anomalia_doc.pop('_id', None)
-    return {**anomalia_doc, "os_gerada_id": os_id, "prioridade_os": prioridade_os}
-
-@api_router.get("/anomalias/{anomalia_id}")
-async def get_anomalia(anomalia_id: str, user: Dict = Depends(get_current_user)):
-    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None}, {"_id": 0})
-    if not a:
-        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
-    ativo = await db.ativos.find_one({"id": a.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
-    if ativo and ativo.get('sector_id'):
-        ativo['sector'] = await db.sectors.find_one({"id": ativo['sector_id']}, {"_id": 0, "nome": 1})
-    a['ativo'] = ativo
-    # Enrich actor names
-    for field in ['criado_por', 'resolvido_por', 'encerrado_por', 'alterado_por']:
-        uid = a.get(field)
-        if uid:
-            u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1})
-            a[f'{field}_nome'] = u.get('nome') if u else uid
-    a['comentarios'] = await db.anomalia_comentarios.find({"anomalia_id": anomalia_id}, {"_id": 0}).sort("created_at", 1).to_list(100)
-    # Resolve user names for comments
-    for c in a['comentarios']:
-        if c.get('usuario_id'):
-            u = await db.users.find_one({"id": c['usuario_id']}, {"_id": 0, "nome": 1})
-            c['usuario_nome'] = u.get('nome') if u else None
-    a['historico'] = await db.anomalia_historico.find({"anomalia_id": anomalia_id}, {"_id": 0}).sort("created_at", 1).to_list(100)
-    return a
-
-@api_router.put("/anomalias/{anomalia_id}")
-async def update_anomalia(anomalia_id: str, body: dict, user: Dict = Depends(get_current_user)):
-    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
-    if not a:
-        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
-    update = {"updated_at": datetime.now(timezone.utc).isoformat(), "alterado_por": user.get('id')}
-    for field in ['descricao', 'severidade']:
-        if field in body: update[field] = body[field]
-    await db.anomalias.update_one({"id": anomalia_id}, {"$set": update})
-    await audit_field_changes("anomalias", anomalia_id, f"Anomalia {a.get('descricao','')[:30]}", a, update, user)
-    await db.anomalia_historico.insert_one({
-        "id": str(uuid.uuid4()), "anomalia_id": anomalia_id,
-        "tipo": "edicao", "descricao": f"Anomalia editada por {user.get('nome', user.get('email'))}",
-        "usuario_id": user['id'], "created_at": datetime.now(timezone.utc).isoformat()
-    })
-    return await db.anomalias.find_one({"id": anomalia_id}, {"_id": 0})
-
-@api_router.post("/anomalias/{anomalia_id}/status")
-async def change_anomalia_status(anomalia_id: str, body: dict, user: Dict = Depends(get_current_user)):
-    """Workflow: aberta → em_analise → os_gerada → aguardando_execucao → resolvida → encerrada"""
-    VALID_TRANSITIONS = {
-        'aberta': ['em_analise', 'encerrada'],
-        'em_analise': ['os_gerada', 'resolvida', 'encerrada'],
-        'os_gerada': ['aguardando_execucao', 'resolvida', 'encerrada'],
-        'aguardando_execucao': ['resolvida', 'encerrada'],
-        'resolvida': ['encerrada'],
-        'encerrada': ['aberta'],  # reabrir
-    }
-    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
-    if not a:
-        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
-    new_status = body.get('status')
-    if not new_status:
-        raise HTTPException(status_code=400, detail="Status é obrigatório")
-    current = a.get('status', 'aberta')
-    if new_status not in VALID_TRANSITIONS.get(current, []):
-        raise HTTPException(status_code=400, detail=f"Transição inválida: {current} → {new_status}")
-    # Permission: encerrar e reabrir apenas supervisor/admin
-    if new_status in ['encerrada'] or (current == 'encerrada' and new_status == 'aberta'):
-        if user.get('role') not in ['admin', 'supervisor', 'pcm']:
-            raise HTTPException(status_code=403, detail="Apenas supervisor/admin pode encerrar ou reabrir")
-    update = {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}
-    if new_status == 'encerrada':
-        update['data_encerramento'] = datetime.now(timezone.utc).isoformat()
-        update['encerrado_por'] = user['id']
-    if new_status == 'aberta' and current == 'encerrada':
-        update['data_encerramento'] = None
-        update['encerrado_por'] = None
-    await db.anomalias.update_one({"id": anomalia_id}, {"$set": update})
-    descricao = f"Status: {current} → {new_status}"
-    if new_status == 'aberta' and current == 'encerrada':
-        descricao = f"Anomalia reaberta por {user.get('nome', user.get('email'))}"
-    await db.anomalia_historico.insert_one({
-        "id": str(uuid.uuid4()), "anomalia_id": anomalia_id,
-        "tipo": "status", "descricao": descricao,
-        "usuario_id": user['id'], "created_at": datetime.now(timezone.utc).isoformat()
-    })
-    return await db.anomalias.find_one({"id": anomalia_id}, {"_id": 0})
-
-@api_router.delete("/anomalias/{anomalia_id}")
-async def delete_anomalia(anomalia_id: str, user: Dict = Depends(get_current_user)):
-    """Soft delete anomalia (admin/supervisor only)"""
-    if user.get('role') not in ['admin', 'supervisor', 'pcm']:
-        raise HTTPException(status_code=403, detail="Sem permissão")
-    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
-    if not a:
-        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
-    await db.anomalias.update_one({"id": anomalia_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
-    return {"success": True}
-
-@api_router.post("/anomalias/{anomalia_id}/comentarios")
-async def add_anomalia_comment(anomalia_id: str, body: dict, user: Dict = Depends(get_current_user)):
-    a = await db.anomalias.find_one({"id": anomalia_id, "deleted_at": None})
-    if not a:
-        raise HTTPException(status_code=404, detail="Anomalia não encontrada")
-    texto = body.get('texto', '').strip()
-    if not texto:
-        raise HTTPException(status_code=400, detail="Comentário vazio")
-    doc = {
-        "id": str(uuid.uuid4()), "anomalia_id": anomalia_id,
-        "texto": texto, "usuario_id": user['id'],
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.anomalia_comentarios.insert_one(doc)
-    doc.pop('_id', None)
-    u = await db.users.find_one({"id": user['id']}, {"_id": 0, "nome": 1})
-    doc['usuario_nome'] = u.get('nome') if u else None
-    return doc
 
 # ============== KNOWLEDGE BASE (ESTRUTURA) ==============
 
