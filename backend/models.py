@@ -130,7 +130,6 @@ class NotificacaoTipo(str, Enum):
     INSPECAO_CONCLUIDA = "inspecao_concluida"
     ESTOQUE_CRITICO = "estoque_critico"
     ATIVO_PARADO = "ativo_parado"
-    ANOMALIA = "anomalia"
 
 
 # ============== MODELS ==============
@@ -444,13 +443,6 @@ class SpareMovementCreate(BaseModel):
     motivo: Optional[str] = None
     os_id: Optional[str] = None
     custo_unitario: Optional[float] = None
-
-class AnomaliaCreate(BaseModel):
-    ativo_id: str
-    descricao: str
-    severidade: str = "media"
-    inspecao_id: Optional[str] = None
-    gerar_os: bool = True
 
 class KnowledgeBaseCreate(BaseModel):
     tipo_equipamento: str

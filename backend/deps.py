@@ -168,10 +168,6 @@ PERMISSIONS = {
     'areas.criar':           ['master', 'admin'],
     'unidades.gerenciar':    ['master', 'admin'],
     
-    # === ANOMALIAS (legacy) ===
-    'anomalias.visualizar':  ['master', 'admin', 'pcm', 'supervisor', 'gerente'] + ROLE_GROUPS['execucao'],
-    'anomalias.criar':       ['master', 'admin', 'pcm', 'supervisor'] + ROLE_GROUPS['execucao'],
-    
     # === QR / PORTAL ===
     'qr.escanear':           ROLE_GROUPS['todos_menos_visualizador'],
     'portal.tecnico':        ROLE_GROUPS['todos_menos_visualizador'],

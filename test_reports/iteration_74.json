@@ -1,0 +1,38 @@
+{
+  "summary": "Validated the complete removal of the Anomalias module and the cosmetic RBAC role-label fix. Backend: 12/12 pytest cases pass (GET/POST/GET-by-id on /api/anomalias all return 404; no user's /api/auth/permissions matrix contains any 'anomalia*' permission for master, tec_mec, gerente, operador; core endpoints /api/dashboard/stats, /api/ordens-servico, /api/ativos, /api/inspecoes all still 200). Frontend Playwright: (a) master sidebar shows exactly the 11 required items (Central de Trabalho, Dashboard, Equipe, Ativos, Ordens de Serviço, Inspeções, Unidades, Áreas, Estoque, Sobressalentes, Paradas) and NO 'Anomalias'; (b) direct URL /anomalias no longer renders any anomalia UI (falls back to Central de Trabalho); (c) tec_mec sidebar bottom shows 'Técnico Mecânico' (raw 'tec_mecanico' absent) and 'Solicitar Serviço' is visible; (d) gerente sidebar shows role label 'Gerente' with NO Anomalias and NO Solicitar Serviço; (e) master dashboard loads with OS/Inspeções/Ativos counts and /os route renders OS list; (f) operador has 'Solicitar Serviço' and clicking it opens the asset-selection solicitation form.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_anomalia_removal.py",
+    "/app/test_reports/pytest/iteration74.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "App.js:1717 inlines a role-label dict {master:'Master', ...} directly inside JSX. This duplicates the roleLabels map that already exists elsewhere in the file (App.js ~8154). Extract to a single top-level const ROLE_LABELS (or import from shared config) to prevent future drift when new roles are added.",
+    "org_config.py still contains 'anomalia' as a labeled entity type (line 27) and a full 'anomalias' entry in the entities map (line 96). While no /api/anomalias endpoints remain, these config-time references and the 'anomalias' entry in data_architecture.py:154 may still cause stale UI labels or unused DB schema hints. Consider fully purging.",
+    "data_architecture.py:154 declares an 'anomalias' collection entry that will never be populated now that endpoints are removed — if any migration or seed logic references it, it would silently do nothing. Recommend removing to keep the collection catalog in sync with reality.",
+    "GET /anomalias in the browser silently redirects to '/' instead of rendering a 404/NotFound view. From a UX/observability standpoint a real Not Found page would be preferable so bookmarks/old links surface clearly. Backend correctly returns 404 for the /api path."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_anomalia_removal.py",
+    "/app/test_reports/pytest/iteration74.xml",
+    "/app/test_reports/iteration_74.json"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 pytest)",
+    "frontend": "100% (6/6 Playwright scenarios: master no-Anomalias, /anomalias route neutralized, tec_mec role label + Solicitar, gerente role label + no Anomalia/no Solicitar, master dashboard+OS regression, operador Solicitar Serviço flow)"
+  },
+  "test_credentials": "master@maintrix.com/master123, test.mec@maintrix.com/tec123, test.gerente@maintrix.com/ger123, test.operador@maintrix.com/op123 — all verified via /api/auth/login (200) and via UI login through ASTEC org. Login endpoint /api/auth/login accepts {email,password} without requiring org_id.",
+  "seed_data_creation": "None. All tests are read-only or hit removed routes expected to 404.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Anomalia module removal + role label fix fully verified. Reusable pytest suite lives at /app/backend/tests/test_anomalia_removal.py (12 tests, 3s runtime). The remaining stale references to 'anomalia' in org_config.py and data_architecture.py are cosmetic/config-only and do NOT expose any HTTP endpoint. When new roles are added, they must be added to BOTH the inline map at App.js:1717 AND the roleLabels map near App.js:8154 — consolidating these is the top follow-up recommendation.",
+  "rca_of_the_issue": "N/A — no failures."
+}
