@@ -42,6 +42,13 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Role labels cosméticos**: Sidebar mostra "Técnico Mecânico" ao invés de `tec_mecanico`
 - **Testing**: Backend 12/12 pytest ✅ | Frontend 6/6 Playwright ✅
 
+### AUDITORIA RC-01 ✅ (2026-07-04)
+- **Relatório completo**: `/app/memory/AUDIT_RC01.md`
+- **Resultado**: 6 P0 (CRITICAL) + 7 P1 (HIGH) + 4 P2 (MEDIUM) = 17 issues
+- **Causa raiz principal**: Desconexão entre roles especializados (tec_mecanico, etc.) e RBAC legado que só referencia 'tecnico'
+- **Maior risco**: 2 bugs de segurança (endpoint diagnóstico público + token reset vazado)
+- **Testing**: 9 pytest + 8 Playwright confirmando os bugs
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
