@@ -76,6 +76,15 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Testing**: 14/14 pytest ✅ (100%)
 - **Status piloto ASTEC: APROVADO**
 
+### RC-05 — Teste de Casos Extremos (Edge Cases) ✅ (2026-07-06)
+- **Relatório completo**: `/app/memory/RC05_EDGE_CASES.md`
+- **38 edge cases testados**: autenticação, upload, concorrência, QR, multiempresa, workflow, banco, segurança
+- **3 bugs encontrados e corrigidos**:
+  - 🔴 OS concluída podia ser reiniciada (iniciar_os sem validação de status)
+  - 🔴 Race condition: dois técnicos concluíam mesma OS (update atômico com filtro)
+  - 🟡 Pausar OS fora de execução era aceito
+- **Taxa final: 100%**
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa

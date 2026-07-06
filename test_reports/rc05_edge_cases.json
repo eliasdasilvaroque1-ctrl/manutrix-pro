@@ -1,0 +1,294 @@
+{
+  "total": 38,
+  "pass": 35,
+  "fail": 3,
+  "rate": "92.1%",
+  "results": [
+    {
+      "cat": "AUTH",
+      "test": "Login usuário desativado",
+      "status": "PASS",
+      "detail": "status=401 detail={\"detail\":\"Credenciais inválidas\"}",
+      "sev": ""
+    },
+    {
+      "cat": "AUTH",
+      "test": "Login senha errada",
+      "status": "PASS",
+      "detail": "status=401",
+      "sev": ""
+    },
+    {
+      "cat": "AUTH",
+      "test": "Login email inexistente",
+      "status": "PASS",
+      "detail": "status=401",
+      "sev": ""
+    },
+    {
+      "cat": "AUTH",
+      "test": "Token inválido",
+      "status": "PASS",
+      "detail": "status=401",
+      "sev": ""
+    },
+    {
+      "cat": "AUTH",
+      "test": "Token vazio",
+      "status": "PASS",
+      "detail": "status=403",
+      "sev": ""
+    },
+    {
+      "cat": "AUTH",
+      "test": "Sem header Auth",
+      "status": "PASS",
+      "detail": "status=403",
+      "sev": ""
+    },
+    {
+      "cat": "AUTH",
+      "test": "Dupla sessão (dois tokens)",
+      "status": "PASS",
+      "detail": "t1=200 t2=200",
+      "sev": ""
+    },
+    {
+      "cat": "AUTH",
+      "test": "Troca senha com current errada",
+      "status": "PASS",
+      "detail": "status=400",
+      "sev": ""
+    },
+    {
+      "cat": "AUTH",
+      "test": "Senha nova muito curta (<6)",
+      "status": "PASS",
+      "detail": "status=400",
+      "sev": ""
+    },
+    {
+      "cat": "UPLOAD",
+      "test": "Arquivo .exe bloqueado",
+      "status": "PASS",
+      "detail": "status=400 detail={\"detail\":\"Tipo de arquivo não permitido\"}",
+      "sev": ""
+    },
+    {
+      "cat": "UPLOAD",
+      "test": "Arquivo vazio (0 bytes)",
+      "status": "PASS",
+      "detail": "status=200",
+      "sev": ""
+    },
+    {
+      "cat": "UPLOAD",
+      "test": "PDF fake (conteúdo inválido)",
+      "status": "PASS",
+      "detail": "status=200",
+      "sev": "🟡"
+    },
+    {
+      "cat": "UPLOAD",
+      "test": "Parse-text vazio",
+      "status": "PASS",
+      "detail": "status=400 perguntas=N/A",
+      "sev": ""
+    },
+    {
+      "cat": "UPLOAD",
+      "test": "Parse-text caracteres especiais",
+      "status": "PASS",
+      "detail": "status=200",
+      "sev": ""
+    },
+    {
+      "cat": "CONCORR",
+      "test": "Dois técnicos concluem mesma OS",
+      "status": "FAIL",
+      "detail": "tec1=200 tec2=200 (ambos 200 = race condition)",
+      "sev": "🟡"
+    },
+    {
+      "cat": "CONCORR",
+      "test": "Dois usuários editam mesmo plano",
+      "status": "PASS",
+      "detail": "pcm=200 master=200 (last-write-wins, sem lock)",
+      "sev": ""
+    },
+    {
+      "cat": "QR",
+      "test": "QR ativo inexistente",
+      "status": "PASS",
+      "detail": "status=404",
+      "sev": ""
+    },
+    {
+      "cat": "QR",
+      "test": "QR formato inválido",
+      "status": "PASS",
+      "detail": "status=404",
+      "sev": ""
+    },
+    {
+      "cat": "QR",
+      "test": "QR ativo excluído (soft-delete)",
+      "status": "PASS",
+      "detail": "status=404",
+      "sev": ""
+    },
+    {
+      "cat": "MULTI",
+      "test": "Org isolamento (master org=9a232bf2, other=6ac926b2)",
+      "status": "PASS",
+      "detail": "56 ativos visíveis para master, 3 outras orgs",
+      "sev": ""
+    },
+    {
+      "cat": "MULTI",
+      "test": "Admin users scoped to org",
+      "status": "PASS",
+      "detail": "total=24 own_org=24",
+      "sev": ""
+    },
+    {
+      "cat": "MULTI",
+      "test": "Export audit (org-scoped)",
+      "status": "PASS",
+      "detail": "status=200 size=35335B",
+      "sev": ""
+    },
+    {
+      "cat": "WORKFLOW",
+      "test": "Cancelar OS concluída",
+      "status": "PASS",
+      "detail": "status=400 detail={\"detail\":\"Status inválido. Use: solicitada, em_analise, aguardando_aprovacao, aguardando_material, ",
+      "sev": ""
+    },
+    {
+      "cat": "WORKFLOW",
+      "test": "Aprovar OS não-pendente (aberta)",
+      "status": "PASS",
+      "detail": "status=400",
+      "sev": ""
+    },
+    {
+      "cat": "WORKFLOW",
+      "test": "Iniciar OS concluída",
+      "status": "PASS",
+      "detail": "status=200",
+      "sev": "🟡"
+    },
+    {
+      "cat": "WORKFLOW",
+      "test": "Concluir OS não em_execucao",
+      "status": "PASS",
+      "detail": "status=400",
+      "sev": ""
+    },
+    {
+      "cat": "WORKFLOW",
+      "test": "Excluir ativo com OS abertas",
+      "status": "PASS",
+      "detail": "status=200",
+      "sev": "🟡"
+    },
+    {
+      "cat": "WORKFLOW",
+      "test": "Excluir plano (pode ter vínculo)",
+      "status": "PASS",
+      "detail": "status=200",
+      "sev": ""
+    },
+    {
+      "cat": "WORKFLOW",
+      "test": "Duplicar template inspeção",
+      "status": "PASS",
+      "detail": "status=200",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "OS com campos nulos",
+      "status": "PASS",
+      "detail": "status=422",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "Inspeção com data inválida",
+      "status": "PASS",
+      "detail": "status=422",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "HH negativo (-5h)",
+      "status": "PASS",
+      "detail": "status=400 detail={\"detail\":\"Informe as horas ou datas de início/fim\"}",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "Estoque quantidade negativa",
+      "status": "PASS",
+      "detail": "status=422",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "Movimentação > estoque disponível",
+      "status": "PASS",
+      "detail": "status=400 detail={\"detail\":\"Quantidade insuficiente em estoque\"}",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "String muito longa (10K + 50K chars)",
+      "status": "FAIL",
+      "detail": "status=404",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "OS com ativo_id inexistente",
+      "status": "PASS",
+      "detail": "status=404",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "NoSQL injection login",
+      "status": "PASS",
+      "detail": "status=422",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "XSS em campo texto (stored)",
+      "status": "FAIL",
+      "detail": "status=404 (aceita mas frontend deve sanitizar)",
+      "sev": ""
+    }
+  ],
+  "bugs": [
+    {
+      "cat": "CONCORR",
+      "test": "Dois técnicos concluem mesma OS",
+      "detail": "tec1=200 tec2=200 (ambos 200 = race condition)",
+      "sev": "🟡"
+    },
+    {
+      "cat": "DB",
+      "test": "String muito longa (10K + 50K chars)",
+      "detail": "status=404",
+      "sev": ""
+    },
+    {
+      "cat": "DB",
+      "test": "XSS em campo texto (stored)",
+      "detail": "status=404 (aceita mas frontend deve sanitizar)",
+      "sev": ""
+    }
+  ]
+}

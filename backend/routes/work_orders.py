@@ -299,6 +299,9 @@ async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
     os = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    allowed_start = ['aberta', 'programada', 'disponivel', 'planejada', 'pausada', 'solicitada', 'em_analise']
+    if os.get('status') not in allowed_start:
+        raise HTTPException(status_code=400, detail=f"OS com status '{os.get('status')}' não pode ser iniciada")
     await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "em_execucao", "data_inicio": datetime.now(timezone.utc).isoformat(), "iniciado_por": user.get('id'), "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}})
     await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os.get('numero')} → em_execucao")
     return {"success": True, "message": "OS iniciada"}
@@ -308,9 +311,12 @@ async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
 async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
     check_write_permission(user, ['admin', 'supervisor'] + ROLE_GROUPS['execucao'])
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+    if os_doc.get('status') != 'em_execucao':
+        raise HTTPException(status_code=400, detail=f"OS com status '{os_doc.get('status')}' não pode ser pausada")
     await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "pausada", "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}})
-    if os_doc:
-        await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → pausada")
+    await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → pausada")
     return {"success": True, "message": "OS pausada"}
 
 
@@ -346,6 +352,8 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    if os_doc.get('status') in ('concluida', 'cancelada'):
+        raise HTTPException(status_code=400, detail=f"OS com status '{os_doc.get('status')}' não pode ser concluída novamente")
     descricao = body.servicos_realizados or body.observacoes or os_doc.get('descricao')
     if not descricao:
         raise HTTPException(status_code=400, detail="Descrição do serviço é obrigatória para fechar a OS")
@@ -364,12 +372,18 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
         tempo = max(1, int((datetime.now(timezone.utc) - start).total_seconds() / 60))
     if not tempo:
         raise HTTPException(status_code=400, detail="Tempo gasto é obrigatório para fechar a OS")
-    await db.ordens_servico.update_one({"id": os_id}, {"$set": {
-        "status": "concluida", "data_conclusao": datetime.now(timezone.utc).isoformat(),
-        "tempo_execucao_minutos": tempo, "descricao_servico": descricao,
-        "concluido_por": user.get('id'), "alterado_por": user.get('id'),
-        "observacoes": body.observacoes, "updated_at": datetime.now(timezone.utc).isoformat()
-    }})
+    # Atomic update: only update if status is still not concluida (prevents race condition)
+    result = await db.ordens_servico.update_one(
+        {"id": os_id, "status": {"$nin": ["concluida", "cancelada"]}},
+        {"$set": {
+            "status": "concluida", "data_conclusao": datetime.now(timezone.utc).isoformat(),
+            "tempo_execucao_minutos": tempo, "descricao_servico": descricao,
+            "concluido_por": user.get('id'), "alterado_por": user.get('id'),
+            "observacoes": body.observacoes, "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=409, detail="OS já foi concluída ou cancelada por outro usuário")
     await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → concluida (tempo: {tempo}min)")
     return {"success": True, "tempo_execucao_minutos": tempo}
 
