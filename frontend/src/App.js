@@ -7979,10 +7979,24 @@ const ExportButtons = ({ entity }) => {
 
 // ============== LAYOUT ==============
 
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, allow }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Cog size={48} className="text-brand animate-spin" /></div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (allow && !allow.includes(user.role)) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]" data-testid="access-restricted">
+          <div className="glass-card p-8 text-center max-w-md">
+            <Shield size={48} className="text-red-400 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-slate-100 mb-2">Acesso Restrito</h2>
+            <p className="text-slate-400 text-sm mb-4">Seu perfil ({ROLE_LABELS[user.role] || user.role}) não possui permissão para acessar esta página.</p>
+            <button onClick={() => window.history.back()} className="btn-primary text-sm">Voltar</button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
   return children;
 };
 
@@ -9961,17 +9975,17 @@ function App() {
               <Route path="/paradas" element={<ProtectedRoute><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
               <Route path="/solicitar" element={<ProtectedRoute><AppLayout><SolicitacaoServicoPage /></AppLayout></ProtectedRoute>} />
               <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/usuarios" element={<ProtectedRoute><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/templates" element={<ProtectedRoute><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/auditoria" element={<ProtectedRoute><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/usuarios" element={<ProtectedRoute allow={['master','admin']}><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/templates" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/auditoria" element={<ProtectedRoute allow={['master','admin','gerente','supervisor']}><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
               <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
               <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/unidades" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/config" element={<ProtectedRoute><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/equipe" element={<ProtectedRoute><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
-              <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/master/white-label" element={<ProtectedRoute><AppLayout><WhiteLabelDesignerPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/master/cleanup" element={<ProtectedRoute><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/unidades" element={<ProtectedRoute allow={['master','admin']}><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/config" element={<ProtectedRoute allow={['master','admin']}><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/equipe" element={<ProtectedRoute allow={['master','admin','pcm','supervisor']}><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
+              <Route path="/biblioteca" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/master/white-label" element={<ProtectedRoute allow={['master']}><AppLayout><WhiteLabelDesignerPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/master/cleanup" element={<ProtectedRoute allow={['master']}><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
               <Route path="/portal/equipamento/:id" element={<PortalPublicoPage />} />
               <Route path="/portal/tecnico/:id" element={<ProtectedRoute><AppLayout><PortalTecnicoPage /></AppLayout></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />

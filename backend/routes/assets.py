@@ -7,7 +7,8 @@ import uuid
 
 from deps import (
     db, get_current_user, check_admin_only, check_pcm_or_admin, check_write_permission,
-    audit_log, criar_notificacao, generate_tag, verify_org_access, audit_field_changes
+    audit_log, criar_notificacao, generate_tag, verify_org_access, audit_field_changes,
+    ROLE_GROUPS
 )
 from models import (
     SectorCreate, SectorUpdate, AtivoCreate, AtivoUpdate, AtivoMaterialCreate,
@@ -105,6 +106,13 @@ async def list_ativos(
         query['organization_id'] = user['organization_id']
     if sector_id:
         query['sector_id'] = sector_id
+
+    # Visibility: operador/técnicos see only assets in their areas
+    role = user.get('role', '')
+    if role in ROLE_GROUPS['operacional'] and not sector_id:
+        area_ids = user.get('area_ids') or []
+        if area_ids:
+            query['sector_id'] = {"$in": area_ids}
 
     ativos = await db.ativos.find(query, {"_id": 0}).sort("tag", 1).to_list(1000)
 

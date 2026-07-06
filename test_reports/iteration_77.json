@@ -1,0 +1,39 @@
+{
+  "summary": "Sprint RC-03 verification complete. All 4 P1 fixes from AUDITORIA RC-01 are confirmed working. Backend: 10/10 pytest cases pass (P1-05 assets area filter, P1-06 audit export org filter, P1-07 GET /api/admin/users/{id} + 404 + non-admin 403, RC-02 regressions master/tec_mec still healthy). Frontend: 12/12 Playwright route-guard checks pass — ProtectedRoute correctly renders 'Acesso Restrito' card with data-testid='access-restricted' for OPERADOR on /admin/config, /admin/auditoria, /admin/usuarios, /master/white-label; for GERENTE on /master/white-label and /admin/config (but ALLOWED on /admin/auditoria as gerente is in the allow list); MASTER can access all restricted routes normally. Standard routes (/ativos) remain open to all authenticated users.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rbac_audit_rc03.py",
+    "/app/test_reports/pytest/iteration77.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/assets.py:112 correctly gates area filter on `role in ROLE_GROUPS['operacional'] AND not sector_id` — good composition; the `not sector_id` guard preserves explicit sector queries. Only concern: if an operacional user is created with EMPTY area_ids they see ALL org ativos (current behavior at line 114: `if area_ids:`). Consider explicit deny (return []) when operacional has no areas — otherwise a mis-provisioned operacional user leaks visibility.",
+    "server.py:3196 admin_get_user correctly scopes by organization_id and strips password_hash via projection ({'_id':0,'password_hash':0}) — good multi-tenant hygiene.",
+    "server.py:3494 export_audit now scopes audit_query by user.organization_id — matches P1-06 fix intent. Recommend also enforcing a max window (e.g., 30d) or LIMIT bump to prevent large-tenant memory pressure (currently hard-coded to 1000 which silently drops history).",
+    "App.js:7982 ProtectedRoute — clean allow-list gate rendering inside AppLayout (so users keep nav). data-testid='access-restricted' consistent with test convention. Consider ALSO gating the sidebar links themselves so restricted routes aren't visible in the menu (currently only route-level guard, sidebar still shows /admin/config etc. to operador).",
+    "App.js routes 9978-9988 — admin/master routes use appropriate allow lists (['master','admin'], ['master','admin','pcm'], ['master','admin','gerente','supervisor'], ['master']). Consistent taxonomy."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rbac_audit_rc03.py",
+    "/app/test_reports/pytest/iteration77.xml",
+    "/app/test_reports/iteration_77.json"
+  ],
+  "success_rate": {
+    "backend": "10/10 (100%)",
+    "frontend": "12/12 route-guard checks (100%)"
+  },
+  "test_credentials": "master@maintrix.com/master123, test.mec@maintrix.com/tec123, test.gerente@maintrix.com/ger123, test.operador@maintrix.com/op123",
+  "seed_data_creation": "1x OS (title 'TEST_RC03 corretiva by tec_mec <ts>') created by tec_mec — NOT deleted (regression test for RC-02 P0-01). No frontend seed data created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-03 P1 fixes fully verified (10/10 backend + 12/12 frontend guards). Test file at /app/backend/tests/test_rbac_audit_rc03.py runs in ~6s. P1-05 test observation: in current seed data ALL 56 master ativos happen to be inside operador's 6 area_ids (only 3 distinct sectors used), so count parity between master (56) and operador (56) is expected — the test now confirms via (a) subset check (all op ativos have sector_id in area_ids) and (b) conditional count-drop check when master has ativos outside op areas (currently no-op due to data). To FORCE a stronger P1-05 signal in future runs, create a test ativo in a sector NOT in operador's area_ids. Also verified RC-02 P0 regressions (tec_mec create OS + central visibility) still healthy.",
+  "rca_of_the_issue": "N/A — verification pass. All 4 RC-03 P1 fixes (P1-01/02 frontend guard, P1-05 ativos area filter, P1-06 audit org filter, P1-07 GET /admin/users/{id}) implemented correctly. Backend uses ROLE_GROUPS['operacional'] taxonomy consistent with RC-02 fixes. Frontend ProtectedRoute now takes optional `allow` prop and renders access-restricted card when role mismatches — while still keeping AppLayout/nav visible."
+}

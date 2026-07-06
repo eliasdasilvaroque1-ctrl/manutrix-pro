@@ -3193,6 +3193,17 @@ async def admin_list_users(user: Dict = Depends(get_current_user)):
         query['organization_id'] = user['organization_id']
     return await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(200)
 
+@api_router.get("/admin/users/{user_id}")
+async def admin_get_user(user_id: str, user: Dict = Depends(get_current_user)):
+    check_admin_only(user)
+    query = {"id": user_id, "deleted_at": None}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    target = await db.users.find_one(query, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    return target
+
 @api_router.post("/admin/users")
 async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
@@ -3478,7 +3489,10 @@ async def get_audit_stats(user: Dict = Depends(get_current_user)):
 async def export_audit(format: str = "excel", user: Dict = Depends(get_current_user)):
     if user.get('role') not in ['master', 'admin', 'gerente', 'pcm', 'supervisor']:
         raise HTTPException(status_code=403, detail="Sem permissão")
-    logs = await db.audit_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    audit_query = {}
+    if user.get('organization_id'):
+        audit_query['organization_id'] = user['organization_id']
+    logs = await db.audit_logs.find(audit_query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     if format == "excel":
         import openpyxl
         wb = openpyxl.Workbook()
