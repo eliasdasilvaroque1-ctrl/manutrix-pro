@@ -60,6 +60,13 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **P1-04 FIXED**: HH manual permitido para técnicos especializados
 - **Testing**: Backend 14/14 pytest ✅ (100%)
 
+### Sprint RC-03 — Correção P1s da Auditoria ✅ (2026-07-06)
+- **P1-01/02 FIXED**: `ProtectedRoute` com prop `allow` — rotas admin/master bloqueadas para roles não autorizados. Operador em `/admin/config` vê "Acesso Restrito" ao invés do formulário editável
+- **P1-05 FIXED**: `GET /api/ativos` filtra por `area_ids` para roles operacionais (técnicos, operadores)
+- **P1-06 FIXED**: `GET /api/export/audit` filtra por `organization_id` — não mais vaza dados entre orgs
+- **P1-07 FIXED**: `GET /api/admin/users/{id}` implementado com scoping multi-tenant
+- **Testing**: Backend 10/10 pytest ✅ | Frontend 12/12 Playwright ✅
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
