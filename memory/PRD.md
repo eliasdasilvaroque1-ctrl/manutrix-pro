@@ -67,6 +67,15 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **P1-07 FIXED**: `GET /api/admin/users/{id}` implementado com scoping multi-tenant
 - **Testing**: Backend 10/10 pytest ✅ | Frontend 12/12 Playwright ✅
 
+### RC-04 — Homologação Operacional ASTEC ✅ (2026-07-06)
+- **Relatório completo**: `/app/memory/RC04_HOMOLOGACAO.md`
+- **90 fluxos testados** por 8 perfis: Master, Gerente, Supervisor, PCM, Tec Mecânico, Tec Elétrico, Operador, Visualizador
+- **2 bugs críticos encontrados e corrigidos**:
+  - `check_write_permission` bloqueava gerente antes de verificar allowed_roles (impedia aprovação de OS)
+  - Cálculo automático de tempo retornava 0 para execuções < 1min (impedia conclusão de OS)
+- **Testing**: 14/14 pytest ✅ (100%)
+- **Status piloto ASTEC: APROVADO**
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
