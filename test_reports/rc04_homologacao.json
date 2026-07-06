@@ -1,0 +1,814 @@
+{
+  "total": 90,
+  "pass": 78,
+  "fail": 12,
+  "success_rate": "86.7%",
+  "results": [
+    {
+      "flow": "MASTER",
+      "test": "Login",
+      "status": "PASS",
+      "detail": "",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "GET /auth/me",
+      "status": "PASS",
+      "detail": "status=200 role=master",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "GET /auth/permissions",
+      "status": "PASS",
+      "detail": "43 permissions",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Empresas (public/organizations)",
+      "status": "PASS",
+      "detail": "4 orgs",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "White Label (master/organizations)",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Usuários (admin/users)",
+      "status": "PASS",
+      "detail": "24 users",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "GET /admin/users/{id}",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Auditoria (audit-logs)",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Configurações (org/config)",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Export Excel ativos",
+      "status": "PASS",
+      "detail": "status=200 size=7805B",
+      "file": "server.py export/ativos",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Export Excel ordens-servico",
+      "status": "PASS",
+      "detail": "status=200 size=8734B",
+      "file": "server.py export/ordens-servico",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Export Excel estoque",
+      "status": "PASS",
+      "detail": "status=200 size=6605B",
+      "file": "server.py export/estoque",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Export Excel inspecoes",
+      "status": "PASS",
+      "detail": "status=200 size=7184B",
+      "file": "server.py export/inspecoes",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Export Excel sobressalentes",
+      "status": "PASS",
+      "detail": "status=200 size=5827B",
+      "file": "server.py export/sobressalentes",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Export Excel audit",
+      "status": "PASS",
+      "detail": "status=200 size=33517B",
+      "file": "server.py export/audit",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Export PDF ativos",
+      "status": "PASS",
+      "detail": "status=200 size=7494B",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Export PDF ordens-servico",
+      "status": "PASS",
+      "detail": "status=200 size=6329B",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Export PDF inspecoes",
+      "status": "PASS",
+      "detail": "status=200 size=6223B",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Ativos (list)",
+      "status": "PASS",
+      "detail": "56 ativos",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Portal Público (public/ativo)",
+      "status": "FAIL",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Dashboard stats",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "MASTER",
+      "test": "Admin actions (limpeza)",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Login",
+      "status": "PASS",
+      "detail": "",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Dashboard stats",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Consulta ativos",
+      "status": "PASS",
+      "detail": "56 ativos",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Consulta OS",
+      "status": "PASS",
+      "detail": "42 OS",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Consulta Inspeções",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Auditoria",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Aprovar OS",
+      "status": "FAIL",
+      "detail": "status=403 detail={\"detail\":\"Perfil Gerente possui apenas acesso de leitura para esta operação\"}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Criar OS (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "routes/work_orders.py check_not_gerente",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Admin users (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "SUPERVISOR",
+      "test": "Login",
+      "status": "PASS",
+      "detail": "",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "SUPERVISOR",
+      "test": "Criar OS",
+      "status": "PASS",
+      "detail": "status=200 os_id=d4327d0d-6aea-4863-a2e1-e405970eb7b4",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "SUPERVISOR",
+      "test": "Consultar backlog OS",
+      "status": "PASS",
+      "detail": "43 OS",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "SUPERVISOR",
+      "test": "Consultar equipe (tecnicos)",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "SUPERVISOR",
+      "test": "Consultar ativos",
+      "status": "PASS",
+      "detail": "56 ativos",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "SUPERVISOR",
+      "test": "Consultar inspeções",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "SUPERVISOR",
+      "test": "Dashboard stats",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "Login",
+      "status": "PASS",
+      "detail": "",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "1. Cadastrar Ativo",
+      "status": "FAIL",
+      "detail": "status=404 id=None",
+      "file": "routes/assets.py POST /ativos",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "2. Cadastrar Material",
+      "status": "FAIL",
+      "detail": "status=422",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "3. Importar Plano (parse-text)",
+      "status": "PASS",
+      "detail": "status=200 perguntas=4",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "4. Criar Template Inspeção",
+      "status": "FAIL",
+      "detail": "status=422",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "5. Criar Plano de Inspeção",
+      "status": "PASS",
+      "detail": "status=200 detail={\"id\":\"71b61723-b3dd-42fe-8f7a-a4f286944a08\",\"organization_id\":\"9a232bf2-fc01-4253-813f-8df356be31c1\",\"nome\":\"HOM Plano Bomba Mensal\",\"tipo\":\"preventi",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "6. Criar Inspeção",
+      "status": "FAIL",
+      "detail": "status=400 detail={\"detail\":\"Plano 'HOM Plano Bomba Mensal' não está aprovado. Status atual: rascunho. Solicite aprovação ao PCM.\"}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "9. Gerar OS",
+      "status": "PASS",
+      "detail": "status=200 detail={\"id\":\"51d71aeb-9313-4300-a97a-88ae02e28a0d\",\"numero\":\"2026-00048\",\"ativo_id\":\"5af42d90-4654-4067-b67d-92d7e7f6f78d\",\"organization_id\":\"9a232bf2-fc01-",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "10. Planejar OS",
+      "status": "PASS",
+      "detail": "status=200 detail={\"success\":true,\"new_status\":\"programada\"}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "12. Liberar OS (disponivel)",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "13. Iniciar OS (em_execucao)",
+      "status": "FAIL",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "14. Concluir OS",
+      "status": "FAIL",
+      "detail": "status=403 detail={\"detail\":\"Sem permissão para esta operação\"}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "Export Excel ativos",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "Export Excel ordens-servico",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "Export Excel estoque",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "Export Excel inspecoes",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_MEC",
+      "test": "Login",
+      "status": "PASS",
+      "detail": "",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_MEC",
+      "test": "Minha Jornada (central)",
+      "status": "PASS",
+      "detail": "role=tec_mecanico vencidas=3",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_MEC",
+      "test": "Abrir OS",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_MEC",
+      "test": "Executar OS (iniciar)",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_MEC",
+      "test": "Lançar HH",
+      "status": "PASS",
+      "detail": "status=200 detail={\"success\":true,\"minutos\":120.0}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_MEC",
+      "test": "Concluir OS",
+      "status": "FAIL",
+      "detail": "status=400 detail={\"detail\":\"Tempo gasto é obrigatório para fechar a OS\"}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_MEC",
+      "test": "Admin users (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_MEC",
+      "test": "Master orgs (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_ELE",
+      "test": "Login",
+      "status": "PASS",
+      "detail": "",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_ELE",
+      "test": "Minha Jornada (central)",
+      "status": "PASS",
+      "detail": "role=tec_eletrico vencidas=3",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_ELE",
+      "test": "Abrir OS",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_ELE",
+      "test": "Executar OS",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_ELE",
+      "test": "Concluir OS",
+      "status": "FAIL",
+      "detail": "status=400",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_ELE",
+      "test": "Admin users (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "OPERADOR",
+      "test": "Login",
+      "status": "PASS",
+      "detail": "",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "OPERADOR",
+      "test": "Solicitação de Serviço",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "OPERADOR",
+      "test": "Portal Público",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "OPERADOR",
+      "test": "Aprovar OS (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "OPERADOR",
+      "test": "Criar Plano (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "OPERADOR",
+      "test": "Criar Ativo (deve ser 403)",
+      "status": "FAIL",
+      "detail": "status=422",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "OPERADOR",
+      "test": "Admin users (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "OPERADOR",
+      "test": "Exportar (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "VISUALIZADOR",
+      "test": "Login",
+      "status": "PASS",
+      "detail": "",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "VISUALIZADOR",
+      "test": "Consultar ativos",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "VISUALIZADOR",
+      "test": "Consultar OS",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "VISUALIZADOR",
+      "test": "Consultar inspeções",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "VISUALIZADOR",
+      "test": "Criar OS (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "VISUALIZADOR",
+      "test": "Criar Ativo (deve ser 403)",
+      "status": "FAIL",
+      "detail": "status=422",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "VISUALIZADOR",
+      "test": "Criar Estoque (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "VISUALIZADOR",
+      "test": "Exportar (deve ser 403)",
+      "status": "PASS",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TRANSVERSAL",
+      "test": "Recuperação de senha (sem token leak)",
+      "status": "PASS",
+      "detail": "status=200 has_token=False",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TRANSVERSAL",
+      "test": "Duplicar Template Inspeção",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TRANSVERSAL",
+      "test": "Estoque (listar)",
+      "status": "PASS",
+      "detail": "27 itens",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TRANSVERSAL",
+      "test": "Sobressalentes (listar)",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TRANSVERSAL",
+      "test": "Paradas programadas",
+      "status": "PASS",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TRANSVERSAL",
+      "test": "OS statuses presentes",
+      "status": "PASS",
+      "detail": "statuses={'aguardando_aprovacao', 'solicitada', 'em_execucao', 'em_analise', 'disponivel', 'concluida', 'planejada', 'aberta', 'cancelada', 'programada'}",
+      "file": "",
+      "fix": ""
+    }
+  ],
+  "bugs": [
+    {
+      "flow": "MASTER",
+      "test": "Portal Público (public/ativo)",
+      "detail": "status=200",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "GERENTE",
+      "test": "Aprovar OS",
+      "detail": "status=403 detail={\"detail\":\"Perfil Gerente possui apenas acesso de leitura para esta operação\"}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "1. Cadastrar Ativo",
+      "detail": "status=404 id=None",
+      "file": "routes/assets.py POST /ativos",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "2. Cadastrar Material",
+      "detail": "status=422",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "4. Criar Template Inspeção",
+      "detail": "status=422",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "6. Criar Inspeção",
+      "detail": "status=400 detail={\"detail\":\"Plano 'HOM Plano Bomba Mensal' não está aprovado. Status atual: rascunho. Solicite aprovação ao PCM.\"}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "13. Iniciar OS (em_execucao)",
+      "detail": "status=403",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "PCM",
+      "test": "14. Concluir OS",
+      "detail": "status=403 detail={\"detail\":\"Sem permissão para esta operação\"}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_MEC",
+      "test": "Concluir OS",
+      "detail": "status=400 detail={\"detail\":\"Tempo gasto é obrigatório para fechar a OS\"}",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "TEC_ELE",
+      "test": "Concluir OS",
+      "detail": "status=400",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "OPERADOR",
+      "test": "Criar Ativo (deve ser 403)",
+      "detail": "status=422",
+      "file": "",
+      "fix": ""
+    },
+    {
+      "flow": "VISUALIZADOR",
+      "test": "Criar Ativo (deve ser 403)",
+      "detail": "status=422",
+      "file": "",
+      "fix": ""
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "summary": "RC-04 P0 fix verification complete. All 14/14 pytest cases pass. FIX 1 (Gerente approval) confirmed: gerente logs in, PCM creates high-cost OS (custo_total=13000 > default 10000 → aprovacao.necessaria=True), PCM POST /ordens-servico/{id}/enviar-aprovacao transitions to aguardando_aprovacao, then POST /aprovar with {decisao:'aprovada'} by gerente returns 200 and aprovacao.status='aprovada', status='programada', aprovador=gerente_id. FIX 1 regression: gerente still 403 on POST /ordens-servico and POST /ativos (deps.py:229-242 correctly returns True only when role explicitly in allowed_roles; falls through to gerente-block otherwise). FIX 2 (Concluir tempo auto-calc) confirmed: tec_mec creates+iniciar+immediately concluir with no tempo_execucao_minutos → 200 with tempo>=1 (max(1, int(elapsed))). FIX 2 explicit tempo: 120 → persisted as 120. Regressions all green: master (dashboard/ativos/OS/export/admin_users all 200), pcm (create OS + export excel 200; iniciar OS correctly 403 since PCM not in ROLE_GROUPS['execucao']), operador (create solicitacao 200, aprovar 403, admin/users 403), visualizador (temp user created via /admin/users, GET ativos+OS 200, POST OS+estoque both 403, teardown deletes user).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rc04_fixes.py",
+    "/app/test_reports/pytest/iteration78.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "deps.py:229-242 check_write_permission — fix is correct: admin/master short-circuit, then explicit allowed_roles check, then gerente/visualizador blocks. Order matters and is now correct. Consider unit-testing this helper directly with parametrize (gerente in allow-list vs not, visualizador in allow-list vs not) to prevent future regressions from re-ordering.",
+    "routes/work_orders.py:361-366 concluir_os — `if tempo is None and data_inicio:` correctly distinguishes 'not provided' from '0'; max(1, int(...)) prevents the `0-is-falsy` trap for <1min durations. However line 365 `if not tempo:` still uses `not tempo` — if OS has no data_inicio AND tempo not provided, this still 400s ('Tempo gasto é obrigatório'). That is intentional (can't fabricate tempo from thin air) but worth documenting. Also: if a user explicitly passes tempo_execucao_minutos=0 the code still 400s (falsy) — probably desired behavior, but consider explicit `if tempo is None: raise 400` for clarity.",
+    "routes/work_orders.py:184-254 create_os — approval logic triggers on `tipo in tipos_aprovacao OR custo_total >= limite_custo(default 10000)`. Note: status remains 'programada' after PCM create; only /enviar-aprovacao transitions to 'aguardando_aprovacao'. Frontend should surface this two-step flow clearly to PCM users, otherwise the 'aprovacao.necessaria=True' flag on a 'programada' OS is invisible to gerentes browsing OS list.",
+    "routes/work_orders.py:540 aprovar_os — verify_org_access is called AFTER check_write_permission which is correct; allowed_roles=['admin','master','gerente'] is aligned with the fix. Consider adding audit_denial log for 403 attempts on this endpoint (currently silent 403).",
+    "server.py:428-430 create_estoque uses check_write_permission(user, ['admin','pcm']) — visualizador correctly 403; test confirms.",
+    "routes/assets.py:189 create_ativo uses check_pcm_or_admin — this bypasses the check_write_permission code path entirely. Gerente gets 403 with detail 'Apenas Admin ou PCM podem realizar esta operação' (different message than the check_write_permission path). Test only asserts status=403 which passes. Consider unifying via check_write_permission(user, ['admin','master','pcm']) for consistent error messages and future maintainability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rc04_fixes.py",
+    "/app/test_reports/pytest/iteration78.xml",
+    "/app/test_reports/iteration_78.json"
+  ],
+  "success_rate": {
+    "backend": "14/14 (100%)",
+    "frontend": "n/a (backend-only run)"
+  },
+  "test_credentials": "master@maintrix.com/master123, test.gerente@maintrix.com/ger123, test.pcm@maintrix.com/pcm123, test.mec@maintrix.com/tec123, test.operador@maintrix.com/op123 (+ temp visualizador test.rc04.viewer.<uuid>@maintrix.com/viewer123 auto-created & auto-deleted)",
+  "seed_data_creation": "Test data (all prefixed 'TEST_RC04'): 1 aprovada OS (gerente flow), 2 concluida OS (tempo tests), 1 pcm OS with export, 1 pcm OS that failed to iniciar (still in programada), 1 operador solicitacao. Temp visualizador user is created & deleted within the same test class. Non-visualizador OS data intentionally NOT deleted (regression data for future runs, all easily identifiable by 'TEST_RC04' title prefix).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-04 both P0 fixes (gerente approval + concluir auto-tempo) fully verified via /app/backend/tests/test_rc04_fixes.py (14 tests, ~8s). The previous RC-04 script (test_rc04_homologacao.py) had 12 'failures' but most were payload/data-shape issues in that script, not real bugs — see rc04_homologacao.json bugs list. Real bugs remaining (from that older script, NOT re-tested here since main agent said only RC-04 fixes + regressions): (a) Portal Público returned status=200 but was marked FAIL in old script (likely test bug), (b) PCM Cadastrar Ativo/Material 422 (payload issue in old script), (c) PCM 'Criar Inspeção' blocked because parent plano is 'rascunho' — expected business rule, (d) OPERADOR/VISUALIZADOR 'Criar Ativo' returned 422 instead of 403 because payload missing required fields → main agent may want to add explicit RBAC check BEFORE pydantic validation in POST /ativos so denied roles get 403 not 422. Approval flow tip: POST /ordens-servico with custo_total>=10000 or tipo in workflow.tipos_que_precisam_aprovacao sets aprovacao.necessaria=True, but status is still 'programada' — must POST /enviar-aprovacao to move to 'aguardando_aprovacao' before /aprovar works.",
+  "rca_of_the_issue": "RCA (already fixed by main agent, re-verified here): (1) deps.py:229 old check_write_permission blocked gerente BEFORE checking allowed_roles — so even endpoints that explicitly whitelisted 'gerente' (like /ordens-servico/{id}/aprovar) rejected gerente. Fix reordered: admin/master short-circuit → allowed_roles check → gerente/visualizador blocks → default deny. Reproduction: POST /aprovar as gerente returned 403 with 'Perfil Gerente possui apenas acesso de leitura para esta operação'. After fix: returns 200 with aprovacao.status='aprovada'. (2) work_orders.py:361 old code used `int(elapsed_seconds/60)` which yields 0 for <60s; `if not tempo` treated 0 as missing and raised 400. Fix: `tempo is None` gate + `max(1, int(...))` floor. Reproduction: iniciar OS then immediately concluir with no tempo → 400 'Tempo gasto é obrigatório'. After fix: 200 with tempo_execucao_minutos>=1."
+}

@@ -228,14 +228,17 @@ def is_master(user: Dict) -> bool:
 
 def check_write_permission(user: Dict, allowed_roles: list = None):
     role = user.get('role', '')
+    # Always allow admin/master
+    if role in ('admin', 'master'):
+        return True
+    # Check explicit allow-list FIRST (before generic blocks)
+    if allowed_roles and role in allowed_roles:
+        return True
+    # Generic blocks for read-only roles
     if role == 'visualizador':
         raise HTTPException(status_code=403, detail="Perfil Visualizador possui apenas acesso de leitura")
     if role == 'gerente':
         raise HTTPException(status_code=403, detail="Perfil Gerente possui apenas acesso de leitura para esta operação")
-    if role in ('admin', 'master'):
-        return True
-    if allowed_roles and role in allowed_roles:
-        return True
     raise HTTPException(status_code=403, detail="Sem permissão para esta operação")
 
 def check_admin_only(user: Dict):

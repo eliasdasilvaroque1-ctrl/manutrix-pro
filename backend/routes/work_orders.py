@@ -359,9 +359,9 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
             if attachments == 0:
                 raise HTTPException(status_code=400, detail="OS corretiva exige pelo menos uma foto/evidência anexada. Adicione fotos antes de concluir.")
     tempo = body.tempo_execucao_minutos
-    if not tempo and os_doc.get('data_inicio'):
+    if tempo is None and os_doc.get('data_inicio'):
         start = datetime.fromisoformat(os_doc['data_inicio'].replace('Z', '+00:00'))
-        tempo = int((datetime.now(timezone.utc) - start).total_seconds() / 60)
+        tempo = max(1, int((datetime.now(timezone.utc) - start).total_seconds() / 60))
     if not tempo:
         raise HTTPException(status_code=400, detail="Tempo gasto é obrigatório para fechar a OS")
     await db.ordens_servico.update_one({"id": os_id}, {"$set": {
