@@ -96,51 +96,26 @@ app.include_router(central_router, prefix="/api")
 
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
-    existing = await db.users.find_one({"email": user_data.email, "deleted_at": None})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email já cadastrado")
-    
-    org_id = user_data.organization_id
-    if not org_id and user_data.role == UserRole.ADMIN:
-        org = Organization(nome=f"Org de {user_data.nome}")
-        org_doc = org.model_dump()
-        org_doc['created_at'] = org_doc['created_at'].isoformat()
-        await db.organizations.insert_one(org_doc)
-        org_id = org.id
-    
-    user_id = str(uuid.uuid4())
-    user_doc = {
-        "id": user_id,
-        "email": user_data.email,
-        "nome": user_data.nome,
-        "role": user_data.role.value,
-        "organization_id": org_id,
-        "telefone": user_data.telefone,
-        "disciplina_principal": user_data.disciplina_principal,
-        "disciplinas_secundarias": user_data.disciplinas_secundarias or [],
-        "turno": user_data.turno,
-        "unidade_ids": user_data.unidade_ids or [],
-        "area_ids": user_data.area_ids or [],
-        "password_hash": hash_password(user_data.password),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "deleted_at": None
-    }
-    await db.users.insert_one(user_doc)
-    
-    token = create_token(user_id, user_data.role.value, org_id or "")
-    return TokenResponse(
-        access_token=token,
-        user={"id": user_id, "email": user_data.email, "nome": user_data.nome, "role": user_data.role.value, "organization_id": org_id}
-    )
+    """Self-registration is DISABLED in multi-tenant mode.
+    Users must be created by an admin via POST /api/admin/users."""
+    raise HTTPException(status_code=403, detail="Registro direto desabilitado. Contate o administrador da sua organização.")
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
     email = credentials.email.lower().strip()
     
-    # MongoDB is the SINGLE SOURCE OF TRUTH for authentication
-    user = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0})
+    # Build query with organization scope
+    query = {"email": email, "deleted_at": None}
+    if credentials.organization_id:
+        query["organization_id"] = credentials.organization_id
+    
+    user = await db.users.find_one(query, {"_id": 0})
     if not user or not verify_password(credentials.password, user.get('password_hash', '')):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
+    
+    # Validate organization context
+    if credentials.organization_id and user.get('organization_id') != credentials.organization_id:
+        raise HTTPException(status_code=401, detail="Usuário não pertence a esta organização")
     
     token = create_token(user['id'], user.get('role', 'tecnico'), user.get('organization_id', ''))
     await audit_log("login", "auth", user['id'], user, f"Login: {email}")
@@ -182,24 +157,22 @@ async def get_my_permissions(user: Dict = Depends(get_current_user)):
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest):
-    """Send password reset - via Supabase or local token"""
+    """Send password reset - scoped to organization"""
     email = data.email.lower().strip()
     
-    if supabase_client:
-        try:
-            supabase_client.auth.reset_password_for_email(email)
-            return {"success": True, "message": "Link de redefinição enviado para seu email", "method": "supabase"}
-        except Exception as e:
-            logger.warning(f"Supabase reset failed: {e}")
+    # Build query with organization scope
+    query = {"email": email, "deleted_at": None}
+    if data.organization_id:
+        query["organization_id"] = data.organization_id
     
-    # Fallback: local token
-    user = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0})
+    user = await db.users.find_one(query, {"_id": 0})
     if not user:
         return {"success": True, "message": "Se o email existir, um link de redefinição será gerado"}
     
     token = secrets.token_urlsafe(32)
     await db.password_reset_tokens.insert_one({
         "token": token, "user_id": user['id'], "email": email,
+        "organization_id": user.get('organization_id', ''),
         "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
         "used": False, "created_at": datetime.now(timezone.utc).isoformat()
     })

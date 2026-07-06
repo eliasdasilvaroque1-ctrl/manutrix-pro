@@ -1836,7 +1836,7 @@ const LoginPage = () => {
     if (!orgId) { toast.error('Selecione uma empresa'); return; }
     setLoading(true);
     try {
-      const response = await axios.post(`${API}/auth/login`, { email, password });
+      const response = await axios.post(`${API}/auth/login`, { email, password, organization_id: orgId });
       if (response.data.user?.force_password_change) {
         setTempToken(response.data.access_token);
         setView('forceChange');
@@ -1857,7 +1857,7 @@ const LoginPage = () => {
     if (!email) { toast.error('Informe seu email'); return; }
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/auth/forgot-password`, { email });
+      const res = await axios.post(`${API}/auth/forgot-password`, { email, organization_id: orgId });
       setResetToken(res.data.token || '');
       setView('reset');
       toast.success(res.data.message || 'Token de redefinição gerado!');

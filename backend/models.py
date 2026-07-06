@@ -152,6 +152,7 @@ class UserCreate(UserBase):
 class UserLogin(BaseModel):
     email: str
     password: str
+    organization_id: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -384,6 +385,7 @@ class MovimentacaoEstoque(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: str
+    organization_id: Optional[str] = None
 
 class ResetPasswordRequest(BaseModel):
     token: str

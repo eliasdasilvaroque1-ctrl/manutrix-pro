@@ -1,0 +1,51 @@
+{
+  "summary": "RC-08 Auditoria Multiempresa — FULL PASS (16/16 backend + GUI regression). Backend: (1) POST /api/auth/login with matching organization_id → 200 + token; with WRONG org → 401 'Credenciais inválidas'; without org (backward compat) → 200 OK; wrong password → 401. (2) POST /api/auth/register → 403 'Registro direto desabilitado' regardless of payload (both filled and empty). (3) POST /api/auth/forgot-password with correct org → success; with WRONG org → same generic 'Se o email existir…' message (no user existence leak); unknown email → same generic response. (4) JWT decoded manually — contains 'org' claim equal to user's organization_id. (5) GET /api/ativos, /api/ordens-servico all return only docs where organization_id == master's org (ASTEC 9a232bf2…). (6) GET /api/export/ativos returns 200 with non-empty body (org-scoped). (7) POST /api/admin/users WITHOUT organization_id → user is created with admin's org automatically. (8) GET /api/public/ativo/{id} for an ASTEC ativo returns a 'branding' block carrying the org's cor_primaria/logo. Frontend GUI: on /login the empresa-input → 'ASTEC' → click org-option workflow was captured; login POST payload was intercepted and confirmed to carry organization_id=9a232bf2…; redirect to / succeeded, 'Login realizado!' toast appeared, sidebar renders 'ASTEC Cedro' branding and full master menu (Central de Trabalho, Dashboard, Equipe, Ativos, Ordens de Serviço, Inspeções, Unidades, Áreas, Estoque, Sobressalentes, Paradas, Biblioteca, Usuários, Planos de Inspeção, Auditoria, Configurações). Forgot-password flow also intercepted — POST body includes organization_id.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "rc08_verification_matrix": {
+    "P0-01_login_correct_org_200": "PASS",
+    "P0-01_login_wrong_org_401": "PASS",
+    "P0-01_login_no_org_backward_compat_200": "PASS",
+    "P0-01_login_wrong_password_401": "PASS",
+    "P0-02_register_returns_403": "PASS",
+    "P0-02_register_empty_payload_403_or_422": "PASS",
+    "P0-03_forgot_password_correct_org_success": "PASS",
+    "P0-03_forgot_password_wrong_org_generic_message": "PASS",
+    "P0-03_forgot_password_unknown_email_generic": "PASS",
+    "JWT_contains_org_claim": "PASS (org == 9a232bf2-fc01-4253-813f-8df356be31c1)",
+    "ativos_org_scoped": "PASS (all docs have organization_id == ASTEC)",
+    "ordens_servico_org_scoped": "PASS",
+    "export_ativos_org_scoped": "PASS (200, non-empty)",
+    "no_auth_ativos_returns_401_or_403": "PASS",
+    "admin_create_user_inherits_admin_org": "PASS (created user org == admin org, user cleaned up)",
+    "public_ativo_returns_org_branding": "PASS (branding block with cor_primaria present)",
+    "gui_login_sends_organization_id": "PASS (payload: {email, password, organization_id})",
+    "gui_forgot_sends_organization_id": "PASS (payload: {email, organization_id})",
+    "gui_login_redirects_to_root_and_dashboard_loads": "PASS (URL=/, 'Login realizado!' toast, ASTEC branding in sidebar)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rc08_multitenant.py",
+    "/app/test_reports/pytest/iteration82.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py login (line 103-131): The org validation is correctly enforced twice — query filters by organization_id when provided AND explicit assertion at line 117 rejects mismatches. Backward compat (no org_id) still works because email is globally unique in the users collection. Good defense-in-depth.",
+    "server.py register (line 97-101): Cleanly returns 403 with meaningful Portuguese message. Consider removing the response_model=TokenResponse decorator since it never returns a token (cosmetic only).",
+    "server.py forgot-password (line 158-180): Correctly returns identical generic message for both 'no user' and 'wrong org' paths, preventing user enumeration across orgs. Reset token stored with organization_id for later scoping — good.",
+    "models.py UserLogin/ForgotPasswordRequest: organization_id is Optional[str] — appropriate for backward compat + phased rollout.",
+    "Frontend App.js login/forgot handlers correctly send organization_id from the empresa-input selection.",
+    "MINOR (non-blocking): The backward-compat login without org_id opens a small window where a cross-tenant email collision (if introduced later) could shadow-login into the wrong tenant. Recommend a follow-up unique index on (email, organization_id) instead of (email), and eventually deprecate the no-org branch."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rc08_multitenant.py",
+    "/app/test_reports/iteration_82.json",
+    "/app/test_reports/pytest/iteration82.xml"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% (login + forgot flow verified, both send organization_id)"},
+  "test_credentials": "master@maintrix.com/master123 used against ASTEC Cedro org_id=9a232bf2-fc01-4253-813f-8df356be31c1. Ephemeral 'TEST_rc08_user@example.com' was created via /api/admin/users and DELETED in the same test. No persistent test data.",
+  "seed_data_creation": "None persistent — TEST_rc08_user@example.com created and deleted within the test_admin_create_user_inherits_org test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-08 multi-tenant audit is closed. Login/Register/Forgot-password all respect organization_id. JWT carries 'org' claim. All read APIs (/ativos, /ordens-servico, /export/ativos) are org-scoped. Admin user creation auto-inherits admin org. Public QR endpoint returns branding sourced from the ativo's org. Backward-compat login without org still works (see minor comment). Suggested follow-ups: (a) unique index on (email, organization_id) to enable true multi-tenant email reuse; (b) deprecate the no-org login branch once the frontend is proven to always send it.",
+  "rca_of_the_issue": "N/A — no defects. All P0 fixes verified."
+}
