@@ -308,7 +308,7 @@ async def admin_update_user(user_id: str, data: dict, user: Dict = Depends(get_c
     if not target:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     
-    allowed_fields = {'nome', 'email', 'role', 'telefone', 'active', 'disciplina_principal', 'disciplinas_secundarias', 'turno', 'unidade_ids', 'area_ids'}
+    allowed_fields = {'nome', 'email', 'role', 'telefone', 'active', 'disciplina_principal', 'disciplinas_secundarias', 'turno', 'unidade_ids', 'area_ids', 'force_password_change'}
     update_data = {k: v for k, v in data.items() if k in allowed_fields and v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     

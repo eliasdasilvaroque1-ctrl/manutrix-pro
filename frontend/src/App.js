@@ -3702,9 +3702,11 @@ const OSPage = () => {
               <List size={14} className="inline mr-1" />Lista
             </button>
           </div>
+          {user?.role !== 'visualizador' && user?.role !== 'gerente' && (
           <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-os-btn">
             <Plus size={20} /> Nova OS
           </button>
+          )}
         </div>
       </div>
       
@@ -4875,9 +4877,11 @@ const InspecoesPage = () => {
           <h1 className="text-2xl font-bold text-slate-100">Inspeções</h1>
           <ExportButtons entity="inspecoes" />
         </div>
+        {user?.role !== 'visualizador' && user?.role !== 'gerente' && (
         <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-inspecao-btn">
           <Plus size={20} /> Nova Inspeção
         </button>
+        )}
       </div>
 
       {/* I1: Filtro por status + I2: Filtro por área */}
@@ -9973,7 +9977,7 @@ function App() {
               <Route path="/scanner" element={<ProtectedRoute><AppLayout><ScannerPage /></AppLayout></ProtectedRoute>} />
               <Route path="/sobressalentes" element={<ProtectedRoute><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
               <Route path="/paradas" element={<ProtectedRoute><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/solicitar" element={<ProtectedRoute><AppLayout><SolicitacaoServicoPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/solicitar" element={<ProtectedRoute allow={['master','admin','pcm','supervisor','tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor','operador']}><AppLayout><SolicitacaoServicoPage /></AppLayout></ProtectedRoute>} />
               <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/usuarios" element={<ProtectedRoute allow={['master','admin']}><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/templates" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />

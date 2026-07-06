@@ -85,6 +85,17 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
   - 🟡 Pausar OS fora de execução era aceito
 - **Taxa final: 100%**
 
+### RC-06 — Validação E2E via Interface Gráfica ✅ (2026-07-06)
+- **Relatório completo**: `/app/memory/RC06_E2E_GUI.md`
+- **9 perfis testados via Playwright**: Master, Gerente, Supervisor, PCM, Tec Mecânico, Tec Elétrico, Lubrificador, Operador, Visualizador
+- **76 steps E2E** — login, navegação sidebar, RBAC, formulários, exportação, logout
+- **4 bugs corrigidos**:
+  - 🔴 "Nova OS" e "Nova Inspeção" visíveis para Visualizador (ocultados)
+  - 🔴 /solicitar acessível para Visualizador (allow prop adicionado)
+  - 🟡 `force_password_change` não editável via admin (campo adicionado)
+- **6 observações UX** documentadas (nenhuma bloqueante)
+- **Performance**: Todas as telas <2s, nenhuma >3s
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
