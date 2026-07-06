@@ -105,6 +105,16 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Redirect pós-login**: `/consulta` para Visualizador, `/` para demais
 - **Testing**: Backend 7/7 pytest ✅ | Frontend 100% Playwright ✅ | Regressão Master/Operador OK
 
+### RC-08 — Auditoria Multiempresa ✅ (2026-07-06)
+- **P0-01 FIXED**: Login agora aceita e valida `organization_id` — org errada retorna 401
+- **P0-02 FIXED**: Register público BLOQUEADO (403) — só admin pode criar usuários
+- **P0-03 FIXED**: Forgot-password agora aceita `organization_id` e filtra por org (previne enumeração)
+- **Frontend**: Envia `organization_id` no login e forgot-password
+- **JWT**: Contém claim `org` com organization_id do usuário
+- **Cross-org**: Ativos, OS, export todos scoped por organization_id
+- **QR Code**: Portal público retorna branding da organização correta
+- **Testing**: Backend 16/16 ✅ | Frontend 100% GUI ✅
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
