@@ -1,0 +1,54 @@
+{
+  "summary": "RC-06 E2E validation via GUI only (Playwright, no APIs). Tested 4 profiles: MASTER, GERENTE, SUPERVISOR MECÂNICO, PCM. All logins succeeded; all sidebar visibility rules respected; all RBAC restrictions render 'Acesso Restrito' correctly on forbidden routes; Sair (logout) works for every profile. Navigation, KPIs, Kanban, Prontuário, Nova OS modal, Estoque, Paradas, Auditoria all render with real data. No blocking defects found. Only cosmetic/UX observations captured (see frontend_issues).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Ativos (all profiles)", "issue": "Button labeled '+ NOVO ATIVO' (uppercase). Ok for UX, but note lowercase variants of similar labels elsewhere ('+ Nova Parada', '+ Novo Plano', '+ Nova Inspeção') → minor inconsistency in casing across CTA buttons.", "selector": "button:has-text('NOVO ATIVO')", "priority": "LOW"},
+      {"component": "Ativos list", "issue": "List uses card layout (not tabular). Column 'TAG' is not a real column header — TAG is embedded inside each card. Fine for UX but the RC-06 spec mentioned 'TAG column'. Consider adding an explicit visible TAG label above the code (e.g. 'TAG: AV-01') for scanability.", "selector": "[data-testid^='ativo-card'] (inferred)", "priority": "LOW"},
+      {"component": "Ordens de Serviço list", "issue": "Export icons (Excel/PDF) next to the page title are icon-only with no visible text label and no title/aria-label detected via text selectors. Users may miss the export affordance.", "selector": "svg icons next to h1 'Ordens de Serviço'", "priority": "LOW"},
+      {"component": "OS card in Kanban", "issue": "Clicking an OS card did not navigate to a detail URL (URL stayed at /os or /ordens-servico) in Gerente/Supervisor sessions. Detail may open in a side-panel/modal but URL does not update → breaks deep-linking and browser Back behavior.", "selector": "OS Kanban card", "priority": "MEDIUM"},
+      {"component": "Prontuário (Ativo detail)", "issue": "Clicking an ativo card in Gerente session kept URL at /ativos (detail may render as drawer). Same deep-linking concern.", "selector": "Ativo card", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Login", "issues": ["Empresa autocomplete dropdown appears only after user types AND when filteredOrgs>0; if organizations API is still loading on first keystroke, dropdown looks broken. Consider a small loading spinner inside the empresa combobox until orgs are hydrated."]},
+      {"screen": "Sidebar (all profiles)", "issues": ["Section header 'PCM' shown in Supervisor sidebar for the 'Biblioteca' item can be confusing since Supervisor is not a PCM role. Suggest renaming the section or hiding it when the only child (Biblioteca) is not shown to that role."]},
+      {"screen": "Acesso Restrito page", "issues": ["Message wording is clear ('Seu perfil (Gerente) não possui permissão para acessar esta página.') and includes a 'VOLTAR' button — no complaints."]}
+    ]
+  },
+  "role_matrix_verified": {
+    "MASTER": {"login_ok": true, "sidebar_items_present": ["Central de Trabalho","Dashboard","Equipe","Ativos","Ordens de Serviço","Inspeções","Unidades","Áreas","Estoque","Sobressalentes","Paradas","Biblioteca","Usuários","Planos de Inspeção","Auditoria","Configurações"], "acesso_restrito_correct": "N/A (full access)", "flows_ok": ["Dashboard KPIs (Disponibilidade 99.7%, Backlog 30, OS Abertas 24)","Ativos (55 cards)","OS Kanban (Solicitadas 6, Em Análise 3, Aguard.Aprov 1, Programadas 11)","/admin/usuarios (users listed)","/admin/config renders","/admin/auditoria (1166 registros)","/master/white-label (Designer)","Sair OK"], "clicks_to_full_journey": 8},
+    "GERENTE": {"login_ok": true, "sidebar_items": ["Central de Trabalho","Dashboard","Ordens de Serviço","Ativos","Auditoria"], "sidebar_count": 5, "matches_spec_5max": true, "forbidden_absent": {"Solicitar Serviço": true}, "acesso_restrito_correct": {"/admin/config": true, "/master/white-label": true}, "clicks_to_full_journey": 9},
+    "SUPERVISOR_MECÂNICO": {"login_ok": true, "sidebar_items_expected_present": {"Central de Trabalho": true, "Dashboard": true, "Equipe": true, "Ativos": true, "Ordens de Serviço": true, "Inspeções": true, "Estoque": true}, "extras_present": ["Áreas","Sobressalentes","Paradas","Auditoria"], "nova_os_modal_ok": true, "modal_fields": ["Ativo (select)","Título","Tipo","Disciplina","Prioridade","Descrição","Causa da Falha","Equipamento Parado"], "acesso_restrito_admin_usuarios": true, "clicks": 10},
+    "PCM": {"login_ok": true, "sidebar_items": ["Central de Trabalho","Dashboard","Equipe","Ativos","Ordens de Serviço","Inspeções","Áreas","Estoque","Sobressalentes","Paradas","Biblioteca","Planos de Inspeção","Auditoria"], "estoque_novo_item_visible": true, "os_nova_os_visible": true, "templates_route": "'/admin/templates' resolves to Planos de Inspeção page (no 404, PCM has access).", "clicks": 9}
+  },
+  "click_and_timing_notes": {
+    "master_full_journey_clicks": 8,
+    "gerente_full_journey_clicks": 9,
+    "supervisor_full_journey_clicks": 10,
+    "pcm_full_journey_clicks": 9,
+    "note_on_timings": "All measured page transitions completed within the forced 3s wait_for_timeout used in the script. Real load time is dominated by that wait (audit page took +0.7s over the wait ~ actual load <1s). No genuine >3s slow pages observed."
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL UX: Make OS-card and Ativo-card clicks push a real detail route (deep-linking) so browser Back works and users can share URLs.",
+    "OPTIONAL UX: Add visible label or tooltip to icon-only Export (Excel/PDF) buttons at top of OS/Ativos/Auditoria pages.",
+    "OPTIONAL UX: Show a loading indicator inside the Empresa combobox on the login screen while organizations are still being fetched — first keystroke can look unresponsive.",
+    "OPTIONAL UX: Section header 'PCM' shown in Supervisor sidebar is misleading — hide when its children are not visible or rename to 'Documentação'.",
+    "No BUG-level fixes required. RC-06 acceptance criteria met: all E2E flows complete via GUI, all RBAC restrictions correct, no button unresponsive, no field out-of-focus, no overlay blockers."
+  ],
+  "critical_code_review_comments": [
+    "App.js login form (LoginPage): empresa autocomplete depends on organizations being loaded before user types; if loadOrganizations() hasn't resolved yet the dropdown silently renders empty (filteredOrgs.length===0 condition). Consider disabling the input or showing a spinner during load.",
+    "ProtectedRoute pattern with data-testid='access-restricted' is correctly wired for /admin/config, /admin/usuarios, /master/white-label — confirmed for Gerente & Supervisor.",
+    "Sidebar group labels ('PCM','ADMIN','INFRAESTRUTURA', etc.) are static — should be filtered out when the group has zero visible items for the current role (small polish).",
+    "Detail routes for OS and Ativo appear to render as overlays/drawers without changing the URL. Recommend switching to nested routes (e.g. /os/:id, /ativos/:id) to preserve browser navigation and shareability."
+  ],
+  "updated_files": ["/app/test_reports/iteration_79.json"],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% (all 4 profile flows executed end-to-end without blocking failures)"},
+  "test_credentials": "master@maintrix.com/master123, test.gerente@maintrix.com/ger123, test.sup.mec@maintrix.com/sup123, test.pcm@maintrix.com/pcm123 — all confirmed working via GUI login.",
+  "seed_data_creation": "None. Nova OS and Novo Ativo modals were opened for inspection but forms were NOT submitted to avoid polluting the database. All test actions were read-only after login.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-06 GUI validation complete. All P0 functionality works via UI: login (empresa autocomplete → org-option → email/pwd → submit), sidebar RBAC (Gerente=5 items, Supervisor=broader, Master=full, PCM=full minus admin), Acesso Restrito page renders with data-testid='access-restricted' on forbidden routes for all non-admin roles, and Sair works. Two UX papercuts worth pursuing next round: (1) detail views (OS card, Ativo card) don't push routes — clicking them keeps URL at /os or /ativos, breaking Back and share; (2) icon-only export buttons need labels/tooltips. Nothing blocks completion of any flow — do NOT fix these unless explicitly requested since RC-06 says 'Corrigir APENAS defeitos que impeçam a conclusão do fluxo'.",
+  "rca_of_the_issue": "N/A — no blocking bug identified in RC-06 pass. Two potentially confusing behaviors documented under frontend_issues.ui_bugs (deep-link on detail views) and design_issues (login empresa hint, sidebar group headers) are UX polish items, not defects."
+}
