@@ -1,0 +1,55 @@
+{
+  "summary": "RC-07 Consolidação do Perfil Visualizador — FULL PASS. Backend: created viewer via API, verified 7/7 pytest checks (viewer READ /ativos OK, viewer WRITE blocked with 403 on /ordens-servico, /ativos, /estoque and /export/ativos, master regression OK). Frontend GUI: viewer logs in, gets redirected to /consulta, sidebar shows ONLY 'CONSULTA > Portal de Equipamentos' (no Dashboard/Ativos/OS/Inspeções/Estoque/Auditoria/Config/Users), 55 ativo cards rendered from /api/ativos, search filter works (typed 'AV-' → 2 cards), detail view opens with TAG/nome/status/type/fabricante and 'Voltar à pesquisa' returns to search. Navigating directly to /, /dashboard, /os, /ativos, /inspecoes, /estoque, /solicitar, /admin/config, /master/white-label all show the Acesso Restrito screen (data-testid='access-restricted'). Master and Operador regression clean — no side-effects. Previous RC-06 BATCH 2 gaps are now closed (viewer no longer sees +Nova OS, +Nova Inspeção or the Solicitar wizard because those pages are all restricted at the ProtectedRoute layer).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "rc07_verification_matrix": {
+    "viewer_login_redirect": {"url_after_login": "/consulta", "status": "PASS"},
+    "viewer_sidebar_items": ["Portal de Equipamentos"],
+    "viewer_sidebar_forbidden_absent": {"Dashboard": true, "Ativos": true, "Ordens de Serviço": true, "Inspeções": true, "Estoque": true, "Central de Trabalho": true, "Auditoria": true, "Configurações": true, "Usuários": true},
+    "consulta_portal": {"heading": "Portal de Consulta", "search_input_testid": "consulta-busca", "cards_count": 55, "search_filter_works": true, "detail_view_opens": true, "voltar_button_works": true},
+    "blocked_routes_status": {
+      "/": "access-restricted",
+      "/dashboard": "access-restricted",
+      "/os": "access-restricted",
+      "/ativos": "access-restricted",
+      "/inspecoes": "access-restricted",
+      "/estoque": "access-restricted",
+      "/solicitar": "access-restricted",
+      "/admin/config": "access-restricted",
+      "/master/white-label": "access-restricted"
+    },
+    "backend_403_verified": {
+      "POST /api/ordens-servico": 403,
+      "POST /api/ativos (with valid sector_id)": 403,
+      "POST /api/estoque": 403,
+      "GET /api/export/ativos": 403
+    },
+    "master_regression": {"routes_ok": ["/","/dashboard","/os","/ativos","/inspecoes","/admin/config"], "restricted": []},
+    "operador_regression": {"sidebar_has_minha_jornada": true, "sidebar_has_solicitar_servico": true, "root_access_ok": true}
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rc07_viewer.py",
+    "/app/test_reports/pytest/iteration81.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "App.js ROLES_EXCEPT_VIEWER (line 37) is correctly used across all operational routes ✓. Defense-in-depth achieved: sidebar hides items AND ProtectedRoute allow list blocks direct URL entry.",
+    "CatchAllRedirect (line 8006) sends viewer to /consulta and everyone else to / — clean centralization of role-based landing.",
+    "Backend /export/ativos, POST /ordens-servico, POST /ativos, POST /estoque all enforce role check independently of frontend (returning 403), so the read-only guarantee holds at API layer too.",
+    "Consider adding a friendlier 'no results' string trigger — currently 'Nenhum equipamento encontrado para \"…\"' is fine.",
+    "Minor: /consulta ProtectedRoute has no explicit 'allow' prop — this is intentional so ALL authenticated users (including operadores/técnicos) could theoretically reach the portal if they knew the URL. Not a defect, but worth documenting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rc07_viewer.py",
+    "/app/backend/tests/_rc07_create_viewer.py",
+    "/app/test_reports/iteration_81.json",
+    "/app/test_reports/pytest/iteration81.xml"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all viewer + regression flows passed)"},
+  "test_credentials": "master@maintrix.com/master123, test.operador@maintrix.com/op123. Viewer rc07test@maintrix.com/v123 (role=visualizador) was CREATED via POST /api/admin/users, force_password_change flipped to false via PUT, then DELETED after tests. Cleanup COMPLETE.",
+  "seed_data_creation": "Ephemeral viewer 'rc07test@maintrix.com' created and deleted. No persistent test data left. No OS/Ativos/Estoque created during this run (viewer blocked from all writes; regression flows were read-only).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-07 fully verified. Viewer role is now truly read-only both at UI (sidebar only shows Portal de Equipamentos, all operational routes render Acesso Restrito) and API (403 on writes and export). Master and Operador are unaffected. If future changes add new routes, they should either be added to ROLES_EXCEPT_VIEWER allow list or explicitly opened to viewer. Recommended next step: consider adding an integration test that hits /api/consulta/... endpoints (if any) or the /public/ativo/:id endpoint the viewer detail view depends on.",
+  "rca_of_the_issue": "N/A — no defects. Prior RC-06 bugs (Nova OS/Nova Inspeção buttons visible to viewer, /solicitar not blocked) are resolved by the consolidation strategy: instead of gating individual CTAs, the entire operational route set is now blocked at the ProtectedRoute layer, and the sidebar was slimmed to a single 'Portal de Equipamentos' entry."
+}

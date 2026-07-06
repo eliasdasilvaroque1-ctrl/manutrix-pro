@@ -34,6 +34,7 @@ const FIELD_LABEL_MAP = {
 };
 
 const ROLE_LABELS = { master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tec_mecanico: 'Técnico Mecânico', tec_eletrico: 'Técnico Elétrico', instrumentista: 'Instrumentista', lubrificador: 'Lubrificador', tecnico: 'Técnico (legado)', operador: 'Operador', inspetor: 'Inspetor', visualizador: 'Visualizador', viewer: 'Visualizador' };
+const ROLES_EXCEPT_VIEWER = ['master','admin','gerente','pcm','supervisor','tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor','operador'];
 
 
 const normalizeError = (error) => {
@@ -1582,10 +1583,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     {
       label: 'CONSULTA',
       items: [
-        { icon: BarChart3, label: 'Dashboard', path: '/dashboard' },
-        { icon: Box, label: 'Ativos', path: '/ativos' },
-        { icon: Wrench, label: 'Ordens de Serviço', path: '/os' },
-        { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
+        { icon: Search, label: 'Portal de Equipamentos', path: '/consulta' },
       ]
     },
   ] : isGerente ? [
@@ -1846,7 +1844,8 @@ const LoginPage = () => {
       } else {
         login(response.data);
         toast.success('Login realizado!');
-        navigate('/');
+        const userRole = response.data.user?.role;
+        navigate(userRole === 'visualizador' || userRole === 'viewer' ? '/consulta' : '/');
       }
     } catch (error) {
       toast.error(normalizeError(error));
@@ -8004,6 +8003,13 @@ const ProtectedRoute = ({ children, allow }) => {
   return children;
 };
 
+const CatchAllRedirect = () => {
+  const { user } = useAuth();
+  const isViewer = user?.role === 'visualizador' || user?.role === 'viewer';
+  return <Navigate to={isViewer ? '/consulta' : '/'} replace />;
+};
+
+
 // ============== SETORES PAGE ==============
 const SetoresPage = () => {
   const [sectors, setSectors] = useState([]);
@@ -9171,6 +9177,159 @@ const QRLabelModal = ({ ativo, onClose }) => {
 };
 
 
+// ============== PORTAL CONSULTA EQUIPAMENTOS (VISUALIZADOR) ==============
+
+const ConsultaEquipamentosPage = () => {
+  const [busca, setBusca] = useState('');
+  const [ativos, setAtivos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [portalData, setPortalData] = useState(null);
+  const [loadingPortal, setLoadingPortal] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get('/ativos');
+        setAtivos(res.data);
+      } catch { /* empty */ }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  const handleSelectAtivo = async (ativo) => {
+    setSelected(ativo);
+    setLoadingPortal(true);
+    try {
+      const res = await axios.get(`${API}/public/ativo/${ativo.id}`);
+      setPortalData(res.data);
+    } catch { toast.error('Erro ao carregar dados do equipamento'); }
+    finally { setLoadingPortal(false); }
+  };
+
+  const filtered = ativos.filter(a => {
+    const q = busca.toLowerCase();
+    return !q || a.tag?.toLowerCase().includes(q) || a.nome?.toLowerCase().includes(q) || a.tipo_equipamento?.toLowerCase().includes(q);
+  });
+
+  const statusMap = { operacional: { label: 'Operacional', cls: 'bg-emerald-500/10 text-emerald-400' }, parado: { label: 'Parado', cls: 'bg-red-500/10 text-red-400' }, manutencao: { label: 'Manutenção', cls: 'bg-amber-500/10 text-amber-400' } };
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+
+  if (selected && portalData) {
+    const { ativo: av, kpis, ultimas_inspecoes, ultimas_os, manuais } = portalData;
+    const st = statusMap[av?.status] || statusMap.operacional;
+    return (
+      <div className="space-y-4" data-testid="consulta-detalhe">
+        <button onClick={() => { setSelected(null); setPortalData(null); }} className="flex items-center gap-1 text-sm text-slate-400 hover:text-brand transition-colors" data-testid="consulta-voltar">
+          <ChevronLeft size={16} /> Voltar à pesquisa
+        </button>
+        <div className="glass-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <span className="text-brand font-mono font-bold text-lg">{av?.tag}</span>
+              <h2 className="text-xl font-bold text-slate-100 mt-1">{av?.nome}</h2>
+            </div>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${st.cls}`}>{st.label}</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div><span className="text-slate-500">Tipo</span><p className="text-slate-200 font-medium">{av?.tipo_equipamento || '—'}</p></div>
+            <div><span className="text-slate-500">Fabricante</span><p className="text-slate-200 font-medium">{av?.fabricante || '—'}</p></div>
+            <div><span className="text-slate-500">Modelo</span><p className="text-slate-200 font-medium">{av?.modelo || '—'}</p></div>
+            <div><span className="text-slate-500">Criticidade</span><p className="text-slate-200 font-medium capitalize">{av?.criticidade || '—'}</p></div>
+          </div>
+        </div>
+        {kpis && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {kpis.total_os != null && <div className="glass-card p-4 text-center"><p className="text-2xl font-bold text-brand">{kpis.total_os}</p><p className="text-xs text-slate-500">OS Total</p></div>}
+            {kpis.total_inspecoes != null && <div className="glass-card p-4 text-center"><p className="text-2xl font-bold text-emerald-400">{kpis.total_inspecoes}</p><p className="text-xs text-slate-500">Inspeções</p></div>}
+            {kpis.disponibilidade != null && <div className="glass-card p-4 text-center"><p className="text-2xl font-bold text-blue-400">{kpis.disponibilidade}%</p><p className="text-xs text-slate-500">Disponibilidade</p></div>}
+            {kpis.mtbf != null && <div className="glass-card p-4 text-center"><p className="text-2xl font-bold text-amber-400">{kpis.mtbf}h</p><p className="text-xs text-slate-500">MTBF</p></div>}
+          </div>
+        )}
+        {ultimas_os?.length > 0 && (
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-3">Últimas Ordens de Serviço</h3>
+            <div className="space-y-2">
+              {ultimas_os.slice(0, 5).map((os, i) => (
+                <div key={i} className="flex items-center justify-between text-sm border-b border-slate-800 pb-2">
+                  <div><span className="font-mono text-brand">#{os.numero}</span> <span className="text-slate-300 ml-2">{os.titulo}</span></div>
+                  <div className="flex items-center gap-2"><span className="text-xs text-slate-500">{formatDate(os.created_at)}</span><span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 capitalize">{os.status}</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {ultimas_inspecoes?.length > 0 && (
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-3">Últimas Inspeções</h3>
+            <div className="space-y-2">
+              {ultimas_inspecoes.slice(0, 5).map((ins, i) => (
+                <div key={i} className="flex items-center justify-between text-sm border-b border-slate-800 pb-2">
+                  <span className="text-slate-300">{ins.tipo || 'Inspeção'}</span>
+                  <div className="flex items-center gap-2"><span className="text-xs text-slate-500">{formatDate(ins.data_execucao || ins.created_at)}</span><span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 capitalize">{ins.status}</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {manuais?.length > 0 && (
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-3">Manuais e Documentos</h3>
+            <div className="space-y-2">
+              {manuais.map((m, i) => (
+                <a key={i} href={m.url?.startsWith('http') ? m.url : `${BACKEND_URL}${m.url}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300">
+                  <FileText size={14} /> {m.nome || m.filename}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4" data-testid="consulta-equipamentos">
+      <div className="flex items-center gap-3 mb-2">
+        <Search size={24} className="text-brand" />
+        <h1 className="text-2xl font-bold text-slate-100">Portal de Consulta</h1>
+      </div>
+      <p className="text-sm text-slate-400">Pesquise equipamentos por TAG, nome ou tipo. Selecione para ver o prontuário completo.</p>
+      <div className="relative">
+        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por TAG, nome ou tipo de equipamento..." className="input-industrial w-full pl-10" data-testid="consulta-busca" />
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-12"><Cog size={32} className="text-brand animate-spin" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12 text-slate-500">
+          <Search size={48} className="mx-auto mb-3 opacity-30" />
+          <p>{busca ? `Nenhum equipamento encontrado para "${busca}"` : 'Nenhum equipamento cadastrado'}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered.map(a => {
+            const s = statusMap[a.status] || statusMap.operacional;
+            return (
+              <button key={a.id} onClick={() => handleSelectAtivo(a)} className="glass-card p-4 text-left hover:border-brand/40 transition-all group" data-testid={`consulta-ativo-${a.id}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-mono text-brand font-bold text-sm">{a.tag}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${s.cls}`}>{s.label}</span>
+                </div>
+                <p className="text-slate-200 text-sm font-medium truncate">{a.nome}</p>
+                <p className="text-xs text-slate-500 mt-1">{a.tipo_equipamento} {a.fabricante ? `| ${a.fabricante}` : ''}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
 // ============== PORTAL PÚBLICO DO EQUIPAMENTO (FASE 4) ==============
 
 const PortalPublicoPage = () => {
@@ -9964,19 +10123,19 @@ function App() {
           <BrandingLoader>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/" element={<ProtectedRoute><AppLayout><CentralTrabalhoPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/ativos" element={<ProtectedRoute><AppLayout><AtivosPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><CentralTrabalhoPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/ativos" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><AtivosPage /></AppLayout></ProtectedRoute>} />
               <Route path="/ativos/:id" element={<ProtectedRoute><AppLayout><AtivoDetailPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/os" element={<ProtectedRoute><AppLayout><OSPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/os" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><OSPage /></AppLayout></ProtectedRoute>} />
               <Route path="/os/:id" element={<ProtectedRoute><AppLayout><OSDetailPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/estoque" element={<ProtectedRoute><AppLayout><EstoquePage /></AppLayout></ProtectedRoute>} />
-              <Route path="/inspecoes" element={<ProtectedRoute><AppLayout><InspecoesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/estoque" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><EstoquePage /></AppLayout></ProtectedRoute>} />
+              <Route path="/inspecoes" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><InspecoesPage /></AppLayout></ProtectedRoute>} />
               <Route path="/inspecoes/:id" element={<ProtectedRoute><AppLayout><InspecaoDetailPage /></AppLayout></ProtectedRoute>} />
               <Route path="/ronda" element={<ProtectedRoute><AppLayout><RondaPage /></AppLayout></ProtectedRoute>} />
               <Route path="/scanner" element={<ProtectedRoute><AppLayout><ScannerPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/sobressalentes" element={<ProtectedRoute><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/paradas" element={<ProtectedRoute><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/sobressalentes" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/paradas" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
               <Route path="/solicitar" element={<ProtectedRoute allow={['master','admin','pcm','supervisor','tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor','operador']}><AppLayout><SolicitacaoServicoPage /></AppLayout></ProtectedRoute>} />
               <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/usuarios" element={<ProtectedRoute allow={['master','admin']}><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
@@ -9990,9 +10149,10 @@ function App() {
               <Route path="/biblioteca" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
               <Route path="/master/white-label" element={<ProtectedRoute allow={['master']}><AppLayout><WhiteLabelDesignerPage /></AppLayout></ProtectedRoute>} />
               <Route path="/master/cleanup" element={<ProtectedRoute allow={['master']}><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/consulta" element={<ProtectedRoute><AppLayout><ConsultaEquipamentosPage /></AppLayout></ProtectedRoute>} />
               <Route path="/portal/equipamento/:id" element={<PortalPublicoPage />} />
               <Route path="/portal/tecnico/:id" element={<ProtectedRoute><AppLayout><PortalTecnicoPage /></AppLayout></ProtectedRoute>} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<CatchAllRedirect />} />
             </Routes>
           </BrandingLoader>
           <Toaster position="top-center" richColors />
