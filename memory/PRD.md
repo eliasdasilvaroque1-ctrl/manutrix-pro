@@ -96,6 +96,15 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **6 observações UX** documentadas (nenhuma bloqueante)
 - **Performance**: Todas as telas <2s, nenhuma >3s
 
+### RC-07 — Consolidação do Perfil Visualizador ✅ (2026-07-06)
+- **Conceito**: Visualizador acessa APENAS o Portal de Consulta de Equipamentos (busca por TAG + prontuário)
+- **Sidebar**: Reduzido a único item "Portal de Equipamentos" → `/consulta`
+- **ConsultaEquipamentosPage**: Busca por TAG/nome/tipo, cards com status, detalhe com KPIs/OS/Inspeções/Manuais
+- **Bloqueios**: 9 rotas operacionais bloqueadas via `ROLES_EXCEPT_VIEWER` + ProtectedRoute allow
+- **Backend**: 403 para POST OS, POST ativos, POST estoque, GET export (defesa em profundidade)
+- **Redirect pós-login**: `/consulta` para Visualizador, `/` para demais
+- **Testing**: Backend 7/7 pytest ✅ | Frontend 100% Playwright ✅ | Regressão Master/Operador OK
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
