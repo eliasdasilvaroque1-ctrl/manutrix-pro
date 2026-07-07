@@ -280,21 +280,30 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - Auth Audit: MongoDB-only auth, bypass Supabase
 - Bug fixes: Circular structure on Save Plan, HTTP 422 on change-password
 
-## Pending / Backlog (Prioritized)
+## Fase Atual: PILOTO ASTEC — App CONGELADO (Fev/2026)
 
-### P0 — Sprint 61/Bloco C: Dashboard Supervisor Executivo
-- Indicadores avançados de manutenção (MTBF, MTTR, Disponibilidade, Backlog)
-- KPIs por área, por disciplina, por tipo de OS
-- Exportação executiva (PDF/Excel com branding)
-- Gráficos de tendência (30/60/90 dias)
+**Versão oficial**: v1.0.0-RC1
+**Status**: GO LIVE APROVADO — Desenvolvimento congelado
+**Governança**: CTO aprova qualquer alteração que não seja P0 bloqueante
 
-### P1 — IA Features (Assistente Inteligente)
-- Botão "✨ Melhorar Plano" usando LLM para aprimorar checklists importados
-- Arquitetura preparada no Sprint 57 (parser pronto, falta integração LLM)
+### Protocolo de Mudança
+- Consultor (E1) atua como QA e Implantação — não como desenvolvedor
+- Toda alteração requer análise de impacto documentada
+- Critérios completos em: `/app/memory/CRITERIOS_NOVA_FUNCIONALIDADE.md`
 
-### P2 — Estrutura de Subconjuntos e Integrações ERP/SAP
-- Hierarquia ativo → subconjuntos → componentes
-- Integração com sistemas ERP (SAP PM, Oracle EAM)
+### Permitido durante o piloto:
+- Correção de bugs reais reportados por usuários
+- Melhorias de UX quando usuário relatar dificuldade
+- Investigação de problemas de desempenho
+- Atualização de documentação e relatórios técnicos
+
+### Backlog v2.0 (SUSPENSO — aguardando aprovação do CTO)
+
+| Prioridade | Feature | Status |
+|------------|---------|--------|
+| P0 | Dashboard Supervisor Executivo (MTBF, MTTR, KPIs) | Backlog |
+| P1 | IA Assistente (Melhorar Plano via LLM) | Backlog |
+| P2 | Estrutura de Subconjuntos + Integrações ERP/SAP | Backlog |
 
 ## Data Models
 - `users`: {id, nome, email, role, organization_id, disciplinas, turno, areas}
