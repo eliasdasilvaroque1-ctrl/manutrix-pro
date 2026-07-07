@@ -133,6 +133,15 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Bug corrigido**: Portal Público retornava "Planta Principal" (stale doc de collection errada) ao invés de "UNIDADE CEDRO"
 - **Testing**: Backend 6/6 + Frontend 6/6 + Regressão 3/3 ✅
 
+### RC-12 — Dossiê Permanente do Equipamento ✅ (2026-07-07) — ÚLTIMA SPRINT
+- **Timeline completa**: Aba "Histórico Completo" no Prontuário — OS, Inspeções, Paradas, Materiais em uma única linha do tempo cronológica
+- **Dossiê OS read-only**: Unidade/Área/TAG/Equipamento, número, tipo, origem, solicitante, PCM, supervisor, executantes com HH individual, materiais consumidos, fotos, causa da falha, solução, aprovação, auditoria completa — tudo em SOMENTE LEITURA
+- **Dossiê Inspeção read-only**: Plano utilizado, todas as respostas do checklist, não conformidades destacadas, fotos, executor, tempo, observações
+- **Pesquisa Global**: Página `/dossie` — pesquisa por número OS, TAG, tipo, área, equipamento. Resultados clicáveis para abrir dossiê completo
+- **RBAC**: Dossiê acessível para Master, Admin, PCM, Supervisor, Gerente. Técnicos bloqueados (403)
+- **Testing**: Backend 12/12 ✅ | Frontend 100% ✅ | Regressão Dashboard/OS/Inspeções ✅
+- **STATUS: DESENVOLVIMENTO ENCERRADO — VERSÃO v1.0.0-RC1 CONGELADA**
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
