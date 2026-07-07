@@ -365,9 +365,9 @@ async def get_public_ativo(ativo_id: str):
     # Resolve unidade from sector or first unidade of org
     unidade = None
     if sector and sector.get('unidade_id'):
-        unidade = await db.plantas.find_one({"id": sector['unidade_id']}, {"_id": 0, "nome": 1, "codigo": 1})
+        unidade = await db.unidades.find_one({"id": sector['unidade_id'], "deleted_at": None}, {"_id": 0, "nome": 1, "codigo": 1})
     if not unidade:
-        unidade = await db.plantas.find_one({"organization_id": org_id}, {"_id": 0, "nome": 1, "codigo": 1})
+        unidade = await db.unidades.find_one({"organization_id": org_id, "deleted_at": None}, {"_id": 0, "nome": 1, "codigo": 1})
 
     # Last 5 inspections
     last_inspecoes = await db.inspecoes.find(

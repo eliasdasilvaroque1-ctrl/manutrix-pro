@@ -125,6 +125,14 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Testing**: Backend 11/11 ✅ | Frontend GUI ✅ | RBAC regressão ✅
 - **STATUS: VERSÃO CONGELADA PARA PILOTO ASTEC**
 
+### RC-11 — Identidade Operacional dos Ativos ✅ (2026-07-07)
+- **Padrão aplicado**: Unidade › Área › TAG › Nome em 12 telas
+- **Telas atualizadas**: Ativos list, OS Kanban, OS list, OS detail, Inspeções list/detail, Prontuário, Minha Jornada, Solicitações, Portal Público (QR), Portal Técnico, Consulta Visualizador
+- **Backend**: `/api/public/ativo` agora retorna campo `unidade` (corrigido collection `db.unidades` vs stale `db.plantas`)
+- **Helper**: `getAssetContext()` + `AssetIdentity` componente reutilizável
+- **Bug corrigido**: Portal Público retornava "Planta Principal" (stale doc de collection errada) ao invés de "UNIDADE CEDRO"
+- **Testing**: Backend 6/6 + Frontend 6/6 + Regressão 3/3 ✅
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
