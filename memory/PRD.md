@@ -115,6 +115,16 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **QR Code**: Portal público retorna branding da organização correta
 - **Testing**: Backend 16/16 ✅ | Frontend 100% GUI ✅
 
+### RC-09 — Congelamento da Arquitetura Multiempresa ✅ (2026-07-07) — v1.0.0-RC1
+- **Login global ELIMINADO**: `organization_id` é campo OBRIGATÓRIO (Pydantic 422 se ausente)
+- **Índice composto**: `(organization_id, email)` único — permite mesmo email em orgs diferentes
+- **Forgot-password**: Exige `organization_id` obrigatoriamente
+- **Register público**: BLOQUEADO (403) — só admin pode criar usuários
+- **Admin create user**: Valida `organization_id` obrigatório, herda do admin se não informado
+- **Frontend**: Envia `organization_id` em login e forgot-password
+- **Testing**: Backend 11/11 ✅ | Frontend GUI ✅ | RBAC regressão ✅
+- **STATUS: VERSÃO CONGELADA PARA PILOTO ASTEC**
+
 ### Sprint 58 — Exportação PDF/Excel Corrigida ✅ (2026-07-03)
 - **10 endpoints corrigidos**: ativos, OS, inspeções, estoque, sobressalentes × excel + pdf
 - **Branding dinâmico**: Títulos PDF usam nome da empresa (não mais "MAINTRIX"), cores dos headers usam cor_primaria da empresa
