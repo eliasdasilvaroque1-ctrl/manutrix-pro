@@ -360,7 +360,14 @@ async def get_public_ativo(ativo_id: str):
     org_id = ativo.get('organization_id', '')
     config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1, "tema": 1})
 
-    sector = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0, "nome": 1, "codigo": 1})
+    sector = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0, "nome": 1, "codigo": 1, "unidade_id": 1})
+    
+    # Resolve unidade from sector or first unidade of org
+    unidade = None
+    if sector and sector.get('unidade_id'):
+        unidade = await db.plantas.find_one({"id": sector['unidade_id']}, {"_id": 0, "nome": 1, "codigo": 1})
+    if not unidade:
+        unidade = await db.plantas.find_one({"organization_id": org_id}, {"_id": 0, "nome": 1, "codigo": 1})
 
     # Last 5 inspections
     last_inspecoes = await db.inspecoes.find(
@@ -404,6 +411,7 @@ async def get_public_ativo(ativo_id: str):
             "foto_url": ativo.get('foto_url'),
         },
         "area": sector.get('nome') if sector else '',
+        "unidade": unidade.get('nome') if unidade else '',
         "ultimas_inspecoes": last_inspecoes,
         "ultimas_os": last_os,
         "ultimas_manutencoes": last_manut,

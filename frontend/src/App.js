@@ -36,6 +36,60 @@ const FIELD_LABEL_MAP = {
 const ROLE_LABELS = { master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tec_mecanico: 'Técnico Mecânico', tec_eletrico: 'Técnico Elétrico', instrumentista: 'Instrumentista', lubrificador: 'Lubrificador', tecnico: 'Técnico (legado)', operador: 'Operador', inspetor: 'Inspetor', visualizador: 'Visualizador', viewer: 'Visualizador' };
 const ROLES_EXCEPT_VIEWER = ['master','admin','gerente','pcm','supervisor','tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor','operador'];
 
+// Asset Identity — Padrão único de exibição: Unidade > Área > TAG > Nome
+const getAssetContext = (ativo, plantas, sectors) => {
+  const sector = ativo?.sector || (sectors || []).find(s => s.id === ativo?.sector_id);
+  const unidade = (plantas || []).find(p => p.id === sector?.unidade_id) || (plantas || [])[0];
+  return { unidade: unidade?.nome || unidade?.codigo || '', area: sector?.nome || sector?.codigo || '', tag: ativo?.tag || '', nome: ativo?.nome || '' };
+};
+const AssetIdentity = ({ ativo, plantas, sectors, size = 'md', showLabels = false, className = '' }) => {
+  const ctx = getAssetContext(ativo, plantas, sectors);
+  if (size === 'xs') return (
+    <span className={`inline-flex items-center gap-1 ${className}`}>
+      {ctx.area && <span className="text-[10px] text-slate-500">{ctx.area}</span>}
+      {ctx.area && <span className="text-slate-600">·</span>}
+      <span className="font-mono text-brand text-xs font-bold">{ctx.tag}</span>
+      <span className="text-xs text-slate-400 truncate max-w-[120px]">{ctx.nome}</span>
+    </span>
+  );
+  if (size === 'sm') return (
+    <div className={`flex flex-col gap-0.5 ${className}`}>
+      <div className="flex items-center gap-1.5">
+        <span className="font-mono text-brand text-sm font-bold">{ctx.tag}</span>
+        <span className="text-sm text-slate-300 truncate">{ctx.nome}</span>
+      </div>
+      <div className="flex items-center gap-1 text-[10px] text-slate-500">
+        {ctx.unidade && <span>{ctx.unidade}</span>}
+        {ctx.unidade && ctx.area && <span className="text-slate-600">›</span>}
+        {ctx.area && <span>{ctx.area}</span>}
+      </div>
+    </div>
+  );
+  if (size === 'lg') return (
+    <div className={`space-y-1 ${className}`}>
+      <span className="font-mono text-brand text-lg font-bold">{ctx.tag}</span>
+      <h2 className="text-lg text-slate-200 font-semibold">{ctx.nome}</h2>
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        {ctx.unidade && <span className="flex items-center gap-1"><Building2 size={12} />{ctx.unidade}</span>}
+        {ctx.area && <span className="flex items-center gap-1"><MapPin size={12} />{ctx.area}</span>}
+      </div>
+    </div>
+  );
+  return (
+    <div className={`flex flex-col gap-0.5 ${className}`}>
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-brand text-sm font-bold">{ctx.tag}</span>
+        <span className="text-slate-200">{ctx.nome}</span>
+      </div>
+      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+        {ctx.unidade && <span className="flex items-center gap-0.5"><Building2 size={11} />{ctx.unidade}</span>}
+        {ctx.area && <span className="flex items-center gap-0.5"><MapPin size={11} />{ctx.area}</span>}
+      </div>
+    </div>
+  );
+};
+
+
 
 const normalizeError = (error) => {
   const detail = error?.response?.data?.detail;
@@ -1145,7 +1199,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                 <Select
                   value={form.ativo_id}
                   onChange={(val) => setForm({...form, ativo_id: val})}
-                  options={ativos.map(a => ({ value: a.id, label: `${a.sector?.nome || ''} • ${a.tag} - ${a.nome}` }))}
+                  options={ativos.map(a => ({ value: a.id, label: `${a.sector?.nome || ''} › ${a.tag} — ${a.nome}` }))}
                   placeholder="Selecione o ativo..."
                 />
               )}
@@ -2042,6 +2096,7 @@ const AtividadeCard = ({ item, tipo, navigate }) => {
           <span className="font-mono text-brand text-xs">{tag}</span>
           <span className="text-slate-300 text-sm truncate">{nome}</span>
         </div>
+        {item.ativo?.sector?.nome && <p className="text-[10px] text-slate-500">{item.ativo.sector.nome}</p>}
         <p className="text-slate-100 text-sm font-medium truncate">{titulo}</p>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 capitalize">{tipoLabel}</span>
@@ -2669,6 +2724,7 @@ const OSDistChart = ({ data, onBarClick }) => {
 const AtivosPage = () => {
   const [ativos, setAtivos] = useState([]);
   const [sectors, setSectors] = useState([]);
+  const [plantas, setPlantas] = useState([]);
   const [osList, setOsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -2683,14 +2739,16 @@ const AtivosPage = () => {
     try {
       const params = {};
       if (filterSector) params.sector_id = filterSector;
-      const [ativosRes, sectorsRes, osRes] = await Promise.all([
+      const [ativosRes, sectorsRes, osRes, plantasRes] = await Promise.all([
         api.get('/ativos', { params }),
         api.get('/sectors'),
-        api.get('/ordens-servico')
+        api.get('/ordens-servico'),
+        api.get('/plantas')
       ]);
       setAtivos(ativosRes.data);
       setSectors(sectorsRes.data);
       setOsList(osRes.data);
+      setPlantas(plantasRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
     } finally {
@@ -2778,14 +2836,16 @@ const AtivosPage = () => {
                     <Box size={22} className="text-brand" />
                   </div>
                   <div>
-                    {ativo.sector && <p className="text-xs text-slate-500 font-medium uppercase">{ativo.sector.nome}</p>}
+                    <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-0.5">
+                      {plantas[0]?.nome && <span>{plantas[0].nome}</span>}
+                      {plantas[0]?.nome && ativo.sector?.nome && <span className="text-slate-600">›</span>}
+                      {ativo.sector?.nome && <span>{ativo.sector.nome}</span>}
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-brand text-sm">{ativo.tag}</span>
-                      {/* A1: Status dinâmico */}
                       {(() => { const st = getAtivoStatus(ativo.id); return (
                         <span className={`${st.class} border text-[10px] px-1.5 py-0.5 rounded font-medium`} data-testid={`ativo-status-${ativo.tag}`}>{st.label}</span>
                       ); })()}
-                      {/* A2: Contador OS abertas */}
                       {(() => { const c = getOsAbertasCount(ativo.id); return c > 0 ? (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 font-medium" data-testid={`ativo-os-count-${ativo.tag}`}>
                           <Wrench size={10} className="inline mr-0.5" />{c} OS
@@ -2862,6 +2922,7 @@ const AtivoDetailPage = () => {
   const [showQRLabel, setShowQRLabel] = useState(false);
   const [histFilters, setHistFilters] = useState({ tipo: '', status: '', usuario_id: '', data_inicio: '', data_fim: '' });
   const [tecnicos, setTecnicos] = useState([]);
+  const [plantas, setPlantas] = useState([]);
   const [timelineLimit, setTimelineLimit] = useState(20);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
@@ -2869,18 +2930,20 @@ const AtivoDetailPage = () => {
   
   const fetchAtivo = async () => {
     try {
-      const [ativoRes, manuaisRes, histRes, planosRes, saudeRes] = await Promise.all([
+      const [ativoRes, manuaisRes, histRes, planosRes, saudeRes, plantasRes] = await Promise.all([
         api.get(`/ativos/${id}`),
         api.get(`/ativos/${id}/manuais`),
         api.get(`/ativos/${id}/historico`).catch(() => ({ data: [] })),
         api.get(`/planos-inspecao/por-ativo/${id}`).catch(() => ({ data: [] })),
         api.get(`/ativos/${id}/saude`).catch(() => ({ data: null })),
+        api.get('/plantas').catch(() => ({ data: [] })),
       ]);
       setAtivo(ativoRes.data);
       setManuais(manuaisRes.data);
       setHistorico(histRes.data);
       setPlanosVinculados(planosRes.data);
       setSaude(saudeRes.data);
+      setPlantas(plantasRes.data);
     } catch (error) {
       toast.error('Ativo não encontrado');
       navigate('/ativos');
@@ -2994,12 +3057,12 @@ const AtivoDetailPage = () => {
                 </div>
                 <h2 className="text-lg text-slate-200 font-semibold" data-testid="prontuario-nome">{ativo.nome}</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 mt-3 text-sm">
+                  <div><span className="text-slate-500">Unidade</span><p className="text-slate-300">{plantas?.[0]?.nome || '—'}</p></div>
                   <div><span className="text-slate-500">Área</span><p className="text-slate-300">{ativo.sector?.nome || '—'}</p></div>
                   <div><span className="text-slate-500">Tipo</span><p className="text-slate-300">{ativo.tipo_equipamento || '—'}</p></div>
                   <div><span className="text-slate-500">Fabricante</span><p className="text-slate-300">{ativo.fabricante || '—'}</p></div>
                   <div><span className="text-slate-500">Modelo</span><p className="text-slate-300">{ativo.modelo || '—'}</p></div>
                   <div><span className="text-slate-500">Nº Série</span><p className="text-slate-300">{ativo.numero_serie || '—'}</p></div>
-                  <div><span className="text-slate-500">QR Code</span><p className="text-slate-300 font-mono text-xs">{ativo.qr_code?.substring(0,8) || '—'}</p></div>
                 </div>
               </div>
             </div>
@@ -3417,7 +3480,7 @@ const AtivoDetailPage = () => {
 
 // ============== KANBAN BOARD ==============
 
-const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete }) => {
+const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete, plantas }) => {
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
   const touchRef = useRef(null);
@@ -3510,10 +3573,9 @@ const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete }) 
                   } ${col.id === 'concluida' ? 'cursor-default opacity-70' : ''} ${os.atrasada ? 'border-red-500/50' : ''}`}
                   data-testid={`kanban-card-${os.id}`}
                 >
-                  {/* Top: Area/Planta stripe */}
+                  {/* Top: Unidade > Área stripe */}
                   <div className="px-3 py-1.5 bg-slate-800/60 border-b border-slate-700/30">
-                    {os.ativo?.planta_nome && <p className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">{os.ativo.planta_nome}</p>}
-                    <p className="text-[10px] text-slate-400 font-medium">{os.ativo?.sector?.nome || os.ativo?.area_nome || ''}</p>
+                    <p className="text-[10px] text-slate-400 font-medium">{plantas?.[0]?.nome ? `${plantas[0].nome} › ` : ''}{os.ativo?.sector?.nome || os.ativo?.area_nome || ''}</p>
                   </div>
                   <div className="p-2.5">
                     {/* TAG + Equipment name */}
@@ -3785,6 +3847,7 @@ const OSPage = () => {
           onCardClick={(os) => navigate(`/os/${os.id}`)}
           onEdit={['admin','master','pcm'].includes(user?.role) ? (os) => { setEditItem(os); setShowModal(true); } : null}
           onDelete={['admin','master'].includes(user?.role) ? (os) => setDeleteItem(os) : null}
+          plantas={plantas}
         />
       ) : (
         <>
@@ -3814,7 +3877,7 @@ const OSPage = () => {
                     <div className="flex-1 cursor-pointer" onClick={() => navigate(`/os/${os.id}`)}>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-brand">#{os.numero}</span>
-                        {os.ativo && <span className="text-xs text-slate-500">{os.ativo.tag}</span>}
+                        {os.ativo && <span className="text-xs text-slate-500">{plantas?.[0]?.nome ? `${plantas[0].nome} › ` : ''}{os.ativo.sector?.nome ? `${os.ativo.sector.nome} · ` : ''}{os.ativo.tag} — {os.ativo.nome}</span>}
                         {os.atrasada && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded">ATRASADA</span>}
                       </div>
                       <p className="text-slate-100">{os.titulo}</p>
@@ -3876,12 +3939,13 @@ const OSDetailPage = () => {
   const [osEventos, setOsEventos] = useState([]);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
+  const [plantas, setPlantas] = useState([]);
   const navigate = useNavigate();
   const { user } = useAuth();
   
   const fetchOS = async () => {
     try {
-      const [osRes, histRes, matRes, hhRes, execRes, evtRes, tecRes] = await Promise.all([
+      const [osRes, histRes, matRes, hhRes, execRes, evtRes, tecRes, plantasRes] = await Promise.all([
         api.get(`/ordens-servico/${id}`),
         api.get(`/ordens-servico/${id}/historico`).catch(() => ({ data: [] })),
         api.get(`/ordens-servico/${id}/materiais`).catch(() => ({ data: [] })),
@@ -3889,6 +3953,7 @@ const OSDetailPage = () => {
         api.get(`/os/${id}/executantes`).catch(() => ({ data: [] })),
         api.get(`/os/${id}/eventos`).catch(() => ({ data: [] })),
         api.get('/users/tecnicos').catch(() => ({ data: [] })),
+        api.get('/plantas').catch(() => ({ data: [] })),
       ]);
       setOs(osRes.data);
       setHistorico(histRes.data);
@@ -3897,6 +3962,7 @@ const OSDetailPage = () => {
       setExecutantes(execRes.data);
       setOsEventos(evtRes.data);
       setTecnicos(tecRes.data);
+      setPlantas(plantasRes.data);
       
       // Determine current HH status for this user
       const myHH = (hhRes.data?.executantes || []).find(e => e.user_id === user?.id);
@@ -4091,7 +4157,11 @@ const OSDetailPage = () => {
           <p className="text-xs text-slate-500 mb-1">Equipamento</p>
           <div className="flex items-center justify-between">
             <div>
-              {os.ativo.sector && <p className="text-xs text-slate-500 uppercase font-medium">{os.ativo.sector.nome || os.ativo.sector_nome}</p>}
+              <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-0.5">
+                {plantas?.length > 0 && <span>{plantas[0].nome}</span>}
+                {plantas?.length > 0 && os.ativo.sector && <span className="text-slate-600">›</span>}
+                {os.ativo.sector && <span>{os.ativo.sector.nome || os.ativo.sector_nome}</span>}
+              </div>
               <span className="font-mono text-brand">{os.ativo.tag}</span>
               <p className="text-slate-200">{os.ativo.nome}</p>
             </div>
@@ -4815,6 +4885,7 @@ const InspecoesPage = () => {
   const [rotas, setRotas] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
   const [sectors, setSectors] = useState([]);
+  const [plantas, setPlantas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [deleteItem, setDeleteItem] = useState(null);
@@ -4830,18 +4901,20 @@ const InspecoesPage = () => {
   
   const fetchData = async () => {
     try {
-      const [inspRes, ativosRes, rotasRes, tecnicosRes, sectorsRes] = await Promise.all([
+      const [inspRes, ativosRes, rotasRes, tecnicosRes, sectorsRes, plantasRes] = await Promise.all([
         api.get('/inspecoes'),
         api.get('/ativos'),
         api.get('/rotas-inspecao'),
         api.get('/users/tecnicos'),
-        api.get('/sectors')
+        api.get('/sectors'),
+        api.get('/plantas').catch(() => ({ data: [] }))
       ]);
       setInspecoes(inspRes.data);
       setAtivos(ativosRes.data);
       setRotas(rotasRes.data);
       setTecnicos(tecnicosRes.data);
       setSectors(sectorsRes.data);
+      setPlantas(plantasRes.data);
     } catch (error) {
       toast.error('Erro ao carregar dados');
     } finally {
@@ -4927,7 +5000,11 @@ const InspecoesPage = () => {
                   <div className="flex items-center gap-2 mb-1">
                     {insp.ativo && (
                       <div>
-                        {insp.ativo.sector && <span className="text-[10px] text-slate-600 uppercase block">{insp.ativo.sector?.nome}</span>}
+                        <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                          {plantas?.[0]?.nome && <span>{plantas[0].nome}</span>}
+                          {plantas?.[0]?.nome && insp.ativo.sector?.nome && <span className="text-slate-600">›</span>}
+                          {insp.ativo.sector?.nome && <span>{insp.ativo.sector.nome}</span>}
+                        </div>
                         <span className="font-mono text-brand text-sm">{insp.ativo.tag}</span>
                         <span className="text-slate-400 text-xs ml-1">{insp.ativo.nome}</span>
                       </div>
@@ -4999,14 +5076,19 @@ const InspecaoDetailPage = () => {
   const [checklist, setChecklist] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [plantas, setPlantas] = useState([]);
   const navigate = useNavigate();
   const { user } = useAuth();
   
   const fetchInspecao = async () => {
     try {
-      const response = await api.get(`/inspecoes/${id}`);
+      const [response, plantasRes] = await Promise.all([
+        api.get(`/inspecoes/${id}`),
+        api.get('/plantas').catch(() => ({ data: [] }))
+      ]);
       setInspecao(response.data);
       setChecklist(response.data.checklist || []);
+      setPlantas(plantasRes.data);
     } catch (error) {
       toast.error('Inspeção não encontrada');
       navigate('/inspecoes');
@@ -5086,7 +5168,11 @@ const InspecaoDetailPage = () => {
         <div className="flex-1">
           {inspecao.ativo && (
             <div className="mb-1">
-              {inspecao.ativo.sector && <p className="text-xs text-slate-500 uppercase">{inspecao.ativo.sector?.nome}</p>}
+              <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                {plantas?.[0]?.nome && <span>{plantas[0].nome}</span>}
+                {plantas?.[0]?.nome && inspecao.ativo.sector?.nome && <span className="text-slate-600">›</span>}
+                {inspecao.ativo.sector?.nome && <span>{inspecao.ativo.sector.nome}</span>}
+              </div>
               <span className="font-mono text-brand">{inspecao.ativo.tag}</span>
               <span className="text-slate-300 ml-2">{inspecao.ativo.nome}</span>
             </div>
@@ -5658,7 +5744,7 @@ const RondaPage = () => {
                         {tem_pendente && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />}
                       </div>
                       <p className="text-slate-200 text-sm">{ativo.nome}</p>
-                      <p className="text-xs text-slate-500">{ativo.tipo_equipamento}</p>
+                      <p className="text-xs text-slate-500">{selectedArea?.nome} · {ativo.tipo_equipamento}</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -6499,9 +6585,12 @@ const SolicitacaoServicoPage = () => {
                   <Box size={18} className="text-brand" />
                 </div>
                 <div className="min-w-0">
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-0.5">
+                    {a.sector?.nome && <span>{a.sector.nome}</span>}
+                  </div>
                   <p className="text-sm font-mono text-brand font-bold">{a.tag}</p>
                   <p className="text-sm text-slate-200 truncate">{a.nome}</p>
-                  <p className="text-[10px] text-slate-500">{a.tipo_equipamento || ''}</p>
+                  <p className="text-[10px] text-slate-500">{a.tipo_equipamento || ''} {a.fabricante ? `• ${a.fabricante}` : ''}</p>
                 </div>
                 <ChevronRight size={16} className="text-slate-600 ml-auto shrink-0" />
               </button>
@@ -9366,7 +9455,7 @@ const PortalPublicoPage = () => {
     </div>
   );
 
-  const { ativo, area, branding: brand, kpis, ultimas_inspecoes, ultimas_os, ultimas_manutencoes, manuais } = data;
+  const { ativo, area, unidade, branding: brand, kpis, ultimas_inspecoes, ultimas_os, ultimas_manutencoes, manuais } = data;
   const b = brand || {};
   const statusMap = { operacional: { label: 'Operacional', cls: 'bg-emerald-500/10 text-emerald-400' }, parado: { label: 'Parado', cls: 'bg-red-500/10 text-red-400' }, manutencao: { label: 'Em Manutenção', cls: 'bg-amber-500/10 text-amber-400' } };
   const st = statusMap[ativo.status] || statusMap.operacional;
@@ -9408,9 +9497,10 @@ const PortalPublicoPage = () => {
             <div className="flex-1 min-w-0">
               <p className="font-mono text-lg font-bold" style={{ color: b.cor_primaria || '#10b981' }} data-testid="portal-tag">{ativo.tag}</p>
               <h1 className="text-xl font-bold text-slate-100" data-testid="portal-nome">{ativo.nome}</h1>
-              <p className="text-sm text-slate-400 mt-1">{ativo.tipo_equipamento}</p>
-              <div className="flex items-center gap-2 mt-2">
+              <p className="text-sm text-slate-400 mt-1">{ativo.tipo_equipamento} {ativo.fabricante ? `• ${ativo.fabricante}` : ''}</p>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${st.cls}`}>{st.label}</span>
+                {unidade && <span className="text-xs text-slate-500"><Building2 size={12} className="inline mr-1" />{unidade}</span>}
                 {area && <span className="text-xs text-slate-500"><MapPin size={12} className="inline mr-1" />{area}</span>}
               </div>
             </div>
@@ -9551,6 +9641,7 @@ const PortalPublicoPage = () => {
 const PortalTecnicoPage = () => {
   const { id } = useParams();
   const [ativo, setAtivo] = useState(null);
+  const [plantas, setPlantas] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -9560,8 +9651,12 @@ const PortalTecnicoPage = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.get(`/ativos/${id}`);
+        const [res, plantasRes] = await Promise.all([
+          api.get(`/ativos/${id}`),
+          api.get('/plantas').catch(() => ({ data: [] }))
+        ]);
         setAtivo(res.data);
+        setPlantas(plantasRes.data);
       } catch { toast.error('Ativo não encontrado'); navigate('/'); }
       finally { setLoading(false); }
     })();
@@ -9599,7 +9694,11 @@ const PortalTecnicoPage = () => {
           <div className="flex-1 min-w-0">
             <p className="font-mono text-brand text-lg font-bold">{ativo.tag}</p>
             <h2 className="text-lg text-slate-200 font-semibold">{ativo.nome}</h2>
-            <p className="text-sm text-slate-500">{ativo.sector?.nome || ''} {ativo.tipo_equipamento ? `• ${ativo.tipo_equipamento}` : ''}</p>
+            <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+              {plantas?.[0]?.nome && <span className="flex items-center gap-0.5"><Building2 size={11} />{plantas[0].nome}</span>}
+              {ativo.sector?.nome && <span className="flex items-center gap-0.5"><MapPin size={11} />{ativo.sector.nome}</span>}
+              {ativo.tipo_equipamento && <span>• {ativo.tipo_equipamento}</span>}
+            </div>
           </div>
         </div>
       </div>

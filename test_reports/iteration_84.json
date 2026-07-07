@@ -1,0 +1,42 @@
+{
+  "summary": "RC-11 Identidade Operacional dos Ativos — 6 of 7 flows PASS, 1 FAIL (Portal Público backend). Verified with master login (ASTEC Cedro, org_id=9a232bf2-fc01-4253-813f-8df356be31c1). PASS: (1) /ativos list — every card shows 'UNIDADE CEDRO › PLANTA-XX' above TAG + Nome. (2) /os Kanban renders WITHOUT crash (no 'plantas is not defined'); every card shows 'UNIDADE CEDRO › PLANTA-XX' above TAG. (3) /os/{id} detail — Equipamento block shows 'UNIDADE CEDRO › PLANTA-03' + AV-01 + ALIMENTADOR. (4) /inspecoes — every row shows 'UNIDADE CEDRO › PLANTA-XX' above TAG-nome. (5) /ativos/{id} Prontuário — grid has separate 'Unidade: UNIDADE CEDRO' and 'Área: PLANTA-03' fields. (6) Regression logins: master → Central Executiva OK; test.mec/tec123 → Central de Trabalho (Minha Jornada) OK with sidebar item; test.operador/op123 → Central Operacional with 'Solicitar Serviço' sidebar OK. FAIL: (7) GET /api/public/ativo/{id} returns `unidade: 'Planta Principal'` instead of `'UNIDADE CEDRO'` — verified for ativo 0f8972a8-72c6-4941-97af-06cd61171904.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/public/ativo/{ativo_id}", "issue": "'unidade' field returns 'Planta Principal' instead of 'UNIDADE CEDRO'. Root cause: routes/org.py line 368-370 queries db.plantas collection (which has a stale 'Planta Principal' doc), but the frontend /api/plantas endpoint (server.py line 1721-1726) reads from db.unidades collection (which has 'UNIDADE CEDRO'). Two different collections. Fix: change `db.plantas.find_one(...)` to `db.unidades.find_one(...)` in routes/org.py lines 368 and 370. Also consider dropping the stale db.plantas doc or unifying the collection name org-wide.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "rc11_verification_matrix": {
+    "ativos_list_breadcrumb": "PASS (UNIDADE CEDRO › PLANTA-0X above TAG on 55 cards)",
+    "os_kanban_no_crash": "PASS (no 'plantas is not defined', 20+ cards rendered)",
+    "os_kanban_breadcrumb": "PASS",
+    "os_detail_breadcrumb": "PASS (UNIDADE CEDRO › PLANTA-03 in Equipamento block)",
+    "inspecoes_breadcrumb": "PASS (49 rows, all show breadcrumb)",
+    "prontuario_unidade_area_fields": "PASS (Unidade=UNIDADE CEDRO, Área=PLANTA-03)",
+    "portal_publico_unidade_field": "FAIL (returns 'Planta Principal' not 'UNIDADE CEDRO')",
+    "regression_master_dashboard": "PASS (Central Executiva loaded)",
+    "regression_tec_minha_jornada": "PASS (Central de Trabalho + Minha Jornada sidebar)",
+    "regression_operador_solicitar": "PASS (Central Operacional + Solicitar Serviço sidebar)"
+  },
+  "test_report_links": ["/app/test_reports/iteration_84.json"],
+  "action_items": [
+    "HIGH: Fix /api/public/ativo/{id} in /app/backend/routes/org.py — replace `db.plantas.find_one(...)` with `db.unidades.find_one(...)` on lines 368 and 370. The public endpoint uses the wrong Mongo collection. Frontend /api/plantas already reads from db.unidades (server.py:1726).",
+    "OPTIONAL cleanup: drop the stale doc in db.plantas collection (id=6e17bc98-e1d2-44d1-80ad-c74d1c01a6ea, nome='Planta Principal', org=9a232bf2...) — legacy from before the collection was renamed to 'unidades'.",
+    "OPTIONAL: consider renaming db.unidades → db.plantas everywhere OR db.plantas → db.unidades to avoid future confusion. Currently only /api/plantas + /api/unidades and public/ativo touch this."
+  ],
+  "critical_code_review_comments": [
+    "Collection name inconsistency between routes/org.py (uses db.plantas) and server.py /api/plantas (uses db.unidades). This is fragile and led to the bug. Should be unified.",
+    "routes/org.py public/ativo: fallback logic `if not unidade: unidade = await db.plantas.find_one({'organization_id': org_id})` is fine as a fallback pattern, but points to the wrong collection.",
+    "Sectors in ASTEC don't have `unidade_id` set (all null) — so the first `db.plantas.find_one({id: sector.unidade_id})` never matches; only the fallback executes. Frontend appears to compute breadcrumb via `plantas[0]` (single-unidade org) — matches the recorded design decision.",
+    "Positive: KanbanBoard receives plantas as prop; no ReferenceError anywhere in DOM or console during OS kanban render — the plantas-not-defined fix was applied correctly."
+  ],
+  "updated_files": ["/app/test_reports/iteration_84.json"],
+  "success_rate": {"backend": "83% (1 endpoint FAIL out of 6 tested manually)", "frontend": "100% (6/6 flows PASS)"},
+  "test_credentials": "master@maintrix.com/master123, test.mec@maintrix.com/tec123, test.operador@maintrix.com/op123 — all with organization_id=9a232bf2-fc01-4253-813f-8df356be31c1 (ASTEC Cedro).",
+  "seed_data_creation": "None. Read-only verification.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-11 UI parts (Ativos, OS Kanban, OS Detail, Inspeções list, Prontuário) all show 'UNIDADE CEDRO › PLANTA-XX' correctly — frontend implementation is COMPLETE. Only remaining issue is the backend /api/public/ativo/{id} returning stale 'Planta Principal' from db.plantas collection instead of 'UNIDADE CEDRO' from db.unidades. After main agent flips the collection reference in routes/org.py lines 368+370, re-verify with: `curl https://procure-manutrix.preview.emergentagent.com/api/public/ativo/0f8972a8-72c6-4941-97af-06cd61171904 | jq .unidade` → expect 'UNIDADE CEDRO'. Also worth verifying InspecaoDetailPage and PortalTecnicoPage which we didn't explicitly click into. Frontend logs in via sessionStorage keys 'maintrix_token' + 'maintrix_user' (NOT localStorage). Login flow: type 'ASTEC' → dropdown → click org-option-{id} → email/password → submit.",
+  "rca_of_the_issue": "Portal Público bug RCA: MongoDB has TWO parallel collections — `db.plantas` (contains stale 'Planta Principal' doc for ASTEC) and `db.unidades` (contains real 'UNIDADE CEDRO' doc). The frontend-facing /api/plantas endpoint in server.py:1721-1726 reads from db.unidades (returns 'UNIDADE CEDRO'). But /api/public/ativo/{id} in routes/org.py:368-370 reads from db.plantas (returns 'Planta Principal'). Sectors in ASTEC don't have unidade_id populated, so only the fallback branch executes. Reproduction: `curl $BASE/api/public/ativo/0f8972a8-72c6-4941-97af-06cd61171904 | jq .unidade` → 'Planta Principal'. Mitigation: change 2 lines in routes/org.py from db.plantas to db.unidades and optionally drop the stale db.plantas doc."
+}
