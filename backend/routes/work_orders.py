@@ -612,3 +612,208 @@ async def enviar_para_aprovacao(os_id: str, user: Dict = Depends(get_current_use
     await audit_log("enviar_aprovacao", "ordens_servico", os_id, user,
         f"OS #{os_doc.get('numero','')} enviada para aprovação")
     return await db.ordens_servico.find_one({"id": os_id}, {"_id": 0})
+
+
+# ============== DOSSIÊ PERMANENTE ==============
+
+@router.get("/dossie/os/{os_id}")
+async def dossie_os(os_id: str, user: Dict = Depends(get_current_user)):
+    """Dossiê completo de uma OS — somente leitura. Retorna todos os dados enriquecidos."""
+    if user.get('role') not in ['master', 'admin', 'pcm', 'supervisor', 'gerente']:
+        raise HTTPException(status_code=403, detail="Sem permissão para visualizar dossiê")
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os_doc, "OS")
+
+    # Enrich ativo
+    ativo = await db.ativos.find_one({"id": os_doc.get('ativo_id')}, {"_id": 0})
+    sector = await db.sectors.find_one({"id": ativo.get('sector_id') if ativo else ''}, {"_id": 0, "nome": 1}) if ativo else None
+    unidade = await db.unidades.find_one({"organization_id": os_doc.get('organization_id'), "deleted_at": None}, {"_id": 0, "nome": 1})
+    os_doc['ativo'] = ativo
+    os_doc['ativo_sector'] = sector.get('nome') if sector else ''
+    os_doc['ativo_unidade'] = unidade.get('nome') if unidade else ''
+
+    # Resolve user names
+    async def name(uid):
+        if not uid: return None
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1, "role": 1})
+        return u if u else None
+
+    os_doc['solicitante'] = await name(os_doc.get('criado_por'))
+    os_doc['responsavel'] = await name(os_doc.get('responsavel_id'))
+    os_doc['iniciado_por_info'] = await name(os_doc.get('iniciado_por'))
+    os_doc['concluido_por_info'] = await name(os_doc.get('concluido_por'))
+
+    # Equipe/Executantes with HH
+    executantes = []
+    equipe_ids = os_doc.get('equipe') or []
+    for uid in equipe_ids:
+        u = await name(uid)
+        hh_events = await db.hh_events.find({"os_id": os_id, "user_id": uid, "tipo": "pausa"}, {"_id": 0, "duracao_minutos": 1}).to_list(100)
+        hh_total = sum(e.get('duracao_minutos', 0) for e in hh_events)
+        executantes.append({"id": uid, "nome": u.get('nome') if u else uid, "role": u.get('role') if u else '', "hh_minutos": hh_total})
+    os_doc['executantes'] = executantes
+
+    # HH summary
+    hh_all = await db.hh_events.find({"os_id": os_id}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    os_doc['hh_eventos'] = hh_all
+
+    # Materiais consumidos
+    materiais = await db.os_materiais.find({"os_id": os_id, "deleted_at": None}, {"_id": 0}).to_list(100)
+    for m in materiais:
+        item = await db.estoque.find_one({"id": m.get('item_estoque_id')}, {"_id": 0, "nome": 1, "codigo": 1})
+        m['item_nome'] = item.get('nome') if item else ''
+        m['item_codigo'] = item.get('codigo') if item else ''
+    os_doc['materiais'] = materiais
+
+    # Fotos/Anexos
+    attachments = await db.attachments.find({"entity_type": "ordens_servico", "entity_id": os_id}, {"_id": 0}).to_list(50)
+    os_doc['fotos'] = attachments
+
+    # Histórico/Auditoria
+    hist = await db.audit_logs.find({"entity_id": os_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    os_doc['auditoria'] = hist
+
+    # Aprovação
+    os_doc['aprovacao'] = os_doc.get('aprovacao', {})
+    if os_doc['aprovacao'].get('aprovador_id'):
+        aprov = await name(os_doc['aprovacao']['aprovador_id'])
+        os_doc['aprovacao']['aprovador_nome'] = aprov.get('nome') if aprov else ''
+
+    return os_doc
+
+
+@router.get("/dossie/inspecao/{insp_id}")
+async def dossie_inspecao(insp_id: str, user: Dict = Depends(get_current_user)):
+    """Dossiê completo de uma Inspeção — somente leitura."""
+    if user.get('role') not in ['master', 'admin', 'pcm', 'supervisor', 'gerente']:
+        raise HTTPException(status_code=403, detail="Sem permissão para visualizar dossiê")
+    insp = await db.inspecoes.find_one({"id": insp_id, "deleted_at": None}, {"_id": 0})
+    if not insp:
+        raise HTTPException(status_code=404, detail="Inspeção não encontrada")
+    verify_org_access(user, insp, "Inspeção")
+
+    # Ativo
+    ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0})
+    sector = await db.sectors.find_one({"id": ativo.get('sector_id') if ativo else ''}, {"_id": 0, "nome": 1}) if ativo else None
+    unidade = await db.unidades.find_one({"organization_id": insp.get('organization_id'), "deleted_at": None}, {"_id": 0, "nome": 1})
+    insp['ativo'] = ativo
+    insp['ativo_sector'] = sector.get('nome') if sector else ''
+    insp['ativo_unidade'] = unidade.get('nome') if unidade else ''
+
+    # Plano utilizado
+    if insp.get('plano_id'):
+        plano = await db.planos_inspecao.find_one({"id": insp['plano_id']}, {"_id": 0, "nome": 1, "tipo": 1, "frequencia": 1})
+        insp['plano'] = plano
+
+    # User names
+    async def name(uid):
+        if not uid: return None
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "nome": 1, "role": 1})
+        return u if u else None
+
+    insp['executado_por_info'] = await name(insp.get('concluido_por') or insp.get('criado_por'))
+    insp['criado_por_info'] = await name(insp.get('criado_por'))
+
+    # Fotos/Anexos
+    attachments = await db.attachments.find({"entity_type": "inspecoes", "entity_id": insp_id}, {"_id": 0}).to_list(50)
+    insp['fotos'] = attachments
+
+    # Não-conformidades
+    checklist = insp.get('checklist', [])
+    nao_conformes = [c for c in checklist if c.get('resposta') in ('nao_conforme', 'reprovado', 'nao')]
+    insp['nao_conformidades'] = nao_conformes
+
+    return insp
+
+
+@router.get("/dossie/pesquisa")
+async def dossie_pesquisa(
+    q: Optional[str] = None,
+    tipo: Optional[str] = None,
+    tag: Optional[str] = None,
+    area: Optional[str] = None,
+    executante: Optional[str] = None,
+    data_inicio: Optional[str] = None,
+    data_fim: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    """Pesquisa global em OS e Inspeções concluídas para o dossiê."""
+    org_id = user.get('organization_id', '')
+    results = []
+
+    # Build asset filter by tag/area
+    asset_ids = None
+    if tag or area:
+        ativo_q = {"organization_id": org_id, "deleted_at": None}
+        if tag:
+            ativo_q["tag"] = {"$regex": tag, "$options": "i"}
+        if area:
+            sectors = await db.sectors.find({"nome": {"$regex": area, "$options": "i"}}, {"_id": 0, "id": 1}).to_list(100)
+            sector_ids = [s['id'] for s in sectors]
+            if sector_ids:
+                ativo_q["sector_id"] = {"$in": sector_ids}
+        ativos = await db.ativos.find(ativo_q, {"_id": 0, "id": 1, "tag": 1, "nome": 1}).to_list(500)
+        asset_ids = [a['id'] for a in ativos]
+        if not asset_ids:
+            return []
+
+    # OS search
+    if not tipo or tipo in ('os', 'corretiva', 'preventiva', 'melhoria'):
+        os_q = {"organization_id": org_id, "deleted_at": None}
+        if asset_ids is not None:
+            os_q["ativo_id"] = {"$in": asset_ids}
+        if q:
+            os_q["$or"] = [
+                {"numero": {"$regex": q, "$options": "i"}},
+                {"titulo": {"$regex": q, "$options": "i"}},
+            ]
+        if tipo in ('corretiva', 'preventiva', 'melhoria'):
+            os_q["tipo"] = tipo
+        if data_inicio:
+            os_q["created_at"] = {"$gte": data_inicio}
+        if data_fim:
+            os_q.setdefault("created_at", {})["$lte"] = data_fim
+        if executante:
+            users_match = await db.users.find({"nome": {"$regex": executante, "$options": "i"}, "organization_id": org_id}, {"_id": 0, "id": 1}).to_list(50)
+            uids = [u['id'] for u in users_match]
+            if uids:
+                os_q["$or"] = os_q.get("$or", []) + [{"equipe": {"$in": uids}}, {"concluido_por": {"$in": uids}}]
+
+        oss = await db.ordens_servico.find(os_q, {"_id": 0, "id": 1, "numero": 1, "titulo": 1, "tipo": 1, "status": 1, "ativo_id": 1, "data_conclusao": 1, "created_at": 1, "tempo_execucao_minutos": 1}).sort("created_at", -1).to_list(100)
+        for o in oss:
+            ativo = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
+            sec = await db.sectors.find_one({"id": ativo.get('sector_id') if ativo else ''}, {"_id": 0, "nome": 1}) if ativo else None
+            results.append({
+                "tipo_registro": "os", "id": o['id'], "numero": o.get('numero'), "titulo": o.get('titulo'),
+                "tipo": o.get('tipo'), "status": o.get('status'), "data": o.get('data_conclusao') or o.get('created_at'),
+                "tag": ativo.get('tag') if ativo else '', "equipamento": ativo.get('nome') if ativo else '',
+                "area": sec.get('nome') if sec else '', "tempo_minutos": o.get('tempo_execucao_minutos')
+            })
+
+    # Inspeção search
+    if not tipo or tipo == 'inspecao':
+        insp_q = {"organization_id": org_id, "deleted_at": None}
+        if asset_ids is not None:
+            insp_q["ativo_id"] = {"$in": asset_ids}
+        if q:
+            insp_q["tipo"] = {"$regex": q, "$options": "i"}
+        if data_inicio:
+            insp_q["created_at"] = {"$gte": data_inicio}
+        if data_fim:
+            insp_q.setdefault("created_at", {})["$lte"] = data_fim
+
+        insps = await db.inspecoes.find(insp_q, {"_id": 0, "id": 1, "tipo": 1, "status": 1, "resultado": 1, "ativo_id": 1, "data_conclusao": 1, "created_at": 1, "duracao_minutos": 1}).sort("created_at", -1).to_list(100)
+        for i in insps:
+            ativo = await db.ativos.find_one({"id": i.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
+            sec = await db.sectors.find_one({"id": ativo.get('sector_id') if ativo else ''}, {"_id": 0, "nome": 1}) if ativo else None
+            results.append({
+                "tipo_registro": "inspecao", "id": i['id'], "tipo": i.get('tipo'), "status": i.get('status'),
+                "resultado": i.get('resultado'), "data": i.get('data_conclusao') or i.get('created_at'),
+                "tag": ativo.get('tag') if ativo else '', "equipamento": ativo.get('nome') if ativo else '',
+                "area": sec.get('nome') if sec else '', "tempo_minutos": i.get('duracao_minutos')
+            })
+
+    results.sort(key=lambda r: r.get('data', ''), reverse=True)
+    return results

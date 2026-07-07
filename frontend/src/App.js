@@ -1686,10 +1686,11 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         ...(!isOperacional ? [{ icon: Calendar, label: 'Paradas', path: '/paradas' }] : []),
       ]
     },
-    ...(['admin','master','pcm'].includes(role) ? [{
+    ...(['admin','master','pcm','supervisor'].includes(role) ? [{
       label: 'PCM',
       items: [
-        { icon: BookOpen, label: 'Biblioteca', path: '/biblioteca' },
+        ...(['admin','master','pcm'].includes(role) ? [{ icon: BookOpen, label: 'Biblioteca', path: '/biblioteca' }] : []),
+        { icon: FileText, label: 'Dossiê / Pesquisa', path: '/dossie' },
       ]
     }] : []),
     ...(isAdmin || isPCM || isSupervisor ? [{
@@ -2901,6 +2902,285 @@ const AtivosPage = () => {
 };
 
 // Ativo Detail
+
+// ============== DOSSIÊ PERMANENTE DO EQUIPAMENTO ==============
+const DossieTab = ({ ativoId, plantas, user }) => {
+  const [eventos, setEventos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtro, setFiltro] = useState('');
+  const [dossie, setDossie] = useState(null);
+  const [dossieType, setDossieType] = useState(null);
+  const [dossieLoading, setDossieLoading] = useState(false);
+  const canViewDossie = ['master','admin','pcm','supervisor','gerente'].includes(user?.role);
+  const formatD = (d) => d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  const formatMin = (m) => m ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '—';
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get(`/ativos/${ativoId}/historico`);
+        setEventos(res.data.sort((a,b) => (b.data||'').localeCompare(a.data||'')));
+      } catch { /* empty */ }
+      finally { setLoading(false); }
+    })();
+  }, [ativoId]);
+
+  const openDossie = async (tipo, id) => {
+    if (!canViewDossie) return;
+    setDossieLoading(true);
+    try {
+      const res = await api.get(`/dossie/${tipo}/${id}`);
+      setDossie(res.data);
+      setDossieType(tipo);
+    } catch { toast.error('Erro ao carregar dossiê'); }
+    finally { setDossieLoading(false); }
+  };
+
+  const tipoConfig = {
+    os: { icon: Wrench, color: 'text-blue-400 bg-blue-500/10 border-blue-500/30', label: 'OS' },
+    inspecao: { icon: ClipboardCheck, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30', label: 'Inspeção' },
+    material: { icon: Package, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30', label: 'Material' },
+    anomalia: { icon: AlertTriangle, color: 'text-red-400 bg-red-500/10 border-red-500/30', label: 'Solicitação' },
+  };
+
+  const filtered = filtro ? eventos.filter(e => e.tipo_evento === filtro) : eventos;
+
+  // --- DOSSIÊ OS MODAL ---
+  if (dossie && dossieType === 'os') {
+    const d = dossie;
+    return (
+      <div className="space-y-4" data-testid="dossie-os-view">
+        <div className="flex items-center justify-between">
+          <button onClick={() => { setDossie(null); setDossieType(null); }} className="flex items-center gap-1 text-sm text-slate-400 hover:text-brand" data-testid="dossie-voltar"><ChevronLeft size={16} /> Voltar ao Histórico</button>
+          <span className="text-xs bg-slate-700 text-slate-300 px-3 py-1 rounded-full">SOMENTE LEITURA</span>
+        </div>
+        <div className="glass-card p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                {d.ativo_unidade && <span className="flex items-center gap-0.5"><Building2 size={10} />{d.ativo_unidade}</span>}
+                {d.ativo_sector && <span className="flex items-center gap-0.5"><MapPin size={10} />{d.ativo_sector}</span>}
+              </div>
+              <span className="font-mono text-brand text-sm font-bold">{d.ativo?.tag}</span>
+              <span className="text-slate-300 ml-2">{d.ativo?.nome}</span>
+            </div>
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${d.status === 'concluida' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-300'}`}>{d.status}</span>
+          </div>
+          <h2 className="text-lg font-bold text-slate-100">OS #{d.numero} — {d.titulo}</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div><span className="text-slate-500 text-xs">Tipo</span><p className="text-slate-200 capitalize">{d.tipo}</p></div>
+            <div><span className="text-slate-500 text-xs">Origem</span><p className="text-slate-200 capitalize">{d.origem}</p></div>
+            <div><span className="text-slate-500 text-xs">Prioridade</span><p className="text-slate-200 capitalize">{d.prioridade}</p></div>
+            <div><span className="text-slate-500 text-xs">Disciplina</span><p className="text-slate-200 capitalize">{d.disciplina || '—'}</p></div>
+            <div><span className="text-slate-500 text-xs">Solicitante</span><p className="text-slate-200">{d.solicitante?.nome || '—'}</p></div>
+            <div><span className="text-slate-500 text-xs">Responsável PCM</span><p className="text-slate-200">{d.responsavel?.nome || '—'}</p></div>
+            <div><span className="text-slate-500 text-xs">Iniciado por</span><p className="text-slate-200">{d.iniciado_por_info?.nome || '—'}</p></div>
+            <div><span className="text-slate-500 text-xs">Concluído por</span><p className="text-slate-200">{d.concluido_por_info?.nome || '—'}</p></div>
+            <div><span className="text-slate-500 text-xs">Abertura</span><p className="text-slate-200">{formatD(d.data_abertura || d.created_at)}</p></div>
+            <div><span className="text-slate-500 text-xs">Início</span><p className="text-slate-200">{formatD(d.data_inicio)}</p></div>
+            <div><span className="text-slate-500 text-xs">Conclusão</span><p className="text-slate-200">{formatD(d.data_conclusao)}</p></div>
+            <div><span className="text-slate-500 text-xs">Tempo</span><p className="text-slate-200">{formatMin(d.tempo_execucao_minutos)}</p></div>
+          </div>
+        </div>
+        {d.descricao && <div className="glass-card p-4"><h3 className="text-sm font-semibold text-slate-300 mb-2">Descrição</h3><p className="text-sm text-slate-400">{d.descricao}</p></div>}
+        {d.descricao_servico && <div className="glass-card p-4"><h3 className="text-sm font-semibold text-slate-300 mb-2">Solução Aplicada</h3><p className="text-sm text-slate-400">{d.descricao_servico}</p></div>}
+        {d.causa_falha && <div className="glass-card p-4"><h3 className="text-sm font-semibold text-slate-300 mb-2">Causa da Falha</h3><p className="text-sm text-slate-400">{d.causa_falha}</p></div>}
+        {d.observacoes && <div className="glass-card p-4"><h3 className="text-sm font-semibold text-slate-300 mb-2">Observações</h3><p className="text-sm text-slate-400">{d.observacoes}</p></div>}
+        {d.executantes?.length > 0 && (
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-2">Executantes e HH</h3>
+            <div className="space-y-1">
+              {d.executantes.map((ex, i) => (
+                <div key={i} className="flex items-center justify-between text-sm border-b border-slate-800 pb-1">
+                  <span className="text-slate-200">{ex.nome} <span className="text-xs text-slate-500">({ROLE_LABELS[ex.role] || ex.role})</span></span>
+                  <span className="text-brand font-mono">{formatMin(ex.hh_minutos)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {d.materiais?.length > 0 && (
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-2">Materiais Consumidos</h3>
+            <div className="space-y-1">
+              {d.materiais.map((m, i) => (
+                <div key={i} className="flex items-center justify-between text-sm border-b border-slate-800 pb-1">
+                  <span className="text-slate-200">{m.item_nome || m.item_codigo} <span className="text-xs text-slate-500">{m.item_codigo}</span></span>
+                  <span className="text-slate-300">{m.quantidade} {m.unidade || 'un'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {d.aprovacao?.status && (
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-2">Aprovação</h3>
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div><span className="text-slate-500 text-xs">Status</span><p className="text-slate-200 capitalize">{d.aprovacao.status}</p></div>
+              <div><span className="text-slate-500 text-xs">Aprovador</span><p className="text-slate-200">{d.aprovacao.aprovador_nome || '—'}</p></div>
+              <div><span className="text-slate-500 text-xs">Data</span><p className="text-slate-200">{formatD(d.aprovacao.data)}</p></div>
+            </div>
+          </div>
+        )}
+        {d.fotos?.length > 0 && (
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-2">Fotos e Anexos ({d.fotos.length})</h3>
+            <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+              {d.fotos.map((f, i) => (
+                <a key={i} href={f.url?.startsWith('http') ? f.url : `${BACKEND_URL}${f.url}`} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-slate-700 hover:border-brand/40 transition-all">
+                  {f.mime_type?.startsWith('image') ? <img src={f.url?.startsWith('http') ? f.url : `${BACKEND_URL}${f.url}`} alt="" className="w-full h-20 object-cover" /> : <div className="h-20 flex items-center justify-center bg-slate-800"><FileText size={24} className="text-slate-500" /></div>}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        {d.auditoria?.length > 0 && (
+          <details className="glass-card p-4">
+            <summary className="text-sm font-semibold text-slate-300 cursor-pointer">Auditoria ({d.auditoria.length} registros)</summary>
+            <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+              {d.auditoria.map((a, i) => (
+                <div key={i} className="text-[11px] text-slate-500 border-b border-slate-800 pb-1">
+                  <span className="text-slate-400">{formatD(a.created_at)}</span> — {a.action} — {a.details}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+    );
+  }
+
+  // --- DOSSIÊ INSPEÇÃO MODAL ---
+  if (dossie && dossieType === 'inspecao') {
+    const d = dossie;
+    return (
+      <div className="space-y-4" data-testid="dossie-inspecao-view">
+        <div className="flex items-center justify-between">
+          <button onClick={() => { setDossie(null); setDossieType(null); }} className="flex items-center gap-1 text-sm text-slate-400 hover:text-brand" data-testid="dossie-voltar"><ChevronLeft size={16} /> Voltar ao Histórico</button>
+          <span className="text-xs bg-slate-700 text-slate-300 px-3 py-1 rounded-full">SOMENTE LEITURA</span>
+        </div>
+        <div className="glass-card p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                {d.ativo_unidade && <span className="flex items-center gap-0.5"><Building2 size={10} />{d.ativo_unidade}</span>}
+                {d.ativo_sector && <span className="flex items-center gap-0.5"><MapPin size={10} />{d.ativo_sector}</span>}
+              </div>
+              <span className="font-mono text-brand text-sm font-bold">{d.ativo?.tag}</span>
+              <span className="text-slate-300 ml-2">{d.ativo?.nome}</span>
+            </div>
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${d.status === 'concluida' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-300'}`}>{d.status}</span>
+          </div>
+          <h2 className="text-lg font-bold text-slate-100">Inspeção {d.tipo?.charAt(0).toUpperCase() + d.tipo?.slice(1)}</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div><span className="text-slate-500 text-xs">Tipo</span><p className="text-slate-200 capitalize">{d.tipo}</p></div>
+            <div><span className="text-slate-500 text-xs">Disciplina</span><p className="text-slate-200 capitalize">{d.disciplina || '—'}</p></div>
+            <div><span className="text-slate-500 text-xs">Resultado</span><p className={`capitalize ${d.resultado === 'conforme' ? 'text-emerald-400' : d.resultado === 'nao_conforme' ? 'text-red-400' : 'text-slate-200'}`}>{d.resultado || '—'}</p></div>
+            <div><span className="text-slate-500 text-xs">Duração</span><p className="text-slate-200">{formatMin(d.duracao_minutos)}</p></div>
+            <div><span className="text-slate-500 text-xs">Executado por</span><p className="text-slate-200">{d.executado_por_info?.nome || '—'}</p></div>
+            <div><span className="text-slate-500 text-xs">Criado por</span><p className="text-slate-200">{d.criado_por_info?.nome || '—'}</p></div>
+            <div><span className="text-slate-500 text-xs">Data Execução</span><p className="text-slate-200">{formatD(d.data_conclusao || d.data_inicio)}</p></div>
+            <div><span className="text-slate-500 text-xs">Criação</span><p className="text-slate-200">{formatD(d.created_at)}</p></div>
+          </div>
+          {d.plano && (
+            <div className="bg-slate-800/50 rounded p-3">
+              <span className="text-xs text-slate-500">Plano utilizado:</span>
+              <p className="text-sm text-slate-300 font-medium">{d.plano.nome} <span className="text-xs text-slate-500 capitalize">({d.plano.tipo} — {d.plano.frequencia})</span></p>
+            </div>
+          )}
+        </div>
+        {d.checklist?.length > 0 && (
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-3">Respostas do Checklist ({d.checklist.length})</h3>
+            <div className="space-y-2">
+              {d.checklist.map((c, i) => (
+                <div key={i} className={`flex items-start justify-between text-sm border-b border-slate-800 pb-2 ${c.resposta === 'nao_conforme' || c.resposta === 'reprovado' ? 'bg-red-500/5 -mx-2 px-2 rounded' : ''}`}>
+                  <div className="flex-1">
+                    <p className="text-slate-300">{c.pergunta}</p>
+                    {c.observacao && <p className="text-xs text-slate-500 mt-0.5">{c.observacao}</p>}
+                  </div>
+                  <span className={`ml-3 text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${c.resposta === 'conforme' || c.resposta === 'sim' ? 'bg-emerald-500/10 text-emerald-400' : c.resposta === 'nao_conforme' || c.resposta === 'nao' || c.resposta === 'reprovado' ? 'bg-red-500/10 text-red-400' : 'bg-slate-700 text-slate-300'}`}>{c.resposta || '—'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {d.nao_conformidades?.length > 0 && (
+          <div className="glass-card p-4 border border-red-500/20">
+            <h3 className="text-sm font-semibold text-red-400 mb-2">Não Conformidades ({d.nao_conformidades.length})</h3>
+            <div className="space-y-1">
+              {d.nao_conformidades.map((nc, i) => (
+                <div key={i} className="text-sm text-red-300">{nc.pergunta}: <span className="text-red-400 font-medium">{nc.resposta}</span></div>
+              ))}
+            </div>
+          </div>
+        )}
+        {d.observacoes && <div className="glass-card p-4"><h3 className="text-sm font-semibold text-slate-300 mb-2">Observações</h3><p className="text-sm text-slate-400">{d.observacoes}</p></div>}
+        {d.fotos?.length > 0 && (
+          <div className="glass-card p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-2">Fotos ({d.fotos.length})</h3>
+            <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+              {d.fotos.map((f, i) => (
+                <a key={i} href={f.url?.startsWith('http') ? f.url : `${BACKEND_URL}${f.url}`} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-slate-700 hover:border-brand/40 transition-all">
+                  {f.mime_type?.startsWith('image') ? <img src={f.url?.startsWith('http') ? f.url : `${BACKEND_URL}${f.url}`} alt="" className="w-full h-20 object-cover" /> : <div className="h-20 flex items-center justify-center bg-slate-800"><FileText size={24} className="text-slate-500" /></div>}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- TIMELINE LIST ---
+  return (
+    <div className="space-y-3" data-testid="dossie-tab">
+      <div className="glass-card p-3 flex flex-wrap items-center gap-2">
+        <select value={filtro} onChange={e => setFiltro(e.target.value)} className="input-industrial px-3 text-sm">
+          <option value="">Todos ({eventos.length})</option>
+          <option value="os">Ordens de Serviço</option>
+          <option value="inspecao">Inspeções</option>
+          <option value="material">Materiais</option>
+        </select>
+        <span className="text-xs text-slate-500 ml-auto">{filtered.length} registros</span>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-8"><Cog size={32} className="text-brand animate-spin" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-8 text-slate-500"><ClipboardCheck size={32} className="mx-auto mb-2 opacity-30" /><p>Nenhum registro encontrado</p></div>
+      ) : (
+        <div className="space-y-1.5">
+          {filtered.map((ev, idx) => {
+            const cfg = tipoConfig[ev.tipo_evento] || tipoConfig.os;
+            const Icon = cfg.icon;
+            const clickable = canViewDossie && (ev.tipo_evento === 'os' || ev.tipo_evento === 'inspecao');
+            return (
+              <div key={idx} onClick={() => clickable && openDossie(ev.tipo_evento, ev.id)} className={`glass-card p-3 flex items-center gap-3 ${clickable ? 'cursor-pointer hover:border-brand/30' : ''} transition-all`} data-testid={`dossie-item-${idx}`}>
+                <div className={`p-2 rounded-lg border ${cfg.color}`}><Icon size={16} /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-200 truncate">{ev.titulo}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full capitalize ${ev.status === 'concluida' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>{ev.status}</span>
+                  </div>
+                  {ev.descricao && <p className="text-xs text-slate-500 truncate">{ev.descricao}</p>}
+                  {ev.usuario && <p className="text-[10px] text-slate-600">{ev.usuario}</p>}
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-slate-400">{formatD(ev.data)}</p>
+                  {ev.tempo_minutos && <p className="text-[10px] text-slate-500">{formatMin(ev.tempo_minutos)}</p>}
+                </div>
+                {clickable && <ChevronRight size={14} className="text-slate-600" />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {dossieLoading && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><Cog size={48} className="text-brand animate-spin" /></div>}
+    </div>
+  );
+};
+
+
 const AtivoDetailPage = () => {
   const { id } = useParams();
   const [ativo, setAtivo] = useState(null);
@@ -3003,6 +3283,7 @@ const AtivoDetailPage = () => {
 
   const tabs = [
     { key: 'prontuario', label: 'Prontuário' },
+    { key: 'dossie', label: 'Histórico Completo' },
     { key: 'timeline', label: `Timeline (${historico.length})` },
     { key: 'planos', label: `Planos (${planosVinculados.length})` },
     { key: 'os', label: `OS (${ativo.ordens_servico?.length || 0})` },
@@ -3202,6 +3483,13 @@ const AtivoDetailPage = () => {
           </div>
         </div>
       )}
+
+
+      {/* ===== TAB: DOSSIÊ PERMANENTE ===== */}
+      {activeTab === 'dossie' && (
+        <DossieTab ativoId={ativo.id} plantas={plantas} user={user} />
+      )}
+
 
       {/* ===== TAB: Timeline completa ===== */}
       {activeTab === 'timeline' && (
@@ -9421,6 +9709,124 @@ const ConsultaEquipamentosPage = () => {
 
 // ============== PORTAL PÚBLICO DO EQUIPAMENTO (FASE 4) ==============
 
+
+// ============== DOSSIÊ PESQUISA GLOBAL ==============
+const DossiePesquisaPage = () => {
+  const [busca, setBusca] = useState('');
+  const [tipo, setTipo] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [dossie, setDossie] = useState(null);
+  const [dossieType, setDossieType] = useState(null);
+  const [dossieLoading, setDossieLoading] = useState(false);
+  const [plantas, setPlantas] = useState([]);
+  const { user } = useAuth();
+  const formatD = (d) => d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+  const formatMin = (m) => m ? `${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}` : '';
+
+  useEffect(() => { api.get('/plantas').then(r => setPlantas(r.data)).catch(() => {}); }, []);
+
+  const pesquisar = async () => {
+    if (!busca.trim() && !tipo) return;
+    setLoading(true);
+    try {
+      const params = {};
+      if (busca.trim()) params.q = busca.trim();
+      if (tipo) params.tipo = tipo;
+      const res = await api.get('/dossie/pesquisa', { params });
+      setResults(res.data);
+    } catch { toast.error('Erro na pesquisa'); }
+    finally { setLoading(false); }
+  };
+
+  const openDossie = async (tipoReg, id) => {
+    setDossieLoading(true);
+    try {
+      const res = await api.get(`/dossie/${tipoReg}/${id}`);
+      setDossie(res.data);
+      setDossieType(tipoReg);
+    } catch { toast.error('Erro ao carregar dossiê'); }
+    finally { setDossieLoading(false); }
+  };
+
+  if (dossie) {
+    return (
+      <div data-testid="dossie-pesquisa-detail">
+        <button onClick={() => { setDossie(null); setDossieType(null); }} className="flex items-center gap-1 text-sm text-slate-400 hover:text-brand mb-3"><ChevronLeft size={16} /> Voltar à pesquisa</button>
+        <DossieTab ativoId={dossie.ativo_id || dossie.ativo?.id} plantas={plantas} user={user} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4" data-testid="dossie-pesquisa">
+      <div className="flex items-center gap-3">
+        <FileText size={24} className="text-brand" />
+        <h1 className="text-2xl font-bold text-slate-100">Dossiê / Pesquisa</h1>
+      </div>
+      <p className="text-sm text-slate-400">Pesquise ordens de serviço e inspeções por número, TAG, equipamento, área ou tipo.</p>
+      <div className="glass-card p-4 flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[200px]">
+          <label className="text-xs text-slate-500 mb-1 block">Pesquisar</label>
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input value={busca} onChange={e => setBusca(e.target.value)} onKeyDown={e => e.key === 'Enter' && pesquisar()} placeholder="Nº OS, TAG, equipamento..." className="input-industrial w-full pl-9" data-testid="dossie-pesquisa-input" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 mb-1 block">Tipo</label>
+          <select value={tipo} onChange={e => setTipo(e.target.value)} className="input-industrial px-3" data-testid="dossie-pesquisa-tipo">
+            <option value="">Todos</option>
+            <option value="corretiva">OS Corretiva</option>
+            <option value="preventiva">OS Preventiva</option>
+            <option value="melhoria">OS Melhoria</option>
+            <option value="inspecao">Inspeção</option>
+          </select>
+        </div>
+        <button onClick={pesquisar} className="btn-primary flex items-center gap-2" data-testid="dossie-pesquisa-btn">
+          <Search size={16} /> Pesquisar
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-8"><Cog size={32} className="text-brand animate-spin" /></div>
+      ) : results.length > 0 ? (
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-500">{results.length} resultado(s)</p>
+          {results.map((r, i) => (
+            <div key={i} onClick={() => openDossie(r.tipo_registro, r.id)} className="glass-card p-3 flex items-center gap-3 cursor-pointer hover:border-brand/30 transition-all" data-testid={`dossie-result-${i}`}>
+              <div className={`p-2 rounded-lg border ${r.tipo_registro === 'os' ? 'text-blue-400 bg-blue-500/10 border-blue-500/30' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'}`}>
+                {r.tipo_registro === 'os' ? <Wrench size={16} /> : <ClipboardCheck size={16} />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  {r.numero && <span className="font-mono text-brand text-sm">#{r.numero}</span>}
+                  <span className="text-sm text-slate-200 truncate">{r.titulo || r.tipo}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full capitalize ${r.status === 'concluida' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>{r.status}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  {r.area && <span>{r.area}</span>}
+                  {r.tag && <span className="font-mono text-brand">{r.tag}</span>}
+                  {r.equipamento && <span>{r.equipamento}</span>}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs text-slate-400">{formatD(r.data)}</p>
+                {r.tempo_minutos && <p className="text-[10px] text-slate-500">{formatMin(r.tempo_minutos)}</p>}
+              </div>
+              <ChevronRight size={14} className="text-slate-600" />
+            </div>
+          ))}
+        </div>
+      ) : busca || tipo ? (
+        <div className="text-center py-8 text-slate-500"><Search size={32} className="mx-auto mb-2 opacity-30" /><p>Nenhum resultado para a pesquisa</p></div>
+      ) : null}
+      {dossieLoading && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><Cog size={48} className="text-brand animate-spin" /></div>}
+    </div>
+  );
+};
+
+
 const PortalPublicoPage = () => {
   const { id } = useParams();
   const [data, setData] = useState(null);
@@ -10246,6 +10652,7 @@ function App() {
               <Route path="/admin/config" element={<ProtectedRoute allow={['master','admin']}><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
               <Route path="/equipe" element={<ProtectedRoute allow={['master','admin','pcm','supervisor']}><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
               <Route path="/biblioteca" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/dossie" element={<ProtectedRoute allow={['master','admin','pcm','supervisor','gerente']}><AppLayout><DossiePesquisaPage /></AppLayout></ProtectedRoute>} />
               <Route path="/master/white-label" element={<ProtectedRoute allow={['master']}><AppLayout><WhiteLabelDesignerPage /></AppLayout></ProtectedRoute>} />
               <Route path="/master/cleanup" element={<ProtectedRoute allow={['master']}><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
               <Route path="/consulta" element={<ProtectedRoute><AppLayout><ConsultaEquipamentosPage /></AppLayout></ProtectedRoute>} />

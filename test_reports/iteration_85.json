@@ -1,0 +1,59 @@
+{
+  "summary": "RC-12 Dossiê Permanente do Equipamento — Backend 12/12 PASS, Frontend 100% PASS. All required endpoints functional: /api/ativos/{id}/historico returns timeline events with tipo_evento/titulo/status/data; /api/dossie/os/{id} enriches OS with ativo_unidade='UNIDADE CEDRO' + ativo_sector + executantes + materiais + fotos + auditoria + aprovacao; /api/dossie/inspecao/{id} enriches with ativo, unidade, sector, plano, checklist, nao_conformidades, fotos; /api/dossie/pesquisa?q=bomba returns 6 enriched results with tipo_registro/tag/equipamento/area/status; ?tipo=inspecao filter works. RBAC: tec_mecanico (test.mec@maintrix.com) → 403 on both dossie endpoints. GUI: /ativos/{id} shows 'Histórico Completo' tab, dossie-tab renders 8 items, clicking OS item opens dossie-os-view with 'SOMENTE LEITURA' badge and 'Voltar ao Histórico' button. /dossie loads DossiePesquisaPage; typing 'bomba' + click Pesquisar → 6 results shown with dossie-result-0 selector. Regression /dashboard, /os, /inspecoes all load cleanly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/dossie/os/{id} and /api/dossie/inspecao/{id}", "issue": "ativo_unidade returns 'UNIDADE CEDRO ' with a trailing space. Source is db.unidades.nome; either the seed doc has a trailing space or values should be .strip()-ed on read. Cosmetic — UI does not currently show excess space visibly."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Login / global", "issues": ["React hydration warning in console: '<span> cannot be a child of <option>'. Somewhere a native <select><option> has a <span> child. Not blocking but should be cleaned up."]}
+    ]
+  },
+  "rc12_verification_matrix": {
+    "historico_endpoint": "PASS (8 events, correct schema)",
+    "dossie_os_enrichment": "PASS (ativo_unidade=UNIDADE CEDRO, executantes/materiais/fotos/auditoria/aprovacao all present)",
+    "dossie_os_404": "PASS",
+    "dossie_inspecao_enrichment": "PASS",
+    "pesquisa_q_bomba": "PASS (6 results, all fields present)",
+    "pesquisa_tipo_inspecao_filter": "PASS (all results tipo_registro=inspecao)",
+    "rbac_tec_blocked_os": "PASS (403)",
+    "rbac_tec_blocked_inspecao": "PASS (403)",
+    "gui_prontuario_historico_tab": "PASS (tab visible, dossie-tab renders, 8 items)",
+    "gui_dossie_os_view_click": "PASS (dossie-os-view opens, SOMENTE LEITURA badge visible, dossie-voltar visible, full OS #2026-00004 detail rendered with UNIDADE CEDRO › PLANTA-03 breadcrumb)",
+    "gui_dossie_pesquisa_page": "PASS (dossie-pesquisa renders, input/btn functional, 6 results for 'bomba', dossie-result-0 visible)",
+    "regression_dashboard": "PASS",
+    "regression_os_page": "PASS",
+    "regression_inspecoes_page": "PASS"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration85_rc12_dossie.py",
+    "/app/test_reports/pytest/iteration85.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: strip() trailing whitespace on unidade.nome (either fix seed data — db.unidades doc for ASTEC has 'UNIDADE CEDRO ' with trailing space — or add .strip() when reading in dossie endpoints).",
+    "OPTIONAL: fix hydration warning '<span> cannot be a child of <option>' — a <select> somewhere renders a <span> inside <option>. Not user-visible but pollutes console."
+  ],
+  "critical_code_review_comments": [
+    "routes/work_orders.py dossie/os and dossie/inspecao correctly excludes _id via projection everywhere. Good.",
+    "dossie/pesquisa builds Mongo query dynamically but overwrites $or if 'executante' filter is combined with 'q' — line 782 does os_q['$or'] = os_q.get('$or', []) + [...] which appends but should ideally use $and for clarity. Low priority.",
+    "RBAC gate uses hardcoded role list ['master','admin','pcm','supervisor','gerente'] duplicated in both endpoints — consider a helper decorator/dep. Low priority.",
+    "Positive: consistent org isolation via verify_org_access on both dossie endpoints.",
+    "DossieTab (frontend App.js line 2907-3180) properly handles read-only rendering with dossie-voltar and SOMENTE LEITURA badge."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration85_rc12_dossie.py",
+    "/app/test_reports/pytest/iteration85.xml",
+    "/app/test_reports/iteration_85.json"
+  ],
+  "success_rate": {"backend": "100% (12/12 tests pass)", "frontend": "100% (all flows pass)"},
+  "test_credentials": "master@maintrix.com/master123, test.mec@maintrix.com/tec123 — org=ASTEC Cedro (id=9a232bf2-fc01-4253-813f-8df356be31c1)",
+  "seed_data_creation": "None. Used existing concluída OS #2026-00004 (id retrieved via /api/ordens-servico filter status=concluida) and inspecoes[0].",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-12 fully implemented and verified. Backend endpoints at /app/backend/routes/work_orders.py lines 619-819 and /app/backend/routes/assets.py line 364. Frontend DossieTab component at App.js lines 2907-3210, DossiePesquisaPage at 9714-9810, route /dossie at line 10655. RBAC roles allowed: master, admin, pcm, supervisor, gerente. Note only 'os' and 'inspecao' items in DossieTab are clickable; 'parada' and other tipo_evento items are display-only. Data quality note: db.unidades ASTEC doc has 'UNIDADE CEDRO ' with trailing space.",
+  "rca_of_the_issue": "No blocking issues. Cosmetic: trailing space on UNIDADE CEDRO comes from the seed data itself in db.unidades collection — visible in JSON responses but not in UI (CSS whitespace collapse). Fix at seed or add .strip() in the enrichment step."
+}
