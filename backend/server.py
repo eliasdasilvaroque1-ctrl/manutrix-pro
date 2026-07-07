@@ -65,6 +65,23 @@ async def startup_create_indexes():
     from data_architecture import create_all_indexes
     from org_config import CONFIG_INDEXES
     await create_all_indexes(db)
+    
+    # Compound unique index: (organization_id, email) — allows same email in different orgs
+    try:
+        await db.users.drop_index("email_1")
+    except Exception:
+        pass
+    try:
+        await db.users.create_index(
+            [("organization_id", 1), ("email", 1)],
+            name="org_email_unique",
+            unique=True,
+            partialFilterExpression={"deleted_at": None}
+        )
+        logger.info("Index org_email_unique created/verified on users")
+    except Exception as e:
+        logger.warning(f"Index org_email_unique: {e}")
+    
     # Create config indexes
     for coll_name, idx_list in CONFIG_INDEXES.items():
         for idx in idx_list:
@@ -103,22 +120,14 @@ async def register(user_data: UserCreate):
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
     email = credentials.email.lower().strip()
+    org_id = credentials.organization_id
     
-    # Build query with organization scope
-    query = {"email": email, "deleted_at": None}
-    if credentials.organization_id:
-        query["organization_id"] = credentials.organization_id
-    
-    user = await db.users.find_one(query, {"_id": 0})
+    user = await db.users.find_one({"email": email, "organization_id": org_id, "deleted_at": None}, {"_id": 0})
     if not user or not verify_password(credentials.password, user.get('password_hash', '')):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
     
-    # Validate organization context
-    if credentials.organization_id and user.get('organization_id') != credentials.organization_id:
-        raise HTTPException(status_code=401, detail="Usuário não pertence a esta organização")
-    
-    token = create_token(user['id'], user.get('role', 'tecnico'), user.get('organization_id', ''))
-    await audit_log("login", "auth", user['id'], user, f"Login: {email}")
+    token = create_token(user['id'], user.get('role', 'tecnico'), user['organization_id'])
+    await audit_log("login", "auth", user['id'], user, f"Login: {email} org: {org_id[:8]}")
     return TokenResponse(
         access_token=token,
         user={"id": user['id'], "email": user['email'], "nome": user['nome'],
@@ -157,26 +166,22 @@ async def get_my_permissions(user: Dict = Depends(get_current_user)):
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest):
-    """Send password reset - scoped to organization"""
+    """Send password reset - scoped to organization (required)"""
     email = data.email.lower().strip()
+    org_id = data.organization_id
     
-    # Build query with organization scope
-    query = {"email": email, "deleted_at": None}
-    if data.organization_id:
-        query["organization_id"] = data.organization_id
-    
-    user = await db.users.find_one(query, {"_id": 0})
+    user = await db.users.find_one({"email": email, "organization_id": org_id, "deleted_at": None}, {"_id": 0})
     if not user:
         return {"success": True, "message": "Se o email existir, um link de redefinição será gerado"}
     
     token = secrets.token_urlsafe(32)
     await db.password_reset_tokens.insert_one({
         "token": token, "user_id": user['id'], "email": email,
-        "organization_id": user.get('organization_id', ''),
+        "organization_id": org_id,
         "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
         "used": False, "created_at": datetime.now(timezone.utc).isoformat()
     })
-    logger.info(f"PASSWORD RESET TOKEN for {email}: {token}")
+    logger.info(f"PASSWORD RESET TOKEN for {email}@{org_id[:8]}: {token}")
     return {"success": True, "message": "Token de redefinição gerado. Verifique seu email."}
 
 @api_router.post("/auth/reset-password")
@@ -3181,9 +3186,15 @@ async def admin_get_user(user_id: str, user: Dict = Depends(get_current_user)):
 async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
     email_normalized = data.email.lower().strip()
-    existing = await db.users.find_one({"email": email_normalized, "deleted_at": None})
+    target_org = data.organization_id or user.get('organization_id', '')
+    
+    if not target_org:
+        raise HTTPException(status_code=400, detail="organization_id é obrigatório")
+    
+    # Check unique within organization (allows same email in different orgs)
+    existing = await db.users.find_one({"email": email_normalized, "organization_id": target_org, "deleted_at": None})
     if existing:
-        raise HTTPException(status_code=400, detail="Email já cadastrado")
+        raise HTTPException(status_code=400, detail="Email já cadastrado nesta organização")
     
     user_id = str(uuid.uuid4())
     user_doc = {
@@ -3191,7 +3202,7 @@ async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_u
         "email": email_normalized,
         "nome": data.nome,
         "role": data.role.value,
-        "organization_id": data.organization_id or user.get('organization_id', ''),
+        "organization_id": target_org,
         "telefone": data.telefone,
         "disciplina_principal": data.disciplina_principal,
         "disciplinas_secundarias": data.disciplinas_secundarias or [],
@@ -3531,8 +3542,7 @@ app.add_middleware(
 async def run_migrations():
     """Run all startup migrations"""
     try:
-        # Create indexes
-        await db.users.create_index("email")
+        # Create indexes (compound org+email is created in startup_create_indexes)
         await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
         await db.password_reset_tokens.create_index("token")
         await db.sectors.create_index("organization_id")

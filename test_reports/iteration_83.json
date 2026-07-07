@@ -1,0 +1,48 @@
+{
+  "summary": "RC-09 Congelamento Multiempresa — FULL PASS (11/11 backend + GUI regression). Backend: (1) Login without organization_id → 422 with 'organization_id' in error body; login with correct org → 200 + token bearing correct organization_id; login with fake org → 401; login with wrong password → 401. (2) Forgot-password without organization_id → 422; with correct org → 200 {success:true}. (3) POST /api/auth/register → 403 'Registro direto desabilitado'. (4) POST /api/admin/users without organization_id (as ASTEC master) → user created with organization_id auto-inherited from admin (== ASTEC 9a232bf2…). (5) REGRESSION RBAC on ASTEC org: tec (test.mec) POST /api/ordens-servico → 200 OK; gerente (test.gerente) POST /api/ordens-servico → 403. (6) REGRESSION exports: master GET /api/export/ativos?format=excel → 200 with non-empty body. GUI: /login empresa-input='ASTEC' → dropdown shows ASTEC Cedro + Org de Admin ASTEC → click ASTEC Cedro → fill login-email/login-password → click login-submit → login POST payload confirmed to be {email, password, organization_id:'9a232bf2-fc01-4253-813f-8df356be31c1'} → redirect to '/' → 'Login realizado!' toast → Central Executiva (dashboard) rendered with ASTEC branding + full master sidebar (Central de Trabalho, Dashboard, Equipe, Ativos, Ordens de Serviço, Inspeções, Unidades, Áreas, Estoque, Sobressalentes, Paradas, Biblioteca, Usuários, Planos de Inspeção, Auditoria, Configurações).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "rc09_verification_matrix": {
+    "P1_login_without_org_returns_422": "PASS",
+    "P1_login_correct_org_returns_200_token": "PASS",
+    "P1_login_wrong_org_returns_401": "PASS",
+    "P1_login_wrong_password_returns_401": "PASS",
+    "P2_compound_index_org_email_unique": "PASS (verified via startup log + admin create + no conflict across orgs)",
+    "P3_forgot_password_without_org_returns_422": "PASS",
+    "P3_forgot_password_with_org_success": "PASS",
+    "P4_admin_create_user_without_org_inherits_admin_org": "PASS (created org == ASTEC 9a232bf2…)",
+    "P5_register_returns_403": "PASS",
+    "regression_rbac_tec_can_create_os": "PASS (200)",
+    "regression_rbac_gerente_denied_create_os": "PASS (403)",
+    "regression_export_ativos_excel_200": "PASS",
+    "gui_login_flow_astec": "PASS (empresa→ASTEC Cedro→email/senha→Entrar → / redirect + dashboard)",
+    "gui_login_payload_contains_organization_id": "PASS"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rc09_congelamento.py",
+    "/app/test_reports/pytest/iteration83.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "models.py: UserLogin.organization_id and ForgotPasswordRequest.organization_id are now `str` (required). FastAPI/Pydantic correctly emits 422 on missing field — matches P0 requirement.",
+    "server.py auth/login (~line 120-140): Query is now strict — `{email, organization_id, deleted_at:None}`. Wrong org returns 401 same as wrong password (no user enumeration leak). Good.",
+    "server.py auth/forgot-password (~line 167-185): Same generic message returned whether user exists or not — safe against enumeration; reset token stored with organization_id — enables cross-org isolation on reset.",
+    "server.py startup_create_indexes (~line 64-83): Drops legacy `email_1` index and creates compound `org_email_unique` on (organization_id, email) with partialFilterExpression={deleted_at:None} — correctly allows same email to exist in different orgs and after soft-delete restores. Verified via admin create user test with existing email in a soft-delete state.",
+    "server.py admin_create_user (~line 3185-3231): `target_org = data.organization_id or user.get('organization_id')` — correctly inherits admin's org when payload omits it; unique check scoped to (email, target_org). Response excludes password_hash and _id — good.",
+    "frontend App.js Login handler: verified live — always sends `organization_id` from the selected empresa; forgot-password modal also sends it. Login page has proper data-testids (empresa-input, login-email, login-password, login-submit, forgot-password-link).",
+    "MINOR: Org options in dropdown use `data-testid=\"org-option-{org_id}\"` (suffixed with the id). If any downstream test script expects the plain `data-testid=\"org-option\"` selector, it will fail — recommend either dual-tagging (both attributes) or updating docs. Tests here worked around by using text match on 'ASTEC Cedro'.",
+    "MINOR (non-blocking): The `TokenResponse` decorator on `/api/auth/register` is cosmetic — the endpoint always raises 403 and never returns a token. Consider removing the response_model to avoid schema misdirection."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rc09_congelamento.py",
+    "/app/test_reports/iteration_83.json",
+    "/app/test_reports/pytest/iteration83.xml"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (login flow + payload verification)"},
+  "test_credentials": "master@maintrix.com/master123, test.mec@maintrix.com/tec123, test.gerente@maintrix.com/ger123 — all logged in via ASTEC Cedro org_id=9a232bf2-fc01-4253-813f-8df356be31c1. One ephemeral 'TEST_rc09_inherit_{uuid}@example.com' created and soft-deleted within the admin_create_user test.",
+  "seed_data_creation": "None persistent — ephemeral TEST_rc09_inherit_* user created and cleaned. Ephemeral tec OS also cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-09 is closed. All auth endpoints (login, forgot-password) now REQUIRE organization_id — Pydantic returns 422 if absent. Compound unique index org_email_unique on (organization_id, email) is live. Admin create user inherits admin's org when payload omits organization_id. RBAC on /api/ordens-servico is intact (tec ok, gerente 403). Master export /api/export/ativos?format=excel returns 200. GUI login payload confirmed to always carry organization_id. ASTEC Cedro org_id = 9a232bf2-fc01-4253-813f-8df356be31c1. Note for future: org-option data-testid is `org-option-{org_id}`, not plain `org-option`.",
+  "rca_of_the_issue": "N/A — no defects."
+}
