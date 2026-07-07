@@ -3167,9 +3167,10 @@ async def delete_knowledge(kb_id: str, user: Dict = Depends(get_current_user)):
 async def admin_list_users(user: Dict = Depends(get_current_user)):
     check_admin_only(user)
     query = {"deleted_at": None}
-    if user.get('organization_id'):
+    # Master sees all orgs, admin sees only their own org
+    if user.get('role') != 'master' and user.get('organization_id'):
         query['organization_id'] = user['organization_id']
-    return await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(200)
+    return await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(500)
 
 @api_router.get("/admin/users/{user_id}")
 async def admin_get_user(user_id: str, user: Dict = Depends(get_current_user)):

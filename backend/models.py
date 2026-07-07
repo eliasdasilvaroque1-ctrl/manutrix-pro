@@ -329,7 +329,7 @@ class EstoqueCreate(BaseModel):
     descricao: Optional[str] = None
     categoria: str = "outro"
     quantidade: float = 0
-    unidade: UnidadeEstoque = UnidadeEstoque.UN
+    unidade: str = "UN"
     estoque_minimo: float = 0
     estoque_maximo: Optional[float] = None
     custo_unitario: float = 0
