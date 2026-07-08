@@ -14,7 +14,8 @@ import {
   Phone, Mail, Building, Hash, Thermometer, Volume2, Droplet, Cog,
   DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
   Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy, Factory,
-  Building2, Palette, BookOpen, CheckCircle2, Sparkles, Send
+  Building2, Palette, BookOpen, CheckCircle2, Sparkles, Send,
+  ZoomIn, Maximize2, ImagePlus
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
 import { BrandingProvider, useBranding } from "@/lib/branding";
@@ -413,6 +414,228 @@ const CameraCapture = ({ onCapture, onClose }) => {
         <button onClick={takePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-white/30 hover:bg-gray-200 transition-all" data-testid="camera-shutter" />
         <div className="w-12" />
       </div>
+    </div>
+  );
+};
+
+// ============== MATERIAL IMAGE COMPONENTS ==============
+
+const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { h = (maxWidth / w) * h; w = maxWidth; }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }));
+        }, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+const MaterialThumbnail = ({ images, nome, categoria, size = 'md', onClick }) => {
+  const { config } = useBranding();
+  const primaryColor = config?.tema?.cor_primaria || '#10b981';
+  const src = (images || [])[0];
+  const sizes = { sm: 'w-8 h-8', md: 'w-10 h-10', lg: 'w-14 h-14', xl: 'w-20 h-20' };
+  const iconSizes = { sm: 12, md: 14, lg: 18, xl: 24 };
+  const textSizes = { sm: 'text-[8px]', md: 'text-[10px]', lg: 'text-xs', xl: 'text-sm' };
+
+  const catIcons = {
+    rolamento: Cog, filtro: Filter, correia: Activity, eletrico: Zap,
+    hidraulico: Droplet, mecanico: Wrench, vedacao: Shield, lubrificante: Droplet,
+    outro: Package,
+  };
+  const matchCat = Object.keys(catIcons).find(k => (categoria || '').toLowerCase().includes(k));
+  const CatIcon = catIcons[matchCat] || Package;
+  const initials = (nome || '?').split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+
+  if (src) {
+    return (
+      <div
+        className={`${sizes[size]} rounded-lg overflow-hidden flex-shrink-0 cursor-pointer border border-slate-700 hover:border-slate-500 transition-all`}
+        onClick={onClick}
+        data-testid="material-thumbnail"
+      >
+        <img src={`${BACKEND_URL}${src}`} alt={nome} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+        <div className="w-full h-full items-center justify-center hidden" style={{ background: `${primaryColor}15` }}>
+          <CatIcon size={iconSizes[size]} style={{ color: primaryColor }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`${sizes[size]} rounded-lg flex-shrink-0 flex flex-col items-center justify-center border border-slate-700/50 ${onClick ? 'cursor-pointer hover:border-slate-500' : ''} transition-all`}
+      style={{ background: `${primaryColor}10` }}
+      onClick={onClick}
+      data-testid="material-placeholder"
+    >
+      <CatIcon size={iconSizes[size]} style={{ color: primaryColor, opacity: 0.6 }} />
+      <span className={`${textSizes[size]} font-semibold mt-0.5`} style={{ color: primaryColor, opacity: 0.7 }}>{initials}</span>
+    </div>
+  );
+};
+
+const MaterialImageModal = ({ src, nome, onClose }) => {
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef(null);
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    setZoom(z => Math.max(0.5, Math.min(5, z + (e.deltaY > 0 ? -0.2 : 0.2))));
+  };
+
+  const handlePointerDown = (e) => {
+    if (zoom <= 1) return;
+    setDragging(true);
+    lastPos.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+  };
+  const handlePointerMove = (e) => {
+    if (!dragging) return;
+    setPos({ x: e.clientX - lastPos.current.x, y: e.clientY - lastPos.current.y });
+  };
+  const handlePointerUp = () => setDragging(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen?.();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.();
+      setIsFullscreen(false);
+    }
+  };
+
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="fixed inset-0 z-[200] bg-black/95 flex flex-col" data-testid="material-image-modal" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="flex items-center justify-between p-3 bg-black/60">
+        <span className="text-sm text-slate-300 truncate">{nome}</span>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setZoom(z => Math.min(5, z + 0.5))} className="p-1.5 rounded hover:bg-slate-800 text-slate-400" data-testid="zoom-in"><ZoomIn size={18} /></button>
+          <span className="text-xs text-slate-500 w-12 text-center">{Math.round(zoom * 100)}%</span>
+          <button onClick={() => { setZoom(z => Math.max(0.5, z - 0.5)); setPos({ x: 0, y: 0 }); }} className="p-1.5 rounded hover:bg-slate-800 text-slate-400" data-testid="zoom-out"><ZoomIn size={18} className="rotate-180" /></button>
+          <button onClick={toggleFullscreen} className="p-1.5 rounded hover:bg-slate-800 text-slate-400" data-testid="fullscreen-toggle"><Maximize2 size={18} /></button>
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-red-500/20 text-slate-400" data-testid="close-image-modal"><X size={18} /></button>
+        </div>
+      </div>
+      <div
+        className="flex-1 overflow-hidden flex items-center justify-center"
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        style={{ cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : 'default', touchAction: 'none' }}
+      >
+        <img
+          src={`${BACKEND_URL}${src}`}
+          alt={nome}
+          className="select-none"
+          draggable={false}
+          style={{ transform: `translate(${pos.x}px, ${pos.y}px) scale(${zoom})`, transition: dragging ? 'none' : 'transform 0.15s ease', maxWidth: '95vw', maxHeight: '90vh', objectFit: 'contain' }}
+        />
+      </div>
+    </div>
+  );
+};
+
+const MaterialImageUploader = ({ tipo, itemId, images, onUpdate }) => {
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [viewImg, setViewImg] = useState(null);
+  const fileRef = useRef(null);
+  const { config } = useBranding();
+  const primaryColor = config?.tema?.cor_primaria || '#10b981';
+
+  const handleFiles = async (files) => {
+    if (!files.length || !itemId) return;
+    setUploading(true);
+    try {
+      for (const rawFile of files) {
+        const file = await compressImage(rawFile);
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await api.post(`/materiais/${tipo}/${itemId}/images`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        onUpdate?.(res.data.images);
+      }
+      toast.success('Imagem enviada!');
+    } catch (e) { toast.error('Erro ao enviar imagem'); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
+
+  const handleRemove = async (url) => {
+    try {
+      await api.delete(`/materiais/${tipo}/${itemId}/images?image_url=${encodeURIComponent(url)}`);
+      onUpdate?.((images || []).filter(u => u !== url));
+      toast.success('Imagem removida');
+    } catch (e) { toast.error('Erro ao remover imagem'); }
+  };
+
+  const imgList = images || [];
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider flex items-center gap-1"><ImagePlus size={14} /> Identificação Visual</p>
+      {imgList.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          {imgList.map((url, idx) => (
+            <div key={idx} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-slate-700 cursor-pointer hover:border-slate-500" onClick={() => setViewImg(url)}>
+              <img src={`${BACKEND_URL}${url}`} alt={`Material ${idx + 1}`} className="w-full h-full object-cover" />
+              <button
+                onClick={(e) => { e.stopPropagation(); handleRemove(url); }}
+                className="absolute top-0.5 right-0.5 p-0.5 bg-red-500/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                data-testid={`remove-material-img-${idx}`}
+              ><X size={10} className="text-white" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div
+        className={`border-2 border-dashed rounded-lg p-3 text-center transition-all cursor-pointer ${dragOver ? 'border-emerald-400 bg-emerald-500/5' : 'border-slate-700 hover:border-slate-500'}`}
+        style={dragOver ? {} : { borderColor: `${primaryColor}40` }}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))); }}
+        onClick={() => fileRef.current?.click()}
+        data-testid="material-image-dropzone"
+      >
+        {uploading ? (
+          <span className="text-xs text-slate-400 flex items-center justify-center gap-2"><RefreshCw size={14} className="animate-spin" /> Enviando...</span>
+        ) : (
+          <span className="text-xs text-slate-500 flex items-center justify-center gap-2"><Camera size={14} /> Arraste, selecione ou tire uma foto</span>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => handleFiles(Array.from(e.target.files))}
+          className="hidden"
+          disabled={uploading}
+          data-testid="material-image-input"
+        />
+      </div>
+      {viewImg && <MaterialImageModal src={viewImg} nome="Material" onClose={() => setViewImg(null)} />}
     </div>
   );
 };
@@ -1078,6 +1301,18 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
             </label>
           </div>
         </div>
+        
+        {/* Identificação Visual */}
+        {editData && (
+          <div className="glass-card p-4">
+            <MaterialImageUploader
+              tipo="estoque"
+              itemId={editData.id}
+              images={editData.images}
+              onUpdate={(imgs) => { editData.images = imgs; }}
+            />
+          </div>
+        )}
         
         {/* Actions */}
         <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
@@ -3004,8 +3239,9 @@ const DossieTab = ({ ativoId, plantas, user }) => {
             <h3 className="text-sm font-semibold text-slate-300 mb-2">Materiais Consumidos</h3>
             <div className="space-y-1">
               {d.materiais.map((m, i) => (
-                <div key={i} className="flex items-center justify-between text-sm border-b border-slate-800 pb-1">
-                  <span className="text-slate-200">{m.item_nome || m.item_codigo} <span className="text-xs text-slate-500">{m.item_codigo}</span></span>
+                <div key={i} className="flex items-center gap-2 text-sm border-b border-slate-800 pb-1">
+                  <MaterialThumbnail images={m.image_url ? [m.image_url] : []} nome={m.item_nome || m.item_codigo} categoria="" size="sm" />
+                  <span className="text-slate-200 flex-1">{m.item_nome || m.item_codigo} <span className="text-xs text-slate-500">{m.item_codigo}</span></span>
                   <span className="text-slate-300">{m.quantidade} {m.unidade || 'un'}</span>
                 </div>
               ))}
@@ -3704,6 +3940,7 @@ const AtivoDetailPage = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-slate-800 text-slate-500 text-xs uppercase">
+                    <th className="w-8 py-2 px-1"></th>
                     <th className="text-left py-2 px-3">Código</th>
                     <th className="text-left py-2 px-3">Descrição</th>
                     <th className="text-right py-2 px-3">Qtd</th>
@@ -3713,6 +3950,7 @@ const AtivoDetailPage = () => {
                   <tbody>
                     {(ativo.materiais || []).filter(m => !bomSearch || (m.nome||'').toLowerCase().includes(bomSearch) || (m.codigo||'').toLowerCase().includes(bomSearch)).map(m => (
                       <tr key={m.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                        <td className="py-1 px-1"><MaterialThumbnail images={m.images} nome={m.nome} categoria="" size="sm" /></td>
                         <td className="py-2 px-3 font-mono text-xs text-blue-400">{m.codigo || '—'}</td>
                         <td className="py-2 px-3 text-slate-300">{m.nome}</td>
                         <td className="py-2 px-3 text-right text-slate-300">{m.quantidade}</td>
@@ -4760,14 +4998,17 @@ const OSDetailPage = () => {
           <div className="space-y-2">
             {materiais.map(m => (
               <div key={m.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3 border border-slate-700/50" data-testid={`material-item-${m.id}`}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-brand text-sm">{m.codigo}</span>
-                    <span className="text-slate-300 text-sm">{m.descricao}</span>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <MaterialThumbnail images={m.image_url ? [m.image_url] : []} nome={m.descricao} categoria="" size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-brand text-sm">{m.codigo}</span>
+                      <span className="text-slate-300 text-sm">{m.descricao}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {m.quantidade} {m.unidade} • {m.local_estoque} • {m.usuario_nome} • {new Date(m.created_at).toLocaleString('pt-BR')}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {m.quantidade} {m.unidade} • {m.local_estoque} • {m.usuario_nome} • {new Date(m.created_at).toLocaleString('pt-BR')}
-                  </p>
                 </div>
                 {m.custo_total > 0 && <span className="text-sm text-slate-300 mx-2">R$ {m.custo_total.toFixed(2)}</span>}
                 {!['concluida','cancelada'].includes(os.status) && ['admin','master','pcm','supervisor'].includes(user?.role) && (
@@ -4795,6 +5036,19 @@ const OSDetailPage = () => {
               ))}
             </select>
           </FormInput>
+          {/* Preview do material selecionado */}
+          {matForm.item_estoque_id && (() => {
+            const sel = estoqueItems.find(i => i.id === matForm.item_estoque_id);
+            return sel ? (
+              <div className="flex items-center gap-3 p-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                <MaterialThumbnail images={sel.images} nome={sel.nome} categoria={sel.categoria} size="lg" />
+                <div>
+                  <p className="text-sm text-slate-200 font-medium">{sel.nome}</p>
+                  <p className="text-xs text-slate-500">{sel.sku} • Disp: {sel.quantidade} {sel.unidade}</p>
+                </div>
+              </div>
+            ) : null;
+          })()}
           <FormInput label="Quantidade" required>
             <input type="number" step="0.01" min="0.01" value={matForm.quantidade} onChange={e => setMatForm({...matForm, quantidade: e.target.value})} className="input-industrial w-full px-4" data-testid="material-quantidade" />
           </FormInput>
@@ -4974,6 +5228,7 @@ const EstoquePage = () => {
   const [expandedItem, setExpandedItem] = useState(null);
   const [expandedMovs, setExpandedMovs] = useState([]);
   const [loadingMovs, setLoadingMovs] = useState(false);
+  const [viewImage, setViewImage] = useState(null);
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   
@@ -5071,9 +5326,13 @@ const EstoquePage = () => {
               <div className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${item.is_critico ? 'bg-red-500/10' : 'bg-brand-10'}`}>
-                      <Package size={20} className={item.is_critico ? 'text-red-400' : 'text-emerald-400'} />
-                    </div>
+                    <MaterialThumbnail
+                      images={item.images}
+                      nome={item.nome}
+                      categoria={item.categoria}
+                      size="md"
+                      onClick={() => (item.images || [])[0] && setViewImage({ src: item.images[0], nome: item.nome })}
+                    />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-brand text-sm">{item.sku}</span>
@@ -5162,6 +5421,7 @@ const EstoquePage = () => {
         confirmText="Excluir"
         danger
       />
+      {viewImage && <MaterialImageModal src={viewImage.src} nome={viewImage.nome} onClose={() => setViewImage(null)} />}
     </div>
   );
 };
@@ -6526,6 +6786,7 @@ const SobressalentesPage = () => {
   const [showReformaModal, setShowReformaModal] = useState(null);
   const [reformaForm, setReformaForm] = useState({ empresa_reparadora: '', data_envio: '', data_retorno: '', observacao: '', valor: '' });
   const [reformas, setReformas] = useState([]);
+  const [viewImage, setViewImage] = useState(null);
   const { user } = useAuth();
 
   const fetchData = async () => {
@@ -6657,7 +6918,15 @@ const SobressalentesPage = () => {
             return (
             <div key={sp.id} className="glass-card p-4 hover:border-slate-600 transition-all" data-testid={`spare-card-${sp.id}`}>
               <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
+                <div className="flex gap-3 flex-1 min-w-0">
+                  <MaterialThumbnail
+                    images={sp.images}
+                    nome={sp.descricao}
+                    categoria={sp.tipo_equipamento}
+                    size="lg"
+                    onClick={() => (sp.images || [])[0] && setViewImage({ src: sp.images[0], nome: sp.descricao })}
+                  />
+                  <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-mono text-brand text-sm">{sp.tag || sp.codigo}</span>
                     {origemLabel && <span className="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{origemLabel}</span>}
@@ -6676,6 +6945,7 @@ const SobressalentesPage = () => {
                       ))}
                     </div>
                   )}
+                </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   {sp.custo > 0 && <p className="text-lg font-bold text-slate-200">R$ {sp.custo.toFixed(2)}</p>}
@@ -6724,6 +6994,17 @@ const SobressalentesPage = () => {
               ))}
             </div>
           </div>
+          {/* Identificação Visual */}
+          {editItem && (
+            <div className="border-t border-slate-800 pt-3">
+              <MaterialImageUploader
+                tipo="sobressalente"
+                itemId={editItem.id}
+                images={editItem.images}
+                onUpdate={(imgs) => { editItem.images = imgs; }}
+              />
+            </div>
+          )}
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
             <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Salvando...' : 'Salvar'}</button>
@@ -6789,7 +7070,7 @@ const SobressalentesPage = () => {
         confirmText="Excluir"
         danger
       />
-
+      {viewImage && <MaterialImageModal src={viewImage.src} nome={viewImage.nome} onClose={() => setViewImage(null)} />}
     </div>
   );
 };

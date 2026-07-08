@@ -462,6 +462,7 @@ async def add_os_material(os_id: str, body: dict, user: Dict = Depends(get_curre
         "local_estoque": ' '.join(filter(None, [item.get('almoxarifado'), item.get('prateleira'), item.get('posicao')])),
         "custo_unitario": cost,
         "custo_total": quantidade * cost,
+        "image_url": (item.get('images') or [None])[0],
         "ativo_id": os_doc.get('ativo_id'),
         "ativo_tag": ativo.get('tag', '') if ativo else '',
         "usuario_id": user.get('id'),

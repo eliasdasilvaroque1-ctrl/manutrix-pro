@@ -340,6 +340,7 @@ class EstoqueCreate(BaseModel):
     item_critico: bool = False
     alertar_minimo: bool = True
     observacoes: Optional[str] = None
+    images: Optional[List[str]] = None
 
 class EstoqueUpdate(BaseModel):
     nome: Optional[str] = None
@@ -357,6 +358,7 @@ class EstoqueUpdate(BaseModel):
     item_critico: Optional[bool] = None
     alertar_minimo: Optional[bool] = None
     observacoes: Optional[str] = None
+    images: Optional[List[str]] = None
 
 class MovimentacaoCreateBody(BaseModel):
     tipo: str
@@ -419,6 +421,7 @@ class SpareAssetCreate(BaseModel):
     observacoes: Optional[str] = None
     origem: Optional[str] = None
     condicoes: Optional[dict] = None
+    images: Optional[List[str]] = None
 
 class SpareAssetUpdate(BaseModel):
     nome: Optional[str] = None
@@ -437,6 +440,7 @@ class SpareAssetUpdate(BaseModel):
     observacoes: Optional[str] = None
     origem: Optional[str] = None
     condicoes: Optional[dict] = None
+    images: Optional[List[str]] = None
 
 class SpareMovementCreate(BaseModel):
     spare_id: str

@@ -435,6 +435,7 @@ async def create_estoque(data: EstoqueCreate, user: Dict = Depends(get_current_u
         "posicao": data.posicao,
         "alertar_minimo": data.alertar_minimo,
         "item_critico": data.item_critico,
+        "images": data.images or [],
         "organization_id": org_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -2871,6 +2872,73 @@ async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_curre
         doc.build(elements); buf.seek(0)
         return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=inspecoes_{empresa.replace(' ','_')}.pdf"})
 
+# ============== MATERIAL IMAGE UPLOAD ==============
+
+@api_router.post("/materiais/{tipo}/{item_id}/images")
+async def upload_material_image(
+    tipo: str,
+    item_id: str,
+    file: UploadFile = File(...),
+    user: Dict = Depends(get_current_user)
+):
+    """Upload image for estoque or sobressalente item. Appends to images[] array."""
+    check_write_permission(user, ['admin', 'pcm'])
+    
+    if tipo not in ('estoque', 'sobressalente'):
+        raise HTTPException(status_code=400, detail="Tipo deve ser 'estoque' ou 'sobressalente'")
+    
+    collection = db.itens_estoque if tipo == 'estoque' else db.spare_assets
+    item = await collection.find_one({"id": item_id, "deleted_at": None}, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    verify_org_access(user, item, "Material")
+    
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+        raise HTTPException(status_code=400, detail="Apenas imagens são permitidas (jpg, png, gif, webp)")
+    
+    content = await file.read()
+    
+    if objstore.is_available():
+        storage_path = objstore.upload_file(f"material_{tipo}", item_id, file.filename, content, file.content_type or "image/jpeg")
+        file_url = f"/api/storage/{storage_path}"
+    else:
+        filename = f"mat_{tipo}_{item_id}_{uuid.uuid4().hex[:8]}{ext}"
+        filepath = UPLOAD_DIR / filename
+        async with aiofiles.open(filepath, 'wb') as f:
+            await f.write(content)
+        file_url = f"/api/uploads/{filename}"
+    
+    await collection.update_one({"id": item_id}, {"$push": {"images": file_url}})
+    await audit_log("upload", tipo, item_id, user, f"Imagem adicionada ao material {item.get('sku', item.get('tag', ''))}")
+    
+    updated = await collection.find_one({"id": item_id}, {"_id": 0})
+    return {"url": file_url, "images": updated.get("images", [])}
+
+@api_router.delete("/materiais/{tipo}/{item_id}/images")
+async def delete_material_image(
+    tipo: str,
+    item_id: str,
+    image_url: str,
+    user: Dict = Depends(get_current_user)
+):
+    """Remove an image URL from the material's images[] array."""
+    check_write_permission(user, ['admin', 'pcm'])
+    
+    if tipo not in ('estoque', 'sobressalente'):
+        raise HTTPException(status_code=400, detail="Tipo deve ser 'estoque' ou 'sobressalente'")
+    
+    collection = db.itens_estoque if tipo == 'estoque' else db.spare_assets
+    item = await collection.find_one({"id": item_id, "deleted_at": None}, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    verify_org_access(user, item, "Material")
+    
+    await collection.update_one({"id": item_id}, {"$pull": {"images": image_url}})
+    await audit_log("delete", tipo, item_id, user, f"Imagem removida do material {item.get('sku', item.get('tag', ''))}")
+    
+    return {"success": True}
+
 # ============== ATTACHMENTS ==============
 
 @api_router.post("/attachments")
@@ -3008,6 +3076,7 @@ async def create_spare(data: SpareAssetCreate, user: Dict = Depends(get_current_
         "origem": data.origem,
         "condicoes": data.condicoes or {"novo": 0, "reformado": 0, "em_reforma": 0, "reservado": 0, "instalado": 0, "descartado": 0},
         "quantidade_total": sum((data.condicoes or {}).values()) if data.condicoes else 0,
+        "images": data.images or [],
         "organization_id": org_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),

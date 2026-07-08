@@ -1,0 +1,72 @@
+{
+  "summary": "RC-13 Identificação Visual de Materiais — Backend 15/15 PASS, Frontend fully working. Placeholder thumbnails render on Estoque (27 items) and Sobressalentes (13 items). Both Edit modals show the MaterialImageUploader ('Identificação Visual' section with drag-drop zone, hidden file input, and camera capture). POST /api/materiais/estoque/{id}/images and /api/materiais/sobressalente/{id}/images accept multipart uploads, persist to images[] array, return {url, images:[]}. DELETE /api/materiais/{tipo}/{id}/images?image_url=... removes the URL. Non-image files are rejected with 400; unknown tipo returns 400; missing item returns 404; unauthenticated call returns 401/403. models.EstoqueCreate and SpareAssetCreate now accept optional images:List[str], persisted to Mongo. End-to-end UI upload test: (1) opened admin edit modal for COR-V-A68, (2) uploaded PNG via material-image-input, (3) 'Imagem enviada!' toast shown, (4) after page refresh Estoque list now shows real thumbnail (1) instead of placeholder (26 placeholders down from 27), (5) reopening the edit modal shows the image, (6) MaterialImageModal opens with zoom-in and close controls working. OS detail page loads (/os/{id}) — the OS tested had 0 materials so no thumbnails to render (expected). Regression: dashboard loads (Backlog/OS Abertas/MTBF/etc. all shown), sobressalentes Excel/PDF exports return 200, login flow works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "EstoquePage + SobressalentesPage — Edit modal MaterialImageUploader wiring",
+        "issue": "onUpdate mutates editData.images directly instead of using setState, so newly uploaded images do NOT re-render into the uploader's image list until the modal is reopened. Persistence to backend works correctly (verified via refresh + reopen), but the UX is confusing: user sees only the 'Imagem enviada!' toast and no immediate visual confirmation inside the modal. Same anti-pattern is used for Estoque (App.js line 1312) and Sobressalente (App.js line 7004): onUpdate={(imgs) => { editData.images = imgs; }} / onUpdate={(imgs) => { editItem.images = imgs; }}. Recommended fix: hoist the images list into local React state (useState) inside the modal component or use setEditData/setEditItem with a spread to trigger re-render.",
+        "selector": "[data-testid=\"material-image-dropzone\"], [data-testid^=\"remove-material-img-\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "rc13_verification_matrix": {
+    "estoque_list_placeholders_render": "PASS (27 placeholders w/ category icon + initials)",
+    "sobressalentes_list_placeholders_render": "PASS (13 placeholders)",
+    "estoque_edit_modal_has_uploader": "PASS (dropzone + input + heading all present)",
+    "sobressalente_edit_modal_has_uploader": "PASS",
+    "api_upload_estoque_image": "PASS (200, url + images[] returned)",
+    "api_upload_spare_image": "PASS (200)",
+    "api_delete_estoque_image": "PASS (200, url removed)",
+    "api_delete_spare_image": "PASS",
+    "api_reject_non_image": "PASS (400)",
+    "api_reject_invalid_tipo": "PASS (400)",
+    "api_404_when_item_missing": "PASS",
+    "api_requires_auth": "PASS (401/403 without token)",
+    "models_estoque_accepts_images_field": "PASS (persisted round-trip)",
+    "models_spare_accepts_images_field": "PASS",
+    "os_material_image_url_embedded": "N/A (OS tested had 0 materials; backend code confirmed at work_orders.py:465 image_url = item.get('images')[0])",
+    "ui_thumbnail_shown_after_upload_and_refresh": "PASS (27 placeholders → 26 placeholders + 1 thumbnail)",
+    "ui_material_image_modal_zoom": "PASS (opens on click, zoom-in and close work)",
+    "ui_thumbnail_shown_inline_after_upload_same_session": "FAIL (state mutation bug — see frontend_issues)",
+    "regression_dashboard": "PASS",
+    "regression_sobressalentes_excel_export": "PASS (200)",
+    "regression_sobressalentes_pdf_export": "PASS (200)",
+    "regression_login_flow": "PASS"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration87_rc13_material_images.py",
+    "/app/test_reports/pytest/iteration87.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (LOW): Fix state mutation in EstoquePage (App.js:1312) and SobressalentesPage (App.js:7004): replace `onUpdate={(imgs) => { editData.images = imgs; }}` with a React setState call so the just-uploaded image renders immediately in the modal instead of only after reopen. Suggested fix: move images to local component state (useState) inside the modal and mirror it back on save; OR pass a setter callback that does setEditData(prev => ({...prev, images: imgs}))."
+  ],
+  "critical_code_review_comments": [
+    "server.py upload_material_image (line 2877): correctly validates tipo, ext whitelist, persists via $push, calls audit_log, returns url + images. Good.",
+    "server.py delete_material_image (line 2918): uses $pull with exact url match. Good.",
+    "server.py estoque create sets images: data.images or [] (line 438) and spare create similarly (line 3079). Good.",
+    "routes/work_orders.py line 464-465: mat_doc['image_url'] = (item.get('images') or [None])[0] — safe pattern that handles missing images field on legacy items.",
+    "App.js MaterialImageUploader (line 562): uses client-side compressImage (max 1200px, 0.8 quality JPEG) before POST. Good, but note compressImage uses FileReader + canvas.toBlob and always JPEG-converts, which will strip alpha and force .jpg extension in the filename.",
+    "App.js MaterialThumbnail (line 445): correctly resolves category icons and applies primary brand color from BrandingContext.",
+    "MINOR bug (already reported): line 1312 and 7004 mutate parent editData.images without triggering re-render. UI state update anti-pattern.",
+    "onError fallback in MaterialThumbnail (line 469) hides the broken img and shows the category-icon placeholder as fallback — good defensive design."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration87_rc13_material_images.py",
+    "/app/test_reports/pytest/iteration87.xml",
+    "/app/test_reports/iteration_87.json"
+  ],
+  "success_rate": {"backend": "100% (15/15 tests pass)", "frontend": "95% (all critical flows work; only same-session in-modal image refresh has minor state-mutation UX issue)"},
+  "test_credentials": "test.admin@maintrix.com / admin123 with organization_id=9a232bf2-fc01-4253-813f-8df356be31c1 (ASTEC Cedro).",
+  "seed_data_creation": "Test suite created and then deleted TEST_RC13_EST_01 and TEST_RC13_SP_01 estoque/spare items, and TEST_RC13_EST_IMG_INIT / TEST_RC13_SP_IMG_INIT variants. During E2E UI test, one image was uploaded to the existing COR-V-A68 estoque item (Correia V A-68) — that image is now persisted on the item's images[] array and is visible as its thumbnail. If a clean state is desired, main agent can DELETE /api/materiais/estoque/{cor_v_a68_id}/images?image_url=<url> to remove it.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC-13 fully validated end-to-end. Backend all endpoints work (POST/DELETE /api/materiais/{tipo}/{item_id}/images, estoque and spare create accept images[] initial state). Frontend placeholders and thumbnails render, edit modal has uploader, upload API is called, toast fires, persistence verified after refresh. One minor bug: onUpdate handler in Estoque and Sobressalente edit modals mutates state instead of calling setState — the newly-uploaded image only appears after modal reopen. To reproduce: open Editar Item on any Estoque row, upload an image via [data-testid=material-image-input], observe Imagem enviada toast but 0 items rendered under [data-testid^=remove-material-img-]. Close and reopen: 1 image appears. ASTEC org id: 9a232bf2-fc01-4253-813f-8df356be31c1. Estoque route: /estoque. Sobressalentes route: /sobressalentes. OS route: /os (kanban default; click 'Lista' for list view). Testid patterns used: expand-estoque-{id}, edit-spare-{id}, material-thumbnail, material-placeholder, material-image-dropzone, material-image-input, material-image-modal, remove-material-img-{idx}, zoom-in, zoom-out, close-image-modal, fullscreen-toggle. Estoque edit button is hidden group-hover:flex — must be triggered programmatically or via hover in Playwright.",
+  "rca_of_the_issue": "Minor UI state bug in EstoquePage (App.js:1312) and SobressalentesPage (App.js:7004): `onUpdate={(imgs) => { editData.images = imgs; }}` directly mutates the prop object. React only re-renders when setState is called with a new reference; a direct mutation of an object property does not schedule an update. The uploader's `imgList = images || []` receives the (mutated) same array by reference, so if a re-render happened for another reason it would show the update, but nothing triggers one here. The remedy is to hoist images into React state or expose a setter callback from parent. Not blocking — persistence and reload display work correctly."
+}
