@@ -293,6 +293,13 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Integração**: Thumbnails em Estoque, Sobressalentes, OS Materiais, BOM, Dossiê
 - **Testes**: Backend 15/15 ✅ | Frontend 95%+ ✅ (bug de estado LOW corrigido)
 
+### RC-BUG-02 — White Label Wallpaper Freeze ✅ (2026-07-08)
+- **Causa raiz**: `PreviewLogin` usava `absolute inset-0` sem `relative` no container pai → overlay cobria a página inteira
+- **Arquivo**: `App.js`, componente `PreviewLogin` (~linha 9323)
+- **Correção**: `relative` + `pointer-events-none` + `BACKEND_URL` prefix
+- **NÃO é regressão da RC-13**
+- **Validação**: 4/4 uploads testados (Logo, Logo Branca, Favicon, Wallpaper)
+
 ### Protocolo de Mudança
 - Consultor (E1) atua como QA e Implantação — não como desenvolvedor
 - Toda alteração requer análise de impacto documentada

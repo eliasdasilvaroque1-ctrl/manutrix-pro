@@ -9319,10 +9319,11 @@ const AssetUploader = ({ label, currentUrl, orgId, assetType, onUploaded }) => {
 const PreviewLogin = ({ cfg }) => {
   const t = cfg.tema || {};
   const i = cfg.identidade || {};
+  const wpUrl = i.wallpaper_url ? (i.wallpaper_url.startsWith('http') ? i.wallpaper_url : `${BACKEND_URL}${i.wallpaper_url}`) : null;
   return (
-    <div className="rounded-lg overflow-hidden border border-slate-700" style={{ backgroundColor: t.cor_login || '#020617', minHeight: 200 }}>
-      {i.wallpaper_url && (
-        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: `url(${i.wallpaper_url})`, backgroundSize: 'cover' }} />
+    <div className="rounded-lg overflow-hidden border border-slate-700 relative" style={{ backgroundColor: t.cor_login || '#020617', minHeight: 200 }}>
+      {wpUrl && (
+        <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: `url(${wpUrl})`, backgroundSize: 'cover' }} />
       )}
       <div className="p-4 text-center relative">
         {i.logo_url ? (
