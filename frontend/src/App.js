@@ -563,9 +563,12 @@ const MaterialImageUploader = ({ tipo, itemId, images, onUpdate }) => {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [viewImg, setViewImg] = useState(null);
+  const [localImages, setLocalImages] = useState(images || []);
   const fileRef = useRef(null);
   const { config } = useBranding();
   const primaryColor = config?.tema?.cor_primaria || '#10b981';
+
+  useEffect(() => { setLocalImages(images || []); }, [images]);
 
   const handleFiles = async (files) => {
     if (!files.length || !itemId) return;
@@ -576,6 +579,7 @@ const MaterialImageUploader = ({ tipo, itemId, images, onUpdate }) => {
         const formData = new FormData();
         formData.append('file', file);
         const res = await api.post(`/materiais/${tipo}/${itemId}/images`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        setLocalImages(res.data.images);
         onUpdate?.(res.data.images);
       }
       toast.success('Imagem enviada!');
@@ -586,12 +590,14 @@ const MaterialImageUploader = ({ tipo, itemId, images, onUpdate }) => {
   const handleRemove = async (url) => {
     try {
       await api.delete(`/materiais/${tipo}/${itemId}/images?image_url=${encodeURIComponent(url)}`);
-      onUpdate?.((images || []).filter(u => u !== url));
+      const updated = localImages.filter(u => u !== url);
+      setLocalImages(updated);
+      onUpdate?.(updated);
       toast.success('Imagem removida');
     } catch (e) { toast.error('Erro ao remover imagem'); }
   };
 
-  const imgList = images || [];
+  const imgList = localImages;
 
   return (
     <div className="space-y-2">

@@ -282,9 +282,16 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Fase Atual: PILOTO ASTEC — App CONGELADO (Fev/2026)
 
-**Versão oficial**: v1.0.0-RC1
-**Status**: GO LIVE APROVADO — Desenvolvimento congelado
+**Versão oficial**: v1.0.0-RC1 → v1.1.0-RC13
+**Status**: GO LIVE APROVADO — Piloto em andamento
 **Governança**: CTO aprova qualquer alteração que não seja P0 bloqueante
+
+### RC-13 — Identificação Visual de Materiais ✅ (2026-07-08)
+- **Backend**: Campo `images: []` em EstoqueCreate/Update e SpareAssetCreate/Update
+- **Endpoints**: `POST/DELETE /api/materiais/{tipo}/{item_id}/images` (upload e remoção)
+- **Frontend**: MaterialThumbnail (placeholder inteligente White Label), MaterialImageModal (zoom/fullscreen), MaterialImageUploader (drag&drop + câmera + compressão)
+- **Integração**: Thumbnails em Estoque, Sobressalentes, OS Materiais, BOM, Dossiê
+- **Testes**: Backend 15/15 ✅ | Frontend 95%+ ✅ (bug de estado LOW corrigido)
 
 ### Protocolo de Mudança
 - Consultor (E1) atua como QA e Implantação — não como desenvolvedor
@@ -312,12 +319,17 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - `ativos`: {id, organization_id, nome, tag, tipo_equipamento, fabricante, ...}
 - `ordens_servico`: {id, organization_id, numero, tipo, status, ativo_id, ...}
 - `inspecoes`: {id, organization_id, ativo_id, status, resultado, ...}
+- `itens_estoque`: {id, organization_id, sku, nome, categoria, quantidade, **images: []**, ...}
+- `spare_assets`: {id, organization_id, tag, descricao, **images: []**, ...}
+- `os_materiais`: {id, os_id, item_estoque_id, codigo, descricao, **image_url**, ...}
 
 ## Key API Endpoints
 - `POST /api/auth/login` — JWT login
 - `GET /api/public/organizations` — Public org list for login selector
 - `GET /api/public/branding/{id}` — Public branding by org_id or subdomain
 - `GET /api/org/config` — Authenticated org config
+- `POST /api/materiais/{tipo}/{item_id}/images` — Upload material image (RC-13)
+- `DELETE /api/materiais/{tipo}/{item_id}/images?image_url=...` — Remove material image (RC-13)
 - `PUT /api/org/config/branding` — Update complete branding (admin)
 - `PUT /api/org/config/tema` — Update theme colors (admin)
 - `POST /api/org/config/logo` — Upload logo (admin)
