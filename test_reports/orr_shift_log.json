@@ -1,0 +1,878 @@
+{
+  "events": [
+    {
+      "step": "LOGIN",
+      "actor": "admin",
+      "action": "POST /auth/login",
+      "result": "OK",
+      "evidence": {
+        "has_token": true
+      },
+      "elapsed_ms": 378.2
+    },
+    {
+      "step": "LOGIN",
+      "actor": "pcm",
+      "action": "POST /auth/login",
+      "result": "OK",
+      "evidence": {
+        "has_token": true
+      },
+      "elapsed_ms": 324.8
+    },
+    {
+      "step": "LOGIN",
+      "actor": "sup_mec",
+      "action": "POST /auth/login",
+      "result": "OK",
+      "evidence": {
+        "has_token": true
+      },
+      "elapsed_ms": 337.7
+    },
+    {
+      "step": "LOGIN",
+      "actor": "tec_mec",
+      "action": "POST /auth/login",
+      "result": "OK",
+      "evidence": {
+        "has_token": true
+      },
+      "elapsed_ms": 387.2
+    },
+    {
+      "step": "LOGIN",
+      "actor": "operador",
+      "action": "POST /auth/login",
+      "result": "OK",
+      "evidence": {
+        "has_token": true
+      },
+      "elapsed_ms": 342.8
+    },
+    {
+      "step": "LOGIN",
+      "actor": "gerente",
+      "action": "POST /auth/login",
+      "result": "OK",
+      "evidence": {
+        "has_token": true
+      },
+      "elapsed_ms": 320.2
+    },
+    {
+      "step": "LOGIN",
+      "actor": "viewer",
+      "action": "POST /auth/login",
+      "result": "OK",
+      "evidence": {
+        "has_token": true
+      },
+      "elapsed_ms": 321.5
+    },
+    {
+      "step": "07:00",
+      "actor": "operador",
+      "action": "GET /central",
+      "result": "200",
+      "evidence": {
+        "body_keys": [
+          "role",
+          "user_nome",
+          "turno",
+          "vencidas",
+          "hoje",
+          "semana",
+          "sem_data",
+          "em_execucao",
+          "total_atividades"
+        ]
+      },
+      "elapsed_ms": 103.6
+    },
+    {
+      "step": "07:05",
+      "actor": "operador",
+      "action": "POST /ordens-servico (corretiva)",
+      "result": "200",
+      "evidence": {
+        "status": 200,
+        "body": {
+          "id": "48ba0637-d414-4441-94ea-fe59cbddc632",
+          "numero": "2026-00040",
+          "ativo_id": "0f8972a8-72c6-4941-97af-06cd61171904",
+          "organization_id": "9a232bf2-fc01-4253-813f-8df356be31c1",
+          "tipo": "corretiva",
+          "disciplina": "mecanica",
+          "sector_id": "5c79c7fb-c944-4cdf-88d8-590cd4861b2a",
+          "origem": "manual",
+          "prioridade": "alta",
+          "titulo": "ORR - Vibra\u00e7\u00e3o excessiva no Alimentador AV-01",
+          "descricao": null,
+          "justificativa": null,
+          "status": "solicitada",
+          "aprovacao": {
+            "necessaria": false,
+            "status": "nao_requer",
+            "aprovador": null,
+            "data": null,
+            "observacao": ""
+          },
+          "responsavel_id": null,
+          "equipe": [],
+          "data_abertura": "2026-07-09T18:33:13.314213+00:00",
+          "data_planejada": null,
+          "data_inicio": null,
+          "data_conclusao": null,
+          "custo_pecas": 0,
+          "custo_mao_obra": 0,
+          "custo_total": 0,
+          "causa_falha": null,
+          "equipamento_parado": false,
+          "horas_parada": null,
+          "tempo_execucao_minutos": null,
+          "observacoes": null,
+          "servicos_realizados": null,
+          "criado_por": "3de25bc8-b297-4676-863f-915cd30b04c7",
+          "planejado_por": null,
+          "data_planejamento": null,
+          "iniciado_por": null,
+          "concluido_por": null,
+          "created_at": "2026-07-09T18:33:13.314226+00:00",
+          "updated_at": "2026-07-09T18:33:13.314228+00:00",
+          "deleted_at": null
+        }
+      },
+      "elapsed_ms": 115.6
+    },
+    {
+      "step": "07:10",
+      "actor": "admin",
+      "action": "verify solicitada excluded from KPIs / present in list",
+      "result": "kpi=200 list=200",
+      "evidence": {
+        "kpis": {
+          "disponibilidade_percent": 98.9,
+          "mtbf_horas": 180.0,
+          "mttr_horas": 2.0,
+          "backlog_total": 1,
+          "os_atrasadas": 0,
+          "custo_manutencao_mes": 0,
+          "ativos_total": 55,
+          "inspecoes_pendentes": 0,
+          "achados_criticos": 0
+        },
+        "in_list": true,
+        "backlog_count": null
+      }
+    },
+    {
+      "step": "07:15",
+      "actor": "sup_mec",
+      "action": "PATCH status \u2192 em_analise",
+      "result": "200",
+      "evidence": {
+        "body": {
+          "success": true,
+          "new_status": "em_analise"
+        }
+      }
+    },
+    {
+      "step": "07:20",
+      "actor": "pcm",
+      "action": "PATCH status \u2192 programada",
+      "result": "200",
+      "evidence": {
+        "body": {
+          "success": true,
+          "new_status": "programada"
+        }
+      }
+    },
+    {
+      "step": "07:20",
+      "actor": "pcm",
+      "action": "verify data_planejamento set",
+      "result": "MISSING",
+      "evidence": {
+        "data_planejamento": null,
+        "status": "programada"
+      }
+    },
+    {
+      "step": "07:25",
+      "actor": "pcm",
+      "action": "POST /ordens-servico/48ba0637/materiais (qtd=2)",
+      "result": "200",
+      "evidence": {
+        "estoque_before": 8.0,
+        "estoque_after": 6.0,
+        "expected_after": 6.0,
+        "body": {
+          "id": "8d69a4c4-f16b-4b43-b453-6b88864db6b2",
+          "os_id": "48ba0637-d414-4441-94ea-fe59cbddc632",
+          "os_numero": "2026-00040",
+          "item_estoque_id": "7a2fa59f-d7cb-4d24-b653-e119408d3932",
+          "codigo": "TEST-MAT-5D393E",
+          "descricao": "Material teste TEST-MAT-5D393E",
+          "quantidade": 2,
+          "unidade": "UN",
+          "local_estoque": "Almox A",
+          "custo_unitario": 50.0,
+          "custo_total": 100.0,
+          "image_url": null,
+          "ativo_id": "0f8972a8-72c6-4941-97af-06cd61171904",
+          "ativo_tag": "AV-01",
+          "usuario_id": "80fcef92-6722-4119-a2e3-5f333d851d57",
+          "usuario_nome": "PCM Teste",
+          "created_at": "2026-07-09T18:33:14.226776+00:00",
+          "deleted_at": null
+        }
+      }
+    },
+    {
+      "step": "07:30",
+      "actor": "tec_mec",
+      "action": "PATCH \u2192 em_execucao",
+      "result": "403",
+      "evidence": {
+        "data_inicio": null,
+        "status_after": "programada"
+      }
+    },
+    {
+      "step": "07:45",
+      "actor": "tec_mec",
+      "action": "POST /concluir",
+      "result": "200",
+      "evidence": {
+        "final_status": "concluida",
+        "data_conclusao": "2026-07-09T18:33:14.670817+00:00",
+        "tempo": 90,
+        "servicos": "",
+        "body": {
+          "success": true,
+          "tempo_execucao_minutos": 90
+        }
+      }
+    },
+    {
+      "step": "07:50",
+      "actor": "admin",
+      "action": "GET /kpis & /dashboard/stats",
+      "result": "kpi=200 stats=200",
+      "evidence": {
+        "kpis": {
+          "disponibilidade_percent": 98.7,
+          "mtbf_horas": 144.0,
+          "mttr_horas": 1.9,
+          "backlog_total": 1,
+          "os_atrasadas": 0,
+          "custo_manutencao_mes": 0,
+          "ativos_total": 55,
+          "inspecoes_pendentes": 0,
+          "achados_criticos": 0
+        },
+        "stats": {
+          "ativos": {
+            "total": 55,
+            "operacionais": 55,
+            "parados": 0,
+            "manutencao": 0,
+            "desativados": 0
+          },
+          "ordens_servico": {
+            "abertas": 0,
+            "planejadas": 0,
+            "em_execucao": 1,
+            "pausadas": 0,
+            "concluidas_hoje": 5,
+            "atrasadas": 0
+          },
+          "inspecoes": {
+            "pendentes": 0,
+            "em_andamento": 0,
+            "concluidas_hoje": 0,
+            "nao_conformes_mes": 0
+          },
+          "estoque": {
+            "total_itens": 24,
+            "criticos": 6
+          }
+        }
+      }
+    },
+    {
+      "step": "07:55",
+      "actor": "admin",
+      "action": "GET /admin/audit-logs?entity_id=...",
+      "result": "200",
+      "evidence": {
+        "entries": 100,
+        "actions_sequence": [
+          "status_change",
+          "material_consumo",
+          "kanban_move",
+          "kanban_move",
+          "login",
+          "login",
+          "login",
+          "login",
+          "login",
+          "login",
+          "login",
+          "field_change",
+          "delete",
+          "delete",
+          "delete",
+          "status_change",
+          "kanban_move",
+          "kanban_move",
+          "status_change",
+          "kanban_move"
+        ]
+      }
+    },
+    {
+      "step": "08:00",
+      "actor": "admin",
+      "action": "GET /ativos/0f8972a8",
+      "result": "200",
+      "evidence": {
+        "os_in_history": true,
+        "history_count": 10,
+        "kpis": {
+          "mtbf_horas": 144.0,
+          "mttr_horas": 1.9,
+          "disponibilidade_percent": 98.7,
+          "total_os": 26,
+          "total_falhas": 5
+        }
+      }
+    },
+    {
+      "step": "08:05",
+      "actor": "admin",
+      "action": "lifecycle (preventiva)",
+      "result": "create=200 prog=200 exec=200 concl=200",
+      "evidence": {
+        "os_id": "fee28a4f-6a49-4ee9-8dff-d53bdfaf513a",
+        "final_status": "concluida",
+        "tempo": 120,
+        "data_inicio": "2026-07-09T18:33:15.532718+00:00",
+        "data_conclusao": "2026-07-09T18:33:15.631306+00:00"
+      }
+    },
+    {
+      "step": "08:15",
+      "actor": "admin",
+      "action": "lifecycle (lubrificacao)",
+      "result": "create=200 prog=200 exec=200 concl=200",
+      "evidence": {
+        "os_id": "abc4b182-2502-4b25-9d72-a62a8a3d9c45",
+        "final_status": "concluida",
+        "tempo": 30,
+        "data_inicio": "2026-07-09T18:33:16.057810+00:00",
+        "data_conclusao": "2026-07-09T18:33:16.160313+00:00"
+      }
+    },
+    {
+      "step": "08:25",
+      "actor": "admin",
+      "action": "cross-check KPIs/stats/trend/central",
+      "result": "kpi=200 stats=200 trend=200 central=200",
+      "evidence": {
+        "kpis": {
+          "disponibilidade_percent": 98.7,
+          "mtbf_horas": 144.0,
+          "mttr_horas": 1.9,
+          "backlog_total": 1,
+          "os_atrasadas": 0,
+          "custo_manutencao_mes": 0,
+          "ativos_total": 55,
+          "inspecoes_pendentes": 0,
+          "achados_criticos": 0
+        },
+        "stats": {
+          "ativos": {
+            "total": 55,
+            "operacionais": 55,
+            "parados": 0,
+            "manutencao": 0,
+            "desativados": 0
+          },
+          "ordens_servico": {
+            "abertas": 0,
+            "planejadas": 0,
+            "em_execucao": 1,
+            "pausadas": 0,
+            "concluidas_hoje": 7,
+            "atrasadas": 0
+          },
+          "inspecoes": {
+            "pendentes": 0,
+            "em_andamento": 0,
+            "concluidas_hoje": 0,
+            "nao_conformes_mes": 0
+          },
+          "estoque": {
+            "total_itens": 24,
+            "criticos": 6
+          }
+        },
+        "trend": [
+          {
+            "mes": "Fev",
+            "mes_num": 2,
+            "ano": 2026,
+            "mttr": 2.6,
+            "mtbf": 585,
+            "total_os": 18,
+            "preventivas": 13,
+            "corretivas": 5,
+            "custo": 10448.92,
+            "is_estimated": true
+          },
+          {
+            "mes": "Mar",
+            "mes_num": 3,
+            "ano": 2026,
+            "mttr": 2.6,
+            "mtbf": 599,
+            "total_os": 20,
+            "preventivas": 13,
+            "corretivas": 7,
+            "custo": 8869.39,
+            "is_estimated": true
+          },
+          {
+            "mes": "Abr",
+            "mes_num": 4,
+            "ano": 2026,
+            "mttr": 2.8,
+            "mtbf": 593,
+            "total_os": 12,
+            "preventivas": 8,
+            "corretivas": 4,
+            "custo": 10326.61,
+            "is_estimated": true
+          },
+          {
+            "mes": "Mai",
+            "mes_num": 5,
+            "ano": 2026,
+            "mttr": 1.9,
+            "mtbf": 644,
+            "total_os": 16,
+            "preventivas": 9,
+            "corretivas": 7,
+            "custo": 12195.2,
+            "is_estimated": true
+          },
+          {
+            "mes": "Jun",
+            "mes_num": 6,
+            "ano": 2026,
+            "mttr": 2.0,
+            "mtbf": 664,
+            "total_os": 17,
+            "preventivas": 14,
+            "corretivas": 3,
+            "custo": 15588.07,
+            "is_estimated": true
+          },
+          {
+            "mes": "Jul",
+            "mes_num": 7,
+            "ano": 2026,
+            "mttr": 1.71,
+            "mtbf": 720.0,
+            "total_os": 7,
+            "preventivas": 1,
+            "corretivas": 5,
+            "custo": 0,
+            "is_estimated": false
+          }
+        ],
+        "central_keys": [
+          "role",
+          "user_nome",
+          "turno",
+          "vencidas",
+          "hoje",
+          "semana",
+          "sem_data",
+          "em_execucao",
+          "planos_pendentes",
+          "os_criticas",
+          "resumo",
+          "total_atividades"
+        ]
+      }
+    },
+    {
+      "step": "08:30",
+      "actor": "admin",
+      "action": "GET /export/ordens-servico & /export/estoque",
+      "result": "os=200 est=200",
+      "evidence": {
+        "os_size": 7154,
+        "est_size": 6372,
+        "os_ct": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "est_ct": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    },
+    {
+      "step": "08:30",
+      "actor": "admin",
+      "action": "GET spec endpoints (/export/excel variants)",
+      "result": "os_alt=404 est_alt=404",
+      "evidence": {
+        "note": "spec used non-existent /export/excel; real endpoints are /api/export/*"
+      }
+    },
+    {
+      "step": "08:35",
+      "actor": "operador",
+      "action": "GET OS then PATCH status",
+      "result": "get=200 patch=403",
+      "evidence": {
+        "expected_patch": "403",
+        "actual_patch": 403
+      }
+    },
+    {
+      "step": "08:35",
+      "actor": "viewer",
+      "action": "GET /ordens-servico",
+      "result": "200",
+      "evidence": {
+        "viewer_can_see_orr_os": false,
+        "count": 0
+      }
+    },
+    {
+      "step": "08:35",
+      "actor": "gerente",
+      "action": "GET /kpis & /dashboard/stats",
+      "result": "kpi=200 stats=200",
+      "evidence": {
+        "can_see_dashboard": true
+      }
+    },
+    {
+      "step": "CLEANUP",
+      "actor": "admin",
+      "action": "DELETE ORR OS & restore estoque",
+      "result": "done",
+      "evidence": {
+        "corretiva": 200,
+        "preventiva": 200,
+        "lubrificacao": 200,
+        "estoque_restore": 200
+      }
+    }
+  ],
+  "kpis": {
+    "before_conclusion": {
+      "disponibilidade_percent": 98.9,
+      "mtbf_horas": 180.0,
+      "mttr_horas": 2.0,
+      "backlog_total": 1,
+      "os_atrasadas": 0,
+      "custo_manutencao_mes": 0,
+      "ativos_total": 55,
+      "inspecoes_pendentes": 0,
+      "achados_criticos": 0
+    },
+    "07_15_status": 200,
+    "material": {
+      "before": 8.0,
+      "after": 6.0,
+      "status": 200,
+      "item_id": "7a2fa59f-d7cb-4d24-b653-e119408d3932"
+    },
+    "after_corretiva": {
+      "disponibilidade_percent": 98.7,
+      "mtbf_horas": 144.0,
+      "mttr_horas": 1.9,
+      "backlog_total": 1,
+      "os_atrasadas": 0,
+      "custo_manutencao_mes": 0,
+      "ativos_total": 55,
+      "inspecoes_pendentes": 0,
+      "achados_criticos": 0
+    },
+    "dashboard_after_corretiva": {
+      "ativos": {
+        "total": 55,
+        "operacionais": 55,
+        "parados": 0,
+        "manutencao": 0,
+        "desativados": 0
+      },
+      "ordens_servico": {
+        "abertas": 0,
+        "planejadas": 0,
+        "em_execucao": 1,
+        "pausadas": 0,
+        "concluidas_hoje": 5,
+        "atrasadas": 0
+      },
+      "inspecoes": {
+        "pendentes": 0,
+        "em_andamento": 0,
+        "concluidas_hoje": 0,
+        "nao_conformes_mes": 0
+      },
+      "estoque": {
+        "total_itens": 24,
+        "criticos": 6
+      }
+    },
+    "final": {
+      "kpis": {
+        "disponibilidade_percent": 98.7,
+        "mtbf_horas": 144.0,
+        "mttr_horas": 1.9,
+        "backlog_total": 1,
+        "os_atrasadas": 0,
+        "custo_manutencao_mes": 0,
+        "ativos_total": 55,
+        "inspecoes_pendentes": 0,
+        "achados_criticos": 0
+      },
+      "stats": {
+        "ativos": {
+          "total": 55,
+          "operacionais": 55,
+          "parados": 0,
+          "manutencao": 0,
+          "desativados": 0
+        },
+        "ordens_servico": {
+          "abertas": 0,
+          "planejadas": 0,
+          "em_execucao": 1,
+          "pausadas": 0,
+          "concluidas_hoje": 7,
+          "atrasadas": 0
+        },
+        "inspecoes": {
+          "pendentes": 0,
+          "em_andamento": 0,
+          "concluidas_hoje": 0,
+          "nao_conformes_mes": 0
+        },
+        "estoque": {
+          "total_itens": 24,
+          "criticos": 6
+        }
+      },
+      "trend": [
+        {
+          "mes": "Fev",
+          "mes_num": 2,
+          "ano": 2026,
+          "mttr": 2.6,
+          "mtbf": 585,
+          "total_os": 18,
+          "preventivas": 13,
+          "corretivas": 5,
+          "custo": 10448.92,
+          "is_estimated": true
+        },
+        {
+          "mes": "Mar",
+          "mes_num": 3,
+          "ano": 2026,
+          "mttr": 2.6,
+          "mtbf": 599,
+          "total_os": 20,
+          "preventivas": 13,
+          "corretivas": 7,
+          "custo": 8869.39,
+          "is_estimated": true
+        },
+        {
+          "mes": "Abr",
+          "mes_num": 4,
+          "ano": 2026,
+          "mttr": 2.8,
+          "mtbf": 593,
+          "total_os": 12,
+          "preventivas": 8,
+          "corretivas": 4,
+          "custo": 10326.61,
+          "is_estimated": true
+        },
+        {
+          "mes": "Mai",
+          "mes_num": 5,
+          "ano": 2026,
+          "mttr": 1.9,
+          "mtbf": 644,
+          "total_os": 16,
+          "preventivas": 9,
+          "corretivas": 7,
+          "custo": 12195.2,
+          "is_estimated": true
+        },
+        {
+          "mes": "Jun",
+          "mes_num": 6,
+          "ano": 2026,
+          "mttr": 2.0,
+          "mtbf": 664,
+          "total_os": 17,
+          "preventivas": 14,
+          "corretivas": 3,
+          "custo": 15588.07,
+          "is_estimated": true
+        },
+        {
+          "mes": "Jul",
+          "mes_num": 7,
+          "ano": 2026,
+          "mttr": 1.71,
+          "mtbf": 720.0,
+          "total_os": 7,
+          "preventivas": 1,
+          "corretivas": 5,
+          "custo": 0,
+          "is_estimated": false
+        }
+      ],
+      "central_keys": [
+        "role",
+        "user_nome",
+        "turno",
+        "vencidas",
+        "hoje",
+        "semana",
+        "sem_data",
+        "em_execucao",
+        "planos_pendentes",
+        "os_criticas",
+        "resumo",
+        "total_atividades"
+      ]
+    }
+  },
+  "os_ids": {
+    "corretiva": "48ba0637-d414-4441-94ea-fe59cbddc632",
+    "corretiva_numero": "2026-00040",
+    "corretiva_ativo": "0f8972a8-72c6-4941-97af-06cd61171904",
+    "preventiva": "fee28a4f-6a49-4ee9-8dff-d53bdfaf513a",
+    "lubrificacao": "abc4b182-2502-4b25-9d72-a62a8a3d9c45"
+  },
+  "audit_trail": {
+    "corretiva": {
+      "count": 100,
+      "actions": [
+        "status_change",
+        "material_consumo",
+        "kanban_move",
+        "kanban_move",
+        "login",
+        "login",
+        "login",
+        "login",
+        "login",
+        "login",
+        "login",
+        "field_change",
+        "delete",
+        "delete",
+        "delete",
+        "status_change",
+        "kanban_move",
+        "kanban_move",
+        "status_change",
+        "kanban_move",
+        "kanban_move",
+        "status_change",
+        "material_consumo",
+        "kanban_move",
+        "kanban_move",
+        "login",
+        "login",
+        "login",
+        "login",
+        "login",
+        "login",
+        "login",
+        "delete",
+        "delete",
+        "login",
+        "login",
+        "login",
+        "login",
+        "login",
+        "delete",
+        "login",
+        "material_consumo",
+        "material_consumo",
+        "create",
+        "delete",
+        "create",
+        "delete",
+        "login",
+        "login",
+        "login",
+        "create",
+        "create",
+        "delete",
+        "create",
+        "login",
+        "material_consumo",
+        "status_change",
+        "kanban_move",
+        "kanban_move",
+        "login",
+        "login",
+        "login",
+        "material_consumo",
+        "create",
+        "delete",
+        "create",
+        "delete",
+        "login",
+        "login",
+        "login",
+        "delete",
+        "create",
+        "login",
+        "material_consumo",
+        "status_change",
+        "kanban_move",
+        "kanban_move",
+        "login",
+        "login",
+        "login",
+        "login",
+        "login",
+        "material_consumo",
+        "create",
+        "delete",
+        "create",
+        "delete",
+        "login",
+        "login",
+        "login",
+        "delete",
+        "create",
+        "login",
+        "material_consumo",
+        "status_change",
+        "kanban_move",
+        "kanban_move",
+        "login",
+        "login",
+        "login"
+      ]
+    }
+  },
+  "veredito": {}
+}

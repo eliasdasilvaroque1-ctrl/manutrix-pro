@@ -1,0 +1,117 @@
+{
+  "summary": "ORR Operational Readiness Review — Simulação de turno completo ASTEC Cedro (07:00-08:35). 18/18 pytest PASSOS mas com 4 achados de OBSERVAÇÃO relevantes: (1) POST /ordens-servico NÃO emite audit_log action='create' — nenhum dos 3 OS ORR gerou entry de criação; (2) Técnico recebe 403 em PATCH /ordens-servico/{id}/status ao tentar mover para em_execucao (check_write_permission em routes/work_orders.py:329 aceita apenas admin/pcm/supervisor); a conclusão pelo técnico funcionou via POST /concluir mesmo com status='programada', pulando etapa em_execucao; (3) data_planejamento NÃO é setado quando status→programada (routes/work_orders.py:342 seta apenas para status='planejada'); (4) GET /api/admin/audit-logs IGNORA parâmetro entity_id (server.py:3487 aceita apenas user_id, entity_type, action, date_from, date_to). O fluxo funcional operou de ponta a ponta: solicitada→em_analise(sup)→programada(pcm)→material_consumo(pcm)→concluida(tec 90min) com estoque decrementado, KPIs atualizados (MTTR=1.9h, concluidas_hoje=7), exports em /api/export/* respondendo 200, RBAC final correto (operador PATCH=403, viewer=lista vazia, gerente=dashboard 200). P0 multi-tenant reportado em iter_91 CORRIGIDO — routes/work_orders.py:338 agora chama verify_org_access. VEREDITO: CONDICIONALMENTE APTO — recomendação técnica é NÃO homologar em produção até (a) audit 'create' emitido em POST /ordens-servico, (b) filtro entity_id funcional no /admin/audit-logs (crítico para rastreabilidade/dossie), e (c) alinhar workflow do técnico (permitir PATCH → em_execucao OU documentar POST /iniciar como caminho oficial e obrigar no frontend). Achados 3 e 4 são degradação de rastreabilidade — comprometem o requisito de auditoria completa exigido pelo CTO.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/ordens-servico",
+        "issue": "P1 AUDIT GAP — Criação de OS não gera audit_log com action='create'. Verificado em 3 OS distintas (ORR corretiva por operador, preventiva por admin, lubrificacao por admin): 0 entradas 'create' em db.audit_logs para entity_type='ordens_servico'. Query: GET /admin/audit-logs?entity_type=ordens_servico&limit=300 → returned 66 logs, 0 com action='create'. Impacto: dossie/histórico de uma OS não mostra QUEM e QUANDO criou. Local esperado do fix: routes/work_orders.py função create_os (linha 185) — adicionar await audit_log('create', 'ordens_servico', os_id, user, f'OS #{numero} criada').",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "GET /api/admin/audit-logs",
+        "issue": "P1 AUDIT FILTER MISSING — Parâmetro entity_id é aceito na query string mas NÃO é aplicado (server.py:3487-3517 aceita apenas user_id, entity_type, action, date_from, date_to, limit). Consequência: consumidores externos (e testes ORR-07:55) que passam ?entity_id=<os_id> recebem TODOS os logs da org, não filtrados. Reprodução: chamar /admin/audit-logs?entity_id=48ba0637-d414-4441-94ea-fe59cbddc632&limit=100 → devolveu 100 logs de várias entidades (login, delete, create, material_consumo). Fix: adicionar 'if entity_id: query[\"entity_id\"] = entity_id' em server.py:3506.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "PATCH /api/ordens-servico/{id}/status (técnico)",
+        "issue": "Técnico recebe 403 ao PATCH → em_execucao. check_write_permission(user, ['admin','pcm','supervisor']) na linha 329 de routes/work_orders.py exclui roles de execução. Workflow atual força técnico a usar POST /iniciar (linha 300, allowed_start inclui técnico via ROLE_GROUPS['execucao']). Não é bug de segurança, mas é INCONSISTÊNCIA de workflow: PCM/Supervisor movem via kanban, técnico deve usar botão iniciar/concluir. Documentar OU incluir 'execucao' em check_write_permission de update_os_status para new_status='em_execucao'."
+      },
+      {
+        "endpoint": "PATCH /api/ordens-servico/{id}/status → programada",
+        "issue": "data_planejamento NÃO é setado quando status→programada. routes/work_orders.py:342-344 só seta para new_status='planejada'. CTO esperava data_planejamento ao mover para 'programada'. Recomendar: aplicar mesma lógica para 'programada'."
+      },
+      {
+        "endpoint": "GET /api/ordens-servico/export/excel, /api/estoque/export/excel",
+        "issue": "Endpoints do problem statement não existem (404). Endpoints reais são /api/export/ordens-servico e /api/export/estoque. Documentar no OpenAPI/README."
+      },
+      {
+        "endpoint": "Conclusão pulando em_execucao",
+        "issue": "OS pode ir de 'programada' → 'concluida' sem passar por 'em_execucao'. Como técnico não pôde PATCH → em_execucao (403), a POST /concluir aceitou status='programada' e concluiu direto (routes/work_orders.py:360 só bloqueia 'concluida' e 'cancelada'). Consequência: data_inicio pode ficar None em OS concluídas. Recomendar exigir status='em_execucao' antes de concluir, ou setar data_inicio automaticamente no /concluir se ausente."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "orr_shift_evidence": {
+    "07_00_login_operador_ms": 342,
+    "07_00_central_ms": 108,
+    "07_05_corretiva_created": {"id": "48ba0637-d414-4441-94ea-fe59cbddc632", "numero": "2026-00040", "status": "solicitada"},
+    "07_10_kpi_backlog_before": 1,
+    "07_10_solicitada_in_list": true,
+    "07_15_supervisor_em_analise": 200,
+    "07_20_pcm_programada": 200,
+    "07_20_data_planejamento_set": false,
+    "07_25_material_consumo": {"item_id": "TEST-MAT-5D393E", "before": 10, "after": 8, "http": 200},
+    "07_30_tecnico_patch_em_execucao": 403,
+    "07_45_tecnico_concluir": {"http": 200, "final_status": "concluida", "tempo": 90, "data_inicio_none": "verificar"},
+    "07_50_kpis_after_corretiva": {"mttr_horas": 1.9, "mtbf_horas": 144.0, "disponibilidade": 98.7},
+    "07_55_audit_entries_for_os_via_direct_filter": 5,
+    "07_55_audit_actions_observed": ["kanban_move(em_analise/supervisor)", "kanban_move(programada/pcm)", "material_consumo(pcm)", "status_change(concluida/tec_mecanico)", "delete(admin)"],
+    "07_55_audit_actions_missing": ["create(operador)", "status_change/kanban_move(em_execucao) — porque técnico foi 403"],
+    "08_00_ativo_historico_count": ">=1 OS listada",
+    "08_05_preventiva_lifecycle": "create=200 prog=200 exec=200 concl=200 (todas por admin)",
+    "08_15_lubrificacao_lifecycle": "create=200 prog=200 exec=200 concl=200 (todas por admin)",
+    "08_25_final_kpis": {"concluidas_hoje": 7, "mttr_horas": 1.9, "disponibilidade": 98.7, "ativos_total": 55},
+    "08_25_dashboard_trend": "OK — 12 meses com dados",
+    "08_30_export_real": {"os": 200, "estoque": 200, "content_type": "spreadsheetml"},
+    "08_30_export_spec_paths_404": true,
+    "08_35_operador_patch_status": 403,
+    "08_35_viewer_ordens_servico_count": 0,
+    "08_35_gerente_dashboard": 200,
+    "cleanup": "3 OS soft-deleted (200 admin); estoque restaurado via PUT"
+  },
+  "veredito_orr": {
+    "resultado": "CONDICIONALMENTE APTO",
+    "recomendacao_homologacao": "NAO — corrigir 2 P1 antes do pilot",
+    "bloqueios_p1": [
+      "Audit 'create' ausente em POST /ordens-servico (rastreabilidade quebrada)",
+      "GET /admin/audit-logs ignora entity_id (dossie e histórico por OS não filtram corretamente)"
+    ],
+    "recomendacoes_p2": [
+      "Alinhar workflow técnico (PATCH → em_execucao OU forçar botão 'Iniciar')",
+      "Setar data_planejamento em status→programada (não só 'planejada')",
+      "POST /concluir: exigir 'em_execucao' OU auto-set data_inicio",
+      "Documentar rotas de export reais (/api/export/*) — spec estava desatualizada"
+    ],
+    "confirmacoes_positivas": [
+      "P0 multi-tenant do iter_91 CORRIGIDO — verify_org_access presente em update_os_status (linha 338)",
+      "Fluxo funcional ponta-a-ponta OK (solicitada→analise→programada→material→execução→conclusão)",
+      "KPIs propagam corretamente (backlog exclui solicitada; MTTR atualizado; concluidas_hoje incrementa)",
+      "RBAC final íntegro (operador PATCH=403, viewer=0 OS visíveis, gerente=dashboard)",
+      "Exports funcionais em /api/export/ordens-servico e /api/export/estoque (spreadsheetml, 200)"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_orr_shift_simulation.py",
+    "/app/test_reports/pytest/orr_results.xml",
+    "/app/test_reports/orr_shift_log.json"
+  ],
+  "action_items": [
+    "P1 — Emitir audit_log('create','ordens_servico',os_id,user,...) no final de routes/work_orders.py:create_os (linha ~250)",
+    "P1 — Adicionar 'entity_id: Optional[str] = None' e query['entity_id']=entity_id em server.py:3487 get_audit_logs",
+    "P2 — Alinhar workflow técnico: liberar PATCH /status para role 'execucao' quando new_status='em_execucao', OU garantir que UI use POST /iniciar (routes/work_orders.py:329)",
+    "P2 — Setar data_planejamento em routes/work_orders.py:342 quando new_status IN ('programada','planejada')",
+    "P2 — POST /concluir: se data_inicio for None, setar automaticamente (routes/work_orders.py:concluir_os)",
+    "P3 — Documentar/expor alias /api/ordens-servico/export/excel e /api/estoque/export/excel OU corrigir spec do CTO"
+  ],
+  "critical_code_review_comments": [
+    "routes/work_orders.py:185 create_os — falta await audit_log('create',...) antes do return; toda outra mutação (status, delete, concluir) tem audit — apenas create não tem.",
+    "server.py:3488 get_audit_logs — assinatura não expõe entity_id como filtro; consumidores externos (dossie, ativo/historico) assumem que existe. Adicionar 3 linhas.",
+    "routes/work_orders.py:329 update_os_status — check_write_permission whitelist não inclui roles de execução; se o design é 'kanban só para PCM+', então a UI deve ocultar drag para técnicos.",
+    "routes/work_orders.py:342 — verifica só 'planejada' para setar data_planejamento; deveria também para 'programada' (spec do CTO)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_orr_shift_simulation.py",
+    "/app/test_reports/pytest/orr_results.xml",
+    "/app/test_reports/orr_shift_log.json",
+    "/app/test_reports/iteration_92.json"
+  ],
+  "success_rate": {"backend": "100% (18/18 pytest PASS) — mas 2 P1 achados de observação bloqueiam homologação", "frontend": "N/A (backend-only)"},
+  "test_credentials": "test.admin@maintrix.com/admin123 | test.pcm@maintrix.com/pcm123 | test.sup.mec@maintrix.com/sup123 | test.mec@maintrix.com/tec123 | test.operador@maintrix.com/op123 | test.gerente@maintrix.com/ger123 | rc07v@maintrix.com/viewer123 (todos org ASTEC=9a232bf2-fc01-4253-813f-8df356be31c1)",
+  "seed_data_creation": "3 OS ORR-* criadas (corretiva 2026-00040, preventiva 2026-00041, lubrificacao 2026-00042) e SOFT-DELETADAS no fim do run. Material TEST-MAT-5D393E consumido em 2 unidades e RESTAURADO via PUT /estoque/{id} — banco limpo pós-execução.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Este é o ORR final (iter_92) — simula turno completo ASTEC. Rodar test_orr_shift_simulation.py APÓS o main agent aplicar os 2 P1: (1) audit create em POST /ordens-servico; (2) filtro entity_id em GET /admin/audit-logs. Após fix, adicionar asserção em test_0755_audit_trail para exigir action='create' com user_role='operador' no primeiro entry, e usar entity_id no filtro (a resposta deverá ter EXATAMENTE 5-6 entries, não 100). Também vale re-avaliar test_0745 se técnico ganhar permissão PATCH — o final_status deve passar por 'em_execucao' e data_inicio deve ser não-nula. Iter_91 P0 multi-tenant JÁ CORRIGIDO (verificado em code line 338).",
+  "rca_of_the_issue": "ACHADO 1 (audit create ausente): routes/work_orders.py create_os (linha 185-256) faz db.ordens_servico.insert_one mas NÃO chama audit_log. Outros endpoints (update_os_status:349, delete_os, concluir_os, iniciar_os) chamam audit_log. Fix: adicionar 'await audit_log(\"create\", \"ordens_servico\", os_id, user, f\"OS #{doc[\"numero\"]} criada — {data.tipo}/{data.disciplina}\")' antes de return no create_os. ACHADO 2 (entity_id filter): server.py:3487 get_audit_logs — a função aceita user_id, entity_type, action, date_from, date_to mas não entity_id. Como o Mongo query é montado somente com esses filtros, ?entity_id=xxx passa despercebido. Fix 3 linhas: (1) assinatura recebe entity_id: Optional[str]=None; (2) if entity_id: query['entity_id']=entity_id; (3) done. Sem esse filtro, dossie/historico de UMA OS específica precisa filtrar client-side após .to_list(limit) — quebra se OS tiver >limit logs (ordem descrescente perde os mais antigos: create/analise)."
+}
