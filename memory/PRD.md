@@ -299,6 +299,11 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Correção**: `relative` + `pointer-events-none` + `BACKEND_URL` prefix
 - **NÃO é regressão da RC-13**
 
+### Design System Onda 1 — Migração Completa ✅ (2026-07-09)
+- **10 páginas migradas** para componentes DS
+- **53 classes slate eliminadas**, cobertura tokens 7.3% → 11.3%
+- **Adoção PageContainer/PageHeader**: 10/24 páginas (42%)
+
 ### QA Piloto ASTEC — GATE 3 UX ✅ (2026-07-09)
 - **6 correções de baixo risco**: EmptyState Paradas/Planos (botão não funcionava), mensagens de erro amigáveis (Network Error, timeout, JSON), toasts genéricos humanizados
 

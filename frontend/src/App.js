@@ -2546,44 +2546,34 @@ const CentralTrabalhoPage = () => {
   const titulo = centralTitles[role] || 'Central de Trabalho';
 
   return (
-    <div className="space-y-6" data-testid="central-trabalho">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-primary">{titulo}</h1>
-          <p className="text-sm text-slate-500">
-            {data.user_nome}{data.turno ? ` • Turno ${data.turno}` : ''} • {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
+    <PageContainer data-testid="central-trabalho">
+      <PageHeader title={titulo} subtitle={`${data.user_nome}${data.turno ? ` • Turno ${data.turno}` : ''} • ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}`}>
+        <div className="text-right">
+          <p className="text-2xl font-bold text-primary">{data.total_atividades}</p>
+          <p className="text-[10px] text-secondary uppercase">Atividades</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-2xl font-bold text-primary">{data.total_atividades}</p>
-            <p className="text-[10px] text-slate-500 uppercase">Atividades</p>
-          </div>
-          <button onClick={() => { setLoading(true); api.get('/central').then(r => setData(r.data)).finally(() => setLoading(false)); }} className="p-2 hover:bg-slate-800 rounded-lg transition-colors" data-testid="central-refresh">
-            <RefreshCw size={18} className="text-slate-400" />
-          </button>
-        </div>
-      </div>
+        <button onClick={() => { setLoading(true); api.get('/central').then(r => setData(r.data)).finally(() => setLoading(false)); }} className="p-2 hover:bg-surface-hover rounded-lg transition-colors" data-testid="central-refresh">
+          <RefreshCw size={18} className="text-secondary" />
+        </button>
+      </PageHeader>
 
-      {/* Quick stats for supervisors/admin */}
       {data.resumo && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="glass-card p-3 text-center">
-            <p className="text-xl font-bold text-slate-100">{data.resumo.total_os_abertas}</p>
-            <p className="text-[10px] text-slate-500 uppercase">OS Abertas</p>
+            <p className="text-xl font-bold text-primary">{data.resumo.total_os_abertas}</p>
+            <p className="text-[10px] text-secondary uppercase">OS Abertas</p>
           </div>
           <div className="glass-card p-3 text-center">
-            <p className="text-xl font-bold text-slate-100">{data.resumo.total_insp_pendentes}</p>
-            <p className="text-[10px] text-slate-500 uppercase">Inspeções Pendentes</p>
+            <p className="text-xl font-bold text-primary">{data.resumo.total_insp_pendentes}</p>
+            <p className="text-[10px] text-secondary uppercase">Inspeções Pendentes</p>
           </div>
           <div className="glass-card p-3 text-center">
-            <p className="text-xl font-bold text-slate-100">{data.resumo.total_ativos}</p>
-            <p className="text-[10px] text-slate-500 uppercase">Ativos</p>
+            <p className="text-xl font-bold text-primary">{data.resumo.total_ativos}</p>
+            <p className="text-[10px] text-secondary uppercase">Ativos</p>
           </div>
           <div className="glass-card p-3 text-center">
-            <p className="text-xl font-bold text-amber-400">{data.resumo.ativos_parados}</p>
-            <p className="text-[10px] text-slate-500 uppercase">Parados</p>
+            <p className="text-xl font-bold text-warning">{data.resumo.ativos_parados}</p>
+            <p className="text-[10px] text-secondary uppercase">Parados</p>
           </div>
         </div>
       )}
@@ -2621,13 +2611,13 @@ const CentralTrabalhoPage = () => {
       {data.planos_pendentes && data.planos_pendentes.length > 0 && (
         <SectionBlock title="Planos Pendentes de Aprovação" icon={ClipboardCheck} count={data.planos_pendentes.length} color="bg-purple-600" defaultOpen={true}>
           {data.planos_pendentes.map(p => (
-            <div key={p.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-800 bg-slate-900/50 cursor-pointer hover:border-slate-600" onClick={() => navigate('/admin/templates')} data-testid={`plano-pendente-${p.id}`}>
+            <div key={p.id} className="flex items-center gap-3 p-3 rounded-lg border border-surface bg-surface/50 cursor-pointer hover:border-slate-600" onClick={() => navigate('/admin/templates')} data-testid={`plano-pendente-${p.id}`}>
               <ClipboardCheck size={16} className="text-purple-400 shrink-0" />
               <div className="flex-1">
-                <p className="text-sm text-slate-200">{p.nome}</p>
-                <span className="text-[10px] text-slate-500">{(p.perguntas || []).length} perguntas • {p.tipo}</span>
+                <p className="text-sm text-primary">{p.nome}</p>
+                <span className="text-[10px] text-secondary">{(p.perguntas || []).length} perguntas • {p.tipo}</span>
               </div>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">{p.status}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning-10 text-warning border border-amber-500/30">{p.status}</span>
             </div>
           ))}
         </SectionBlock>
@@ -2643,12 +2633,12 @@ const CentralTrabalhoPage = () => {
       {/* Empty state */}
       {data.total_atividades === 0 && !data.resumo && (
         <div className="glass-card p-12 text-center">
-          <CheckCircle size={48} className="text-emerald-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-slate-200">Tudo em dia!</h3>
-          <p className="text-sm text-slate-500 mt-1">Nenhuma atividade pendente no momento.</p>
+          <CheckCircle size={48} className="text-success mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-primary">Tudo em dia!</h3>
+          <p className="text-sm text-secondary mt-1">Nenhuma atividade pendente no momento.</p>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 };
 
@@ -3179,31 +3169,18 @@ const AtivosPage = () => {
   });
   
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-primary">Ativos</h1>
-          <ExportButtons entity="ativos" />
-        </div>
+    <PageContainer>
+      <PageHeader title="Ativos">
+        <ExportButtons entity="ativos" />
         {['admin','master'].includes(user?.role) && (
           <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-ativo-btn">
             <Plus size={20} /> Novo Ativo
           </button>
         )}
-      </div>
+      </PageHeader>
       
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por TAG, nome ou área..."
-            className="input-industrial w-full pl-10 pr-4"
-          />
-        </div>
+      <PageToolbar>
+        <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por TAG, nome ou área..." />
         <Select
           value={filterSector}
           onChange={setFilterSector}
@@ -3211,7 +3188,7 @@ const AtivosPage = () => {
           placeholder="Área"
           className="w-40"
         />
-      </div>
+      </PageToolbar>
       
       {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
         <div className="space-y-2">
@@ -3223,9 +3200,9 @@ const AtivosPage = () => {
                     <Box size={22} className="text-brand" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-0.5">
+                    <div className="flex items-center gap-1 text-[10px] text-secondary mb-0.5">
                       {plantas[0]?.nome && <span>{plantas[0].nome}</span>}
-                      {plantas[0]?.nome && ativo.sector?.nome && <span className="text-slate-600">›</span>}
+                      {plantas[0]?.nome && ativo.sector?.nome && <span className="text-secondary">›</span>}
                       {ativo.sector?.nome && <span>{ativo.sector.nome}</span>}
                     </div>
                     <div className="flex items-center gap-2">
@@ -3283,7 +3260,7 @@ const AtivosPage = () => {
         confirmText="Excluir"
         danger
       />
-    </div>
+    </PageContainer>
   );
 };
 
@@ -4420,67 +4397,48 @@ const OSPage = () => {
   ];
   
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-primary">Ordens de Serviço</h1>
-          <ExportButtons entity="ordens-servico" />
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex bg-slate-800 rounded-lg p-0.5">
-            <button onClick={() => setViewMode('kanban')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'kanban' ? 'bg-brand-20 text-brand' : 'text-slate-400'}`} data-testid="view-kanban">
-              <LayoutDashboard size={14} className="inline mr-1" />Kanban
-            </button>
-            <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-brand-20 text-brand' : 'text-slate-400'}`} data-testid="view-list">
-              <List size={14} className="inline mr-1" />Lista
-            </button>
-          </div>
-          {user?.role !== 'visualizador' && user?.role !== 'gerente' && (
-          <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-os-btn">
-            <Plus size={20} /> Nova OS
+    <PageContainer>
+      <PageHeader title="Ordens de Serviço">
+        <ExportButtons entity="ordens-servico" />
+        <div className="flex bg-surface rounded-lg p-0.5">
+          <button onClick={() => setViewMode('kanban')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'kanban' ? 'bg-brand-20 text-brand' : 'text-secondary'}`} data-testid="view-kanban">
+            <LayoutDashboard size={14} className="inline mr-1" />Kanban
           </button>
-          )}
+          <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-brand-20 text-brand' : 'text-secondary'}`} data-testid="view-list">
+            <List size={14} className="inline mr-1" />Lista
+          </button>
         </div>
-      </div>
+        {user?.role !== 'visualizador' && user?.role !== 'gerente' && (
+        <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-os-btn">
+          <Plus size={20} /> Nova OS
+        </button>
+        )}
+      </PageHeader>
       
-      {/* Search + Filters */}
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-            <input
-              type="text"
-              value={searchOS}
-              onChange={(e) => setSearchOS(e.target.value)}
-              placeholder="Buscar por nº, título ou TAG do ativo..."
-              className="input-industrial w-full pl-9 pr-4 text-sm"
-              data-testid="os-search-input"
-            />
-            {searchOS && <button onClick={() => setSearchOS('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={14} /></button>}
-          </div>
-          <button onClick={() => setShowFilters(!showFilters)}
-            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${showFilters || activeFilterCount > 0 ? 'bg-brand-20 text-brand border-brand-30' : 'border-slate-700 text-slate-400 hover:text-slate-300'}`}
-            data-testid="os-toggle-filters"
-          >
-            <Filter size={14} />Filtros
-            {activeFilterCount > 0 && <span className="bg-brand text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
-          </button>
-          <div className="flex gap-1">
-            {[
-              { value: '', label: 'Todas' },
-              { value: 'emergencia', label: 'Emerg.', cls: 'text-red-400 bg-red-500/10 border-red-500/30' },
-              { value: 'alta', label: 'Alta', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/30' },
-              { value: 'media', label: 'Média', cls: 'text-emerald-400 bg-brand-10 border-emerald-500/30' },
-              { value: 'baixa', label: 'Baixa', cls: 'text-slate-400 bg-slate-500/10 border-slate-500/30' },
-            ].map(p => (
-              <button key={p.value} onClick={() => setFilterPriority(p.value)}
-                className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition-all ${filterPriority === p.value ? (p.cls || 'bg-brand-20 text-brand border-brand-30') : 'border-slate-700 text-slate-500 hover:text-slate-300'}`}
-                data-testid={`os-filter-priority-${p.value || 'all'}`}
-              >{p.label}</button>
-            ))}
-          </div>
+      <PageToolbar>
+        <SearchInput value={searchOS} onChange={(e) => setSearchOS(e.target.value)} placeholder="Buscar por nº, título ou TAG do ativo..." />
+        <button onClick={() => setShowFilters(!showFilters)}
+          className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${showFilters || activeFilterCount > 0 ? 'bg-brand-20 text-brand border-brand-30' : 'border-surface text-secondary hover:text-primary'}`}
+          data-testid="os-toggle-filters"
+        >
+          <Filter size={14} />Filtros
+          {activeFilterCount > 0 && <span className="bg-brand text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
+        </button>
+        <div className="flex gap-1">
+          {[
+            { value: '', label: 'Todas' },
+            { value: 'emergencia', label: 'Emerg.', cls: 'text-danger bg-danger-10 border-red-500/30' },
+            { value: 'alta', label: 'Alta', cls: 'text-warning bg-warning-10 border-amber-500/30' },
+            { value: 'media', label: 'Média', cls: 'text-success bg-brand-10 border-emerald-500/30' },
+            { value: 'baixa', label: 'Baixa', cls: 'text-secondary bg-slate-500/10 border-slate-500/30' },
+          ].map(p => (
+            <button key={p.value} onClick={() => setFilterPriority(p.value)}
+              className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border transition-all ${filterPriority === p.value ? (p.cls || 'bg-brand-20 text-brand border-brand-30') : 'border-surface text-secondary hover:text-primary'}`}
+              data-testid={`os-filter-priority-${p.value || 'all'}`}
+            >{p.label}</button>
+          ))}
         </div>
-        {/* Expanded filters panel */}
+
         {showFilters && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-3 glass-card" data-testid="os-filters-panel">
             <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} className="input-industrial text-xs" data-testid="os-filter-tipo">
@@ -4504,12 +4462,12 @@ const OSPage = () => {
               ))}
             </select>
             <button onClick={() => { setFilterPriority(''); setFilterTipo(''); setFilterArea(''); setFilterResponsavel(''); setFilterDisciplina(''); setSearchOS(''); }}
-              className="text-xs text-slate-500 hover:text-brand flex items-center justify-center gap-1" data-testid="os-clear-all-filters">
+              className="text-xs text-secondary hover:text-brand flex items-center justify-center gap-1" data-testid="os-clear-all-filters">
               <X size={12} />Limpar filtros
             </button>
           </div>
         )}
-      </div>
+      </PageToolbar>
 
       {loading ? <Loading rows={5} /> : viewMode === 'kanban' ? (
         <KanbanBoard
@@ -4581,7 +4539,7 @@ const OSPage = () => {
       
       <ModalNovaOS isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} onSuccess={fetchData} ativos={ativos} tecnicos={tecnicos} editData={editItem} preSelectedAtivoId={searchParams.get('ativo') || null} />
       <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir OS" message={`Tem certeza que deseja excluir a OS #${deleteItem?.numero}?`} confirmText="Excluir" danger />
-    </div>
+    </PageContainer>
   );
 };
 
@@ -5625,21 +5583,17 @@ const InspecoesPage = () => {
   });
   
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-primary">Inspeções</h1>
-          <ExportButtons entity="inspecoes" />
-        </div>
+    <PageContainer>
+      <PageHeader title="Inspeções">
+        <ExportButtons entity="inspecoes" />
         {user?.role !== 'visualizador' && user?.role !== 'gerente' && (
         <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-inspecao-btn">
           <Plus size={20} /> Nova Inspeção
         </button>
         )}
-      </div>
+      </PageHeader>
 
-      {/* I1: Filtro por status + I2: Filtro por área */}
-      <div className="flex flex-wrap gap-2 items-center">
+      <PageToolbar>
         <div className="flex gap-1 overflow-x-auto hide-scrollbar">
           {[
             { value: '', label: 'Todas' },
@@ -5649,29 +5603,24 @@ const InspecoesPage = () => {
             { value: 'com_pendencias', label: 'Com Pendências' },
           ].map(f => (
             <button key={f.value} onClick={() => setFilterStatus(f.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${filterStatus === f.value ? 'bg-brand-20 text-brand border border-brand-30' : 'border border-slate-700 text-slate-400 hover:text-slate-300'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${filterStatus === f.value ? 'bg-brand-20 text-brand border border-brand-30' : 'border border-surface text-secondary hover:text-primary'}`}
               data-testid={`insp-filter-status-${f.value || 'all'}`}
             >
               {f.label}
-              {f.value && <span className="ml-1 text-slate-600">({inspecoes.filter(i => i.status === f.value).length})</span>}
+              {f.value && <span className="ml-1 text-secondary">({inspecoes.filter(i => i.status === f.value).length})</span>}
             </button>
           ))}
         </div>
-        <select
-          value={filterArea}
-          onChange={(e) => setFilterArea(e.target.value)}
-          className="input-industrial px-3 text-sm"
-          data-testid="insp-filter-area"
-        >
+        <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="input-industrial px-3 text-sm" data-testid="insp-filter-area">
           <option value="">Todas as Áreas</option>
           {sectors.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
         </select>
         {(filterStatus || filterArea) && (
-          <button onClick={() => { setFilterStatus(''); setFilterArea(''); }} className="text-xs text-slate-500 hover:text-brand" data-testid="insp-clear-filters">Limpar</button>
+          <button onClick={() => { setFilterStatus(''); setFilterArea(''); }} className="text-xs text-secondary hover:text-brand" data-testid="insp-clear-filters">Limpar</button>
         )}
-      </div>
+      </PageToolbar>
 
-      <p className="text-xs text-slate-500">{filteredInspecoes.length} inspeção(ões)</p>
+      <p className="text-xs text-secondary">{filteredInspecoes.length} inspeção(ões)</p>
       
       {loading ? <Loading rows={5} /> : filteredInspecoes.length > 0 ? (
         <div className="space-y-2">
@@ -5747,7 +5696,7 @@ const InspecoesPage = () => {
         confirmText="Excluir"
         danger
       />
-    </div>
+    </PageContainer>
   );
 };
 
@@ -7628,16 +7577,12 @@ const ParadasPage = () => {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-primary">Paradas Programadas</h1>
-          <p className="text-sm text-slate-500">{paradas.length} parada(s)</p>
-        </div>
+    <PageContainer>
+      <PageHeader title="Paradas Programadas" subtitle={`${paradas.length} parada(s)`}>
         {['admin','master','pcm'].includes(user?.role) && (
           <button onClick={() => { setEditItem(null); setForm({ area_id: '', data_inicio: '', data_fim: '', duracao_horas: '', tipo: 'preventiva', responsavel_id: '', descricao: '', observacoes: '', os_vinculadas: [] }); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="new-parada-btn"><Plus size={20} /> Nova Parada</button>
         )}
-      </div>
+      </PageHeader>
 
       {paradas.length > 0 ? (
         <div className="space-y-2">
@@ -7646,11 +7591,11 @@ const ParadasPage = () => {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-amber-400 font-semibold">{p.numero}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 capitalize">{p.tipo?.replace('_',' ')}</span>
+                    <span className="font-mono text-warning font-semibold">{p.numero}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-surface text-secondary capitalize">{p.tipo?.replace('_',' ')}</span>
                     <StatusBadge status={p.status} size="sm" />
                   </div>
-                  <p className="text-slate-200">{p.descricao || p.area?.nome}</p>
+                  <p className="text-primary">{p.descricao || p.area?.nome}</p>
                   <div className="flex items-center gap-4 mt-1 text-xs text-slate-500">
                     <span>{p.area?.nome}</span>
                     {p.data_inicio && <span>{new Date(p.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
@@ -7732,7 +7677,7 @@ const ParadasPage = () => {
         </form>
       </Modal>
       <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Parada" message={`Excluir parada "${deleteItem?.numero}"?`} confirmText="Excluir" danger />
-    </div>
+    </PageContainer>
   );
 };
 
@@ -8520,28 +8465,20 @@ const AuditoriaPage = () => {
   };
 
   return (
-    <div className="space-y-4" data-testid="auditoria-page">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-primary">Auditoria</h1>
-          <p className="text-sm text-slate-500">{stats ? `${stats.total} registros` : ''}</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => handleExport('excel')} className="btn-secondary text-sm flex items-center gap-1" data-testid="audit-export-excel"><Download size={14} /> Excel</button>
-          <button onClick={() => handleExport('pdf')} className="btn-secondary text-sm flex items-center gap-1"><FileText size={14} /> PDF</button>
-        </div>
-      </div>
+    <PageContainer data-testid="auditoria-page">
+      <PageHeader title="Auditoria" subtitle={stats ? `${stats.total} registros` : ''}>
+        <button onClick={() => handleExport('excel')} className="btn-secondary text-sm flex items-center gap-1" data-testid="audit-export-excel"><Download size={14} /> Excel</button>
+        <button onClick={() => handleExport('pdf')} className="btn-secondary text-sm flex items-center gap-1"><FileText size={14} /> PDF</button>
+      </PageHeader>
 
-      {/* Stats */}
       {stats && (
         <div className="flex gap-2 flex-wrap">
           {Object.entries(stats.by_module || {}).map(([mod, count]) => (
-            <span key={mod} className="bg-slate-800/50 text-slate-400 text-xs px-2 py-1 rounded">{mod}: {count}</span>
+            <span key={mod} className="bg-surface text-secondary text-xs px-2 py-1 rounded">{mod}: {count}</span>
           ))}
         </div>
       )}
 
-      {/* Filters */}
       <div className="glass-card p-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <select value={filters.entity_type} onChange={e => setFilters({...filters, entity_type: e.target.value})} className="input-industrial px-3 text-sm">
@@ -8575,7 +8512,7 @@ const AuditoriaPage = () => {
           ))}
         </div>
       ) : <EmptyState icon={Shield} title="Nenhum registro" description="Logs de auditoria aparecerão aqui." />}
-    </div>
+    </PageContainer>
   );
 };
 
@@ -8653,11 +8590,10 @@ const AdminUsuariosPage = () => {
   if (!['admin','master'].includes(user?.role)) return <EmptyState icon={Shield} title="Acesso Restrito" description="Apenas administradores podem gerenciar usuários." />;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-primary">Gestão de Usuários</h1>
+    <PageContainer>
+      <PageHeader title="Gestão de Usuários">
         <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-user-btn"><Plus size={20} /> Novo Usuário</button>
-      </div>
+      </PageHeader>
       {loading ? <Loading rows={5} /> : (
         <div className="space-y-2">
           {users.map((u) => (
@@ -8665,13 +8601,13 @@ const AdminUsuariosPage = () => {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-brand-20 flex items-center justify-center"><User size={20} className="text-brand" /></div>
                 <div>
-                  <p className="text-slate-100 font-medium">{u.nome}</p>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <p className="text-primary font-medium">{u.nome}</p>
+                  <div className="flex items-center gap-2 text-xs text-secondary">
                     <span>{u.email}</span>
-                    {u.disciplina_principal && <span className="bg-slate-800 px-1.5 py-0.5 rounded capitalize">{disciplinaLabels[u.disciplina_principal] || u.disciplina_principal}</span>}
-                    {u.turno && <span className="bg-slate-800 px-1.5 py-0.5 rounded">Turno {u.turno}</span>}
+                    {u.disciplina_principal && <span className="bg-surface px-1.5 py-0.5 rounded capitalize">{disciplinaLabels[u.disciplina_principal] || u.disciplina_principal}</span>}
+                    {u.turno && <span className="bg-surface px-1.5 py-0.5 rounded">Turno {u.turno}</span>}
                   </div>
-                  {u.force_password_change && <span className="text-[10px] text-amber-400">Troca de senha pendente</span>}
+                  {u.force_password_change && <span className="text-[10px] text-warning">Troca de senha pendente</span>}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -8735,7 +8671,7 @@ const AdminUsuariosPage = () => {
           <button onClick={() => setResetResult(null)} className="btn-primary w-full">Entendido</button>
         </div>
       </Modal>
-    </div>
+    </PageContainer>
   );
 };
 
@@ -8866,22 +8802,14 @@ const SetoresPage = () => {
   const colors = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ef4444','#ec4899','#06b6d4','#f97316'];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-primary" data-testid="setores-title">Áreas</h1>
-          <p className="text-sm text-slate-500">Gerencie as áreas industriais</p>
-        </div>
+    <PageContainer>
+      <PageHeader title="Áreas" subtitle={`${sectors.length} áreas cadastradas`} testId="setores-title">
         {['admin','master'].includes(user?.role) && (
           <button onClick={() => openModal()} className="btn-primary flex items-center gap-2" data-testid="add-sector-btn">
             <Plus size={20} /> Nova Área
           </button>
         )}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <p className="text-sm text-slate-500">{sectors.length} áreas cadastradas</p>
-      </div>
+      </PageHeader>
 
       {loading ? <Loading rows={3} /> : sectors.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -8943,7 +8871,7 @@ const SetoresPage = () => {
       </Modal>
 
       <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Área" message={`Excluir a área "${deleteItem?.nome}"? Todos os ativos precisam ser movidos antes.`} confirmText="Excluir" danger />
-    </div>
+    </PageContainer>
   );
 };
 
