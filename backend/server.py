@@ -1464,6 +1464,10 @@ async def delete_inspecao(inspecao_id: str, user: Dict = Depends(get_current_use
 @api_router.post("/inspecoes/{inspecao_id}/iniciar")
 async def iniciar_inspecao(inspecao_id: str, user: Dict = Depends(get_current_user)):
     check_write_permission(user, ['admin', 'supervisor'] + ROLE_GROUPS['execucao'] + ['operador'])
+    insp = await db.inspecoes.find_one({"id": inspecao_id, "deleted_at": None}, {"_id": 0})
+    if not insp:
+        raise HTTPException(status_code=404, detail="Inspeção não encontrada")
+    verify_org_access(user, insp, "Inspeção")
     await db.inspecoes.update_one(
         {"id": inspecao_id},
         {"$set": {
@@ -1488,6 +1492,7 @@ async def concluir_inspecao(
     insp = await db.inspecoes.find_one({"id": inspecao_id, "deleted_at": None}, {"_id": 0})
     if not insp:
         raise HTTPException(status_code=404, detail="Inspeção não encontrada")
+    verify_org_access(user, insp, "Inspeção")
     
     # Determine result
     # Safely check conforme - treat missing/None as neutral

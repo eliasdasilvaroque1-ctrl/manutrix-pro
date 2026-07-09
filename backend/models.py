@@ -204,6 +204,7 @@ class AtivoCreate(BaseModel):
     modelo: Optional[str] = None
     numero_serie: Optional[str] = None
     observacoes: Optional[str] = None
+    status: Optional[str] = "operacional"
 
 class AtivoUpdate(BaseModel):
     sector_id: Optional[str] = None
@@ -213,6 +214,7 @@ class AtivoUpdate(BaseModel):
     modelo: Optional[str] = None
     numero_serie: Optional[str] = None
     observacoes: Optional[str] = None
+    status: Optional[str] = None
 
 # Materiais por Equipamento
 class AtivoMaterialCreate(BaseModel):

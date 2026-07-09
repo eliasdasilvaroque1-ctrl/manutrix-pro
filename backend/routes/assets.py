@@ -205,6 +205,7 @@ async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)
         "fabricante": data.fabricante, "modelo": data.modelo,
         "numero_serie": data.numero_serie,
         "sector_id": data.sector_id,
+        "status": data.status or "operacional",
         "organization_id": org_id,
         "observacoes": data.observacoes,
         "created_at": datetime.now(timezone.utc).isoformat(),

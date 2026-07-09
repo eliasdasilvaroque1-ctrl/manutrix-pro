@@ -312,6 +312,17 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Migrações globais**: Todos os page titles (20+), 17 section headers
 - **Documentação**: `/app/memory/DESIGN_SYSTEM.md` — referência oficial do Design System
 
+### QA Piloto ASTEC — GATE 1 ✅ (2026-07-09)
+- **Auth (16/16)**: Login, logout, forgot-password, change-password, JWT claims — ZERO falhas
+- **Multi-Tenant (7/7)**: Isolamento total entre orgs. Token adulterado rejeitado. IDs falsos → 404.
+- **RBAC (17/19)**: Todas roles testadas. Operador pode criar OS com status=solicitada (decisão CTO: PASS condicional — OS solicitada é demanda, não operacional)
+- **Fix P0**: Removido log de token de reset em texto plano
+
+### QA Piloto ASTEC — GATE 2 ✅ (2026-07-09)
+- **Fluxos (35/37)**: CRUD ativos/estoque/BOM, OS lifecycle completo, inspeções, uploads, exports, audit logs
+- **KPIs**: OS `solicitada` excluída de TODOS os KPIs (backlog, atrasadas, MTBF, MTTR, por-setor, por-disciplina, ativos-mais-falhas)
+- **Fixes**: Status default `operacional` para ativos (116 migrados), verify_org_access em inspeções e consumo de material (IDOR fix)
+
 ### Protocolo de Mudança
 - Consultor (E1) atua como QA e Implantação — não como desenvolvedor
 - Toda alteração requer análise de impacto documentada

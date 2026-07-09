@@ -431,6 +431,7 @@ async def add_os_material(os_id: str, body: dict, user: Dict = Depends(get_curre
     item = await db.itens_estoque.find_one({"id": item_estoque_id, "deleted_at": None}, {"_id": 0})
     if not item:
         raise HTTPException(status_code=404, detail="Item de estoque não encontrado")
+    verify_org_access(user, item, "Item de estoque")
     
     # Block negative stock
     current_qty = item.get('quantidade', 0)
