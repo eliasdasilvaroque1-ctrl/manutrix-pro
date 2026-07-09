@@ -306,6 +306,12 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **7 Componentes Migrados**: Modal, ConfirmDialog, FormInput, Loading, EmptyState, KPICard + glass-card/btn-primary/btn-secondary/input-industrial/card-industrial (CSS)
 - **Testes**: Backend 12/12 ✅ | Frontend 85%→100% (contraste corrigido)
 
+### Design System Enterprise — Fase 1.5 ✅ (2026-07-09)
+- **Theme Engine**: Arquitetura de temas pré-definidos em `branding.js` (Industrial Dark ativo, preparado para Light/Executive/Mining)
+- **8 Componentes Reutilizáveis**: `PageContainer`, `PageHeader`, `PageToolbar`, `SearchInput`, `FilterBar`, `CardSection`, `DataTable`/`DataRow`, `SectionDivider`
+- **Migrações globais**: Todos os page titles (20+), 17 section headers
+- **Documentação**: `/app/memory/DESIGN_SYSTEM.md` — referência oficial do Design System
+
 ### Protocolo de Mudança
 - Consultor (E1) atua como QA e Implantação — não como desenvolvedor
 - Toda alteração requer análise de impacto documentada

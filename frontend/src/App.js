@@ -301,6 +301,82 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText
   );
 };
 
+// ============== DESIGN SYSTEM — STRUCTURAL COMPONENTS ==============
+
+const PageContainer = ({ children, className = '' }) => (
+  <div className={`space-y-6 animate-fadeInUp ${className}`}>{children}</div>
+);
+
+const PageHeader = ({ title, subtitle, children, testId }) => (
+  <div className="flex items-center justify-between" data-testid={testId}>
+    <div>
+      <h1 className="text-2xl font-bold text-primary">{title}</h1>
+      {subtitle && <p className="text-sm text-secondary">{subtitle}</p>}
+    </div>
+    {children && <div className="flex items-center gap-3">{children}</div>}
+  </div>
+);
+
+const PageToolbar = ({ children, className = '' }) => (
+  <div className={`flex flex-wrap gap-3 items-center ${className}`}>{children}</div>
+);
+
+const SearchInput = ({ value, onChange, placeholder = 'Buscar...' }) => (
+  <div className="relative flex-1 min-w-[200px]">
+    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={18} />
+    <input type="text" value={value} onChange={onChange} placeholder={placeholder} className="input-industrial w-full pl-10 pr-4" />
+  </div>
+);
+
+const FilterBar = ({ children, className = '' }) => (
+  <div className={`flex flex-wrap gap-2 items-center ${className}`}>{children}</div>
+);
+
+const CardSection = ({ title, icon: Icon, color, children, actions }) => (
+  <div className="glass-card p-4 space-y-4">
+    <div className="flex items-center justify-between">
+      <h3 className={`text-sm font-semibold uppercase tracking-wider flex items-center gap-2 ${color || 'text-brand'}`}>
+        {Icon && <Icon size={16} />} {title}
+      </h3>
+      {actions}
+    </div>
+    {children}
+  </div>
+);
+
+const DataTable = ({ headers, children, testId }) => (
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm" data-testid={testId}>
+      <thead>
+        <tr className="border-b border-surface text-secondary text-xs uppercase">
+          {headers.map((h, i) => (
+            <th key={i} className={`py-2 px-3 ${h.align === 'right' ? 'text-right' : h.align === 'center' ? 'text-center' : 'text-left'} ${h.className || ''}`}>
+              {h.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>{children}</tbody>
+    </table>
+  </div>
+);
+
+const DataRow = ({ children, onClick, className = '' }) => (
+  <tr className={`border-b border-surface/50 hover:bg-surface-hover/30 transition-colors ${onClick ? 'cursor-pointer' : ''} ${className}`} onClick={onClick}>
+    {children}
+  </tr>
+);
+
+const SectionDivider = ({ label }) => (
+  <div className="flex items-center gap-3 py-2">
+    <div className="flex-1 h-px bg-surface-hover" />
+    {label && <span className="text-xs text-secondary uppercase tracking-wider">{label}</span>}
+    <div className="flex-1 h-px bg-surface-hover" />
+  </div>
+);
+
+
+
 
 // ============== NETWORK STATUS + SYNC ==============
 const NetworkStatus = () => {
@@ -1000,7 +1076,7 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
         
         {/* Observações */}
         <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider flex items-center gap-2">
             <FileText size={16} /> Observações
           </h3>
           <textarea
@@ -1283,7 +1359,7 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
         
         {/* Automação */}
         <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider flex items-center gap-2">
             <Zap size={16} /> Automação
           </h3>
           <div className="flex flex-wrap gap-6">
@@ -1780,7 +1856,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
         {/* Planos Aprovados */}
         {form.ativo_id && (
           <div className="glass-card p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider">
               Planos Aprovados ({planosDisponiveis.length})
             </h3>
             {planosDisponiveis.length === 0 ? (
@@ -1824,7 +1900,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
         {/* Checklist Preview */}
         {selectedPlano && checklist.length > 0 && (
           <div className="glass-card p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider">
               Checklist — {selectedPlano.nome} ({checklist.length} itens)
             </h3>
             <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
@@ -2405,14 +2481,14 @@ const CentralTrabalhoPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">{titulo}</h1>
+          <h1 className="text-2xl font-bold text-primary">{titulo}</h1>
           <p className="text-sm text-slate-500">
             {data.user_nome}{data.turno ? ` • Turno ${data.turno}` : ''} • {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <p className="text-2xl font-bold text-slate-100">{data.total_atividades}</p>
+            <p className="text-2xl font-bold text-primary">{data.total_atividades}</p>
             <p className="text-[10px] text-slate-500 uppercase">Atividades</p>
           </div>
           <button onClick={() => { setLoading(true); api.get('/central').then(r => setData(r.data)).finally(() => setLoading(false)); }} className="p-2 hover:bg-slate-800 rounded-lg transition-colors" data-testid="central-refresh">
@@ -2664,7 +2740,7 @@ const DashboardPage = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100" data-testid="dashboard-title">Dashboard Operacional</h1>
+          <h1 className="text-2xl font-bold text-primary" data-testid="dashboard-title">Dashboard Operacional</h1>
           <p className="text-sm text-slate-500">Monitoramento em tempo real da confiabilidade e desempenho operacional dos ativos</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -3037,7 +3113,7 @@ const AtivosPage = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-100">Ativos</h1>
+          <h1 className="text-2xl font-bold text-primary">Ativos</h1>
           <ExportButtons entity="ativos" />
         </div>
         {['admin','master'].includes(user?.role) && (
@@ -3627,7 +3703,7 @@ const AtivoDetailPage = () => {
         <div className="space-y-4" data-testid="prontuario-tab">
           {/* Saúde do Equipamento */}
           <div className="glass-card p-4">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Activity size={16} className="text-brand" /> Saúde do Equipamento</h3>
+            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2"><Activity size={16} className="text-brand" /> Saúde do Equipamento</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <SaudeItem label="Última Inspeção" data={saude?.ultima_inspecao} icon={ClipboardCheck} color="bg-emerald-600" />
               <SaudeItem label="Próxima Inspeção" data={saude?.proxima_inspecao} icon={Calendar} color="bg-blue-600" />
@@ -3644,7 +3720,7 @@ const AtivoDetailPage = () => {
 
           {/* Planos Permanentes */}
           <div className="glass-card p-4">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><ClipboardCheck size={16} className="text-brand" /> Planos Permanentes ({planosVinculados.length})</h3>
+            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2"><ClipboardCheck size={16} className="text-brand" /> Planos Permanentes ({planosVinculados.length})</h3>
             {planosVinculados.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                 {planosVinculados.map(p => {
@@ -3669,7 +3745,7 @@ const AtivoDetailPage = () => {
           {/* OS Abertas resumo */}
           {(ativo.ordens_servico || []).filter(o => !['concluida','cancelada'].includes(o.status)).length > 0 && (
             <div className="glass-card p-4">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Wrench size={16} className="text-blue-400" /> OS em Aberto</h3>
+              <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2"><Wrench size={16} className="text-blue-400" /> OS em Aberto</h3>
               <div className="space-y-2">
                 {(ativo.ordens_servico || []).filter(o => !['concluida','cancelada'].includes(o.status)).map(o => (
                   <div key={o.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-800 bg-slate-800/30 cursor-pointer hover:border-slate-600" onClick={() => navigate(`/os/${o.id}`)}>
@@ -3691,7 +3767,7 @@ const AtivoDetailPage = () => {
           {/* Timeline preview (últimos 5) */}
           <div className="glass-card p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Clock size={16} className="text-slate-400" /> Últimos Eventos</h3>
+              <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider flex items-center gap-2"><Clock size={16} className="text-slate-400" /> Últimos Eventos</h3>
               <button onClick={() => setActiveTab('timeline')} className="text-xs text-brand hover:underline">Ver todos</button>
             </div>
             {historico.length > 0 ? (
@@ -3905,7 +3981,7 @@ const AtivoDetailPage = () => {
         <div className="space-y-3" data-testid="docs-tab">
           <div className="glass-card p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Documentos</h3>
+              <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider">Documentos</h3>
               <label className="btn-primary text-sm cursor-pointer flex items-center gap-2">
                 <Upload size={16} /> {uploading ? 'Enviando...' : 'Enviar'}
                 <input ref={fileInputRef} type="file" className="hidden" onChange={handleUploadManual} disabled={uploading} />
@@ -3939,36 +4015,31 @@ const AtivoDetailPage = () => {
         <div className="space-y-3" data-testid="materiais-tab">
           <div className="glass-card p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Lista de Materiais (BOM)</h3>
+              <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider">Lista de Materiais (BOM)</h3>
               <button onClick={() => { setBomEdit(null); setBomForm({ nome: '', codigo: '', quantidade: 1, unidade: 'UN', observacoes: '' }); setShowBomModal(true); }} className="btn-primary text-sm flex items-center gap-2"><Plus size={16} /> Adicionar</button>
             </div>
             {(ativo.materiais || []).length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-slate-800 text-slate-500 text-xs uppercase">
-                    <th className="w-8 py-2 px-1"></th>
-                    <th className="text-left py-2 px-3">Código</th>
-                    <th className="text-left py-2 px-3">Descrição</th>
-                    <th className="text-right py-2 px-3">Qtd</th>
-                    <th className="text-left py-2 px-3">Un</th>
-                    <th className="text-right py-2 px-3">Ações</th>
-                  </tr></thead>
-                  <tbody>
+              <DataTable headers={[
+                { label: '', className: 'w-8' },
+                { label: 'Código' },
+                { label: 'Descrição' },
+                { label: 'Qtd', align: 'right' },
+                { label: 'Un' },
+                { label: 'Ações', align: 'right' },
+              ]}>
                     {(ativo.materiais || []).filter(m => !bomSearch || (m.nome||'').toLowerCase().includes(bomSearch) || (m.codigo||'').toLowerCase().includes(bomSearch)).map(m => (
-                      <tr key={m.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                      <DataRow key={m.id}>
                         <td className="py-1 px-1"><MaterialThumbnail images={m.images} nome={m.nome} categoria="" size="sm" /></td>
                         <td className="py-2 px-3 font-mono text-xs text-blue-400">{m.codigo || '—'}</td>
-                        <td className="py-2 px-3 text-slate-300">{m.nome}</td>
-                        <td className="py-2 px-3 text-right text-slate-300">{m.quantidade}</td>
-                        <td className="py-2 px-3 text-slate-500">{m.unidade}</td>
+                        <td className="py-2 px-3 text-primary">{m.nome}</td>
+                        <td className="py-2 px-3 text-right text-primary">{m.quantidade}</td>
+                        <td className="py-2 px-3 text-secondary">{m.unidade}</td>
                         <td className="py-2 px-3 text-right">
-                          <button onClick={() => { setBomEdit(m); setBomForm({ nome: m.nome, codigo: m.codigo||'', quantidade: m.quantidade, unidade: m.unidade, observacoes: m.observacoes||'' }); setShowBomModal(true); }} className="p-1 hover:bg-slate-700 rounded"><Edit size={12} className="text-slate-400" /></button>
+                          <button onClick={() => { setBomEdit(m); setBomForm({ nome: m.nome, codigo: m.codigo||'', quantidade: m.quantidade, unidade: m.unidade, observacoes: m.observacoes||'' }); setShowBomModal(true); }} className="p-1 hover:bg-slate-700 rounded"><Edit size={12} className="text-secondary" /></button>
                         </td>
-                      </tr>
+                      </DataRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+              </DataTable>
             ) : (
               <p className="text-sm text-slate-600 text-center py-4">Nenhum material cadastrado.</p>
             )}
@@ -4283,7 +4354,7 @@ const OSPage = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-100">Ordens de Serviço</h1>
+          <h1 className="text-2xl font-bold text-primary">Ordens de Serviço</h1>
           <ExportButtons entity="ordens-servico" />
         </div>
         <div className="flex items-center gap-2">
@@ -4799,7 +4870,7 @@ const OSDetailPage = () => {
       {/* ============ HORAS TRABALHADAS ============ */}
       <div className="glass-card p-4" data-testid="hh-section">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider flex items-center gap-2">
             <Clock size={16} /> Horas Trabalhadas
           </h3>
           {!['concluida','encerrada','cancelada'].includes(os.status) && (
@@ -4880,7 +4951,7 @@ const OSDetailPage = () => {
       {/* ============ EXECUTANTES DA OS ============ */}
       <div className="glass-card p-4" data-testid="os-executantes-section">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider flex items-center gap-2">
             <Users size={16} /> Equipe ({executantes.length})
           </h3>
           {!['concluida','cancelada'].includes(os.status) && ['admin','master','pcm','supervisor'].includes(user?.role) && (
@@ -4943,7 +5014,7 @@ const OSDetailPage = () => {
       {/* ============ TIMELINE DE EVENTOS ============ */}
       {osEventos.length > 0 && (
         <div className="glass-card p-4" data-testid="os-eventos-timeline">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
             <Activity size={16} /> Timeline ({osEventos.length})
           </h3>
           <div className="space-y-1 max-h-[250px] overflow-y-auto">
@@ -4991,7 +5062,7 @@ const OSDetailPage = () => {
       {/* Materiais Utilizados */}
       <div className="glass-card p-4" data-testid="os-materiais-section">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider flex items-center gap-2">
             <Package size={16} /> Materiais Utilizados ({materiais.length})
           </h3>
           {!['concluida','cancelada'].includes(os.status) && !['gerente'].includes(user?.role) && (
@@ -5093,7 +5164,7 @@ const OSDetailPage = () => {
       
       {/* Histórico Completo */}
       <div className="glass-card p-4" data-testid="os-historico">
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
           <Activity size={16} /> Histórico Completo ({historico.length})
         </h3>
         {historico.length > 0 ? (
@@ -5295,35 +5366,23 @@ const EstoquePage = () => {
   };
   
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-100">Estoque</h1>
-          <ExportButtons entity="estoque" />
-        </div>
+    <PageContainer>
+      <PageHeader title="Estoque">
+        <ExportButtons entity="estoque" />
         <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-estoque-btn">
           <Plus size={20} /> Novo Item
         </button>
-      </div>
+      </PageHeader>
       
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome ou código..."
-            className="input-industrial w-full pl-10 pr-4"
-          />
-        </div>
+      <PageToolbar>
+        <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome ou código..." />
         <button
           onClick={() => setShowCritico(!showCritico)}
-          className={`px-4 py-2 rounded-lg flex items-center gap-2 ${showCritico ? 'bg-red-500 text-white' : 'bg-slate-800 text-slate-300'}`}
+          className={`px-4 py-2 rounded-lg flex items-center gap-2 ${showCritico ? 'bg-red-500 text-white' : 'bg-surface text-secondary'}`}
         >
           <AlertTriangle size={18} /> Crítico
         </button>
-      </div>
+      </PageToolbar>
       
       {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
         <div className="space-y-2">
@@ -5428,7 +5487,7 @@ const EstoquePage = () => {
         danger
       />
       {viewImage && <MaterialImageModal src={viewImage.src} nome={viewImage.nome} onClose={() => setViewImage(null)} />}
-    </div>
+    </PageContainer>
   );
 };
 
@@ -5500,7 +5559,7 @@ const InspecoesPage = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-100">Inspeções</h1>
+          <h1 className="text-2xl font-bold text-primary">Inspeções</h1>
           <ExportButtons entity="inspecoes" />
         </div>
         {user?.role !== 'visualizador' && user?.role !== 'gerente' && (
@@ -6027,7 +6086,7 @@ const InspecaoDetailPage = () => {
       {/* Histórico Completo */}
       {inspecao.historico?.length > 0 && (
         <div className="glass-card p-4" data-testid="inspecao-historico">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
             <Activity size={16} /> Histórico ({inspecao.historico.length})
           </h3>
           <div className="space-y-2">
@@ -6230,7 +6289,7 @@ const RondaPage = () => {
           </button>
         )}
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <Target size={24} className="text-brand" /> Modo Ronda
           </h1>
           <p className="text-sm text-slate-500">
@@ -6572,7 +6631,7 @@ const ScannerPage = () => {
   
   return (
     <div className="space-y-4" data-testid="scanner-page">
-      <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
+      <h1 className="text-2xl font-bold text-primary flex items-center gap-3">
         <QrCode size={28} className="text-brand" /> Identificar Ativo
       </h1>
       
@@ -6899,21 +6958,17 @@ const SobressalentesPage = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Sobressalentes</h1>
-        <div className="flex gap-2">
-          <button onClick={() => handleExport('excel')} className="btn-secondary flex items-center gap-2 text-sm" data-testid="spare-export-excel"><Download size={16} /> Excel</button>
-          <button onClick={() => handleExport('pdf')} className="btn-secondary flex items-center gap-2 text-sm" data-testid="spare-export-pdf"><FileText size={16} /> PDF</button>
-          {['admin','master','pcm'].includes(user?.role) && (
-            <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-spare-btn"><Plus size={20} /> Novo</button>
-          )}
-        </div>
-      </div>
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar sobressalente..." className="input-industrial w-full pl-10 pr-4" />
-      </div>
+    <PageContainer>
+      <PageHeader title="Sobressalentes">
+        <button onClick={() => handleExport('excel')} className="btn-secondary flex items-center gap-2 text-sm" data-testid="spare-export-excel"><Download size={16} /> Excel</button>
+        <button onClick={() => handleExport('pdf')} className="btn-secondary flex items-center gap-2 text-sm" data-testid="spare-export-pdf"><FileText size={16} /> PDF</button>
+        {['admin','master','pcm'].includes(user?.role) && (
+          <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-spare-btn"><Plus size={20} /> Novo</button>
+        )}
+      </PageHeader>
+      <PageToolbar>
+        <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar sobressalente..." />
+      </PageToolbar>
       {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
         <div className="space-y-2">
           {filtered.map((sp) => {
@@ -7077,7 +7132,7 @@ const SobressalentesPage = () => {
         danger
       />
       {viewImage && <MaterialImageModal src={viewImage.src} nome={viewImage.nome} onClose={() => setViewImage(null)} />}
-    </div>
+    </PageContainer>
   );
 };
 
@@ -7286,7 +7341,7 @@ const AssistentePage = () => {
     <div className="flex flex-col h-[calc(100vh-6rem)]">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Assistente Técnico IA</h1>
+          <h1 className="text-2xl font-bold text-primary">Assistente Técnico IA</h1>
           <p className="text-sm text-slate-500">Tire dúvidas sobre equipamentos e manutenção</p>
         </div>
         <button onClick={() => { setMessages([]); setSessionId(''); }} className="btn-secondary flex items-center gap-2"><RefreshCw size={16} /> Nova conversa</button>
@@ -7486,7 +7541,7 @@ const ParadasPage = () => {
       {/* OS List */}
       {detail.os_detalhes?.length > 0 && (
         <div className="glass-card p-4" data-testid="parada-os-list">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">OS Vinculadas</h3>
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-2">OS Vinculadas</h3>
           <div className="space-y-2">
             {detail.os_detalhes.map(os => (
               <div key={os.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
@@ -7507,7 +7562,7 @@ const ParadasPage = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Paradas Programadas</h1>
+          <h1 className="text-2xl font-bold text-primary">Paradas Programadas</h1>
           <p className="text-sm text-slate-500">{paradas.length} parada(s)</p>
         </div>
         {['admin','master','pcm'].includes(user?.role) && (
@@ -8248,7 +8303,7 @@ const AdminTemplatesPage = () => {
     <div className="space-y-4" data-testid="templates-page">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Planos de Inspeção</h1>
+          <h1 className="text-2xl font-bold text-primary">Planos de Inspeção</h1>
           <p className="text-sm text-slate-500">Gerenciar perguntas por tipo de equipamento e por ativo</p>
         </div>
         <div className="flex gap-2">
@@ -8399,7 +8454,7 @@ const AuditoriaPage = () => {
     <div className="space-y-4" data-testid="auditoria-page">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Auditoria</h1>
+          <h1 className="text-2xl font-bold text-primary">Auditoria</h1>
           <p className="text-sm text-slate-500">{stats ? `${stats.total} registros` : ''}</p>
         </div>
         <div className="flex gap-2">
@@ -8531,7 +8586,7 @@ const AdminUsuariosPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Gestão de Usuários</h1>
+        <h1 className="text-2xl font-bold text-primary">Gestão de Usuários</h1>
         <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2" data-testid="add-user-btn"><Plus size={20} /> Novo Usuário</button>
       </div>
       {loading ? <Loading rows={5} /> : (
@@ -8745,7 +8800,7 @@ const SetoresPage = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100" data-testid="setores-title">Áreas</h1>
+          <h1 className="text-2xl font-bold text-primary" data-testid="setores-title">Áreas</h1>
           <p className="text-sm text-slate-500">Gerencie as áreas industriais</p>
         </div>
         {['admin','master'].includes(user?.role) && (
@@ -8878,7 +8933,7 @@ const UnidadesPage = () => {
   return (
     <div className="space-y-4" data-testid="unidades-page">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Unidades</h1>
+        <h1 className="text-2xl font-bold text-primary">Unidades</h1>
         {['admin','master'].includes(user?.role) && (
           <button onClick={() => { setEditItem(null); setForm({ codigo: '', nome: '', descricao: '', endereco: '' }); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-unidade-btn">
             <Plus size={20} /> Nova Unidade
@@ -9020,7 +9075,7 @@ const BibliotecaPage = () => {
   return (
     <div className="space-y-4" data-testid="biblioteca-page">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Biblioteca de Modelos</h1>
+        <h1 className="text-2xl font-bold text-primary">Biblioteca de Modelos</h1>
         <button onClick={() => { setEditItem(null); setForm(getEmptyForm()); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="biblioteca-add-btn">
           <Plus size={20} /> Novo
         </button>
@@ -9141,7 +9196,7 @@ const EquipePage = () => {
   return (
     <div className="space-y-4" data-testid="equipe-page">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Equipe</h1>
+        <h1 className="text-2xl font-bold text-primary">Equipe</h1>
         <div className="flex gap-1">
           {[{v:'hoje',l:'Hoje'},{v:'semana',l:'Semana'},{v:'mes',l:'Mês'},{v:'ano',l:'Ano'}].map(p => (
             <button key={p.v} onClick={() => setPeriodo(p.v)}
@@ -9175,7 +9230,7 @@ const EquipePage = () => {
       {/* Ranking */}
       {loading ? <Loading rows={5} /> : metricas.length > 0 ? (
         <div className="glass-card p-4">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Ranking — {periodo === 'hoje' ? 'Hoje' : periodo === 'semana' ? 'Semana' : periodo === 'mes' ? 'Mês' : 'Ano'}</h3>
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3">Ranking — {periodo === 'hoje' ? 'Hoje' : periodo === 'semana' ? 'Semana' : periodo === 'mes' ? 'Mês' : 'Ano'}</h3>
           <div className="space-y-2">
             {metricas.slice(0, 10).map((m, idx) => {
               const maxOS = metricas[0]?.os_total || 1;
@@ -9499,7 +9554,7 @@ const WhiteLabelDesignerPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100" data-testid="wl-page-title">Designer de Marca</h1>
+          <h1 className="text-2xl font-bold text-primary" data-testid="wl-page-title">Designer de Marca</h1>
           <p className="text-sm text-slate-500">Configure a identidade visual de cada empresa</p>
         </div>
         <div className="flex items-center gap-3">
@@ -9958,7 +10013,7 @@ const ConsultaEquipamentosPage = () => {
     <div className="space-y-4" data-testid="consulta-equipamentos">
       <div className="flex items-center gap-3 mb-2">
         <Search size={24} className="text-brand" />
-        <h1 className="text-2xl font-bold text-slate-100">Portal de Consulta</h1>
+        <h1 className="text-2xl font-bold text-primary">Portal de Consulta</h1>
       </div>
       <p className="text-sm text-slate-400">Pesquise equipamentos por TAG, nome ou tipo. Selecione para ver o prontuário completo.</p>
       <div className="relative">
@@ -10050,7 +10105,7 @@ const DossiePesquisaPage = () => {
     <div className="space-y-4" data-testid="dossie-pesquisa">
       <div className="flex items-center gap-3">
         <FileText size={24} className="text-brand" />
-        <h1 className="text-2xl font-bold text-slate-100">Dossiê / Pesquisa</h1>
+        <h1 className="text-2xl font-bold text-primary">Dossiê / Pesquisa</h1>
       </div>
       <p className="text-sm text-slate-400">Pesquise ordens de serviço e inspeções por número, TAG, equipamento, área ou tipo.</p>
       <div className="glass-card p-4 flex flex-wrap items-end gap-3">
@@ -10208,11 +10263,11 @@ const PortalPublicoPage = () => {
             <p className="text-[10px] text-slate-500 uppercase">Disponibilidade</p>
           </div>
           <div className="glass-card p-3 text-center">
-            <p className="text-2xl font-bold text-slate-100">{kpis.total_os}</p>
+            <p className="text-2xl font-bold text-primary">{kpis.total_os}</p>
             <p className="text-[10px] text-slate-500 uppercase">Total OS</p>
           </div>
           <div className="glass-card p-3 text-center">
-            <p className="text-2xl font-bold text-slate-100">{kpis.total_inspecoes}</p>
+            <p className="text-2xl font-bold text-primary">{kpis.total_inspecoes}</p>
             <p className="text-[10px] text-slate-500 uppercase">Inspeções</p>
           </div>
         </div>
@@ -10489,7 +10544,7 @@ const MasterCleanupPage = () => {
     <div className="space-y-6" data-testid="master-cleanup-page">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Limpeza do Ambiente</h1>
+          <h1 className="text-2xl font-bold text-primary">Limpeza do Ambiente</h1>
           <p className="text-xs text-slate-500 mt-1">Remova dados de teste para preparar o ambiente de produção</p>
         </div>
         <button onClick={() => setConfirmProd(true)} className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 text-sm font-medium hover:bg-red-500/30 transition-all" data-testid="prepare-production-btn">
@@ -10635,7 +10690,7 @@ const OrgConfigPage = () => {
 
   return (
     <div className="space-y-4" data-testid="org-config-page">
-      <h1 className="text-2xl font-bold text-slate-100">Configurações da Organização</h1>
+      <h1 className="text-2xl font-bold text-primary">Configurações da Organização</h1>
       
       {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto hide-scrollbar border-b border-slate-800 pb-1">

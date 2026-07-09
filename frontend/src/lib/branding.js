@@ -164,7 +164,7 @@ export const useBranding = () => useContext(BrandingContext);
 // Apply CSS variables to :root
 function applyCSS(b) {
   const root = document.documentElement;
-  // Core brand colors
+  // Core brand colors (from org White Label)
   root.style.setProperty('--brand-primary', b.cor_primaria);
   root.style.setProperty('--brand-secondary', b.cor_secundaria);
   root.style.setProperty('--brand-bg', b.cor_fundo);
@@ -174,13 +174,30 @@ function applyCSS(b) {
   root.style.setProperty('--brand-login', b.cor_login);
   root.style.setProperty('--brand-header', b.cor_header);
 
-  // Design Token System — derived from core, explicit values
-  root.style.setProperty('--brand-surface', b.cor_menu || '#0f172a');
-  root.style.setProperty('--brand-surface-hover', b.cor_header || '#1e293b');
-  root.style.setProperty('--brand-border', b.cor_header || '#1e293b');
-  root.style.setProperty('--brand-text-primary', '#e2e8f0');
-  root.style.setProperty('--brand-text-secondary', '#94a3b8');
+  // Theme Engine — Industrial Dark (only theme for RC1)
+  // Future themes (Industrial Light, Executive, Mining) will override these values
+  const theme = THEMES['industrial_dark'];
+  root.style.setProperty('--brand-surface', theme.surface);
+  root.style.setProperty('--brand-surface-hover', theme.surfaceHover);
+  root.style.setProperty('--brand-border', theme.border);
+  root.style.setProperty('--brand-text-primary', theme.textPrimary);
+  root.style.setProperty('--brand-text-secondary', theme.textSecondary);
 }
+
+// Theme Engine — Pre-defined themes with explicit values (no calculations)
+const THEMES = {
+  industrial_dark: {
+    surface: '#0f172a',
+    surfaceHover: '#1e293b',
+    border: '#1e293b',
+    textPrimary: '#e2e8f0',
+    textSecondary: '#94a3b8',
+  },
+  // Future:
+  // industrial_light: { surface: '#ffffff', surfaceHover: '#f1f5f9', border: '#e2e8f0', textPrimary: '#111827', textSecondary: '#6b7280' },
+  // executive: { surface: '#1a1a2e', surfaceHover: '#25253d', border: '#2d2d4a', textPrimary: '#e0e0e0', textSecondary: '#9e9eb8' },
+  // mining: { surface: '#1c1917', surfaceHover: '#292524', border: '#44403c', textPrimary: '#f5f5f4', textSecondary: '#a8a29e' },
+};
 
 function applyFavicon(url) {
   if (!url) return;
