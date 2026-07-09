@@ -3488,6 +3488,7 @@ async def powerbi_kpis(user: Dict = Depends(get_current_user)):
 async def get_audit_logs(
     user_id: Optional[str] = None,
     entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
     action: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -3504,6 +3505,8 @@ async def get_audit_logs(
         query['user_id'] = user_id
     if entity_type:
         query['entity_type'] = entity_type
+    if entity_id:
+        query['entity_id'] = entity_id
     if action:
         query['action'] = action
     if date_from:

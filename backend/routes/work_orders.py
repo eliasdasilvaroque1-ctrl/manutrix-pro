@@ -247,6 +247,7 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
     }
 
     await db.ordens_servico.insert_one(os_doc)
+    await audit_log("create", "ordens_servico", os_id, user, f"OS #{numero} criada — {data.tipo}/{data.disciplina}")
     if data.responsavel_id:
         await criar_notificacao(data.responsavel_id, org_id, NotificacaoTipo.OS_ATRIBUIDA,
             f"Nova OS atribuída: #{numero}", f"Ativo: {ativo.get('tag', '')} - {data.titulo}", f"/os/{os_id}")
@@ -339,7 +340,7 @@ async def update_os_status(os_id: str, body: KanbanMoveBody, user: Dict = Depend
     if os_doc.get('status') == 'concluida':
         raise HTTPException(status_code=400, detail="OS concluída não pode ser reaberta via Kanban")
     update = {"status": body.new_status, "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}
-    if body.new_status == 'planejada' and not os_doc.get('planejado_por'):
+    if body.new_status in ('planejada', 'programada') and not os_doc.get('planejado_por'):
         update['planejado_por'] = user.get('id')
         update['data_planejamento'] = datetime.now(timezone.utc).isoformat()
     if body.new_status == 'em_execucao' and not os_doc.get('data_inicio'):
@@ -359,6 +360,8 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
     verify_org_access(user, os_doc, "OS")
     if os_doc.get('status') in ('concluida', 'cancelada'):
         raise HTTPException(status_code=400, detail=f"OS com status '{os_doc.get('status')}' não pode ser concluída novamente")
+    if not os_doc.get('data_inicio') and not body.data_inicio:
+        raise HTTPException(status_code=400, detail="Informe a data e hora de início da execução.")
     descricao = body.servicos_realizados or body.observacoes or os_doc.get('descricao')
     if not descricao:
         raise HTTPException(status_code=400, detail="Descrição do serviço é obrigatória para fechar a OS")
@@ -372,20 +375,27 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
             if attachments == 0:
                 raise HTTPException(status_code=400, detail="OS corretiva exige pelo menos uma foto/evidência anexada. Adicione fotos antes de concluir.")
     tempo = body.tempo_execucao_minutos
-    if tempo is None and os_doc.get('data_inicio'):
-        start = datetime.fromisoformat(os_doc['data_inicio'].replace('Z', '+00:00'))
-        tempo = max(1, int((datetime.now(timezone.utc) - start).total_seconds() / 60))
+    data_inicio_final = body.data_inicio or os_doc.get('data_inicio')
+    data_conclusao_final = body.data_conclusao or datetime.now(timezone.utc).isoformat()
+    if tempo is None and data_inicio_final:
+        start = datetime.fromisoformat(data_inicio_final.replace('Z', '+00:00'))
+        end = datetime.fromisoformat(data_conclusao_final.replace('Z', '+00:00'))
+        tempo = max(1, int((end - start).total_seconds() / 60))
     if not tempo:
         raise HTTPException(status_code=400, detail="Tempo gasto é obrigatório para fechar a OS")
     # Atomic update: only update if status is still not concluida (prevents race condition)
+    update_fields = {
+        "status": "concluida", "data_conclusao": data_conclusao_final,
+        "tempo_execucao_minutos": tempo, "descricao_servico": descricao,
+        "concluido_por": user.get('id'), "alterado_por": user.get('id'),
+        "observacoes": body.observacoes, "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    if body.data_inicio and not os_doc.get('data_inicio'):
+        update_fields['data_inicio'] = body.data_inicio
+        update_fields['iniciado_por'] = user.get('id')
     result = await db.ordens_servico.update_one(
         {"id": os_id, "status": {"$nin": ["concluida", "cancelada"]}},
-        {"$set": {
-            "status": "concluida", "data_conclusao": datetime.now(timezone.utc).isoformat(),
-            "tempo_execucao_minutos": tempo, "descricao_servico": descricao,
-            "concluido_por": user.get('id'), "alterado_por": user.get('id'),
-            "observacoes": body.observacoes, "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
+        {"$set": update_fields}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=409, detail="OS já foi concluída ou cancelada por outro usuário")
