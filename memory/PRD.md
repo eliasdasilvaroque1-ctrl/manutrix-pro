@@ -298,6 +298,8 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Arquivo**: `App.js`, componente `PreviewLogin` (~linha 9323)
 - **Correção**: `relative` + `pointer-events-none` + `BACKEND_URL` prefix
 - **NÃO é regressão da RC-13**
+
+### QA Piloto ASTEC — GATE 1 ✅ (2026-07-09)
 - **Validação**: 4/4 uploads testados (Logo, Logo Branca, Favicon, Wallpaper)
 
 ### Design System Enterprise — Fase 1 ✅ (2026-07-09)
@@ -312,7 +314,11 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Migrações globais**: Todos os page titles (20+), 17 section headers
 - **Documentação**: `/app/memory/DESIGN_SYSTEM.md` — referência oficial do Design System
 
-### QA Piloto ASTEC — GATE 1 ✅ (2026-07-09)
+### UX Login Multiempresa ✅ (2026-07-09)
+- **Smart Org Selector**: 3 modos visuais distintos — Subdomínio (🔒 fixo), Lembrado (localStorage), Manual (busca)
+- **Clareza**: Cada modo mostra contexto ("Detectado pelo endereço", "Última organização utilizada", "Organização única", "Selecionada manualmente")
+- **Trocar organização**: Botão "Trocar" permite alterar sem limpar browser
+- **Terminologia**: "Empresa" → "Organização" em toda a tela de login
 - **Auth (16/16)**: Login, logout, forgot-password, change-password, JWT claims — ZERO falhas
 - **Multi-Tenant (7/7)**: Isolamento total entre orgs. Token adulterado rejeitado. IDs falsos → 404.
 - **RBAC (17/19)**: Todas roles testadas. Operador pode criar OS com status=solicitada (decisão CTO: PASS condicional — OS solicitada é demanda, não operacional)

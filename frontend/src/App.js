@@ -2172,23 +2172,45 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  // Determine org source for UX clarity
+  const [orgSource, setOrgSource] = useState(null); // 'subdomain' | 'remembered' | 'single' | 'manual' | null
+  const [showOrgSelector, setShowOrgSelector] = useState(false);
+
   useEffect(() => { loadOrganizations(); }, [loadOrganizations]);
 
-  // Auto-select from localStorage or single org
+  // Auto-select from subdomain, localStorage, or single org
   useEffect(() => {
     if (orgId) return;
+    // Check subdomain first
+    const hostname = window.location.hostname;
+    const parts = hostname.split('.');
+    const sub = parts.length >= 3 ? parts[0].toLowerCase() : null;
+    const isCustomer = sub && sub !== 'www' && sub !== 'app' && !['localhost','127.0.0.1','preview','emergentagent','vercel','railway','netlify'].some(p => hostname.includes(p));
+    if (isCustomer && organizations.length > 0) {
+      const matchOrg = organizations.find(o => (o.subdominio || '').toLowerCase() === sub || (o.nome || '').toLowerCase().includes(sub));
+      if (matchOrg) {
+        selectOrg(matchOrg.id);
+        setEmpresaBusca(matchOrg.nome);
+        setOrgSource('subdomain');
+        return;
+      }
+    }
+    // Then localStorage
     const saved = localStorage.getItem('maintrix_last_org');
     if (saved) {
       const org = organizations.find(o => o.id === saved);
       if (org) {
         selectOrg(org.id);
         setEmpresaBusca(org.nome);
+        setOrgSource('remembered');
         return;
       }
     }
+    // Single org
     if (organizations.length === 1) {
       selectOrg(organizations[0].id);
       setEmpresaBusca(organizations[0].nome);
+      setOrgSource('single');
     }
   }, [organizations, orgId, selectOrg]);
 
@@ -2196,7 +2218,16 @@ const LoginPage = () => {
     selectOrg(org.id);
     setEmpresaBusca(org.nome);
     setShowEmpresaDropdown(false);
+    setShowOrgSelector(false);
+    setOrgSource('manual');
     localStorage.setItem('maintrix_last_org', org.id);
+  };
+
+  const handleTrocarOrg = () => {
+    setOrgSource(null);
+    setShowOrgSelector(true);
+    setEmpresaBusca('');
+    setShowEmpresaDropdown(false);
   };
 
   const filteredOrgs = organizations.filter(o =>
@@ -2276,46 +2307,80 @@ const LoginPage = () => {
             </div>
           )}
           <h1 className="text-3xl font-bold tracking-wider" style={{ color: branding.cor_primaria }} data-testid="login-title">{branding.nome_empresa}</h1>
-          <p className="text-slate-500 mt-1 text-sm">{branding.texto_login || 'Sistema de Gestão de Manutenção'}</p>
+          <p className="text-secondary mt-1 text-sm">{branding.texto_login || 'Sistema de Gestão de Manutenção'}</p>
         </div>
 
         {/* LOGIN */}
         {view === 'login' && (
           <form onSubmit={handleLogin} className="glass-card p-6 space-y-4" data-testid="login-form">
-            {/* Empresa field with autocomplete */}
-            <div className="relative" data-testid="empresa-field">
-              <FormInput label="Empresa">
-                <div className="relative">
-                  <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input value={empresaBusca} onChange={e => { setEmpresaBusca(e.target.value); setShowEmpresaDropdown(true); }}
-                    onFocus={() => setShowEmpresaDropdown(true)}
-                    className="input-industrial w-full pl-10 pr-4" placeholder="Digite o nome da empresa..."
-                    data-testid="empresa-input" />
-                </div>
-              </FormInput>
-              {showEmpresaDropdown && empresaBusca && filteredOrgs.length > 0 && (
-                <div className="absolute z-20 w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                  {filteredOrgs.map(org => (
-                    <button key={org.id} type="button" onClick={() => handleSelectEmpresa(org)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 transition-colors text-left ${orgId === org.id ? 'bg-brand-10' : ''}`}
-                      data-testid={`org-option-${org.id}`}>
-                      {org.logo_url ? (
-                        <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-800 p-0.5" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: org.cor_primaria || '#10b981' }}>
-                          {(org.nome || 'E').substring(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-200 font-medium truncate">{org.nome}</p>
-                        {org.subdominio && <p className="text-[10px] text-slate-600">{org.subdominio}.maintrix.com.br</p>}
-                      </div>
-                      {orgId === org.id && <CheckCircle size={16} className="text-brand shrink-0" />}
+            {/* Organização — Smart Selector */}
+            {orgId && !showOrgSelector ? (
+              <div data-testid="org-confirmed">
+                <p className="text-xs text-secondary uppercase tracking-wider mb-1.5">
+                  {orgSource === 'subdomain' ? 'Ambiente' : 'Organização'}
+                </p>
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-surface" style={{ backgroundColor: 'var(--brand-surface)' }}>
+                  {(() => { const selOrg = organizations.find(o => o.id === orgId); return selOrg?.logo_url ? (
+                    <img src={selOrg.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-800 p-0.5" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: branding.cor_primaria }}>
+                      {(empresaBusca || '?').substring(0, 2).toUpperCase()}
+                    </div>
+                  ); })()}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-primary truncate" data-testid="org-confirmed-name">{empresaBusca}</p>
+                    <p className="text-[10px] text-secondary">
+                      {orgSource === 'subdomain' && 'Detectado pelo endereço'}
+                      {orgSource === 'remembered' && 'Última organização utilizada'}
+                      {orgSource === 'single' && 'Organização única'}
+                      {orgSource === 'manual' && 'Selecionada manualmente'}
+                    </p>
+                  </div>
+                  {orgSource === 'subdomain' ? (
+                    <Lock size={16} className="text-secondary shrink-0" />
+                  ) : (
+                    <button type="button" onClick={handleTrocarOrg} className="text-xs px-2 py-1 rounded border border-surface hover:bg-surface-hover text-secondary transition-colors" data-testid="trocar-org-btn">
+                      Trocar
                     </button>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="relative" data-testid="org-selector">
+                <FormInput label="Organização">
+                  <div className="relative">
+                    <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
+                    <input value={empresaBusca} onChange={e => { setEmpresaBusca(e.target.value); setShowEmpresaDropdown(true); }}
+                      onFocus={() => setShowEmpresaDropdown(true)}
+                      className="input-industrial w-full pl-10 pr-4" placeholder="Buscar organização..."
+                      autoFocus={showOrgSelector}
+                      data-testid="org-search-input" />
+                  </div>
+                </FormInput>
+                {showEmpresaDropdown && filteredOrgs.length > 0 && (
+                  <div className="absolute z-20 w-full mt-1 bg-surface border border-surface rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    {filteredOrgs.map(org => (
+                      <button key={org.id} type="button" onClick={() => handleSelectEmpresa(org)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-hover transition-colors text-left ${orgId === org.id ? 'bg-brand-10' : ''}`}
+                        data-testid={`org-option-${org.id}`}>
+                        {org.logo_url ? (
+                          <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-800 p-0.5" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: org.cor_primaria || '#10b981' }}>
+                            {(org.nome || 'E').substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-primary font-medium truncate">{org.nome}</p>
+                          {org.subdominio && <p className="text-[10px] text-secondary">{org.subdominio}.maintrix.com.br</p>}
+                        </div>
+                        {orgId === org.id && <CheckCircle size={16} className="text-brand shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <FormInput label="Email">
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-industrial w-full px-4" placeholder="seu@email.com" required data-testid="login-email" />
