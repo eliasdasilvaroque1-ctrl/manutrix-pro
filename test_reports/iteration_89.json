@@ -1,0 +1,104 @@
+{
+  "summary": "GATE 1 — Autenticação/Segurança/RBAC ASTEC Pilot: 40 PASS / 1 FAIL (P1 audit violation) / 1 SKIP em 42 casos. Todos os 16 casos AUTH-*, 7 MULTI-* de isolamento multi-tenant, e 18 de 19 RBAC passaram. FAIL crítico de auditoria: Operador consegue criar OS diretamente (POST /api/ordens-servico → 200), o que contraria o requisito RBAC-OPERADOR-02 do CTO ('Operador CANNOT create OS directly'). Backend cria a OS com status='solicitada' e origem='manual', modelando a solicitação como uma OS pré-programada no mesmo endpoint — decisão de design que precisa ser validada com o CTO ou corrigida via 403. Sem vazamento de dados entre organizações. JWT ok. RBAC de Master/Admin/PCM/Supervisor/Técnico/Visualizador/Gerente conforme especificado.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/ordens-servico (role=operador)",
+        "issue": "AUDIT VIOLATION — Operador conseguiu criar OS diretamente com status 200 (body válido, OS #2026-00002 criada). CTO spec RBAC-OPERADOR-02 exige 403. Backend atualmente inclui 'operador' em check_write_permission allowed_roles (routes/work_orders.py:187) e em PERMISSIONS['os.criar'] (deps.py:118). A OS é criada com status='solicitada' o que é o modelo de 'solicitação-como-OS', mas isso é conflito direto com a exigência do CTO.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/auth/me (sem token)",
+        "issue": "Retorna 403 (Not authenticated) em vez de 401 devido ao HTTPBearer com auto_error=True. Semanticamente 401 é correto para 'ausência de credencial'. Considerar customizar HTTPBearer(auto_error=False) e retornar 401 manualmente."
+      },
+      {
+        "endpoint": "GET /api/solicitacoes (role=operador)",
+        "issue": "Endpoint GET /api/solicitacoes retorna 404 — não existe endpoint dedicado de listagem de solicitações. Isso reforça que solicitações são modeladas dentro de /ordens-servico (o que amplifica a discussão do finding P1)."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "detailed_matrix_astec_format": [
+    {"modulo":"AUTH","caso":"AUTH-01 Login válido admin ASTEC","resultado":"PASS","severidade":"-","reproducao":"POST /api/auth/login {email,password,organization_id}","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-02 Login sem organization_id","resultado":"PASS","severidade":"-","reproducao":"POST /api/auth/login sem org_id → 422 (Pydantic)","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-03 Login org_id errado","resultado":"PASS","severidade":"-","reproducao":"POST com org_id aleatório → 401","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-04 Email inexistente","resultado":"PASS","severidade":"-","reproducao":"POST com email não existente → 401","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-05 Senha incorreta","resultado":"PASS","severidade":"-","reproducao":"POST com senha errada → 401","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-06 Email vazio","resultado":"PASS","severidade":"-","reproducao":"POST com email='' → 401","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-07 Senha vazia","resultado":"PASS","severidade":"-","reproducao":"POST com password='' → 401","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-08 /me com token válido","resultado":"PASS","severidade":"-","reproducao":"GET /api/auth/me com bearer válido → 200 + org_id correto, sem password_hash","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-09 /me com token inválido","resultado":"PASS","severidade":"-","reproducao":"GET /api/auth/me Bearer inválido → 401","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-10 /me sem token","resultado":"PASS","severidade":"BAIXA","reproducao":"GET /api/auth/me sem header → 403 (HTTPBearer auto_error)","causa_provavel":"HTTPBearer default","recomendacao":"Trocar para 401 explícito","status":"OK (accept 401/403)"},
+    {"modulo":"AUTH","caso":"AUTH-11 Forgot password válido","resultado":"PASS","severidade":"-","reproducao":"POST /api/auth/forgot-password → 200 {success:true}","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-12 Forgot password sem revelar usuário","resultado":"PASS","severidade":"-","reproducao":"POST com email inexistente → 200 idêntico ao existente","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-13 Change password com old correto","resultado":"PASS","severidade":"-","reproducao":"POST /api/auth/change-password {current,new} → 200","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-14 Change password com old errado","resultado":"PASS","severidade":"-","reproducao":"POST com current errada → 400","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-15 Resposta contém role e org","resultado":"PASS","severidade":"-","reproducao":"Login PCM → response.user.role='pcm', org=ASTEC","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"AUTH","caso":"AUTH-16 Claims JWT (sub,role,org)","resultado":"PASS","severidade":"-","reproducao":"Decode base64url do payload → contém sub, role='admin', org=ASTEC, exp","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"MULTI","caso":"MULTI-01 Isolamento estoque ASTEC","resultado":"PASS","severidade":"-","reproducao":"GET /api/estoque com token ASTEC → todos com organization_id=ASTEC","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"MULTI","caso":"MULTI-02 Isolamento ativos ASTEC (55 itens)","resultado":"PASS","severidade":"-","reproducao":"GET /api/ativos → todos com organization_id=ASTEC","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"MULTI","caso":"MULTI-03 Isolamento OS ASTEC","resultado":"PASS","severidade":"-","reproducao":"GET /api/ordens-servico → todos com organization_id=ASTEC","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"MULTI","caso":"MULTI-04 Isolamento inspeções ASTEC","resultado":"PASS","severidade":"-","reproducao":"GET /api/inspecoes → todos com organization_id=ASTEC","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"MULTI","caso":"MULTI-05 Estoque de outro org retorna 404","resultado":"PASS","severidade":"-","reproducao":"GET /api/estoque/{fake_uuid} → 404 (não vaza existência)","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"MULTI","caso":"MULTI-06 Ativo fake_id retorna 404","resultado":"PASS","severidade":"-","reproducao":"GET /api/ativos/{fake_uuid} → 404","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"MULTI","caso":"MULTI-BONUS Token adulterado rejeitado","resultado":"PASS","severidade":"-","reproducao":"Assinatura JWT modificada → 401","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-MASTER","caso":"MASTER-01 Acesso /admin/users (todos orgs)","resultado":"PASS","severidade":"-","reproducao":"Master → 200 lista completa","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-MASTER","caso":"MASTER-02 Criar estoque","resultado":"PASS","severidade":"-","reproducao":"POST /api/estoque master → 200","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-ADMIN","caso":"ADMIN-01 /admin/users","resultado":"PASS","severidade":"-","reproducao":"Admin → 200","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-ADMIN","caso":"ADMIN-02 CRUD estoque completo","resultado":"PASS","severidade":"-","reproducao":"POST/PUT/DELETE /api/estoque OK","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-PCM","caso":"PCM-01 Leitura estoque/planos/OS","resultado":"PASS","severidade":"-","reproducao":"GET /api/estoque,/api/ordens-servico,/api/planos-inspecao → 200","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-PCM","caso":"PCM-02 Criar plano e estoque","resultado":"PASS","severidade":"-","reproducao":"POST /api/planos-inspecao e /api/estoque com token PCM → 200","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-SUPERVISOR","caso":"SUP-01 Visualizar OS (sup.mec)","resultado":"PASS","severidade":"-","reproducao":"GET /api/ordens-servico → 200","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-TECNICO","caso":"TEC-01 Ver OS atribuídas","resultado":"PASS","severidade":"-","reproducao":"GET /api/ordens-servico com token tec_mec → 200","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-TECNICO","caso":"TEC-02 NÃO cria estoque","resultado":"PASS","severidade":"-","reproducao":"POST /api/estoque tec_mec → 403","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-TECNICO","caso":"TEC-03 NÃO deleta ativo","resultado":"PASS","severidade":"-","reproducao":"DELETE /api/ativos/{id} tec_mec → 403","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-OPERADOR","caso":"OP-01 Endpoint solicitações","resultado":"SKIP","severidade":"BAIXA","reproducao":"GET /api/solicitacoes → 404","causa_provavel":"Endpoint não existe (solicitação = OS status=solicitada)","recomendacao":"Documentar ou criar endpoint dedicado","status":"SKIP"},
+    {"modulo":"RBAC-OPERADOR","caso":"OP-02 Operador NÃO cria OS diretamente","resultado":"FAIL","severidade":"ALTA","reproducao":"POST /api/ordens-servico {ativo_id, tipo:corretiva, prioridade:media, titulo, disciplina} com token operador → 200. Body retorna OS criada com numero=2026-00002, status='solicitada', origem='manual'.","causa_provavel":"routes/work_orders.py:187 inclui 'operador' em allowed_roles; deps.py:118 inclui 'operador' em PERMISSIONS['os.criar']. Design intencional: modelo de solicitação-como-OS.","recomendacao":"OPÇÃO A (strict): remover 'operador' de allowed_roles em POST /api/ordens-servico; criar endpoint dedicado POST /api/solicitacoes. OPÇÃO B (aceitar design): atualizar spec do CTO explicando que solicitação = OS status='solicitada' (não visível como OS programada). Escalar para o CTO decidir.","status":"OPEN — AUDIT VIOLATION"},
+    {"modulo":"RBAC-OPERADOR","caso":"OP-03 Operador NÃO acessa /admin/users","resultado":"PASS","severidade":"-","reproducao":"GET /api/admin/users operador → 403","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-VISUALIZADOR","caso":"VIEW-01 Visualiza ativos (portal)","resultado":"PASS","severidade":"-","reproducao":"GET /api/ativos rc07v → 200","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-VISUALIZADOR","caso":"VIEW-02 NÃO cria estoque","resultado":"PASS","severidade":"-","reproducao":"POST /api/estoque rc07v → 403","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-VISUALIZADOR","caso":"VIEW-03 NÃO cria OS","resultado":"PASS","severidade":"-","reproducao":"POST /api/ordens-servico rc07v → 403","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-VISUALIZADOR","caso":"VIEW-04 NÃO acessa /admin","resultado":"PASS","severidade":"-","reproducao":"GET /api/admin/users rc07v → 403","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-GERENTE","caso":"GER-01 Vê dashboard e OS","resultado":"PASS","severidade":"-","reproducao":"GET /api/dashboard/kpis + /api/ordens-servico gerente → 200","causa_provavel":"-","recomendacao":"-","status":"OK"},
+    {"modulo":"RBAC-GERENTE","caso":"GER-BONUS Não escreve estoque","resultado":"PASS","severidade":"-","reproducao":"POST /api/estoque gerente → 403","causa_provavel":"-","recomendacao":"-","status":"OK"}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_gate1_auth_rbac_multitenant.py",
+    "/app/test_reports/pytest/gate1_results.xml"
+  ],
+  "action_items": [
+    "HIGH — Decidir com CTO sobre RBAC-OPERADOR-02: Operador conseguiu criar OS via POST /api/ordens-servico (status 200). Duas opções: (A) Aplicar 403 removendo 'operador' de work_orders.py:187 allowed_roles E de deps.py:118 PERMISSIONS['os.criar'], criando endpoint separado POST /api/solicitacoes; (B) Manter design atual (OS status='solicitada' = solicitação) e atualizar spec do CTO. Enquanto não decidido, GATE 1 NÃO passa em ZERO FAILURES.",
+    "LOW — Ajustar GET /api/auth/me para retornar 401 (não 403) quando header Authorization está ausente. Trocar HTTPBearer default por HTTPBearer(auto_error=False) e lançar HTTPException(401) manualmente em get_current_user (deps.py:75).",
+    "LOW — Considerar criar endpoint GET /api/solicitacoes dedicado (mesmo se solicitação = OS status='solicitada') para melhor UX e clareza semântica."
+  ],
+  "critical_code_review_comments": [
+    "server.py:73 — server.py excede 3700 linhas. Considerar quebra em routers modulares adicionais (estoque, planos-inspecao, checklists) para reduzir arquivo abaixo de 1500 linhas.",
+    "deps.py:118 — PERMISSIONS['os.criar'] inclui 'operador'. Se a intenção é que operador NÃO possa criar OS diretamente, remover daqui e centralizar via has_permission em routes/work_orders.py POST.",
+    "routes/work_orders.py:187 — allowed_roles inclui 'operador' explicitamente. Duplicação de política de RBAC (uma em deps.PERMISSIONS, outra em allowed_roles hardcoded). Consolidar via require_permission(user, 'os.criar').",
+    "deps.py:75 — get_current_user usa HTTPBearer com auto_error=True (padrão). Isso força retorno 403 em vez de 401 quando o header está ausente. Semanticamente 401 é o correto.",
+    "server.py:126 — Endpoint /api/auth/login retorna sempre 401 com detail='Credenciais inválidas' — bom (não vaza se email/senha/org está errado).",
+    "server.py:174 — Endpoint /api/auth/forgot-password retorna sempre {success:true} — bom (não vaza existência). No entanto o token real é logado em texto plano em logger.info (linha 184) — em produção considerar remover ou reduzir nível de log.",
+    "deps.py:57 — hash_password/verify_password usa bcrypt corretamente ($2b$). ✓",
+    "server.py:126 — Login não faz rate-limiting nem lockout após N falhas. Recomendar adicionar (Redis + slowapi/limits) para proteger contra brute force.",
+    "server.py:184 — logger.info escreve o token de reset em texto plano em /var/log. Grave em ambiente compartilhado. Rebaixar para logger.debug ou remover em produção.",
+    "deps.py:31 — JWT_SECRET usa fallback secrets.token_hex(32) se não estiver em .env. Isso quebra multi-instância (cada worker gera secret diferente). Confirmar JWT_SECRET em .env de produção — se ausente, tokens não sobrevivem restart e falham em cluster."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_gate1_auth_rbac_multitenant.py",
+    "/app/test_reports/pytest/gate1_results.xml",
+    "/app/test_reports/iteration_89.json"
+  ],
+  "success_rate": {"backend": "95.2% (40/42, 1 fail P1, 1 skip)", "frontend": "N/A (backend-only)"},
+  "test_credentials": "test.admin@maintrix.com/admin123 | master@maintrix.com/master123 | test.pcm@maintrix.com/pcm123 | test.gerente@maintrix.com/ger123 | test.sup.mec@maintrix.com/sup123 | test.sup.ele@maintrix.com/sup123 | test.mec@maintrix.com/tec123 | test.ele@maintrix.com/tec123 | test.operador@maintrix.com/op123 | rc07v@maintrix.com/viewer123 — todos org=9a232bf2-fc01-4253-813f-8df356be31c1",
+  "seed_data_creation": "Nenhum dado persistente novo criado. Todos os itens criados durante o teste (estoque TEST-*, planos TEST_plano_pcm_*, OS TEST_operador_direct_os_*, usuário test.tmpchg+*) foram apagados no cleanup dos próprios testes. Password do operador foi restaurada para 'op123' via script após iteração anterior.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Rodar o mesmo test_gate1_auth_rbac_multitenant.py após decisão sobre OPERADOR-02. Se a decisão for aplicar 403 (opção A), o teste OP-02 passará automaticamente. Se for opção B (aceitar design), atualizar a assertion do OP-02 para verificar status_code==200 AND body.status=='solicitada' AND body.origem in ('operador','manual','solicitacao'). Todos os outros 41 casos permanecerão PASS. Verificar também se o refactor de work_orders.py foi feito para usar require_permission em vez de allowed_roles hardcoded. Password do operador está em 'op123' + force_password_change=True (restaurada). ASTEC tem 55 ativos ativos.",
+  "rca_of_the_issue": "RBAC-OPERADOR-02 fail: código de POST /api/ordens-servico (routes/work_orders.py:184-254) inclui 'operador' em allowed_roles (linha 187) intencionalmente para suportar o modelo de 'OS-como-solicitação' onde uma OS pode nascer com status='solicitada' e depois ser programada pelo PCM. deps.py:118 confirma isso em PERMISSIONS['os.criar']. O comportamento no fluxo: operador → POST /api/ordens-servico → OS criada com status='solicitada' e origem='manual' (ou 'operador'). Não há endpoint separado /api/solicitacoes hoje. O CTO especificou que 'Operador CANNOT create OS directly' de forma literal — logo há gap entre spec e implementação. Não é vazamento de dados nem falha de segurança (a OS resultante NÃO está em status 'programada' e não pode ser executada até PCM aprovar), mas contraria a spec literalmente e reprova o critério ZERO FAILURES."
+}

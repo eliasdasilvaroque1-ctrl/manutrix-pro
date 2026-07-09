@@ -1,5 +1,8 @@
 # MAINTRIX — Test Credentials
 
+## Organization
+- ASTEC Cedro (org_id: 9a232bf2-fc01-4253-813f-8df356be31c1)
+
 ## Master
 - master@maintrix.com / master123
 
@@ -22,6 +25,9 @@
 
 ## Operador
 - test.operador@maintrix.com / op123
+
+## Visualizador
+- rc07v@maintrix.com / viewer123
 
 ## Login Flow
 1. Select organization first (ASTEC Cedro)
