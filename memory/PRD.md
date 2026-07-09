@@ -282,7 +282,10 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Fase Atual: PILOTO ASTEC — App CONGELADO (Fev/2026)
 
-**Versão oficial**: v1.0.0-RC1 → v1.1.0-RC13 → v1.2.0-DS1
+**Versão oficial**: v1.0.0 — CÓDIGO CONGELADO
+**Status**: HOMOLOGAÇÃO ASTEC — Piloto 30 dias
+**IPP**: 99%
+**Função do agente**: Homologador do Piloto ASTEC (não desenvolvedor)
 **Status**: GO LIVE APROVADO — Piloto em andamento
 **Governança**: CTO aprova qualquer alteração que não seja P0 bloqueante
 
