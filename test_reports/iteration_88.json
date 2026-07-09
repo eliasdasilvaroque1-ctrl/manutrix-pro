@@ -1,0 +1,127 @@
+{
+  "summary": "Iteration 88 - Design System Enterprise Phase 1 validation. Backend 12/12 regression tests PASS (login, dashboard/kpis, estoque, sobressalentes, ordens-servico, inspecoes, ativos, org config, public branding). Frontend flows verified: login, org selection, dashboard, Estoque list + Novo Item modal + Empty State (search 'zzzz...'), Sobressalentes, OS (Kanban + Lista), Inspecoes, Ativos, Configurações/White-Label all render without JS errors. CSS Design Tokens VERIFIED PRESENT on :root: --brand-surface (#0f172a default, #004A9E for ASTEC), --brand-surface-hover, --brand-border, --brand-text-primary, --brand-text-secondary, --brand-success/warning/danger/info. Token injection in lib/branding.js writes --brand-surface=cor_menu, --brand-surface-hover=cor_header, --brand-border=cor_header, --brand-text-primary=cor_texto correctly. btn-primary/btn-secondary/glass-card/input-industrial/card-industrial all use the tokens (confirmed via computed styles). HOWEVER, one HIGH-priority visual regression surfaces for ASTEC Cedro branding: the Modal title, ConfirmDialog title, section-title and KPI values become very hard to read because the mapping --brand-text-primary=cor_texto combined with --brand-surface=cor_menu creates dark-on-dark or blue-on-blue combinations when the org's cor_texto is a light-theme color (#1F2937) but cor_menu is dark (#004A9E). Modal 'Novo Item de Estoque' title measured at #1F2937 on #004A9E — insufficient contrast.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Modal (App.js:136-138) + ConfirmDialog (App.js:290-291) + KPICard (App.js:238-242)",
+        "issue": "HIGH — Dark-on-dark / blue-on-blue text under ASTEC branding. Measured: modal panel bg = rgb(0,74,158) (=cor_menu/--brand-surface), title color = rgb(31,41,55) (=cor_texto/--brand-text-primary). Root cause: token mapping in lib/branding.js line 178-181 sets --brand-text-primary = b.cor_texto and --brand-surface = b.cor_menu without checking that these two colors have sufficient contrast. When an org's cor_texto is a light-theme color (e.g. #1F2937 dark gray) and cor_menu is a dark color (e.g. #004A9E blue), the Modal/ConfirmDialog title, KPI value (text-brand on bg-surface — blue on blue), and any 'text-primary on bg-surface' composition become unreadable. Recommendation: (a) compute a contrast-safe --brand-text-on-surface derived from cor_menu luminance (e.g. white if cor_menu is dark, cor_texto otherwise), OR (b) never override --brand-text-primary from cor_texto — keep it always #e2e8f0 for dark surfaces and #1F2937 for light surfaces based on luminance.",
+        "selector": "[data-testid=modal] h2, .glass-card p.text-2xl",
+        "priority": "HIGH"
+      },
+      {
+        "component": "ConfirmDialog (App.js:295)",
+        "issue": "MINOR — Uses undefined class name 'btn-danger' when danger prop is true. Only 'btn-destructive' is defined in index.css line 135. The danger button will render unstyled (no bg/color/padding beyond browser default). Rename to 'btn-destructive' or add a 'btn-danger' alias.",
+        "selector": "[data-testid=modal] .btn-danger",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "index.css:93 vs index.css:371 — duplicate .bg-surface",
+        "issue": "MINOR — .bg-surface is defined twice: once with hardcoded hsl(222 47% 6%) at line 93 (in @layer utilities) and once tokenized with var(--brand-surface) at line 371. The tokenized definition wins due to source order, but the old rule should be removed to avoid confusion and to be resilient to future @layer reordering.",
+        "selector": ".bg-surface",
+        "priority": "LOW"
+      },
+      {
+        "component": "Kanban board / WhiteLabel testids",
+        "issue": "MINOR — Testids named in problem statement do not exist in the DOM: kanban-board (OS Kanban view has no [data-testid=kanban-board]), wl-tab-identidade / wl-tab-cores / wl-save-btn (Configurações page at /admin/config uses tab labels 'Identidade', 'Tema' but no data-testid). Blocking automated testing. Also view-kanban testid missing.",
+        "selector": "[data-testid=kanban-board], [data-testid=wl-tab-identidade], [data-testid=wl-tab-cores], [data-testid=wl-save-btn], [data-testid=view-kanban]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Hard navigation to /ativos, /sobressalentes, /os as authenticated user",
+        "issue": "Branding briefly resets to CMMS default (dark theme) before ASTEC branding re-applies. Visible flash of unbranded UI. Suspected race in BrandingProvider useEffect (branding.js:126-149) — on hard reload, loadFromUser is not called until App reads sessionStorage token and dispatches user data. Not a Phase 1 regression per se but appears in the ASTEC screenshots.",
+        "affected_selectors": ["nav header", ".bg-menu"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Estoque Novo Item modal (ASTEC branding)",
+        "issues": [
+          "Modal title 'Novo Item de Estoque' near-invisible (dark #1F2937 on blue #004A9E)",
+          "Section titles 'IDENTIFICAÇÃO', 'CONTROLE DE ESTOQUE' are blue (--brand-primary #0057B8) on blue panel (--brand-surface #004A9E) — very low contrast"
+        ]
+      },
+      {
+        "screen": "Dashboard KPI cards (ASTEC branding)",
+        "issues": [
+          "KPICard value uses text-brand (--brand-primary #0057B8) on bg-surface (--brand-surface #004A9E). Nearly indistinguishable colors."
+        ]
+      },
+      {
+        "screen": "Configurações /admin/config (ASTEC branding)",
+        "issues": [
+          "Page title area shows very-low-contrast text (dark on dark)",
+          "Inactive tab labels difficult to read"
+        ]
+      }
+    ]
+  },
+  "verification_matrix": {
+    "css_var_brand_surface_on_root": "PASS (default #0f172a, ASTEC #004A9E)",
+    "css_var_brand_surface_hover_on_root": "PASS",
+    "css_var_brand_border_on_root": "PASS",
+    "css_var_brand_text_primary_on_root": "PASS",
+    "css_var_brand_text_secondary_on_root": "PASS",
+    "css_var_brand_success_warning_danger_info_on_root": "PASS",
+    "branding_js_sets_derived_tokens": "PASS (applyCSS lines 178-181)",
+    "btn_primary_uses_brand_primary": "PASS",
+    "btn_secondary_uses_surface_and_border_token": "PASS",
+    "glass_card_uses_surface_and_border_token": "PASS",
+    "input_industrial_uses_brand_bg_and_border": "PASS",
+    "card_industrial_uses_tokens": "PASS",
+    "login_flow_default_theme": "PASS",
+    "login_flow_astec_theme": "PASS",
+    "dashboard_loads_with_kpi_cards": "PASS",
+    "estoque_loads_with_thumbnails": "PASS",
+    "sobressalentes_loads": "PASS",
+    "os_kanban_view_loads": "PASS (columns render)",
+    "os_list_view_loads": "PASS",
+    "inspecoes_loads": "PASS",
+    "ativos_loads": "PASS",
+    "modal_opens_and_closes": "PASS (functionally); FAIL for visual contrast under ASTEC theme",
+    "confirmdialog_renders": "PASS structurally; MINOR bug btn-danger class undefined",
+    "empty_state_search_random_string": "PASS ('Nenhum item encontrado' + Novo Item button)",
+    "whitelabel_page_loads": "PASS (/admin/config route)",
+    "whitelabel_uploads_present": "PARTIAL (Identidade tab shown, Tema tab not opened but exists; testids wl-* not found)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration88_designsystem_regression.py",
+    "/app/test_reports/pytest/iteration88.xml"
+  ],
+  "action_items": [
+    "HIGH: Rework token mapping in lib/branding.js applyCSS. Do NOT set --brand-text-primary directly from cor_texto. Instead derive it from luminance of cor_menu (surface): if surface is dark → use light text (#e2e8f0), else use dark text (#1F2937). Same for --brand-text-secondary. Ensures Modal/ConfirmDialog/KPI values readable regardless of org color config.",
+    "HIGH: In Modal (App.js:136) and ConfirmDialog (App.js:290), section-title/tab-active use --brand-primary (org's cor_primaria). When --brand-primary is close in hue/luminance to --brand-surface, these headings vanish. Either introduce a contrast-check helper or force these headers to use text-primary.",
+    "MEDIUM: Fix ConfirmDialog danger button — replace className 'btn-danger' with 'btn-destructive' at App.js:295, OR add .btn-danger definition in index.css.",
+    "LOW: Remove the duplicate .bg-surface rule at index.css:93 (keep only the token version at line 371).",
+    "LOW: Add missing data-testid attributes referenced in the problem statement: kanban-board on OS Kanban container, view-kanban on Kanban toggle, wl-tab-identidade / wl-tab-cores / wl-save-btn on /admin/config tabs and save button.",
+    "OPTIONAL: Investigate the branding flash on hard navigation to /ativos and /sobressalentes."
+  ],
+  "critical_code_review_comments": [
+    "lib/branding.js:178-181 — applyCSS unconditionally maps cor_texto→--brand-text-primary and cor_menu→--brand-surface. There is no contrast check between these two, causing dark-text-on-dark-surface for orgs with mixed light/dark palettes (ASTEC is a real case).",
+    "App.js:295 — ConfirmDialog uses className 'btn-danger' but only .btn-destructive is defined in index.css. Grep confirms no other reference to btn-danger. Will render unstyled.",
+    "index.css:93 and index.css:371 — both define .bg-surface within @layer utilities. Later one wins; remove the first for clarity and future-safety.",
+    "index.css:141 — .card-industrial uses background-color: var(--brand-bg). For ASTEC, --brand-bg = #F4F6F8 (light), meaning card-industrial panels are LIGHT while surrounding text (--brand-text-primary = #1F2937 dark) works — but any child elements that use text-secondary or icons expecting dark bg may be washed out.",
+    "App.js:187,189,199 — StatusBadge uses 'bg-brand-10 text-emerald-400 border-emerald-500/30' — hardcoded emerald color, not tokenized. Not part of Phase 1 scope but flagged for Phase 2.",
+    "App.js:279 — EmptyState 'Nenhum item' correctly uses bg-surface/text-primary/text-secondary/btn-primary. Structure is good.",
+    "App.js:136 — Modal panel uses 'bg-surface border border-surface'. .border-surface (index.css:377) sets border-color: var(--brand-border) — correct.",
+    "App.js:262-265 — Loading uses 'bg-surface-hover' for skeletons which resolves to --brand-surface-hover — good.",
+    "index.css:411-417 — .glass-card no longer uses color-mix or hardcoded slate values; uses var(--brand-surface) and var(--brand-border). Good migration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration88_designsystem_regression.py",
+    "/app/test_reports/pytest/iteration88.xml",
+    "/app/test_reports/iteration_88.json"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "85% - all functional flows pass; visual contrast HIGH bug under ASTEC branding"},
+  "test_credentials": "test.admin@maintrix.com / admin123 with org ASTEC Cedro (id 9a232bf2-fc01-4253-813f-8df356be31c1). ASTEC branding: cor_primaria=#0057B8, cor_menu=#004A9E, cor_header=#101B30, cor_fundo=#F4F6F8, cor_texto=#1F2937.",
+  "seed_data_creation": "No data created or mutated. Modal opened and closed without saving.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 1 Design System is FUNCTIONALLY complete — all CSS vars are on :root, tokens propagate, no JS errors, all regression flows pass. The main issue to retest after fix is the contrast between --brand-text-primary and --brand-surface under different orgs. To reproduce: login as ASTEC admin → go to /estoque → click 'Novo Item' → inspect modal H2 title color vs panel background (currently rgb(31,41,55) on rgb(0,74,158) — ratio ~1.3:1, needs ≥4.5:1 for AA). Also check KPI values on /dashboard which are blue on blue. The other three action items (btn-danger class, duplicate .bg-surface, missing testids) are simple string edits. Backend endpoints for Phase 1 verification: /api/kpis, /api/estoque, /api/sobressalentes, /api/ordens-servico, /api/inspecoes, /api/ativos, /api/org/config, /api/public/branding/{id}, /api/public/organizations. Login uses access_token key. Org selection is a filter-typing input (not select). Kanban view is the default; List view is toggled via 'Lista' button.",
+  "rca_of_the_issue": "Phase 1 introduced --brand-text-primary and --brand-surface as separate tokens, each pulled from a different org branding attribute (cor_texto vs cor_menu). These two org attributes are historically edited independently by White Label admins, with no invariant that ensures cor_texto has sufficient contrast with cor_menu. For ASTEC, the White Label admin picked cor_texto=#1F2937 (intended as body text on the light cor_fundo=#F4F6F8) but cor_menu=#004A9E (dark blue for the side navigation). When Modal/ConfirmDialog/KPICard resolve 'text-primary on bg-surface', they get #1F2937 on #004A9E → WCAG contrast ~1.3:1, well below AA 4.5:1. The design system needs a contrast-safe derivation layer instead of a direct 1:1 mapping."
+}

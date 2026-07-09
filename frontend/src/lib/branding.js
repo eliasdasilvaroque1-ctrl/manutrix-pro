@@ -164,6 +164,7 @@ export const useBranding = () => useContext(BrandingContext);
 // Apply CSS variables to :root
 function applyCSS(b) {
   const root = document.documentElement;
+  // Core brand colors
   root.style.setProperty('--brand-primary', b.cor_primaria);
   root.style.setProperty('--brand-secondary', b.cor_secundaria);
   root.style.setProperty('--brand-bg', b.cor_fundo);
@@ -172,6 +173,13 @@ function applyCSS(b) {
   root.style.setProperty('--brand-menu', b.cor_menu);
   root.style.setProperty('--brand-login', b.cor_login);
   root.style.setProperty('--brand-header', b.cor_header);
+
+  // Design Token System — derived from core, explicit values
+  root.style.setProperty('--brand-surface', b.cor_menu || '#0f172a');
+  root.style.setProperty('--brand-surface-hover', b.cor_header || '#1e293b');
+  root.style.setProperty('--brand-border', b.cor_header || '#1e293b');
+  root.style.setProperty('--brand-text-primary', b.cor_texto || '#e2e8f0');
+  root.style.setProperty('--brand-text-secondary', '#94a3b8');
 }
 
 function applyFavicon(url) {

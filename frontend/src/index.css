@@ -114,15 +114,22 @@
   }
   
   .btn-primary {
-    @apply btn-industrial text-slate-950;
+    @apply btn-industrial;
     background-color: var(--brand-primary);
+    color: var(--brand-bg);
   }
   .btn-primary:hover {
     filter: brightness(1.1);
   }
   
   .btn-secondary {
-    @apply btn-industrial border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800;
+    @apply btn-industrial;
+    background-color: var(--brand-surface);
+    border: 1px solid var(--brand-border);
+    color: var(--brand-text-primary);
+  }
+  .btn-secondary:hover {
+    background-color: var(--brand-surface-hover);
   }
   
   .btn-destructive {
@@ -131,13 +138,18 @@
   
   /* Cards */
   .card-industrial {
-    @apply bg-slate-950 border border-slate-800 rounded-lg;
+    background-color: var(--brand-bg);
+    border: 1px solid var(--brand-border);
+    border-radius: 0.5rem;
   }
   
   /* Inputs */
   .input-industrial {
-    @apply h-12 bg-slate-950 border-slate-700 text-lg rounded-md;
+    @apply h-12 text-lg rounded-md;
     @apply placeholder:text-slate-500;
+    background-color: var(--brand-bg);
+    border-color: var(--brand-border);
+    color: var(--brand-text-primary);
   }
   .input-industrial:focus {
     border-color: var(--brand-primary);
@@ -146,7 +158,8 @@
   /* Navigation */
   .nav-item {
     @apply flex flex-col items-center justify-center min-h-[56px] min-w-[64px];
-    @apply text-slate-400 hover:text-slate-200 transition-colors;
+    color: var(--brand-text-secondary);
+    @apply hover:text-slate-200 transition-colors;
   }
   
   .nav-item.active {
@@ -353,8 +366,54 @@
   .accent-brand {
     accent-color: var(--brand-primary);
   }
+
+  /* ===== DESIGN TOKEN UTILITY CLASSES ===== */
+  .bg-surface {
+    background-color: var(--brand-surface);
+  }
+  .bg-surface-hover {
+    background-color: var(--brand-surface-hover);
+  }
+  .border-surface {
+    border-color: var(--brand-border);
+  }
+  .text-primary {
+    color: var(--brand-text-primary);
+  }
+  .text-secondary {
+    color: var(--brand-text-secondary);
+  }
+  .text-success {
+    color: var(--brand-success);
+  }
+  .text-warning {
+    color: var(--brand-warning);
+  }
+  .text-danger {
+    color: var(--brand-danger);
+  }
+  .text-info {
+    color: var(--brand-info);
+  }
+  .bg-success-10 {
+    background-color: color-mix(in srgb, var(--brand-success) 10%, transparent);
+  }
+  .bg-warning-10 {
+    background-color: color-mix(in srgb, var(--brand-warning) 10%, transparent);
+  }
+  .bg-danger-10 {
+    background-color: color-mix(in srgb, var(--brand-danger) 10%, transparent);
+  }
+  .bg-info-10 {
+    background-color: color-mix(in srgb, var(--brand-info) 10%, transparent);
+  }
+
+  /* ===== TOKENIZED COMPONENTS ===== */
   .glass-card {
-    @apply bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-xl;
+    background-color: var(--brand-surface);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--brand-border);
+    border-radius: 0.75rem;
   }
   .section-title {
     color: var(--brand-primary);

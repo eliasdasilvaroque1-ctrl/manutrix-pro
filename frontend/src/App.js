@@ -133,11 +133,11 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
     <div className="fixed inset-0 z-50 overflow-y-auto" data-testid="modal">
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose}></div>
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className={`relative w-full ${sizeClasses[size]} bg-slate-900 border border-slate-700 rounded-xl shadow-2xl animate-scaleIn`}>
-          <div className="flex items-center justify-between p-4 border-b border-slate-800">
-            <h2 className="text-xl font-bold text-slate-100">{title}</h2>
-            <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-              <X size={20} className="text-slate-400" />
+        <div className={`relative w-full ${sizeClasses[size]} bg-surface border border-surface rounded-xl shadow-2xl animate-scaleIn`}>
+          <div className="flex items-center justify-between p-4 border-b border-surface">
+            <h2 className="text-xl font-bold text-primary">{title}</h2>
+            <button onClick={onClose} className="p-2 hover:bg-surface-hover rounded-lg transition-colors">
+              <X size={20} className="text-secondary" />
             </button>
           </div>
           <div className="p-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
@@ -152,11 +152,11 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
 // Form Input Component
 const FormInput = ({ label, required, error, children }) => (
   <div className="space-y-1">
-    <label className="block text-sm font-medium text-slate-400">
-      {label} {required && <span className="text-red-400">*</span>}
+    <label className="block text-sm font-medium text-secondary">
+      {label} {required && <span className="text-danger">*</span>}
     </label>
     {children}
-    {error && <p className="text-xs text-red-400">{error}</p>}
+    {error && <p className="text-xs text-danger">{error}</p>}
   </div>
 );
 
@@ -228,9 +228,9 @@ const PriorityBadge = ({ priority }) => {
 const KPICard = ({ value, label, icon: Icon, color = 'brand', subtitle, trend }) => {
   const colors = {
     brand: 'text-brand bg-brand-10',
-    amber: 'text-amber-400 bg-amber-500/10',
-    red: 'text-red-400 bg-red-500/10',
-    blue: 'text-blue-400 bg-blue-500/10',
+    amber: 'text-warning bg-warning-10',
+    red: 'text-danger bg-danger-10',
+    blue: 'text-info bg-info-10',
     purple: 'text-purple-400 bg-purple-500/10',
   };
   
@@ -239,15 +239,15 @@ const KPICard = ({ value, label, icon: Icon, color = 'brand', subtitle, trend })
       <div className="flex items-start justify-between">
         <div>
           <p className={`text-2xl font-bold ${colors[color].split(' ')[0]}`}>{value}</p>
-          <p className="text-sm text-slate-400 mt-1">{label}</p>
-          {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+          <p className="text-sm text-secondary mt-1">{label}</p>
+          {subtitle && <p className="text-xs text-secondary">{subtitle}</p>}
         </div>
         <div className={`p-2 rounded-lg ${colors[color]} group-hover:scale-110 transition-transform`}>
           <Icon size={20} />
         </div>
       </div>
       {trend !== undefined && (
-        <div className={`flex items-center gap-1 mt-2 text-xs ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+        <div className={`flex items-center gap-1 mt-2 text-xs ${trend >= 0 ? 'text-success' : 'text-danger'}`}>
           {trend >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
           <span>{trend >= 0 ? '+' : ''}{trend}% vs mês anterior</span>
         </div>
@@ -261,8 +261,8 @@ const Loading = ({ rows = 3 }) => (
   <div className="space-y-3">
     {Array.from({ length: rows }).map((_, i) => (
       <div key={i} className="glass-card p-4 animate-pulse">
-        <div className="h-4 bg-slate-700 rounded w-3/4 mb-2"></div>
-        <div className="h-3 bg-slate-700 rounded w-1/2"></div>
+        <div className="h-4 bg-surface-hover rounded w-3/4 mb-2"></div>
+        <div className="h-3 bg-surface-hover rounded w-1/2"></div>
       </div>
     ))}
   </div>
@@ -271,11 +271,11 @@ const Loading = ({ rows = 3 }) => (
 // Empty State
 const EmptyState = ({ icon: Icon, title, description, action, actionLabel }) => (
   <div className="flex flex-col items-center justify-center py-12 text-center">
-    <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-4">
-      <Icon size={32} className="text-slate-500" />
+    <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-4">
+      <Icon size={32} className="text-secondary" />
     </div>
-    <h3 className="text-lg text-slate-300 font-semibold mb-2">{title}</h3>
-    <p className="text-slate-500 max-w-sm mb-4">{description}</p>
+    <h3 className="text-lg text-primary font-semibold mb-2">{title}</h3>
+    <p className="text-secondary max-w-sm mb-4">{description}</p>
     {action && <button onClick={action} className="btn-primary">{actionLabel}</button>}
   </div>
 );
@@ -287,9 +287,9 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4 animate-scaleIn">
-        <h3 className="text-lg font-bold text-slate-100 mb-2">{title}</h3>
-        <p className="text-slate-400 mb-6">{message}</p>
+      <div className="relative bg-surface border border-surface rounded-xl p-6 max-w-md w-full mx-4 animate-scaleIn">
+        <h3 className="text-lg font-bold text-primary mb-2">{title}</h3>
+        <p className="text-secondary mb-6">{message}</p>
         <div className="flex gap-3 justify-end">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           <button onClick={onConfirm} className={danger ? "btn-danger" : "btn-primary"}>
