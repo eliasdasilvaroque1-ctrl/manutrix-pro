@@ -142,7 +142,7 @@ async def get_dashboard_stats(sector_id: Optional[str] = None, user: Dict = Depe
 
 @router.get("/dashboard/os-por-setor")
 async def dashboard_os_por_setor(user: Dict = Depends(get_current_user)):
-    """OS count by sector for dashboard chart"""
+    """OS count by sector — single aggregation instead of N+1 loop."""
     base_q = await build_dashboard_visibility(user)
     org_id = user.get('organization_id', '')
     role = user.get('role', '')
@@ -150,22 +150,45 @@ async def dashboard_os_por_setor(user: Dict = Depends(get_current_user)):
     sector_q = {"deleted_at": None}
     if org_id:
         sector_q['organization_id'] = org_id
-    # Scope sectors to user's areas if not full visibility
     if role in ROLE_GROUPS['operacional']:
         area_ids = user.get('area_ids') or []
         if area_ids:
             sector_q['id'] = {"$in": area_ids}
 
     sectors = await db.sectors.find(sector_q, {"_id": 0, "id": 1, "nome": 1, "cor": 1}).to_list(100)
+    sector_map = {s['id']: s for s in sectors}
+
+    # Single query: get all ativos grouped by sector
+    ativo_cursor = db.ativos.find(
+        {"deleted_at": None, "organization_id": org_id, "sector_id": {"$in": list(sector_map.keys())}},
+        {"_id": 0, "id": 1, "sector_id": 1}
+    )
+    sector_to_ativos = {}
+    async for a in ativo_cursor:
+        sector_to_ativos.setdefault(a['sector_id'], []).append(a['id'])
+
+    # Single query: count all open OS with ativo_ids
+    all_ativo_ids = [aid for aids in sector_to_ativos.values() for aid in aids]
+    os_q = {**base_q, "status": {"$nin": ["concluida", "cancelada", "solicitada"]}}
+    if all_ativo_ids:
+        os_q['ativo_id'] = {"$in": all_ativo_ids}
+    os_list = await db.ordens_servico.find(os_q, {"_id": 0, "ativo_id": 1}).to_list(5000)
+
+    # Count per sector
+    ativo_to_sector = {}
+    for sid, aids in sector_to_ativos.items():
+        for aid in aids:
+            ativo_to_sector[aid] = sid
+    sector_counts = {}
+    for o in os_list:
+        sid = ativo_to_sector.get(o.get('ativo_id'))
+        if sid:
+            sector_counts[sid] = sector_counts.get(sid, 0) + 1
+
     result = []
     for s in sectors:
-        aids = [a['id'] for a in await db.ativos.find({"sector_id": s['id'], "deleted_at": None}, {"_id": 0, "id": 1}).to_list(500)]
-        os_q = {**base_q, "status": {"$nin": ["concluida", "cancelada", "solicitada"]}}
-        if aids:
-            os_q['ativo_id'] = {"$in": aids}
-        os_count = await db.ordens_servico.count_documents(os_q) if aids else 0
-        if os_count > 0 or True:
-            result.append({"sector": s['nome'], "cor": s.get('cor', '#10b981'), "os_abertas": os_count})
+        count = sector_counts.get(s['id'], 0)
+        result.append({"sector": s['nome'], "cor": s.get('cor', '#10b981'), "os_abertas": count})
     return sorted(result, key=lambda x: x['os_abertas'], reverse=True)
 
 
@@ -194,7 +217,7 @@ async def dashboard_os_por_disciplina(user: Dict = Depends(get_current_user)):
 
 @router.get("/dashboard/ativos-mais-falhas")
 async def dashboard_ativos_mais_falhas(user: Dict = Depends(get_current_user)):
-    """Top assets with most failures (corretiva OS)"""
+    """Top assets with most failures — single aggregation instead of N+1 loop."""
     q = await build_dashboard_visibility(user)
     q['tipo'] = "corretiva"
     q['status'] = {"$nin": ["solicitada", "cancelada"]}
@@ -205,18 +228,28 @@ async def dashboard_ativos_mais_falhas(user: Dict = Depends(get_current_user)):
         if aid:
             counts[aid] = counts.get(aid, 0) + 1
     top = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    if not top:
+        return []
+
+    # Bulk lookup ativos and sectors (2 queries instead of 20)
+    top_ids = [aid for aid, _ in top]
+    ativos = await db.ativos.find({"id": {"$in": top_ids}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1, "sector_id": 1}).to_list(10)
+    ativo_map = {a['id']: a for a in ativos}
+    sector_ids = list({a.get('sector_id') for a in ativos if a.get('sector_id')})
+    sectors = await db.sectors.find({"id": {"$in": sector_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(50)
+    sector_map = {s['id']: s.get('nome', '') for s in sectors}
+
     result = []
     for aid, count in top:
-        ativo = await db.ativos.find_one({"id": aid}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
+        ativo = ativo_map.get(aid)
         if ativo:
-            sector = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0, "nome": 1})
-            result.append({"tag": ativo.get('tag'), "nome": ativo.get('nome'), "sector": sector.get('nome') if sector else '', "falhas": count})
+            result.append({"tag": ativo.get('tag'), "nome": ativo.get('nome'), "sector": sector_map.get(ativo.get('sector_id'), ''), "falhas": count})
     return result
 
 
 @router.get("/dashboard/trend")
 async def get_dashboard_trend(sector_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
-    """Monthly trend data for charts (last 6 months)"""
+    """Monthly trend data — single bulk query for all 6 months instead of 12+ sequential queries."""
     os_query = await build_dashboard_visibility(user)
     org_id = user.get('organization_id', '')
     role = user.get('role', '')
@@ -236,8 +269,37 @@ async def get_dashboard_trend(sector_id: Optional[str] = None, user: Dict = Depe
             os_query['ativo_id'] = {"$in": asset_ids}
 
     now = datetime.now(timezone.utc)
+
+    # Calculate 6-month date range
+    start_month = now.month - 5
+    start_year = now.year
+    while start_month <= 0:
+        start_month += 12
+        start_year -= 1
+    range_start = datetime(start_year, start_month, 1, tzinfo=timezone.utc).isoformat()
+    end_month = now.month % 12 + 1
+    end_year = now.year + (1 if now.month == 12 else 0)
+    range_end = datetime(end_year, end_month, 1, tzinfo=timezone.utc).isoformat()
+
+    # SINGLE QUERY: fetch all concluded OS in the 6-month range
+    bulk_q = {**os_query, "status": "concluida", "data_conclusao": {"$gte": range_start, "$lt": range_end}}
+    all_os = await db.ordens_servico.find(bulk_q, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1, "custo_total": 1, "data_conclusao": 1}).to_list(5000)
+
+    # Group by month in Python (faster than N separate queries)
+    month_buckets = {}
+    for o in all_os:
+        dc = o.get('data_conclusao', '')
+        if dc and len(dc) >= 7:
+            key = dc[:7]  # "YYYY-MM"
+            month_buckets.setdefault(key, []).append(o)
+
+    # 2 queries for ativos (constant, not per-month)
+    ativos_total = await db.ativos.count_documents(asset_query)
+    ativos_parados = await db.ativos.count_documents({**asset_query, "status": {"$in": ["parado", "manutencao"]}})
+
     months_data = []
     has_real_data = False
+    labels = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
     for i in range(5, -1, -1):
         month = now.month - i
@@ -245,11 +307,8 @@ async def get_dashboard_trend(sector_id: Optional[str] = None, user: Dict = Depe
         while month <= 0:
             month += 12
             year -= 1
-        month_start = datetime(year, month, 1, tzinfo=timezone.utc).isoformat()
-        month_end = datetime(year + (1 if month == 12 else 0), (month % 12) + 1, 1, tzinfo=timezone.utc).isoformat()
-
-        month_q = {**os_query, "data_conclusao": {"$gte": month_start, "$lt": month_end}, "status": "concluida"}
-        os_mes = await db.ordens_servico.find(month_q, {"_id": 0, "tempo_execucao_minutos": 1, "tipo": 1, "custo_total": 1}).to_list(1000)
+        key = f"{year}-{month:02d}"
+        os_mes = month_buckets.get(key, [])
 
         tempos = [o['tempo_execucao_minutos'] for o in os_mes if o.get('tempo_execucao_minutos')]
         mttr = round(sum(tempos) / len(tempos) / 60, 2) if tempos else 0
@@ -257,12 +316,9 @@ async def get_dashboard_trend(sector_id: Optional[str] = None, user: Dict = Depe
         if total > 0:
             has_real_data = True
 
-        ativos_total = await db.ativos.count_documents(asset_query)
-        ativos_parados = await db.ativos.count_documents({**asset_query, "status": {"$in": ["parado", "manutencao"]}})
         mtbf = round(((ativos_total - ativos_parados) / ativos_total * 720) if ativos_total > 0 else 720, 1)
         custo = sum(o.get('custo_total', 0) or 0 for o in os_mes)
 
-        labels = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
         months_data.append({
             "mes": labels[month - 1], "mes_num": month, "ano": year,
             "mttr": mttr, "mtbf": mtbf, "total_os": total,

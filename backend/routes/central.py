@@ -12,27 +12,17 @@ from deps import (
 router = APIRouter()
 
 
-async def _get_user_os(user: Dict, status_list: list, limit: int = 50) -> list:
-    """Get OS visible to user with given statuses."""
-    query = await build_visibility_query(user, entity_type="os")
-    query['status'] = {"$in": status_list}
-    os_list = await db.ordens_servico.find(query, {"_id": 0}).sort("data_planejada", 1).to_list(limit)
-    # Enrich with ativo info
-    for o in os_list:
-        ativo = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
-        o['ativo'] = ativo
-    return os_list
-
-
-async def _get_execucoes_pendentes(user: Dict, limit: int = 50) -> list:
-    """Get pending inspection executions for user."""
-    query = await build_visibility_query(user, entity_type="inspecao")
-    query['status'] = {"$in": ["pendente", "em_andamento"]}
-    inspecoes = await db.inspecoes.find(query, {"_id": 0}).sort("data_programada", 1).to_list(limit)
-    for insp in inspecoes:
-        ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "sector_id": 1})
-        insp['ativo'] = ativo
-    return inspecoes
+async def _bulk_enrich_ativos(items: list) -> None:
+    """Enrich OS/inspeção items with ativo data using a single bulk query instead of N+1."""
+    ativo_ids = list({item.get('ativo_id') for item in items if item.get('ativo_id')})
+    if not ativo_ids:
+        for item in items:
+            item['ativo'] = None
+        return
+    ativos_cursor = db.ativos.find({"id": {"$in": ativo_ids}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1, "sector_id": 1})
+    ativo_map = {a['id']: a async for a in ativos_cursor}
+    for item in items:
+        item['ativo'] = ativo_map.get(item.get('ativo_id'))
 
 
 @router.get("/central")
@@ -56,9 +46,6 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
          "data_planejada": {"$lt": hoje, "$ne": None}},
         {"_id": 0}
     ).sort("data_planejada", 1).to_list(50)
-    for o in vencidas_os:
-        a = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        o['ativo'] = a
 
     insp_query_base = await build_visibility_query(user, entity_type="inspecao")
     vencidas_insp = await db.inspecoes.find(
@@ -66,9 +53,6 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
          "data_programada": {"$lt": hoje, "$ne": None}},
         {"_id": 0, "checklist": 0}
     ).sort("data_programada", 1).to_list(50)
-    for insp in vencidas_insp:
-        a = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        insp['ativo'] = a
 
     result['vencidas'] = {
         "os": vencidas_os,
@@ -82,18 +66,12 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
          "data_planejada": {"$gte": hoje, "$lt": amanha}},
         {"_id": 0}
     ).sort("prioridade", -1).to_list(50)
-    for o in hoje_os:
-        a = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        o['ativo'] = a
 
     hoje_insp = await db.inspecoes.find(
         {**insp_query_base, "status": {"$in": ["pendente", "em_andamento"]},
          "data_programada": {"$gte": hoje, "$lt": amanha}},
         {"_id": 0, "checklist": 0}
     ).sort("data_programada", 1).to_list(50)
-    for insp in hoje_insp:
-        a = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        insp['ativo'] = a
 
     result['hoje'] = {
         "os": hoje_os,
@@ -107,18 +85,12 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
          "data_planejada": {"$gte": amanha, "$lt": fim_semana}},
         {"_id": 0}
     ).sort("data_planejada", 1).to_list(50)
-    for o in semana_os:
-        a = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        o['ativo'] = a
 
     semana_insp = await db.inspecoes.find(
         {**insp_query_base, "status": "pendente",
          "data_programada": {"$gte": amanha, "$lt": fim_semana}},
         {"_id": 0, "checklist": 0}
     ).sort("data_programada", 1).to_list(50)
-    for insp in semana_insp:
-        a = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        insp['ativo'] = a
 
     result['semana'] = {
         "os": semana_os,
@@ -127,15 +99,11 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
     }
 
     # ===== SEM DATA (backlog) =====
-    # Use $and to avoid overwriting visibility $or
     sem_data_q = {**os_query_base, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}}
     sem_data_q.setdefault("$and", []).append(
         {"$or": [{"data_planejada": None}, {"data_planejada": {"$exists": False}}, {"data_planejada": ""}]}
     )
     sem_data_os = await db.ordens_servico.find(sem_data_q, {"_id": 0}).sort("created_at", -1).to_list(30)
-    for o in sem_data_os:
-        a = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        o['ativo'] = a
 
     result['sem_data'] = {"os": sem_data_os, "total": len(sem_data_os)}
 
@@ -144,17 +112,11 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
         {**os_query_base, "status": "em_execucao"},
         {"_id": 0}
     ).sort("data_inicio", -1).to_list(20)
-    for o in em_exec_os:
-        a = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        o['ativo'] = a
 
     em_exec_insp = await db.inspecoes.find(
         {**insp_query_base, "status": "em_andamento"},
         {"_id": 0, "checklist": 0}
     ).to_list(20)
-    for insp in em_exec_insp:
-        a = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-        insp['ativo'] = a
 
     result['em_execucao'] = {
         "os": em_exec_os,
@@ -163,26 +125,20 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
     }
 
     # ===== ROLE-SPECIFIC SECTIONS =====
-
+    criticas = []
     if role in ('supervisor', 'admin', 'master', 'pcm'):
-        # Planos pendentes de aprovação
         planos_q = {"organization_id": org_id, "deleted_at": None, "status": {"$in": ["rascunho", "ativo"]}}
         planos_pendentes = await db.planos_inspecao.find(planos_q, {"_id": 0, "checklist": 0}).to_list(20)
         result['planos_pendentes'] = planos_pendentes
 
-        # OS críticas (emergência + alta prioridade)
         criticas = await db.ordens_servico.find(
             {**os_query_base, "status": {"$in": ["aberta", "em_execucao"]},
              "prioridade": {"$in": ["emergencia", "alta"]}},
             {"_id": 0}
         ).sort("created_at", -1).to_list(10)
-        for o in criticas:
-            a = await db.ativos.find_one({"id": o.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
-            o['ativo'] = a
         result['os_criticas'] = criticas
 
     if role in ('admin', 'master'):
-        # Resumo executivo
         base_q = {"organization_id": org_id, "deleted_at": None} if org_id else {"deleted_at": None}
         result['resumo'] = {
             "total_os_abertas": await db.ordens_servico.count_documents({**base_q, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}}),
@@ -190,6 +146,10 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
             "total_ativos": await db.ativos.count_documents({**base_q}),
             "ativos_parados": await db.ativos.count_documents({**base_q, "status": {"$in": ["parado", "manutencao"]}}),
         }
+
+    # ===== BULK ENRICH all OS and inspections with ativo data (1 query instead of N) =====
+    all_items = vencidas_os + hoje_os + semana_os + sem_data_os + em_exec_os + criticas + vencidas_insp + hoje_insp + semana_insp + em_exec_insp
+    await _bulk_enrich_ativos(all_items)
 
     # Summary counts
     total_atividades = result['vencidas']['total'] + result['hoje']['total'] + result['semana']['total'] + result['em_execucao']['total']
