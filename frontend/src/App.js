@@ -94,7 +94,11 @@ const AssetIdentity = ({ ativo, plantas, sectors, size = 'md', showLabels = fals
 
 const normalizeError = (error) => {
   const detail = error?.response?.data?.detail;
-  if (!detail) return error?.message || 'Erro desconhecido';
+  if (!detail) {
+    if (error?.message?.includes('Network Error')) return 'Sem conexão com o servidor. Verifique sua rede.';
+    if (error?.message?.includes('timeout')) return 'O servidor demorou para responder. Tente novamente.';
+    return 'Não foi possível concluir a operação. Tente novamente.';
+  }
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail)) {
     return detail.map(d => {
@@ -107,12 +111,12 @@ const normalizeError = (error) => {
           return `Campo '${label}' é obrigatório`;
         }
         if (fieldName) return `${label}: ${msg}`;
-        return msg || JSON.stringify(d);
+        return msg || 'Erro de validação';
       }
       return String(d);
     }).join('; ');
   }
-  if (typeof detail === 'object') return detail.msg || JSON.stringify(detail);
+  if (typeof detail === 'object') return detail.msg || 'Erro ao processar requisição';
   return String(detail);
 };
 
@@ -2527,7 +2531,7 @@ const CentralTrabalhoPage = () => {
       try {
         const res = await api.get('/central');
         setData(res.data);
-      } catch { toast.error('Erro ao carregar central'); }
+      } catch { toast.error('Não foi possível carregar a central. Verifique sua conexão.'); }
       finally { setLoading(false); }
     };
     fetch();
@@ -2690,7 +2694,7 @@ const DashboardPage = () => {
         setOsPorDisciplina(discRes.data);
         setAtivosMaisFalhas(falhasRes.data);
       } catch (error) {
-        toast.error('Erro ao carregar dashboard');
+        toast.error('Não foi possível carregar o dashboard. Verifique sua conexão.');
       } finally {
         setLoading(false);
       }
@@ -7668,7 +7672,7 @@ const ParadasPage = () => {
             </div>
           ))}
         </div>
-      ) : <EmptyState icon={Calendar} title="Nenhuma parada" description="Crie paradas programadas para planejar manutenção." actionLabel="Nova Parada" onAction={() => setShowModal(true)} />}
+      ) : <EmptyState icon={Calendar} title="Nenhuma parada" description="Crie paradas programadas para planejar manutenção." action={() => setShowModal(true)} actionLabel="Nova Parada" />}
 
       {/* Modal */}
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? "Editar Parada" : "Nova Parada Programada"} size="lg">
@@ -8452,7 +8456,7 @@ const AdminTemplatesPage = () => {
           })}
         </div>
       ) : (
-        <EmptyState icon={ClipboardCheck} title="Nenhum plano" description="Crie planos de inspeção para cada tipo de equipamento" actionLabel="Novo Plano" onAction={openNew} />
+        <EmptyState icon={ClipboardCheck} title="Nenhum plano" description="Crie planos de inspeção para cada tipo de equipamento" actionLabel="Novo Plano" action={openNew} />
       )}
       <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir Plano" message={`Excluir "${deleteItem?.nome}"?`} confirmText="Excluir" danger />
       {showImportWizard && <PlanImportWizard onClose={() => setShowImportWizard(false)} onImported={fetchData} />}

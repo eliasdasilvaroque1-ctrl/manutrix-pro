@@ -299,7 +299,13 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Correção**: `relative` + `pointer-events-none` + `BACKEND_URL` prefix
 - **NÃO é regressão da RC-13**
 
+### QA Piloto ASTEC — GATE 3 UX ✅ (2026-07-09)
+- **6 correções de baixo risco**: EmptyState Paradas/Planos (botão não funcionava), mensagens de erro amigáveis (Network Error, timeout, JSON), toasts genéricos humanizados
+
 ### QA Piloto ASTEC — GATE 1 ✅ (2026-07-09)
+- **Auditoria**: 14/14 loading states OK, 12/14 empty states OK, 0 mensagens técnicas expostas
+- **Documentados P1**: Mobile bottom nav incompleta (Estoque inacessível)
+- **Relatório**: `/app/memory/GATE3_UX_REPORT.md`
 - **Validação**: 4/4 uploads testados (Logo, Logo Branca, Favicon, Wallpaper)
 
 ### Design System Enterprise — Fase 1 ✅ (2026-07-09)
