@@ -55,7 +55,7 @@ async def get_kpis(sector_id: Optional[str] = None, user: Dict = Depends(get_cur
 
     ativos_total = await db.ativos.count_documents(asset_query)
     backlog = await db.ordens_servico.count_documents({**os_query, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}})
-    os_atrasadas = await db.ordens_servico.count_documents({**os_query, "status": {"$nin": ["concluida", "cancelada"]}, "data_planejada": {"$lt": now.isoformat()}})
+    os_atrasadas = await db.ordens_servico.count_documents({**os_query, "status": {"$nin": ["concluida", "cancelada", "solicitada"]}, "data_planejada": {"$lt": now.isoformat()}})
 
     insp_pendentes = await db.inspecoes.count_documents({**os_query, "status": "pendente"})
     insp_nao_conformes = await db.inspecoes.count_documents({**os_query, "resultado": "nao_conforme"})
@@ -118,7 +118,7 @@ async def get_dashboard_stats(sector_id: Optional[str] = None, user: Dict = Depe
         "em_execucao": await db.ordens_servico.count_documents({**os_query, "status": "em_execucao"}),
         "pausadas": await db.ordens_servico.count_documents({**os_query, "status": "pausada"}),
         "concluidas_hoje": await db.ordens_servico.count_documents({**os_query, "status": "concluida", "data_conclusao": {"$gte": today_start}}),
-        "atrasadas": await db.ordens_servico.count_documents({**os_query, "status": {"$nin": ["concluida", "cancelada"]}, "data_planejada": {"$lt": now.isoformat()}}),
+        "atrasadas": await db.ordens_servico.count_documents({**os_query, "status": {"$nin": ["concluida", "cancelada", "solicitada"]}, "data_planejada": {"$lt": now.isoformat()}}),
     }
 
     inspecoes = {
@@ -160,7 +160,7 @@ async def dashboard_os_por_setor(user: Dict = Depends(get_current_user)):
     result = []
     for s in sectors:
         aids = [a['id'] for a in await db.ativos.find({"sector_id": s['id'], "deleted_at": None}, {"_id": 0, "id": 1}).to_list(500)]
-        os_q = {**base_q, "status": {"$nin": ["concluida", "cancelada"]}}
+        os_q = {**base_q, "status": {"$nin": ["concluida", "cancelada", "solicitada"]}}
         if aids:
             os_q['ativo_id'] = {"$in": aids}
         os_count = await db.ordens_servico.count_documents(os_q) if aids else 0
@@ -173,7 +173,7 @@ async def dashboard_os_por_setor(user: Dict = Depends(get_current_user)):
 async def dashboard_os_por_disciplina(user: Dict = Depends(get_current_user)):
     """OS count by discipline for dashboard chart"""
     q = await build_dashboard_visibility(user)
-    q['status'] = {"$nin": ["concluida", "cancelada"]}
+    q['status'] = {"$nin": ["concluida", "cancelada", "solicitada"]}
 
     result = []
     labels = {"mecanica": "Mecânica", "eletrica": "Elétrica", "instrumentacao": "Instrumentação", "civil": "Civil", "producao": "Produção"}
@@ -197,6 +197,7 @@ async def dashboard_ativos_mais_falhas(user: Dict = Depends(get_current_user)):
     """Top assets with most failures (corretiva OS)"""
     q = await build_dashboard_visibility(user)
     q['tipo'] = "corretiva"
+    q['status'] = {"$nin": ["solicitada", "cancelada"]}
     os_list = await db.ordens_servico.find(q, {"_id": 0, "ativo_id": 1}).to_list(5000)
     counts = {}
     for o in os_list:

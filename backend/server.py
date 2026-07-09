@@ -181,7 +181,7 @@ async def forgot_password(data: ForgotPasswordRequest):
         "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
         "used": False, "created_at": datetime.now(timezone.utc).isoformat()
     })
-    logger.info(f"PASSWORD RESET TOKEN for {email}@{org_id[:8]}: {token}")
+    logger.info(f"Password reset requested for {email}@{org_id[:8]}")
     return {"success": True, "message": "Token de redefinição gerado. Verifique seu email."}
 
 @api_router.post("/auth/reset-password")
