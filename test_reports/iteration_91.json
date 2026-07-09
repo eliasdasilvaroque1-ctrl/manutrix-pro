@@ -1,0 +1,85 @@
+{
+  "summary": "GATE 4.5 — Consistência dos Dados (ASTEC Pilot): 28 PASS / 1 FAIL (P0 multi-tenant) em 29 casos cobrindo 7 dos 10 cenários da spec (S1 OS lifecycle, S4 Materiais, S6 RBAC 7 roles, S7 Multi-tenant, S9 Soft-delete, S10 Concorrência). Cenários 2 (Preventiva), 3 (Inspeção→OS) e 5 (Fotos) não foram cobertos em profundidade — o CTO pediu foco em consistência de dados; deixados para próxima iteração se necessário. FALHA CRÍTICA P0: Palfa admin conseguiu executar PATCH /api/ordens-servico/{astec_os_id}/status → 200 e alterar o estado de uma OS de outra organização (o campo alterado_por passou a apontar para o user Palfa). Isso reprova o critério do CTO 'zero P0 no cenário 7'. Fluxo de OS lifecycle solicitada→programada→em_execucao→concluida funciona end-to-end (data_inicio e data_conclusao setadas automaticamente, MTTR calculado). Consumo de material deduz estoque, audit log gerado. Concorrência não gerou estoque negativo. Isolamento de leitura (GET) entre orgs OK — o vazamento é apenas na ESCRITA de OS.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "PATCH /api/ordens-servico/{os_id}/status",
+        "issue": "P0 MULTI-TENANT ESCALATION — routes/work_orders.py:323 update_os_status NÃO chama verify_org_access. Admin da org Pedreira Alfa (5ea998af-...) executou PATCH em uma OS da org ASTEC (9a232bf2-...) e o backend respondeu 200, atualizando status='em_execucao' e alterado_por=<palfa_user_id>. REPRO: (1) Palfa admin obtém token; (2) obtém um os_id ASTEC via canal admin/log/leak; (3) PATCH /api/ordens-servico/{os_id}/status {new_status:'em_execucao'} → 200. Endpoint apenas checa role via check_write_permission mas não valida organization_id. Impacto: qualquer usuário com role admin/pcm/supervisor de qualquer org pode alterar OS de qualquer outra org se conhecer o UUID.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "POST /api/ordens-servico/{os_id}/iniciar, /pausar, /concluir, DELETE /api/ordens-servico/{id}",
+        "issue": "P0 MULTI-TENANT ESCALATION (mesma classe) — routes/work_orders.py:296 iniciar_os, :310 pausar_os, :349 concluir_os, :285 delete_os TAMBÉM não chamam verify_org_access. Provavelmente vulneráveis à mesma exploração cross-tenant (confirmado só o /status; recomendo confirmar os demais). Somente PUT /api/ordens-servico/{id} (linha 269) e GET individual (linha 162) fazem verify_org_access.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/planos-inspecao",
+        "issue": "Retorna 409 com detail={message, existing_plan_id, existing_plan_nome, action_required} — bom UX, mas o corpo é um object, não string, o que quebra clients que esperam detail=str. Recomendar padronizar detail como string e incluir os metadados em um campo separado (e.g., 'errors' ou 'conflict_info')."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "detailed_matrix_gate45": [
+    {"cenario":"S1-A","caso":"Operador cria OS solicitada","resultado":"PASS","status":"OK"},
+    {"cenario":"S1-B","caso":"OS solicitada excluída de KPIs (backlog, os_atrasadas)","resultado":"PASS","status":"OK"},
+    {"cenario":"S1-C","caso":"PCM solicitada→programada via PATCH /status","resultado":"PASS","status":"OK"},
+    {"cenario":"S1-D","caso":"PCM programada→em_execucao seta data_inicio auto","resultado":"PASS","status":"OK"},
+    {"cenario":"S1-E","caso":"Admin conclui OS (tempo=120, servicos_realizados) → status=concluida, data_conclusao setada","resultado":"PASS","status":"OK"},
+    {"cenario":"S1-F","caso":"KPIs atualizados pós-conclusão (MTTR≥0)","resultado":"PASS","status":"OK"},
+    {"cenario":"S1-G","caso":"/dashboard/stats concluidas_hoje ≥1","resultado":"PASS","status":"OK"},
+    {"cenario":"S1-H","caso":"Audit log com entradas de criação/status/conclusão","resultado":"PASS","status":"OK"},
+    {"cenario":"S4-A","caso":"POST /materiais deduz estoque","resultado":"PASS","status":"OK"},
+    {"cenario":"S4-B","caso":"GET /estoque/{id} confirma quantidade decreased by 2","resultado":"PASS","status":"OK"},
+    {"cenario":"S4-C","caso":"Audit log material_consumo","resultado":"PASS","status":"OK"},
+    {"cenario":"S6-A","caso":"Master GET /admin/users retorna ≥2 orgs distintas","resultado":"PASS","status":"OK"},
+    {"cenario":"S6-B","caso":"Admin CRUD estoque","resultado":"PASS","status":"OK"},
+    {"cenario":"S6-C","caso":"PCM cria planos, estoque","resultado":"PASS","status":"OK"},
+    {"cenario":"S6-D","caso":"Técnico NÃO cria estoque (403)","resultado":"PASS","status":"OK"},
+    {"cenario":"S6-E","caso":"Operador cria OS (status=solicitada) mas NÃO muda status via PATCH (403)","resultado":"PASS","status":"OK"},
+    {"cenario":"S6-F","caso":"Viewer NÃO cria OS/estoque/acessa admin (todos 403)","resultado":"PASS","status":"OK"},
+    {"cenario":"S6-G","caso":"Gerente lê dashboard/kpis, NÃO cria estoque (403)","resultado":"PASS","status":"OK"},
+    {"cenario":"S7-A","caso":"Palfa admin NÃO vê ativo ASTEC em GET /ativos","resultado":"PASS","status":"OK"},
+    {"cenario":"S7-B","caso":"Palfa GET ativo ASTEC → 404 (não 403)","resultado":"PASS","status":"OK"},
+    {"cenario":"S7-C","caso":"Palfa PATCH OS ASTEC status → deveria falhar","resultado":"FAIL","severidade":"P0","status":"OPEN — CROSS-TENANT WRITE"},
+    {"cenario":"S7-D","caso":"KPIs org-scoped (números distintos)","resultado":"PASS","status":"OK"},
+    {"cenario":"S7-E","caso":"Estoque isolado por org (sets disjuntos)","resultado":"PASS","status":"OK"},
+    {"cenario":"S9-A","caso":"Soft-delete ativo remove da lista","resultado":"PASS","status":"OK"},
+    {"cenario":"S9-B","caso":"Audit log delete ativo","resultado":"PASS","status":"OK"},
+    {"cenario":"S9-C","caso":"Soft-delete estoque remove da lista","resultado":"PASS","status":"OK"},
+    {"cenario":"S10","caso":"2 consumos concorrentes (8+8 sobre 10) → estoque não fica negativo","resultado":"PASS","status":"OK"}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_gate45_data_consistency.py",
+    "/app/test_reports/pytest/gate45_results.xml"
+  ],
+  "action_items": [
+    "P0 CRITICAL — Adicionar verify_org_access em routes/work_orders.py: (1) linha 323 update_os_status: após find_one da OS, chamar verify_org_access(user, os_doc, 'OS'); (2) linha 296 iniciar_os: idem; (3) linha 310 pausar_os: idem; (4) linha 349 concluir_os: idem; (5) linha 285 delete_os: idem. Todos esses endpoints hoje aceitam qualquer usuário com role autorizado, INDEPENDENTE da org da OS. Isso permite escalation cross-tenant.",
+    "P1 — Padronizar POST /api/planos-inspecao para retornar HTTPException(detail=str, ...) e metadados de conflito em campo separado (não dentro de detail=object), para consistência.",
+    "P2 — Master é considerado 'admin de qualquer org' apenas no login (via user.organization_id). O endpoint update_os_status precisa considerar master como bypass ao verify_org_access."
+  ],
+  "critical_code_review_comments": [
+    "routes/work_orders.py:323 update_os_status — SEM verify_org_access. Adicionar imediatamente após linha 334 (após confirmar que a OS existe): verify_org_access(user, os_doc, 'OS'). Master role deve fazer bypass.",
+    "routes/work_orders.py:296 iniciar_os — mesma classe de bug. Adicionar verify_org_access na OS antes do update.",
+    "routes/work_orders.py:310 pausar_os — mesma classe. Adicionar verify_org_access.",
+    "routes/work_orders.py:349 concluir_os — mesma classe. Adicionar verify_org_access antes do update_one atômico.",
+    "routes/work_orders.py:285 delete_os — mesma classe. Adicionar verify_org_access antes do soft-delete.",
+    "routes/work_orders.py:413 add_os_material — verifica org do item de estoque (linha 434) mas NÃO da OS. Adicionar verify_org_access(user, os_doc, 'OS') após linha 419.",
+    "routes/work_orders.py:504 remove_os_material — NÃO faz nenhuma checagem de org (nem da OS nem do item). Adicionar ambas.",
+    "Considerar criar um decorator @requires_same_org(entity='os', param='os_id') para eliminar duplicação e garantir consistência de checagem em todos os endpoints de OS.",
+    "server.py:412 estoque criar — bom, faz .upper() no SKU; mas rejeitar SKU vazio explicitamente."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_gate45_data_consistency.py",
+    "/app/test_reports/pytest/gate45_results.xml",
+    "/app/test_reports/iteration_91.json"
+  ],
+  "success_rate": {"backend": "96.5% (28/29 PASS, 1 FAIL P0)", "frontend": "N/A (backend-only)"},
+  "test_credentials": "test.admin@maintrix.com/admin123 | test.pcm@maintrix.com/pcm123 | test.mec@maintrix.com/tec123 | test.operador@maintrix.com/op123 | test.gerente@maintrix.com/ger123 | rc07v@maintrix.com/viewer123 | master@maintrix.com/master123 (org ASTEC=9a232bf2-fc01-4253-813f-8df356be31c1). Pedreira Alfa admin: admin@pedreira-alfa.com — senha resetada via /admin/users/{id}/reset-password (fixture t_palfa_admin) em cada execução; org=5ea998af-ee7e-4549-9fc9-11b338335793 (NÃO 5ea998af-ee7e-4ae1-b9de-b5c9f4ff209d como indicado na spec — a spec estava com UUID errado).",
+  "seed_data_creation": "Testes criam ativos TEST-GATE45-*, estoque TEST-GATE45-*/TEST-CONC-*, planos TEST_GATE45_PCM_*, OS TEST_GATE45 sob org ASTEC. Não há cleanup teardown — os itens ficam persistidos com prefixo TEST_ para fácil identificação. Recomenda-se rodar db.ordens_servico.deleteMany({titulo:{$regex:'^TEST_GATE45'}}) periodicamente. A senha do admin Pedreira Alfa é alterada em toda execução — não interfere no seed principal.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Rodar novamente test_gate45_data_consistency.py após main agent aplicar verify_org_access nos 5 endpoints listados. O único caso FAIL (test_7c_palfa_cannot_patch_astec_os) deve virar PASS quando o fix estiver correto (o teste espera status_code em (403, 404)). ATENÇÃO: o test_report_file criou usuários e planos com prefixo TEST_GATE45 — se muitos rodados acumularem no banco, os testes S9 continuam OK (usam UUIDs únicos) mas o dashboard pode ficar sujo. Considerar cleanup teardown fixture. O UUID de Pedreira Alfa no problem statement estava incorreto (5ea998af-ee7e-4ae1-b9de-b5c9f4ff209d) — o correto é 5ea998af-ee7e-4549-9fc9-11b338335793 e há 9 usuários seedados naquela org. Se o main agent quiser tornar o fluxo de operador → OS mais estrito (403 em POST /ordens-servico direto), lembrar que iteration_89 tinha isso como P1 pendente e o design atual é 'OS-as-solicitação' (POST → 200 com status=solicitada). Cenários S2 (preventiva) e S3 (inspeção→OS) e S5 (fotos) não foram testados nesta iteração — o CTO priorizou consistência (S1, S4, S6, S7, S9, S10). Rodar test_gate2_operational_flows.py cobre S2/S3/S5 parcialmente.",
+  "rca_of_the_issue": "P0 MULTI-TENANT WRITE ESCALATION em endpoints de mutação de OS. Reprodução exata: (1) POST /api/auth/login com master@maintrix.com/master123/org=ASTEC → obtém master_token; (2) POST /api/admin/users/{palfa_admin_uid}/reset-password → recebe temp_password; (3) POST /api/auth/login com admin@pedreira-alfa.com/temp_password/org=Palfa → obtém palfa_token; (4) Com admin ASTEC obter os_id de qualquer OS ASTEC; (5) curl -X PATCH -H 'Authorization: Bearer <palfa_token>' /api/ordens-servico/<astec_os_id>/status -d '{\"new_status\":\"em_execucao\"}' → 200 {success:true}; (6) GET com admin ASTEC no mesmo os_id → status='em_execucao', alterado_por=<palfa_uid>. CONFIRMED. RCA: routes/work_orders.py:323 update_os_status executa check_write_permission(user, ['admin','pcm','supervisor']) — passa porque palfa é admin — mas NÃO chama verify_org_access(user, os_doc, 'OS') após find_one. deps.py:260 verify_org_access compara user.organization_id vs document.organization_id e lança 404 se divergirem — exatamente o que falta aqui. FIX (5 linhas em 5 endpoints): adicionar 'verify_org_access(user, os_doc, \"OS\")' após find_one em: 285 delete_os, 296 iniciar_os, 310 pausar_os, 323 update_os_status, 349 concluir_os. Para master: verify_org_access não bloqueia master porque a checagem só age quando user_org e doc_org são ambos não-vazios e diferentes — como master mantém o user.organization_id de login (ASTEC), isso É bloqueio para master também! Portanto o fix deve incluir bypass: 'if user.get(\"role\") != \"master\": verify_org_access(...)'."
+}
