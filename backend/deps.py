@@ -258,6 +258,8 @@ def check_not_gerente(user: Dict):
         raise HTTPException(status_code=403, detail="Perfil sem permissão de escrita")
 
 def verify_org_access(user: Dict, document: dict, entity_name: str = "Registro"):
+    if user.get('role') == 'master':
+        return  # Master has cross-org access
     user_org = user.get('organization_id', '')
     doc_org = document.get('organization_id', '')
     if user_org and doc_org and user_org != doc_org:

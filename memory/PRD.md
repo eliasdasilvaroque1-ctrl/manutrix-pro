@@ -307,6 +307,12 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 ### QA Piloto ASTEC — GATE 3 UX ✅ (2026-07-09)
 - **6 correções de baixo risco**: EmptyState Paradas/Planos (botão não funcionava), mensagens de erro amigáveis (Network Error, timeout, JSON), toasts genéricos humanizados
 
+### QA Piloto ASTEC — GATE 4.5 Consistência dos Dados ✅ (2026-07-09)
+- **28/29 PASS** (96.5%) — cenários S1(lifecycle), S4(materiais), S6(RBAC), S7(multi-tenant), S9(soft-delete), S10(concorrência)
+- **1 FAIL P0 encontrado e corrigido**: Cross-tenant write escalation em 7 endpoints de OS (PATCH status, iniciar, pausar, concluir, delete, add_material, remove_material) — `verify_org_access` adicionado em todos
+- **Master bypass**: `verify_org_access` agora permite master cross-org explicitamente
+- **Validação do fix**: 4/4 endpoints retornam 404 para cross-tenant write
+
 ### QA Piloto ASTEC — GATE 1 ✅ (2026-07-09)
 - **Auditoria**: 14/14 loading states OK, 12/14 empty states OK, 0 mensagens técnicas expostas
 - **Documentados P1**: Mobile bottom nav incompleta (Estoque inacessível)

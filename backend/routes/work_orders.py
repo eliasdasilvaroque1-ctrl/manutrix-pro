@@ -288,6 +288,7 @@ async def delete_os(os_id: str, user: Dict = Depends(get_current_user)):
     existing = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, existing, "OS")
     await db.ordens_servico.update_one({"id": os_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
     await audit_log("delete", "ordens_servico", os_id, user, f"OS #{existing.get('numero')} excluída")
     return {"success": True, "message": "OS excluída com sucesso"}
@@ -299,6 +300,7 @@ async def iniciar_os(os_id: str, user: Dict = Depends(get_current_user)):
     os = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os, "OS")
     allowed_start = ['aberta', 'programada', 'disponivel', 'planejada', 'pausada', 'solicitada', 'em_analise']
     if os.get('status') not in allowed_start:
         raise HTTPException(status_code=400, detail=f"OS com status '{os.get('status')}' não pode ser iniciada")
@@ -313,6 +315,7 @@ async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os_doc, "OS")
     if os_doc.get('status') != 'em_execucao':
         raise HTTPException(status_code=400, detail=f"OS com status '{os_doc.get('status')}' não pode ser pausada")
     await db.ordens_servico.update_one({"id": os_id}, {"$set": {"status": "pausada", "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}})
@@ -332,6 +335,7 @@ async def update_os_status(os_id: str, body: KanbanMoveBody, user: Dict = Depend
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os_doc, "OS")
     if os_doc.get('status') == 'concluida':
         raise HTTPException(status_code=400, detail="OS concluída não pode ser reaberta via Kanban")
     update = {"status": body.new_status, "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}
@@ -352,6 +356,7 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os_doc, "OS")
     if os_doc.get('status') in ('concluida', 'cancelada'):
         raise HTTPException(status_code=400, detail=f"OS com status '{os_doc.get('status')}' não pode ser concluída novamente")
     descricao = body.servicos_realizados or body.observacoes or os_doc.get('descricao')
@@ -418,6 +423,7 @@ async def add_os_material(os_id: str, body: dict, user: Dict = Depends(get_curre
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os_doc, "OS")
     
     item_estoque_id = body.get('item_estoque_id')
     quantidade = body.get('quantidade', 0)
@@ -505,6 +511,11 @@ async def add_os_material(os_id: str, body: dict, user: Dict = Depends(get_curre
 async def remove_os_material(os_id: str, material_id: str, user: Dict = Depends(get_current_user)):
     """Remove/return material from OS — restores stock"""
     check_write_permission(user, ['admin', 'pcm', 'supervisor'])
+    
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+    verify_org_access(user, os_doc, "OS")
     
     mat = await db.os_materiais.find_one({"id": material_id, "os_id": os_id, "deleted_at": None}, {"_id": 0})
     if not mat:
