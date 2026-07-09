@@ -292,7 +292,7 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText
         <p className="text-secondary mb-6">{message}</p>
         <div className="flex gap-3 justify-end">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button onClick={onConfirm} className={danger ? "btn-danger" : "btn-primary"}>
+          <button onClick={onConfirm} className={danger ? "btn-destructive" : "btn-primary"}>
             {confirmText}
           </button>
         </div>

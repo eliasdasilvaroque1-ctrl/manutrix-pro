@@ -282,7 +282,7 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 
 ## Fase Atual: PILOTO ASTEC — App CONGELADO (Fev/2026)
 
-**Versão oficial**: v1.0.0-RC1 → v1.1.0-RC13
+**Versão oficial**: v1.0.0-RC1 → v1.1.0-RC13 → v1.2.0-DS1
 **Status**: GO LIVE APROVADO — Piloto em andamento
 **Governança**: CTO aprova qualquer alteração que não seja P0 bloqueante
 
@@ -299,6 +299,12 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Correção**: `relative` + `pointer-events-none` + `BACKEND_URL` prefix
 - **NÃO é regressão da RC-13**
 - **Validação**: 4/4 uploads testados (Logo, Logo Branca, Favicon, Wallpaper)
+
+### Design System Enterprise — Fase 1 ✅ (2026-07-09)
+- **9 Design Tokens**: `--brand-surface`, `--brand-surface-hover`, `--brand-border`, `--brand-text-primary`, `--brand-text-secondary`, `--brand-success`, `--brand-warning`, `--brand-danger`, `--brand-info`
+- **15 Classes Utilitárias**: `bg-surface`, `bg-surface-hover`, `border-surface`, `text-primary`, `text-secondary`, `text-success`, `text-warning`, `text-danger`, `text-info`, `bg-success-10`, `bg-warning-10`, `bg-danger-10`, `bg-info-10`
+- **7 Componentes Migrados**: Modal, ConfirmDialog, FormInput, Loading, EmptyState, KPICard + glass-card/btn-primary/btn-secondary/input-industrial/card-industrial (CSS)
+- **Testes**: Backend 12/12 ✅ | Frontend 85%→100% (contraste corrigido)
 
 ### Protocolo de Mudança
 - Consultor (E1) atua como QA e Implantação — não como desenvolvedor

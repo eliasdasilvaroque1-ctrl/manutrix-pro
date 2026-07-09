@@ -90,10 +90,6 @@
     background-color: hsl(222 47% 3%);
   }
   
-  .bg-surface {
-    background-color: hsl(222 47% 6%);
-  }
-  
   /* Status Colors */
   .status-good {
     @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/20;

@@ -178,7 +178,7 @@ function applyCSS(b) {
   root.style.setProperty('--brand-surface', b.cor_menu || '#0f172a');
   root.style.setProperty('--brand-surface-hover', b.cor_header || '#1e293b');
   root.style.setProperty('--brand-border', b.cor_header || '#1e293b');
-  root.style.setProperty('--brand-text-primary', b.cor_texto || '#e2e8f0');
+  root.style.setProperty('--brand-text-primary', '#e2e8f0');
   root.style.setProperty('--brand-text-secondary', '#94a3b8');
 }
 
