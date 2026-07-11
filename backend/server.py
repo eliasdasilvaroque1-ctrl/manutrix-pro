@@ -3697,11 +3697,85 @@ async def export_audit(format: str = "excel", user: Dict = Depends(get_current_u
         return StreamingResponse(buf, media_type="application/pdf",
             headers={"Content-Disposition": "attachment; filename=auditoria_maintrix.pdf"})
 
+# ============== COMPLIANCE / LGPD ==============
+
+TERMS_VERSION = "1.0"
+PRIVACY_VERSION = "1.0"
+
+@api_router.get("/compliance/status")
+async def get_compliance_status(user: Dict = Depends(get_current_user)):
+    """Check if user has accepted current terms and privacy policy"""
+    consent = await db.consents.find_one(
+        {"user_id": user['id'], "terms_version": TERMS_VERSION, "privacy_version": PRIVACY_VERSION},
+        {"_id": 0}
+    )
+    return {
+        "accepted": consent is not None,
+        "terms_version": TERMS_VERSION,
+        "privacy_version": PRIVACY_VERSION,
+        "accepted_at": consent.get("accepted_at") if consent else None,
+    }
+
+@api_router.post("/compliance/accept")
+async def accept_compliance(request: Request, user: Dict = Depends(get_current_user)):
+    """Record user's acceptance of terms and privacy policy"""
+    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request.headers.get("x-forwarded-for") else (request.client.host if request.client else "unknown")
+    ua = request.headers.get("user-agent", "unknown")
+
+    consent_doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user['id'],
+        "user_email": user.get('email', ''),
+        "user_nome": user.get('nome', ''),
+        "organization_id": user.get('organization_id', ''),
+        "terms_version": TERMS_VERSION,
+        "privacy_version": PRIVACY_VERSION,
+        "ip_address": ip,
+        "user_agent": ua[:500],
+        "accepted_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.consents.insert_one(consent_doc)
+    logger.info(f"COMPLIANCE: consent recorded user={user.get('email')} org={user.get('organization_id','')[:8]} terms={TERMS_VERSION} privacy={PRIVACY_VERSION}")
+    return {"success": True, "terms_version": TERMS_VERSION, "privacy_version": PRIVACY_VERSION}
+
+@api_router.get("/compliance/history")
+async def get_compliance_history(user: Dict = Depends(get_current_user)):
+    """Get consent history for current user"""
+    history = await db.consents.find(
+        {"user_id": user['id']}, {"_id": 0}
+    ).sort("accepted_at", -1).to_list(50)
+    return history
+
+@api_router.get("/compliance/terms")
+async def get_terms():
+    """Get current terms of use (public)"""
+    return {"version": TERMS_VERSION, "content": open("/app/compliance/termos_de_uso.md").read()}
+
+@api_router.get("/compliance/privacy")
+async def get_privacy():
+    """Get current privacy policy (public)"""
+    return {"version": PRIVACY_VERSION, "content": open("/app/compliance/politica_privacidade.md").read()}
+
+@api_router.get("/compliance/about")
+async def get_about():
+    """System information"""
+    return {
+        "product": "MAINTRIX Enterprise",
+        "version": "5.2.0-RC1",
+        "build": "2026-07-11",
+        "environment": os.environ.get("MAINTRIX_ENV", "homologacao"),
+        "copyright": "MAINTRIX Tecnologia Ltda.",
+        "support_email": "suporte@maintrix.com.br",
+        "privacy_email": "privacidade@maintrix.com.br",
+        "terms_version": TERMS_VERSION,
+        "privacy_version": PRIVACY_VERSION,
+    }
+
 # ============== ROOT ==============
 
 @api_router.get("/")
 async def root():
-    return {"message": "MAINTRIX API v5.1.0", "status": "online"}
+    return {"message": "MAINTRIX API v5.2.0-RC1", "status": "online"}
 
 app.include_router(api_router)
 

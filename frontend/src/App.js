@@ -1894,6 +1894,15 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
           </div>
         )}
         <button 
+          onClick={() => navigate('/sobre')}
+          className={`w-full flex items-center gap-2 px-3 py-2 text-slate-400 hover:bg-surface-hover rounded-lg transition-colors ${collapsed ? 'justify-center' : ''}`}
+          title={collapsed ? 'Sobre' : undefined}
+          data-testid="sidebar-about"
+        >
+          <AlertCircle size={18} />
+          {!collapsed && <span className="text-sm">Sobre</span>}
+        </button>
+        <button 
           onClick={() => { logout(); navigate('/login'); }}
           className={`w-full flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors ${collapsed ? 'justify-center' : ''}`}
           title={collapsed ? 'Sair' : undefined}
@@ -10780,9 +10789,162 @@ const AppLayout = ({ children }) => {
         <main className="flex-1 pb-20 md:pb-4 px-4 pt-4 max-w-6xl mx-auto w-full">
           {children}
         </main>
+        <footer className="hidden md:flex items-center justify-center gap-4 py-2 text-[10px] text-slate-600 border-t border-surface/30" data-testid="app-footer">
+          <a href="/termos" className="hover:text-slate-400 transition-colors">Termos de Uso</a>
+          <span>|</span>
+          <a href="/privacidade" className="hover:text-slate-400 transition-colors">Privacidade</a>
+          <span>|</span>
+          <a href="/sobre" className="hover:text-slate-400 transition-colors">Sobre</a>
+          <span>|</span>
+          <span>v5.2.0-RC1</span>
+        </footer>
         <BottomNav />
       </div>
     </div>
+  );
+};
+
+// ============== COMPLIANCE — CONSENT GATE ==============
+const ConsentGate = ({ children }) => {
+  const { user } = useAuth();
+  const [status, setStatus] = useState(null); // null=loading, true=accepted, false=needs acceptance
+  const [accepting, setAccepting] = useState(false);
+  const [termsChecked, setTermsChecked] = useState(false);
+  const [privacyChecked, setPrivacyChecked] = useState(false);
+  const [viewDoc, setViewDoc] = useState(null); // 'terms' | 'privacy'
+  const [docContent, setDocContent] = useState('');
+
+  useEffect(() => {
+    if (!user) { setStatus(true); return; }
+    api.get('/compliance/status').then(r => {
+      setStatus(r.data.accepted);
+    }).catch(() => setStatus(true));
+  }, [user]);
+
+  const handleAccept = async () => {
+    if (!termsChecked || !privacyChecked) {
+      toast.error('Você precisa aceitar ambos os documentos');
+      return;
+    }
+    setAccepting(true);
+    try {
+      await api.post('/compliance/accept');
+      setStatus(true);
+      toast.success('Termos aceitos com sucesso');
+    } catch {
+      toast.error('Erro ao registrar aceite');
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  const loadDoc = async (type) => {
+    try {
+      const res = await api.get(`/compliance/${type === 'terms' ? 'terms' : 'privacy'}`);
+      setDocContent(res.data.content || '');
+      setViewDoc(type);
+    } catch {
+      toast.error('Erro ao carregar documento');
+    }
+  };
+
+  if (status === null) return <Loading rows={3} />;
+  if (status === true) return children;
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--brand-bg, #0f172a)' }}>
+      <div className="glass-card max-w-lg w-full p-8 space-y-6" data-testid="consent-gate">
+        <div className="text-center">
+          <Shield size={40} className="mx-auto text-brand mb-3" />
+          <h2 className="text-xl font-bold text-primary">Termos e Privacidade</h2>
+          <p className="text-sm text-secondary mt-2">Para continuar utilizando o MAINTRIX, leia e aceite os documentos abaixo.</p>
+        </div>
+        <div className="space-y-3">
+          <label className="flex items-start gap-3 p-3 rounded-lg border border-surface hover:border-slate-600 cursor-pointer transition-colors" data-testid="terms-checkbox">
+            <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="mt-1 accent-emerald-500" />
+            <div>
+              <p className="text-sm text-primary font-medium">Termos de Uso</p>
+              <button type="button" onClick={() => loadDoc('terms')} className="text-xs text-brand hover:underline">Ler Termos de Uso v1.0</button>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 p-3 rounded-lg border border-surface hover:border-slate-600 cursor-pointer transition-colors" data-testid="privacy-checkbox">
+            <input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="mt-1 accent-emerald-500" />
+            <div>
+              <p className="text-sm text-primary font-medium">Politica de Privacidade</p>
+              <button type="button" onClick={() => loadDoc('privacy')} className="text-xs text-brand hover:underline">Ler Politica de Privacidade v1.0</button>
+            </div>
+          </label>
+        </div>
+        <button onClick={handleAccept} disabled={!termsChecked || !privacyChecked || accepting} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="accept-compliance-btn">
+          {accepting ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+          {accepting ? 'Registrando...' : 'Aceitar e Continuar'}
+        </button>
+      </div>
+      {viewDoc && (
+        <Modal isOpen={true} onClose={() => setViewDoc(null)} title={viewDoc === 'terms' ? 'Termos de Uso' : 'Politica de Privacidade'} size="lg">
+          <div className="prose prose-invert prose-sm max-h-[60vh] overflow-y-auto custom-scrollbar whitespace-pre-wrap text-sm text-slate-300 leading-relaxed">
+            {docContent}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ============== SOBRE O MAINTRIX ==============
+const SobrePage = () => {
+  const [info, setInfo] = useState(null);
+  useEffect(() => { api.get('/compliance/about').then(r => setInfo(r.data)).catch(() => {}); }, []);
+  if (!info) return <Loading rows={2} />;
+  return (
+    <PageContainer>
+      <PageHeader title="Sobre o MAINTRIX" subtitle="Informacoes do sistema" />
+      <div className="max-w-lg mx-auto space-y-6">
+        <div className="glass-card p-6 text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-brand-10 flex items-center justify-center mx-auto">
+            <Cog size={32} className="text-brand" />
+          </div>
+          <h2 className="text-2xl font-bold text-brand">{info.product}</h2>
+          <div className="space-y-1 text-sm">
+            <p className="text-secondary">Versao <span className="text-primary font-mono">{info.version}</span></p>
+            <p className="text-secondary">Build <span className="text-primary font-mono">{info.build}</span></p>
+            <p className="text-secondary">Ambiente: <span className="text-primary capitalize">{info.environment}</span></p>
+          </div>
+        </div>
+        <div className="glass-card p-6 space-y-3">
+          <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Contato</h3>
+          <p className="text-sm text-secondary">Suporte: <a href={`mailto:${info.support_email}`} className="text-brand hover:underline">{info.support_email}</a></p>
+          <p className="text-sm text-secondary">Privacidade: <a href={`mailto:${info.privacy_email}`} className="text-brand hover:underline">{info.privacy_email}</a></p>
+        </div>
+        <div className="glass-card p-6 space-y-3">
+          <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Documentos Legais</h3>
+          <div className="flex flex-col gap-2">
+            <a href="/termos" className="text-sm text-brand hover:underline flex items-center gap-2"><FileText size={14} /> Termos de Uso v{info.terms_version}</a>
+            <a href="/privacidade" className="text-sm text-brand hover:underline flex items-center gap-2"><Shield size={14} /> Politica de Privacidade v{info.privacy_version}</a>
+          </div>
+        </div>
+        <p className="text-center text-xs text-secondary">{info.copyright}</p>
+      </div>
+    </PageContainer>
+  );
+};
+
+// ============== LEGAL DOCUMENT PAGES ==============
+const LegalDocPage = ({ type }) => {
+  const [doc, setDoc] = useState(null);
+  useEffect(() => {
+    api.get(`/compliance/${type}`).then(r => setDoc(r.data)).catch(() => {});
+  }, [type]);
+  if (!doc) return <Loading rows={4} />;
+  return (
+    <PageContainer>
+      <PageHeader title={type === 'terms' ? 'Termos de Uso' : 'Politica de Privacidade'} subtitle={`Versao ${doc.version}`} />
+      <div className="glass-card p-6 max-w-3xl mx-auto">
+        <div className="prose prose-invert prose-sm whitespace-pre-wrap text-sm text-slate-300 leading-relaxed">
+          {doc.content}
+        </div>
+      </div>
+    </PageContainer>
   );
 };
 
@@ -10827,8 +10989,12 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <BrandingLoader>
+            <ConsentGate>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/termos" element={<ProtectedRoute><AppLayout><LegalDocPage type="terms" /></AppLayout></ProtectedRoute>} />
+              <Route path="/privacidade" element={<ProtectedRoute><AppLayout><LegalDocPage type="privacy" /></AppLayout></ProtectedRoute>} />
+              <Route path="/sobre" element={<ProtectedRoute><AppLayout><SobrePage /></AppLayout></ProtectedRoute>} />
               <Route path="/" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><CentralTrabalhoPage /></AppLayout></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
               <Route path="/ativos" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><AtivosPage /></AppLayout></ProtectedRoute>} />
@@ -10861,6 +11027,7 @@ function App() {
               <Route path="/portal/tecnico/:id" element={<ProtectedRoute><AppLayout><PortalTecnicoPage /></AppLayout></ProtectedRoute>} />
               <Route path="*" element={<CatchAllRedirect />} />
             </Routes>
+            </ConsentGate>
           </BrandingLoader>
           <Toaster position="top-center" richColors />
         </BrowserRouter>

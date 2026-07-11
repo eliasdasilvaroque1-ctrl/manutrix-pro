@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 97 — RC1.5 Compliance/LGPD FULL VALIDATION PASSED. Backend: 12/12 tests pass across all /api/compliance/* endpoints (status, accept, history, terms, privacy, about) + regression (dashboard/stats, ativos, ordens-servico). Frontend: complete ConsentGate flow validated end-to-end — (1) Login com test.mec@maintrix.com apresenta modal ConsentGate no primeiro acesso; (2) Botão 'Aceitar e Continuar' desabilitado inicialmente; (3) Marcar apenas Termos mantém botão desabilitado; (4) Marcar ambos habilita o botão (roxo/primary); (5) Clique em Aceitar registra consent no MongoDB (com IP + user-agent), mostra toast 'Termos aceitos com sucesso', modal desaparece, e Central de Trabalho carrega normalmente; (6) Segundo login do mesmo usuário NÃO mostra o modal (status.accepted=true retornado pelo backend); (7) Footer visível em todas as páginas com links 'Termos de Uso | Privacidade | Sobre | v5.2.0-RC1'; (8) Sidebar-about link navega para /sobre; (9) /sobre exibe MAINTRIX Enterprise Versao 5.2.0-RC1, Build 2026-07-11, Ambiente Homologacao, contato suporte@maintrix.com.br e privacidade@maintrix.com.br; (10) /termos carrega 3319 chars de documento; (11) /privacidade carrega 4356 chars; (12) Regressão OK — /ativos e /os (Kanban 5 colunas) funcionam normalmente após aceite.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/compliance/accept", "issue": "POST /accept não é idempotente por versão — chamadas repetidas do mesmo usuário para a mesma versão de terms/privacy inserem novos documentos na coleção 'consents' em vez de fazer upsert. Não é bug de segurança (pelo contrário, mantém trilha de auditoria completa), mas pode inflar a coleção. Sugestão: usar upsert com {user_id, terms_version, privacy_version} como chave única, OU manter insert-per-call como audit log e adicionar log próprio para 're-aceite'."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SobrePage (/sobre)", "issues": ["Rótulos escritos sem acento — 'Versao', 'Informacoes', 'Ambiente: Homologacao'. Estritamente cosmético; texto exibido corretamente. Recomendo trocar para 'Versão', 'Informações', 'Homologação' para consistência com o restante da UI em pt-BR."]},
+      {"screen": "ConsentGate modal", "issues": ["'Politica de Privacidade' aparece sem acento ('Política'). Cosmético — não bloqueia UX. Verificar em App.js linha ~10873."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration97_compliance.py",
+    "/app/test_reports/pytest/iteration97.xml"
+  ],
+  "action_items": [
+    "LOW (cosmético): Trocar 'Versao'/'Informacoes'/'Homologacao' por 'Versão'/'Informações'/'Homologação' na SobrePage (App.js ~10895-10930). Idem para 'Politica de Privacidade' → 'Política de Privacidade' no ConsentGate (App.js ~10873).",
+    "OPTIONAL: Considerar upsert em /api/compliance/accept para evitar múltiplos documentos por usuário+versão. Alternativa: manter como está para audit trail e apenas indexar (user_id, accepted_at desc).",
+    "OK — RC1.5 Compliance/LGPD PRONTO para piloto. Todos os 11 critérios de aceite do problem statement validados com sucesso."
+  ],
+  "critical_code_review_comments": [
+    "ConsentGate implementation (App.js ~10808) está bem estruturado: fetch de status no mount, estado null/true/false, checkboxes controlados, botão disabled até ambos aceitos, toast de erro em falha. Boa prática.",
+    "Backend /api/compliance/status usa filtro por terms_version+privacy_version — quando a versão mudar, o consent antigo não fará match e o modal reaparecerá automaticamente para re-aceite. Comportamento correto para LGPD.",
+    "IP capture usa x-forwarded-for corretamente (importante em ambiente atrás de proxy/ingress). User-agent truncado em 500 chars.",
+    "App.js já ultrapassa 11.041 linhas — mantido feedback de iterations anteriores: split urgente em módulos pós-pilot (ConsentGate, SobrePage, LegalDocPage já são candidatos naturais para um /components/compliance/*).",
+    "Coleção 'consents' não tem índice em user_id+terms_version+privacy_version — query de status faz collscan. Adicionar índice composto ajuda em produção."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration97_compliance.py (novo)"
+  ],
+  "success_rate": {
+    "backend": "100% — 12/12 testes passaram (about, terms, privacy, status master/admin/tec, accept, history, second-accept, dashboard, ativos, os)",
+    "frontend": "100% — Todos os 11 critérios do problem statement validados; ConsentGate flow completo funcional; regressão OK"
+  },
+  "test_credentials": "master@maintrix.com/master123, test.admin@maintrix.com/admin123, test.mec@maintrix.com/tec123 em ASTEC Cedro (9a232bf2-fc01-4253-813f-8df356be31c1)",
+  "seed_data_creation": "Deletei os 2 consents de test.mec@maintrix.com antes do teste UI (haviam sido criados pelo backend test do accept). Após o teste UI o consent foi re-registrado pelo fluxo real. State atual: master, test.admin e test.mec possuem consent v1.0/1.0 registrado. Nenhum outro dado de teste criado.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC1.5 Compliance/LGPD 100% validado. Backend endpoints /api/compliance/{status,accept,history,terms,privacy,about} funcionam. Frontend ConsentGate aparece ao logar com user sem consent registrado, disabled state correto até checkboxes marcados, aceite persiste no MongoDB (coleção 'consents' com ip_address e user_agent), segundo login não mostra modal. Footer, /sobre, /termos, /privacidade todas OK. Data-testids consent-gate, terms-checkbox, privacy-checkbox, accept-compliance-btn, sidebar-about, app-footer estão todos presentes e funcionais. Se quiser re-testar do zero, execute: `python -c \"import asyncio,os; from motor.motor_asyncio import AsyncIOMotorClient; c=AsyncIOMotorClient(os.environ['MONGO_URL']); asyncio.run(c[os.environ['DB_NAME']].consents.delete_many({'user_email':'test.mec@maintrix.com'}))\"` para resetar o estado de aceite do técnico.",
+  "rca_of_the_issue": "N/A — nenhum bug crítico ou funcional encontrado. Único ponto de atenção é cosmético (acentos ausentes em 'Versao/Informacoes/Homologacao/Politica') que pode ser corrigido em <5 linhas em App.js."
+}
