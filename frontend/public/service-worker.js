@@ -1,5 +1,5 @@
-const CACHE_NAME = 'maintrix-v3';
-const API_CACHE = 'maintrix-api-v3';
+const CACHE_NAME = 'maintrix-v4';
+const API_CACHE = 'maintrix-api-v4';
 
 const STATIC_ASSETS = [
   '/',
@@ -9,18 +9,25 @@ const STATIC_ASSETS = [
   '/icon-512.png',
 ];
 
+// Field-critical API routes to cache for offline reads
 const API_PREFIXES = [
   '/api/sectors',
   '/api/ativos',
   '/api/ordens-servico',
   '/api/inspecoes',
-  '/api/checklists/templates',
+  '/api/planos-inspecao',
+  '/api/inspection-templates',
   '/api/kpis',
   '/api/dashboard/',
   '/api/users',
+  '/api/estoque',
+  '/api/central',
+  '/api/plantas',
+  '/api/unidades',
+  '/api/rotas',
 ];
 
-// Install: cache shell
+// Install: cache app shell
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -34,20 +41,24 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== API_CACHE).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          .filter((k) => k !== CACHE_NAME && k !== API_CACHE)
+          .map((k) => caches.delete(k))
+      )
     )
   );
   self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for static
+// Fetch strategy: network-first with cache fallback
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Skip non-GET for caching (POST/PUT/PATCH/DELETE go through)
+  // Only cache GET requests
   if (event.request.method !== 'GET') return;
 
-  // API requests: network-first with cache fallback
+  // API requests: network-first, cache on success, fallback to cache
   if (API_PREFIXES.some((p) => url.pathname.startsWith(p))) {
     event.respondWith(
       fetch(event.request)
@@ -63,7 +74,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: network-first (ensures latest code after deploy)
+  // Static/app assets: network-first with cache fallback
   if (url.origin === self.location.origin) {
     event.respondWith(
       fetch(event.request)
@@ -80,7 +91,7 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
-// Listen for sync events from offline queue
+// Message handler for cache control
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();

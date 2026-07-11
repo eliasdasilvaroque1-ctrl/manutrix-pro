@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
 import { BrandingProvider, useBranding } from "@/lib/branding";
-import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData } from "@/lib/offlineQueue";
+import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData, queuePhoto } from "@/lib/offlineQueue";
 import axios from "axios";
 
 // Register PWA Service Worker
@@ -313,14 +313,17 @@ const NetworkStatus = () => {
         setSyncing(true);
         try {
           const result = await syncPendingOperations(api);
-          if (result.synced > 0) toast.success(`${result.synced} operação(ões) sincronizada(s)`);
-          if (result.failed > 0) toast.error(`${result.failed} operação(ões) falharam`);
+          const total = result.synced + result.photos;
+          if (total > 0) toast.success(`${total} item(ns) sincronizado(s)${result.photos ? ` (${result.photos} foto(s))` : ''}`);
+          if (result.failed > 0) toast.error(`${result.failed} operação(ões) falharam — nova tentativa em breve`);
           const c = await getPendingCount();
           setPendingCount(c);
         } catch {}
         setSyncing(false);
       };
-      doSync();
+      // Small delay to ensure stable connection
+      const timer = setTimeout(doSync, 2000);
+      return () => clearTimeout(timer);
     }
   }, [isOnline, pendingCount]);
 
@@ -4145,9 +4148,15 @@ const OSPage = () => {
 
   const handleKanbanMove = async (osId, newStatus) => {
     try {
-      await api.patch(`/ordens-servico/${osId}/status`, { new_status: newStatus });
-      setOsList(prev => prev.map(os => os.id === osId ? { ...os, status: newStatus } : os));
-      toast.success(`OS movida para ${kanbanColumns.find(c => c.id === newStatus)?.title || newStatus}`);
+      if (!navigator.onLine) {
+        await queueOperation({ method: 'PATCH', url: `/ordens-servico/${osId}/status`, data: { new_status: newStatus }, priority: 2 });
+        setOsList(prev => prev.map(os => os.id === osId ? { ...os, status: newStatus } : os));
+        toast.info('Sem conexão — mudança de status salva para sincronizar');
+      } else {
+        await api.patch(`/ordens-servico/${osId}/status`, { new_status: newStatus });
+        setOsList(prev => prev.map(os => os.id === osId ? { ...os, status: newStatus } : os));
+        toast.success(`OS movida para ${kanbanColumns.find(c => c.id === newStatus)?.title || newStatus}`);
+      }
     } catch (error) {
       toast.error(normalizeError(error));
       fetchData();
@@ -4432,11 +4441,16 @@ const OSDetailPage = () => {
 
   const handleHhManual = async () => {
     try {
-      await api.post(`/os/${id}/hh-manual`, hhManualForm);
-      toast.success('HH registrado!');
+      if (!navigator.onLine) {
+        await queueOperation({ method: 'POST', url: `/os/${id}/hh-manual`, data: hhManualForm, priority: 3 });
+        toast.info('Sem conexão — HH salvo para sincronizar');
+      } else {
+        await api.post(`/os/${id}/hh-manual`, hhManualForm);
+        toast.success('HH registrado!');
+      }
       setShowHhManual(false);
       setHhManualForm({ executante_id: '', data_inicio: '', data_fim: '', horas: '', descricao: '' });
-      fetchOS();
+      if (navigator.onLine) fetchOS();
     } catch (e) { toast.error(normalizeError(e)); }
   };
 
@@ -4444,21 +4458,30 @@ const OSDetailPage = () => {
     if (!concluirForm.servicos_realizados?.trim()) { toast.error('Descreva o serviço executado'); return; }
     setUpdating(true);
     try {
-      // Save HH manual if provided
-      if (concluirForm.tempo_execucao_minutos) {
-        const horas = parseFloat(concluirForm.tempo_execucao_minutos) / 60;
-        await api.post(`/os/${id}/hh-manual`, { horas, descricao: 'HH da finalização rápida' }).catch(() => {});
-      }
-      // Conclude OS
-      await api.post(`/ordens-servico/${id}/concluir`, {
+      const concluirData = {
         servicos_realizados: concluirForm.servicos_realizados,
         tempo_execucao_minutos: parseInt(concluirForm.tempo_execucao_minutos) || 0,
         observacoes: [concluirForm.causa_falha && `Causa: ${concluirForm.causa_falha}`, concluirForm.solucao && `Solução: ${concluirForm.solucao}`, concluirForm.observacoes].filter(Boolean).join('\n'),
         skip_foto_check: true,
-      });
-      toast.success('OS finalizada com sucesso!');
+      };
+      if (!navigator.onLine) {
+        if (concluirForm.tempo_execucao_minutos) {
+          const horas = parseFloat(concluirForm.tempo_execucao_minutos) / 60;
+          await queueOperation({ method: 'POST', url: `/os/${id}/hh-manual`, data: { horas, descricao: 'HH da finalização rápida' }, priority: 2 });
+        }
+        await queueOperation({ method: 'POST', url: `/ordens-servico/${id}/concluir`, data: concluirData, priority: 2 });
+        toast.info('Sem conexão — conclusão da OS salva para sincronizar');
+        setOs(prev => prev ? { ...prev, status: 'concluida' } : prev);
+      } else {
+        if (concluirForm.tempo_execucao_minutos) {
+          const horas = parseFloat(concluirForm.tempo_execucao_minutos) / 60;
+          await api.post(`/os/${id}/hh-manual`, { horas, descricao: 'HH da finalização rápida' }).catch(() => {});
+        }
+        await api.post(`/ordens-servico/${id}/concluir`, concluirData);
+        toast.success('OS finalizada com sucesso!');
+      }
       setShowFinalizarRapido(false);
-      fetchOS();
+      if (navigator.onLine) fetchOS();
     } catch (e) { toast.error(normalizeError(e)); }
     finally { setUpdating(false); }
   };
@@ -4493,9 +4516,15 @@ const OSDetailPage = () => {
     if (action === 'concluir') { setShowConcluir(true); return; }
     setUpdating(true);
     try {
-      await api.post(`/ordens-servico/${id}/${action}`);
-      toast.success(`OS ${action === 'iniciar' ? 'iniciada' : 'pausada'}!`);
-      fetchOS();
+      if (!navigator.onLine) {
+        await queueOperation({ method: 'POST', url: `/ordens-servico/${id}/${action}`, data: {}, priority: 2 });
+        toast.info(`Sem conexão — ação "${action}" salva para sincronizar`);
+        setOs(prev => prev ? { ...prev, status: action === 'iniciar' ? 'em_execucao' : 'pausada' } : prev);
+      } else {
+        await api.post(`/ordens-servico/${id}/${action}`);
+        toast.success(`OS ${action === 'iniciar' ? 'iniciada' : 'pausada'}!`);
+        fetchOS();
+      }
     } catch (error) {
       toast.error(normalizeError(error));
     } finally {
@@ -4515,14 +4544,22 @@ const OSDetailPage = () => {
     }
     setUpdating(true);
     try {
-      await api.post(`/ordens-servico/${id}/concluir`, {
+      const concluirData = {
         servicos_realizados: concluirForm.servicos_realizados.trim(),
         tempo_execucao_minutos: tempo,
         observacoes: concluirForm.observacoes || null,
-      });
-      toast.success('OS concluída com sucesso!');
-      setShowConcluir(false);
-      fetchOS();
+      };
+      if (!navigator.onLine) {
+        await queueOperation({ method: 'POST', url: `/ordens-servico/${id}/concluir`, data: concluirData, priority: 2 });
+        toast.info('Sem conexão — conclusão salva para sincronizar');
+        setOs(prev => prev ? { ...prev, status: 'concluida' } : prev);
+        setShowConcluir(false);
+      } else {
+        await api.post(`/ordens-servico/${id}/concluir`, concluirData);
+        toast.success('OS concluída com sucesso!');
+        setShowConcluir(false);
+        fetchOS();
+      }
     } catch (error) {
       toast.error(normalizeError(error));
     } finally {
@@ -5534,9 +5571,15 @@ const InspecaoDetailPage = () => {
   
   const handleIniciar = async () => {
     try {
-      await api.post(`/inspecoes/${id}/iniciar`);
-      toast.success('Inspeção iniciada!');
-      fetchInspecao();
+      if (!navigator.onLine) {
+        await queueOperation({ method: 'POST', url: `/inspecoes/${id}/iniciar`, data: {}, priority: 2 });
+        toast.info('Sem conexão — início da inspeção salvo para sincronizar');
+        setInspecao(prev => prev ? { ...prev, status: 'em_andamento' } : prev);
+      } else {
+        await api.post(`/inspecoes/${id}/iniciar`);
+        toast.success('Inspeção iniciada!');
+        fetchInspecao();
+      }
     } catch (error) {
       toast.error('Erro ao iniciar');
     }
@@ -5559,17 +5602,20 @@ const InspecaoDetailPage = () => {
     
     setSubmitting(true);
     try {
-      const result = await api.post(`/inspecoes/${id}/concluir`, {
-        checklist,
-        observacoes: ''
-      });
-      
-      if (result.data.os_gerada_id) {
-        toast.warning(`Inspeção não conforme - OS gerada automaticamente`);
+      const concluirPayload = { checklist, observacoes: '' };
+      if (!navigator.onLine) {
+        await queueOperation({ method: 'POST', url: `/inspecoes/${id}/concluir`, data: concluirPayload, priority: 2 });
+        toast.info('Sem conexão — conclusão da inspeção salva para sincronizar');
+        navigate('/inspecoes');
       } else {
-        toast.success(`Inspeção concluída em ${result.data.duracao_minutos || 0} minutos!`);
+        const result = await api.post(`/inspecoes/${id}/concluir`, concluirPayload);
+        if (result.data.os_gerada_id) {
+          toast.warning(`Inspeção não conforme - OS gerada automaticamente`);
+        } else {
+          toast.success(`Inspeção concluída em ${result.data.duracao_minutos || 0} minutos!`);
+        }
+        navigate('/inspecoes');
       }
-      navigate('/inspecoes');
     } catch (error) {
       toast.error(normalizeError(error) || 'Erro ao concluir');
     } finally {
@@ -6044,11 +6090,16 @@ const RondaPage = () => {
       };
       
       if (!navigator.onLine) {
-        await queueOperation({ method: 'POST', url: '/inspecoes', data: payload });
-        toast.info('Sem conexão — inspeção salva para sincronizar');
+        await queueOperation({ method: 'POST', url: '/inspecoes', data: payload, priority: 1 });
+        // Queue photos offline with a temporary entity ID
+        const tempId = `offline_insp_${Date.now()}`;
+        for (const photo of photos) {
+          const arrayBuffer = await photo.arrayBuffer();
+          await queuePhoto({ entityType: 'inspection', entityId: tempId, categoria: 'foto', blob: arrayBuffer, filename: photo.name });
+        }
+        toast.info(`Sem conexão — inspeção${photos.length ? ` + ${photos.length} foto(s)` : ''} salva para sincronizar`);
       } else {
         const res = await api.post('/inspecoes', payload);
-        // Upload photos if any
         for (const photo of photos) {
           const formData = new FormData();
           formData.append('file', photo);
@@ -6537,16 +6588,31 @@ const PhotoUploader = ({ entityType, entityId, categoria = 'foto', label = 'Foto
     if (!files.length) return;
     setUploading(true);
     try {
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('entity_type', entityType);
-        formData.append('entity_id', entityId);
-        formData.append('categoria', categoria);
-        await api.post('/attachments', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      if (!navigator.onLine) {
+        // Store photos in IndexedDB for later sync
+        for (const file of files) {
+          const arrayBuffer = await file.arrayBuffer();
+          await queuePhoto({
+            entityType,
+            entityId,
+            categoria,
+            blob: arrayBuffer,
+            filename: file.name || `photo_${Date.now()}.jpg`,
+          });
+        }
+        toast.info(`${files.length} foto(s) salva(s) offline — serão enviadas ao reconectar`);
+      } else {
+        for (const file of files) {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('entity_type', entityType);
+          formData.append('entity_id', entityId);
+          formData.append('categoria', categoria);
+          await api.post('/attachments', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        }
+        toast.success(`${files.length} foto(s) enviada(s)`);
+        fetchPhotos();
       }
-      toast.success(`${files.length} foto(s) enviada(s)`);
-      fetchPhotos();
     } catch (e) {
       toast.error('Erro ao enviar foto');
     } finally {

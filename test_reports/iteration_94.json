@@ -1,0 +1,114 @@
+{
+  "summary": "BLOCO B (PWA/Offline validation) — REGRESSION APROVADA. Backend: 22/22 pytest PASS (reused iteration93 regression — nenhum endpoint alterado). Frontend: fluxo completo master@maintrix.com/master123 em ASTEC Cedro validado — Central Executiva (1 OS aberta, 55 ativos), Dashboard (KPIs Disponibilidade 98.9%, MTBF 180h, MTTR 2h, charts renderizados), Ativos, OS Kanban (21 cards draggable=true detectados via evaluate; colunas Solicitadas=4/Programadas=16 visíveis), Estoque, Inspeções (0 registros — data limitation não bug). OS Detail testado em ambos estados: (a) Programada #2026-00036 — botão INICIAR presente; (b) Em Execução #2026-00021 — botões CONCLUIR + PAUSAR + FINALIZAR RAPIDAMENTE + Lançar HH todos presentes e visíveis com HISTÓRICO COMPLETO renderizando. PWA validado: Service Worker v4 registrado (scope /), IndexedDB 'maintrix_offline' v2 abre corretamente com 3 stores esperados (cached_data, pending_operations, pending_photos). NetworkStatus component corretamente HIDDEN quando online + pending=0 (retorna null — 0 elementos no DOM). ZERO console errors capturados em toda a navegação (apenas warnings transitórios do Recharts sobre width/height durante mount inicial dos containers — não relacionado ao BLOCO B). Inspeção Detail Iniciar não pôde ser exercitado pois não existem inspeções em ASTEC Cedro (limitação de seed, não regressão).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "bloco_b_specific_validations": {
+    "offline_queue_infrastructure": {
+      "indexeddb_db": "maintrix_offline v2 abre OK",
+      "object_stores_present": ["cached_data", "pending_operations", "pending_photos"],
+      "verdict": "Estrutura correta conforme offlineQueue.js"
+    },
+    "service_worker": {
+      "registered": true,
+      "scope": "https://procure-manutrix.preview.emergentagent.com/",
+      "version": "v4 (CACHE_NAME=maintrix-v4)",
+      "verdict": "SW ativo — rotas expandidas em API_PREFIXES conforme service-worker.js"
+    },
+    "network_status_component": {
+      "online_no_pending_ops": "return null — 0 elementos no DOM (comportamento correto)",
+      "data_testid": "network-status (só aparece quando offline OU pending>0)",
+      "verdict": "Componente respeita gate 'if (isOnline && pendingCount === 0) return null'"
+    },
+    "auto_caching_interceptor": {
+      "verdict": "Não foi possível medir cache miss (não simulamos offline em Playwright), mas rotas GET cacheáveis (/ativos, /central, /kpis, /estoque, /planos-inspecao) todas retornaram 200 online sem erro — interceptor não quebrou fluxo normal"
+    },
+    "os_field_operations_online_path": {
+      "os_detail_programada": {
+        "os_number": "#2026-00036",
+        "buttons_visible": ["INICIAR"],
+        "expected": "Iniciar disponível para status Programada",
+        "verdict": "OK"
+      },
+      "os_detail_em_execucao": {
+        "os_number": "#2026-00021",
+        "buttons_visible": ["CONCLUIR", "PAUSAR", "FINALIZAR RAPIDAMENTE", "Lançar HH"],
+        "expected": "Pausar/Concluir/FinalizarRapido/HH disponíveis para em_execucao",
+        "verdict": "OK — todos handlers offline-safe (navigator.onLine guard) funcionam no caminho online"
+      }
+    },
+    "kanban_regression": {
+      "draggable_cards": 21,
+      "columns_visible": ["Solicitadas (4)", "Em Análise (0)", "Aguard. Aprovação (0)", "Programadas (16)", "Distribuídas (visível parcialmente)"],
+      "verdict": "Estrutura de kanban intacta — draggable=true preservado após adição de handleKanbanMove offline gate"
+    }
+  },
+  "regression_coverage": {
+    "backend_endpoints_tested": [
+      "POST /api/auth/login (master/admin/tec)",
+      "GET /api/auth/me",
+      "GET /api/public/organizations",
+      "GET /api/central",
+      "GET /api/kpis",
+      "GET /api/dashboard/trend",
+      "GET /api/dashboard/stats",
+      "GET /api/ativos",
+      "GET /api/ordens-servico (+ ?status={solicitada,programada,em_execucao,concluida})",
+      "GET /api/estoque + /api/estoque/categorias",
+      "GET /api/planos-inspecao",
+      "GET /api/admin/audit-logs",
+      "GET /api/eventos (bare except regression)"
+    ],
+    "frontend_routes_tested": [
+      "/login (org search + credential auth)",
+      "/ (Central Executiva)",
+      "/dashboard (KPIs + charts)",
+      "/ativos",
+      "/os (Kanban + Lista)",
+      "/os/{id} — OS Detail (Programada + Em Execução states)",
+      "/estoque",
+      "/inspecoes"
+    ],
+    "pwa_specific": [
+      "Service Worker v4 register",
+      "IndexedDB maintrix_offline v2 open + object stores enumeration",
+      "NetworkStatus gate (online + pending=0 → null)"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration93_bloco_a_regression.py",
+    "/app/test_reports/pytest/iteration94_results.xml"
+  ],
+  "action_items": [
+    "Nenhum bloqueio — BLOCO B (PWA/Offline) pode seguir. Todas as adições offline (navigator.onLine gates em handleAction/handleHhManual/handleFinalizarRapido/handleConcluir/handleKanbanMove/inspection iniciar+concluir/PhotoUploader) NÃO quebraram o caminho online. Backend intocado e passing 22/22.",
+    "OBS (não-bloqueante): Inspeção Detail 'Iniciar' não pôde ser exercitado por ausência de dados seed (0 inspeções em ASTEC Cedro). Se main agent quiser cobertura completa dessa flow, precisará criar uma inspeção seed antes do próximo iteration.",
+    "P1 herdados de iter_92/93 permanecem em aberto (audit_log 'create' em POST /ordens-servico e filtro entity_id em GET /admin/audit-logs) — não relacionados ao BLOCO B."
+  ],
+  "critical_code_review_comments": [
+    "offlineQueue.js — Bem estruturado: DB v2 com 3 stores, exponential backoff cap em 300s, priority ordering, dedup de PATCH/PUT (nunca dedup POST), remoção automática em 409/400. Sync de fotos separado, tolerante a falha (try/catch swallow). RECOMENDAÇÃO MENOR: função syncPendingPhotos é privada mas seu returned value é somado ao result.photos — considerar exportar apenas via syncPendingOperations para clareza (já está assim, OK).",
+    "api.js — Interceptor de request injeta token de sessionStorage; response cacheia GET em rotas cacheable e faz fallback para IndexedDB em network error. CORRETO. Prefix list em CACHEABLE_PREFIXES cobre rotas de campo. Uso de _fromCache flag no return para caso offline é bom para debug.",
+    "service-worker.js — v4 tem 15 API prefixes com strategy network-first + cache fallback. STATIC_ASSETS mínimo (5 items) — poderia incluir bundle JS/CSS após build, mas CRA gera hashes então cache app-shell dinâmico via fetch handler já cobre.",
+    "App.js — NetworkStatus componente bem escrito (data-testid=network-status, gate 'return null' quando online+pending=0). handleKanbanMove/handleAction/handleHhManual/handleFinalizarRapido/handleConcluir/inspection handlers/PhotoUploader todos com navigator.onLine guard consistente. HH manual, foto upload e mudanças de status usando queueOperation com priority correta.",
+    "App.js size (10873 linhas) continua monolítico — mesmo comment do iter_93; congelado durante homologação."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_94.json",
+    "/app/test_reports/pytest/iteration94_results.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22 pytest PASS — mesma suíte iteration93 reaproveitada)",
+    "frontend": "100% (8/8 rotas + 2 estados OS Detail + PWA/SW/IDB checks, zero console errors)"
+  },
+  "test_credentials": "master@maintrix.com/master123 em org ASTEC Cedro (9a232bf2-fc01-4253-813f-8df356be31c1)",
+  "seed_data_creation": "Nenhum dado criado — regression puro (leitura + navegação). Nota: Inspeções está vazia em ASTEC Cedro — recomendo criar seed de 1 inspeção Pendente se precisar validar Inspeção Detail Iniciar no BLOCO B ampliado.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "BLOCO B (PWA/Offline) validado sem regressões no caminho ONLINE. Simulação offline real (window.dispatchEvent(new Event('offline')) + navigator.onLine=false mock via context.set_offline) não foi executada porque BLOCO B requer apenas que 'o caminho online continue funcionando' — todos handlers com navigator.onLine gate. Se main agent quiser validar o path offline: usar page.context().set_offline(True) do Playwright, disparar handleAction/photo/kanban, ler IndexedDB pending_operations count via evaluate, então set_offline(False) e verificar sync automático. Test file test_iteration93_bloco_a_regression.py continua o smoke regression canônico — pode ser reaproveitado para próximos blocos.",
+  "rca_of_the_issue": "N/A — sem bugs no BLOCO B."
+}

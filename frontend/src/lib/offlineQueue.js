@@ -1,12 +1,14 @@
 /**
- * Offline Queue Engine for MAINTRIX
- * Stores pending operations in IndexedDB and syncs when online
+ * Offline Queue Engine for MAINTRIX — RC1 Field Operations
+ * Stores pending operations in IndexedDB and syncs when online.
+ * Supports: text mutations, photo blobs, exponential backoff, ordered sync.
  */
 
 const DB_NAME = 'maintrix_offline';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'pending_operations';
 const CACHE_STORE = 'cached_data';
+const PHOTO_STORE = 'pending_photos';
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -14,10 +16,15 @@ function openDB() {
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        store.createIndex('status', 'status', { unique: false });
+        store.createIndex('priority', 'priority', { unique: false });
       }
       if (!db.objectStoreNames.contains(CACHE_STORE)) {
         db.createObjectStore(CACHE_STORE, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(PHOTO_STORE)) {
+        db.createObjectStore(PHOTO_STORE, { keyPath: 'id', autoIncrement: true });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -25,7 +32,10 @@ function openDB() {
   });
 }
 
-// Queue an operation for later sync
+// ============== OPERATION QUEUE ==============
+
+// Queue a mutation for later sync
+// priority: 1=create, 2=status-change, 3=update, 4=attachment
 export async function queueOperation(operation) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -35,7 +45,8 @@ export async function queueOperation(operation) {
       ...operation,
       timestamp: Date.now(),
       retries: 0,
-      status: 'pending'
+      status: 'pending',
+      priority: operation.priority || 2,
     };
     const req = store.add(record);
     req.onsuccess = () => resolve(req.result);
@@ -55,10 +66,11 @@ export async function getPendingOperations() {
   });
 }
 
-// Get count of pending ops
+// Get count of pending ops (operations + photos)
 export async function getPendingCount() {
   const ops = await getPendingOperations();
-  return ops.length;
+  const photos = await getPendingPhotos();
+  return ops.length + photos.length;
 }
 
 // Remove a completed operation
@@ -73,7 +85,7 @@ export async function removeOperation(id) {
   });
 }
 
-// Mark operation as failed (increment retries)
+// Mark operation as failed with exponential backoff tracking
 export async function markRetry(id) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -84,7 +96,9 @@ export async function markRetry(id) {
       const record = getReq.result;
       if (record) {
         record.retries = (record.retries || 0) + 1;
-        if (record.retries >= 5) record.status = 'failed';
+        // Exponential backoff: don't retry for 2^retries seconds
+        record.nextRetryAt = Date.now() + Math.min(Math.pow(2, record.retries) * 1000, 300000);
+        if (record.retries >= 10) record.status = 'failed';
         store.put(record);
       }
       resolve();
@@ -93,7 +107,53 @@ export async function markRetry(id) {
   });
 }
 
-// Cache data locally for offline reads
+// ============== PHOTO QUEUE ==============
+
+// Store a photo blob for offline upload
+export async function queuePhoto({ entityType, entityId, categoria, blob, filename }) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readwrite');
+    const store = tx.objectStore(PHOTO_STORE);
+    const record = {
+      entityType,
+      entityId,
+      categoria: categoria || 'foto',
+      blob,
+      filename: filename || `photo_${Date.now()}.jpg`,
+      timestamp: Date.now(),
+      status: 'pending',
+    };
+    const req = store.add(record);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getPendingPhotos() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readonly');
+    const store = tx.objectStore(PHOTO_STORE);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result.filter(r => r.status === 'pending'));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function removePhoto(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readwrite');
+    const store = tx.objectStore(PHOTO_STORE);
+    const req = store.delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ============== DATA CACHE (READ) ==============
+
 export async function cacheData(key, data) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -105,7 +165,6 @@ export async function cacheData(key, data) {
   });
 }
 
-// Read cached data
 export async function getCachedData(key) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -117,18 +176,39 @@ export async function getCachedData(key) {
   });
 }
 
-// Sync engine: process all pending operations
+// ============== SYNC ENGINE ==============
+
+// Sync all pending operations with ordering and dedup
 export async function syncPendingOperations(apiInstance) {
   const pending = await getPendingOperations();
-  if (pending.length === 0) return { synced: 0, failed: 0 };
+  const now = Date.now();
+  
+  // Filter out operations in backoff period
+  const ready = pending.filter(op => !op.nextRetryAt || op.nextRetryAt <= now);
+  if (ready.length === 0) return { synced: 0, failed: 0, photos: 0 };
 
   let synced = 0;
   let failed = 0;
 
-  // Sort by timestamp (oldest first)
-  pending.sort((a, b) => a.timestamp - b.timestamp);
+  // Sort by priority (creates first), then timestamp (oldest first)
+  ready.sort((a, b) => (a.priority || 2) - (b.priority || 2) || a.timestamp - b.timestamp);
 
-  for (const op of pending) {
+  // Dedup: if same url+method exists multiple times, keep latest
+  const seen = new Map();
+  const deduped = [];
+  for (const op of ready) {
+    const key = `${op.method}:${op.url}`;
+    // Only dedup PATCH/PUT (status changes) — never dedup POST (creates)
+    if ((op.method === 'PATCH' || op.method === 'PUT') && seen.has(key)) {
+      // Remove the older duplicate
+      await removeOperation(seen.get(key).id);
+      synced++;
+    }
+    seen.set(key, op);
+    deduped.push(op);
+  }
+
+  for (const op of deduped) {
     try {
       const { method, url, data } = op;
       if (method === 'POST') {
@@ -141,8 +221,9 @@ export async function syncPendingOperations(apiInstance) {
       await removeOperation(op.id);
       synced++;
     } catch (error) {
-      // Conflict: 409 means data was already created — remove from queue
-      if (error.response?.status === 409 || error.response?.status === 400) {
+      const status = error.response?.status;
+      // 409 Conflict or 400 Bad Request = data already exists or invalid, remove
+      if (status === 409 || status === 400) {
         await removeOperation(op.id);
         synced++;
       } else {
@@ -152,7 +233,38 @@ export async function syncPendingOperations(apiInstance) {
     }
   }
 
-  return { synced, failed };
+  // Sync photos after operations
+  let photosSynced = 0;
+  try {
+    photosSynced = await syncPendingPhotos(apiInstance);
+  } catch {}
+
+  return { synced, failed, photos: photosSynced };
+}
+
+// Sync pending photos
+async function syncPendingPhotos(apiInstance) {
+  const photos = await getPendingPhotos();
+  if (photos.length === 0) return 0;
+
+  let synced = 0;
+  for (const photo of photos) {
+    try {
+      const formData = new FormData();
+      formData.append('file', new Blob([photo.blob], { type: 'image/jpeg' }), photo.filename);
+      formData.append('entity_type', photo.entityType);
+      formData.append('entity_id', photo.entityId);
+      formData.append('categoria', photo.categoria);
+      await apiInstance.post('/attachments', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      await removePhoto(photo.id);
+      synced++;
+    } catch {
+      // Photo sync failures are not critical — will retry next cycle
+    }
+  }
+  return synced;
 }
 
 // Register service worker with auto-update
@@ -162,7 +274,6 @@ export function registerServiceWorker() {
       navigator.serviceWorker.register('/service-worker.js')
         .then((reg) => {
           console.log('SW registered:', reg.scope);
-          // Check for updates every 60 seconds
           setInterval(() => reg.update(), 60000);
           reg.addEventListener('updatefound', () => {
             const newWorker = reg.installing;
