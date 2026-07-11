@@ -410,8 +410,16 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Regressão:** 22/22 pytest PASS, 11/11 rotas frontend PASS. **ZERO REGRESSÕES.**
 - **Veredicto:** APROVADO para BLOCO B.
 
-### BLOCO B — Fluxos Críticos PWA (PENDENTE)
-- Validar offline, sincronização, caching, Service Workers, local queue recovery
+### BLOCO B — Fluxos Críticos PWA ✅ (2026-07-11)
+- **Relatório completo:** `/app/memory/BLOCO_B_RELATORIO.md`
+- **RC1.1 Fila Offline:** 8 novas operações protegidas (iniciar/pausar/concluir OS, status change, HH manual, iniciar/concluir inspeção). Total: 11 operações com fila offline.
+- **RC1.2 Cache Local:** Interceptor automático em api.js cacheia 10 rotas de campo (ativos, setores, plantas, técnicos, templates, estoque). 5 caches confirmados em simulação.
+- **RC1.3 Fotos Offline:** PhotoUploader armazena fotos como ArrayBuffer no IndexedDB (store `pending_photos`). Upload automático ao reconectar.
+- **RC1.4 Sync Engine:** Exponential backoff (cap 300s), ordenação por prioridade, dedup de status changes, tolerância a conflitos 409/400.
+- **Service Worker:** v3 → v4, 15 rotas API cacheadas (era 8).
+- **Simulação Offline:** Kanban OS carrega completo offline, modal Nova OS funcional com dados cacheados.
+- **Regressão:** 22/22 pytest PASS, 8/8 rotas + PWA checks PASS. **ZERO REGRESSÕES.**
+- **Veredicto:** APROVADO para BLOCO C.
 
 ### BLOCO C — Hardening (PENDENTE)
 - Rate Limiting, Security Headers, Profiling, Logs, Timeouts, MongoDB indexes
