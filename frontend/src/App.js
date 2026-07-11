@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
@@ -8,11 +8,11 @@ import {
   Home, ClipboardCheck, Box, User, Settings, LogOut, 
   AlertTriangle, CheckCircle, XCircle, Clock, Wrench, Package,
   ChevronRight, ChevronLeft, ChevronDown, Search, Plus, QrCode, Camera, ArrowLeft,
-  Activity, TrendingUp, TrendingDown, BarChart3, Gauge, Bell, Menu, X, Play, Pause,
-  MapPin, Calendar, FileText, Image, Upload, RefreshCw, Wifi, WifiOff,
-  Zap, Target, Layers, Filter, MoreVertical, Eye, Edit, Trash2, Save,
-  Phone, Mail, Building, Hash, Thermometer, Volume2, Droplet, Cog,
-  DollarSign, Percent, AlertCircle, PieChart, Users, Warehouse, Tag,
+  Activity, TrendingUp, TrendingDown, BarChart3, Bell, Menu, X, Play, Pause,
+  MapPin, Calendar, FileText, Image, Upload, RefreshCw, WifiOff,
+  Zap, Target, Layers, Filter, Eye, Edit, Trash2, Save,
+  Building, Hash, Droplet, Cog,
+  DollarSign, AlertCircle, Users, Tag,
   Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy, Factory,
   Building2, Palette, BookOpen, CheckCircle2, Sparkles, Send,
   ZoomIn, Maximize2, ImagePlus
@@ -37,58 +37,7 @@ const FIELD_LABEL_MAP = {
 const ROLE_LABELS = { master: 'Master', admin: 'Administrador', gerente: 'Gerente', pcm: 'PCM', supervisor: 'Supervisor', tec_mecanico: 'Técnico Mecânico', tec_eletrico: 'Técnico Elétrico', instrumentista: 'Instrumentista', lubrificador: 'Lubrificador', tecnico: 'Técnico (legado)', operador: 'Operador', inspetor: 'Inspetor', visualizador: 'Visualizador', viewer: 'Visualizador' };
 const ROLES_EXCEPT_VIEWER = ['master','admin','gerente','pcm','supervisor','tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor','operador'];
 
-// Asset Identity — Padrão único de exibição: Unidade > Área > TAG > Nome
-const getAssetContext = (ativo, plantas, sectors) => {
-  const sector = ativo?.sector || (sectors || []).find(s => s.id === ativo?.sector_id);
-  const unidade = (plantas || []).find(p => p.id === sector?.unidade_id) || (plantas || [])[0];
-  return { unidade: unidade?.nome || unidade?.codigo || '', area: sector?.nome || sector?.codigo || '', tag: ativo?.tag || '', nome: ativo?.nome || '' };
-};
-const AssetIdentity = ({ ativo, plantas, sectors, size = 'md', showLabels = false, className = '' }) => {
-  const ctx = getAssetContext(ativo, plantas, sectors);
-  if (size === 'xs') return (
-    <span className={`inline-flex items-center gap-1 ${className}`}>
-      {ctx.area && <span className="text-[10px] text-slate-500">{ctx.area}</span>}
-      {ctx.area && <span className="text-slate-600">·</span>}
-      <span className="font-mono text-brand text-xs font-bold">{ctx.tag}</span>
-      <span className="text-xs text-slate-400 truncate max-w-[120px]">{ctx.nome}</span>
-    </span>
-  );
-  if (size === 'sm') return (
-    <div className={`flex flex-col gap-0.5 ${className}`}>
-      <div className="flex items-center gap-1.5">
-        <span className="font-mono text-brand text-sm font-bold">{ctx.tag}</span>
-        <span className="text-sm text-slate-300 truncate">{ctx.nome}</span>
-      </div>
-      <div className="flex items-center gap-1 text-[10px] text-slate-500">
-        {ctx.unidade && <span>{ctx.unidade}</span>}
-        {ctx.unidade && ctx.area && <span className="text-slate-600">›</span>}
-        {ctx.area && <span>{ctx.area}</span>}
-      </div>
-    </div>
-  );
-  if (size === 'lg') return (
-    <div className={`space-y-1 ${className}`}>
-      <span className="font-mono text-brand text-lg font-bold">{ctx.tag}</span>
-      <h2 className="text-lg text-slate-200 font-semibold">{ctx.nome}</h2>
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        {ctx.unidade && <span className="flex items-center gap-1"><Building2 size={12} />{ctx.unidade}</span>}
-        {ctx.area && <span className="flex items-center gap-1"><MapPin size={12} />{ctx.area}</span>}
-      </div>
-    </div>
-  );
-  return (
-    <div className={`flex flex-col gap-0.5 ${className}`}>
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-brand text-sm font-bold">{ctx.tag}</span>
-        <span className="text-slate-200">{ctx.nome}</span>
-      </div>
-      <div className="flex items-center gap-2 text-[11px] text-slate-500">
-        {ctx.unidade && <span className="flex items-center gap-0.5"><Building2 size={11} />{ctx.unidade}</span>}
-        {ctx.area && <span className="flex items-center gap-0.5"><MapPin size={11} />{ctx.area}</span>}
-      </div>
-    </div>
-  );
-};
+// AssetIdentity + getAssetContext — removidos (BLOCO A: zero referências)
 
 
 
@@ -179,7 +128,7 @@ const Select = ({ value, onChange, options, placeholder, className = "" }) => (
 );
 
 // Status Badge
-const StatusBadge = ({ status, size = 'md' }) => {
+const StatusBadge = memo(({ status, size = 'md' }) => {
   const config = {
     // Novo ciclo de vida OS
     solicitada: { class: 'bg-blue-500/10 text-blue-400 border-blue-500/30', label: 'Solicitada', icon: Clock },
@@ -213,10 +162,10 @@ const StatusBadge = ({ status, size = 'md' }) => {
       {c.label}
     </span>
   );
-};
+});
 
 // Priority Badge
-const PriorityBadge = ({ priority }) => {
+const PriorityBadge = memo(({ priority }) => {
   const config = {
     critica: { class: 'bg-red-500/20 border-red-500 text-red-400', label: 'Crítica' },
     emergencia: { class: 'bg-red-500/20 border-red-500 text-red-400', label: 'Emergência' },
@@ -226,42 +175,12 @@ const PriorityBadge = ({ priority }) => {
   };
   const c = config[priority] || config.media;
   return <span className={`${c.class} border px-2 py-1 rounded text-xs font-medium`}>{c.label}</span>;
-};
+});
 
-// KPI Card
-const KPICard = ({ value, label, icon: Icon, color = 'brand', subtitle, trend }) => {
-  const colors = {
-    brand: 'text-brand bg-brand-10',
-    amber: 'text-warning bg-warning-10',
-    red: 'text-danger bg-danger-10',
-    blue: 'text-info bg-info-10',
-    purple: 'text-purple-400 bg-purple-500/10',
-  };
-  
-  return (
-    <div className="glass-card p-4 hover:border-slate-600 transition-all group">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className={`text-2xl font-bold ${colors[color].split(' ')[0]}`}>{value}</p>
-          <p className="text-sm text-secondary mt-1">{label}</p>
-          {subtitle && <p className="text-xs text-secondary">{subtitle}</p>}
-        </div>
-        <div className={`p-2 rounded-lg ${colors[color]} group-hover:scale-110 transition-transform`}>
-          <Icon size={20} />
-        </div>
-      </div>
-      {trend !== undefined && (
-        <div className={`flex items-center gap-1 mt-2 text-xs ${trend >= 0 ? 'text-success' : 'text-danger'}`}>
-          {trend >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-          <span>{trend >= 0 ? '+' : ''}{trend}% vs mês anterior</span>
-        </div>
-      )}
-    </div>
-  );
-};
+// KPICard — removido (BLOCO A: zero referências, Dashboard usa inline KPIs)
 
 // Loading
-const Loading = ({ rows = 3 }) => (
+const Loading = memo(({ rows = 3 }) => (
   <div className="space-y-3">
     {Array.from({ length: rows }).map((_, i) => (
       <div key={i} className="glass-card p-4 animate-pulse">
@@ -270,10 +189,10 @@ const Loading = ({ rows = 3 }) => (
       </div>
     ))}
   </div>
-);
+));
 
 // Empty State
-const EmptyState = ({ icon: Icon, title, description, action, actionLabel }) => (
+const EmptyState = memo(({ icon: Icon, title, description, action, actionLabel }) => (
   <div className="flex flex-col items-center justify-center py-12 text-center">
     <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-4">
       <Icon size={32} className="text-secondary" />
@@ -282,7 +201,7 @@ const EmptyState = ({ icon: Icon, title, description, action, actionLabel }) => 
     <p className="text-secondary max-w-sm mb-4">{description}</p>
     {action && <button onClick={action} className="btn-primary">{actionLabel}</button>}
   </div>
-);
+));
 
 // Confirm Dialog
 const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText = "Confirmar", danger = false }) => {
@@ -332,23 +251,11 @@ const SearchInput = ({ value, onChange, placeholder = 'Buscar...' }) => (
   </div>
 );
 
-const FilterBar = ({ children, className = '' }) => (
-  <div className={`flex flex-wrap gap-2 items-center ${className}`}>{children}</div>
-);
+// FilterBar — removido (BLOCO A: zero referências)
 
-const CardSection = ({ title, icon: Icon, color, children, actions }) => (
-  <div className="glass-card p-4 space-y-4">
-    <div className="flex items-center justify-between">
-      <h3 className={`text-sm font-semibold uppercase tracking-wider flex items-center gap-2 ${color || 'text-brand'}`}>
-        {Icon && <Icon size={16} />} {title}
-      </h3>
-      {actions}
-    </div>
-    {children}
-  </div>
-);
+// CardSection — removido (BLOCO A: zero referências)
 
-const DataTable = ({ headers, children, testId }) => (
+const DataTable = memo(({ headers, children, testId }) => (
   <div className="overflow-x-auto">
     <table className="w-full text-sm" data-testid={testId}>
       <thead>
@@ -363,21 +270,15 @@ const DataTable = ({ headers, children, testId }) => (
       <tbody>{children}</tbody>
     </table>
   </div>
-);
+));
 
-const DataRow = ({ children, onClick, className = '' }) => (
+const DataRow = memo(({ children, onClick, className = '' }) => (
   <tr className={`border-b border-surface/50 hover:bg-surface-hover/30 transition-colors ${onClick ? 'cursor-pointer' : ''} ${className}`} onClick={onClick}>
     {children}
   </tr>
-);
+));
 
-const SectionDivider = ({ label }) => (
-  <div className="flex items-center gap-3 py-2">
-    <div className="flex-1 h-px bg-surface-hover" />
-    {label && <span className="text-xs text-secondary uppercase tracking-wider">{label}</span>}
-    <div className="flex-1 h-px bg-surface-hover" />
-  </div>
-);
+// SectionDivider — removido (BLOCO A: zero referências)
 
 
 
@@ -522,7 +423,7 @@ const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
   });
 };
 
-const MaterialThumbnail = ({ images, nome, categoria, size = 'md', onClick }) => {
+const MaterialThumbnail = memo(({ images, nome, categoria, size = 'md', onClick }) => {
   const { config } = useBranding();
   const primaryColor = config?.tema?.cor_primaria || '#10b981';
   const src = (images || [])[0];
@@ -565,7 +466,7 @@ const MaterialThumbnail = ({ images, nome, categoria, size = 'md', onClick }) =>
       <span className={`${textSizes[size]} font-semibold mt-0.5`} style={{ color: primaryColor, opacity: 0.7 }}>{initials}</span>
     </div>
   );
-};
+});
 
 const MaterialImageModal = ({ src, nome, onClose }) => {
   const [zoom, setZoom] = useState(1);
@@ -727,113 +628,7 @@ const MaterialImageUploader = ({ tipo, itemId, images, onUpdate }) => {
 };
 
 
-// Notification Bell
-const NotificationBell = () => {
-  const [count, setCount] = useState(0);
-  const [notifications, setNotifications] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const navigate = useNavigate();
-  
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const [countRes, listRes] = await Promise.all([
-          api.get('/notificacoes/count'),
-          api.get('/notificacoes?lida=false')
-        ]);
-        setCount(countRes.data.count);
-        setNotifications(listRes.data.slice(0, 5));
-      } catch (error) {}
-    };
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, []);
-  
-  const markAsRead = async (id) => {
-    await api.put(`/notificacoes/${id}/lida`);
-    setCount(prev => Math.max(0, prev - 1));
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-  
-  const markAllRead = async () => {
-    await api.put('/notificacoes/marcar-todas-lidas');
-    setCount(0);
-    setNotifications([]);
-  };
-  
-  const getNotifIcon = (tipo) => {
-    const icons = {
-      os_criada: Wrench,
-      os_atrasada: AlertTriangle,
-      os_atribuida: User,
-      inspecao_pendente: ClipboardCheck,
-      estoque_critico: Package,
-      falha_detectada: AlertCircle,
-      ativo_parado: XCircle,
-    };
-    return icons[tipo] || Bell;
-  };
-  
-  return (
-    <div className="relative">
-      <button 
-        onClick={() => setShowDropdown(!showDropdown)}
-        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg relative transition-colors"
-        data-testid="notifications-button"
-      >
-        <Bell size={20} className="text-slate-400" />
-        {count > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center text-white font-bold animate-pulse">
-            {count > 9 ? '9+' : count}
-          </span>
-        )}
-      </button>
-      
-      {showDropdown && (
-        <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 animate-fadeIn">
-          <div className="p-3 border-b border-slate-800 flex items-center justify-between">
-            <span className="font-semibold text-slate-200">Notificações</span>
-            {count > 0 && (
-              <button onClick={markAllRead} className="text-xs text-brand hover:underline">
-                Marcar todas como lidas
-              </button>
-            )}
-          </div>
-          <div className="max-h-80 overflow-y-auto custom-scrollbar">
-            {notifications.length > 0 ? notifications.map(notif => {
-              const Icon = getNotifIcon(notif.tipo);
-              return (
-                <div 
-                  key={notif.id}
-                  className="p-3 border-b border-slate-800 hover:bg-slate-800/50 cursor-pointer flex gap-3"
-                  onClick={() => {
-                    markAsRead(notif.id);
-                    if (notif.link) navigate(notif.link);
-                    setShowDropdown(false);
-                  }}
-                >
-                  <div className="p-2 bg-slate-800 rounded-lg h-fit">
-                    <Icon size={16} className="text-slate-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-200">{notif.titulo}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{notif.mensagem}</p>
-                  </div>
-                </div>
-              );
-            }) : (
-              <div className="p-6 text-center text-slate-500">
-                <Bell size={24} className="mx-auto mb-2 opacity-50" />
-                <p>Nenhuma notificação</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+// NotificationBell — removido (BLOCO A: zero referências, endpoints /notificacoes existem mas componente não era montado)
 
 // ============== MODALS ==============
 
@@ -2459,7 +2254,7 @@ const centralTitles = {
 const prioColors = { emergencia: 'bg-red-500', alta: 'bg-orange-500', media: 'bg-amber-500', baixa: 'bg-blue-500' };
 const prioLabels = { emergencia: 'Emergência', alta: 'Alta', media: 'Média', baixa: 'Baixa' };
 
-const AtividadeCard = ({ item, tipo, navigate }) => {
+const AtividadeCard = memo(({ item, tipo, navigate }) => {
   const isOS = tipo === 'os';
   const tag = item.ativo?.tag || '';
   const nome = item.ativo?.nome || '';
@@ -2500,7 +2295,7 @@ const AtividadeCard = ({ item, tipo, navigate }) => {
       </div>
     </div>
   );
-};
+});
 
 const SectionBlock = ({ title, icon: Icon, count, color, children, defaultOpen = true }) => {
   const [open, setOpen] = useState(defaultOpen);
@@ -3060,7 +2855,7 @@ const DashboardPage = () => {
 };
 
 // Chart Components
-const TrendChart = ({ data }) => {
+const TrendChart = memo(({ data }) => {
   const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } = require('recharts');
   const enriched = data.map(d => ({ ...d, mes_label: d.is_estimated ? `${d.mes}*` : d.mes }));
   return (
@@ -3076,9 +2871,9 @@ const TrendChart = ({ data }) => {
       </LineChart>
     </ResponsiveContainer>
   );
-};
+});
 
-const OSDistChart = ({ data, onBarClick }) => {
+const OSDistChart = memo(({ data, onBarClick }) => {
   const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } = require('recharts');
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -3095,7 +2890,7 @@ const OSDistChart = ({ data, onBarClick }) => {
       </BarChart>
     </ResponsiveContainer>
   );
-};
+});
 
 // Ativos Page
 const AtivosPage = () => {
@@ -11009,3 +10804,4 @@ function App() {
 }
 
 export default App;
+

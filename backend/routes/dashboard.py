@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, Dict
 from datetime import datetime, timezone
-import json
 import random
 
 from deps import db, get_current_user, get_scoped_asset_ids, check_admin_only, build_dashboard_visibility, build_visibility_query, _get_asset_ids_for_areas, get_user_disciplinas, ROLE_GROUPS

@@ -148,7 +148,7 @@ async def hh_resumo(os_id: str, user: Dict = Depends(get_current_user)):
                     t1 = datetime.fromisoformat(work_start)
                     t2 = datetime.fromisoformat(ts)
                     hh_liquida += max(0, (t2 - t1).total_seconds() / 60)
-                except:
+                except Exception:
                     pass
                 work_start = None
         
@@ -158,7 +158,7 @@ async def hh_resumo(os_id: str, user: Dict = Depends(get_current_user)):
                 first = datetime.fromisoformat(events[0]["timestamp"])
                 last = datetime.fromisoformat(events[-1]["timestamp"])
                 hh_bruta = max(0, (last - first).total_seconds() / 60)
-            except:
+            except Exception:
                 pass
         
         resumos.append({
@@ -202,7 +202,7 @@ async def create_hh_manual(os_id: str, data: dict, user: Dict = Depends(get_curr
             dt_ini = datetime.fromisoformat(data_inicio.replace('Z', '+00:00'))
             dt_fim = datetime.fromisoformat(data_fim.replace('Z', '+00:00'))
             minutos = (dt_fim - dt_ini).total_seconds() / 60
-        except:
+        except Exception:
             pass
 
     if minutos <= 0:
