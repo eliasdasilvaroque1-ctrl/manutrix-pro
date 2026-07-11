@@ -1,6 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Form, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Form, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import FileResponse, StreamingResponse, Response
+from fastapi.responses import FileResponse, StreamingResponse, Response, JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -16,6 +16,9 @@ import secrets
 import jwt
 from enum import Enum
 import aiofiles
+import asyncio
+from collections import defaultdict
+import time
 
 # Import shared deps and models
 from deps import (
@@ -42,10 +45,79 @@ from routes.org import router as org_router
 from routes.biblioteca import router as biblioteca_router, BIBLIOTECA_INDEXES
 from routes.central import router as central_router
 
-app = FastAPI(title="MAINTRIX API", version="5.1.0")
+app = FastAPI(title="MAINTRIX API", version="5.2.0-RC1")
 api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# ============== ETAPA 1: RATE LIMITING ==============
+# In-memory rate limiter for critical endpoints (corporate-friendly limits)
+_rate_store: Dict[str, list] = defaultdict(list)
+_RATE_LIMITS = {
+    "/api/auth/login": (10, 60),           # 10 req/min per IP
+    "/api/auth/register": (5, 60),          # 5 req/min
+    "/api/auth/forgot-password": (3, 60),   # 3 req/min
+    "/api/auth/reset-password": (5, 60),    # 5 req/min
+    "/api/auth/change-password": (5, 60),   # 5 req/min
+    "/api/upload": (30, 60),                # 30 req/min (bulk photo upload)
+    "/api/public/": (60, 60),               # 60 req/min for public endpoints
+}
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def _check_rate_limit(ip: str, path: str) -> bool:
+    """Returns True if request should be allowed."""
+    now = time.time()
+    for prefix, (max_reqs, window) in _RATE_LIMITS.items():
+        if path.startswith(prefix):
+            key = f"{ip}:{prefix}"
+            _rate_store[key] = [t for t in _rate_store[key] if t > now - window]
+            if len(_rate_store[key]) >= max_reqs:
+                return False
+            _rate_store[key].append(now)
+            return True
+    return True
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    if request.method == "POST" or path.startswith("/api/public/"):
+        ip = _get_client_ip(request)
+        if not _check_rate_limit(ip, path):
+            logger.warning(f"RATE_LIMIT: {ip} blocked on {path}")
+            return JSONResponse(status_code=429, content={"detail": "Muitas requisições. Aguarde um momento."})
+    response = await call_next(request)
+    return response
+
+# ============== ETAPA 2: SECURITY HEADERS ==============
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=(self)"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # HSTS only in production (when not localhost)
+    if "localhost" not in request.url.hostname and "127.0.0.1" not in request.url.hostname:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+# ============== ETAPA 4: REQUEST TIMEOUT ==============
+REQUEST_TIMEOUT_SECONDS = 120  # 2 minutes max for any request (uploads can be large)
+
+@app.middleware("http")
+async def timeout_middleware(request: Request, call_next):
+    try:
+        response = await asyncio.wait_for(call_next(request), timeout=REQUEST_TIMEOUT_SECONDS)
+        return response
+    except asyncio.TimeoutError:
+        logger.error(f"TIMEOUT: {request.method} {request.url.path} exceeded {REQUEST_TIMEOUT_SECONDS}s")
+        return JSONResponse(status_code=504, content={"detail": "Requisição excedeu o tempo limite."})
 
 # Initialize object storage at startup
 @app.on_event("startup")
@@ -96,6 +168,30 @@ async def startup_create_indexes():
             except Exception as e:
                 logger.warning(f"Biblioteca index {idx['name']} on {coll_name}: {e}")
 
+    # ============== ETAPA 3: BLOCO A IDENTIFIED INDEXES (14 missing) ==============
+    bloco_a_indexes = [
+        ("planos_inspecao", [("organization_id", 1), ("ativo_id", 1)], "org_ativo"),
+        ("planos_inspecao", [("organization_id", 1), ("deleted_at", 1)], "org_deleted"),
+        ("itens_estoque", [("organization_id", 1)], "org"),
+        ("manuais", [("ativo_id", 1)], "ativo"),
+        ("spare_assets", [("organization_id", 1)], "org"),
+        ("os_materiais", [("os_id", 1)], "os"),
+        ("os_materiais", [("ativo_id", 1)], "ativo"),
+        ("ativo_materiais", [("ativo_id", 1)], "ativo"),
+        ("chat_history", [("user_id", 1), ("created_at", -1)], "user_time"),
+        ("inspection_templates", [("organization_id", 1)], "org"),
+        ("anomalia_historico", [("anomalia_id", 1)], "anomalia"),
+        ("anomalia_comentarios", [("anomalia_id", 1)], "anomalia"),
+        ("spare_reformas", [("spare_id", 1)], "spare"),
+        ("knowledge_base", [("organization_id", 1)], "org"),
+    ]
+    for coll, keys, name in bloco_a_indexes:
+        try:
+            await db[coll].create_index(keys, name=name, background=True)
+        except Exception as e:
+            logger.warning(f"BLOCO_A index {name} on {coll}: {e}")
+    logger.info(f"BLOCO_C: {len(bloco_a_indexes)} performance indexes created/verified")
+
 # Include modularized routers
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(assets_router, prefix="/api")
@@ -114,14 +210,17 @@ async def register(user_data: UserCreate):
     raise HTTPException(status_code=403, detail="Registro direto desabilitado. Contate o administrador da sua organização.")
 
 @api_router.post("/auth/login", response_model=TokenResponse)
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, request: Request = None):
     email = credentials.email.lower().strip()
     org_id = credentials.organization_id
+    ip = _get_client_ip(request) if request else "unknown"
     
     user = await db.users.find_one({"email": email, "organization_id": org_id, "deleted_at": None}, {"_id": 0})
     if not user or not verify_password(credentials.password, user.get('password_hash', '')):
+        logger.warning(f"AUTH_FAIL: login attempt {email} org={org_id[:8]} ip={ip}")
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
     
+    logger.info(f"AUTH_OK: {email} role={user.get('role')} org={org_id[:8]} ip={ip}")
     token = create_token(user['id'], user.get('role', 'tecnico'), user['organization_id'])
     await audit_log("login", "auth", user['id'], user, f"Login: {email} org: {org_id[:8]}")
     return TokenResponse(
@@ -201,6 +300,7 @@ async def reset_password(data: ResetPasswordRequest):
         {"$set": {"password_hash": new_hash, "force_password_change": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     await db.password_reset_tokens.update_one({"token": data.token}, {"$set": {"used": True}})
+    logger.info(f"AUTH: password reset completed for user_id={reset_doc['user_id']}")
     
     # Sync to Supabase Auth
     reset_user = await db.users.find_one({"id": reset_doc['user_id']}, {"_id": 0, "supabase_id": 1})
@@ -296,9 +396,12 @@ async def admin_update_user(user_id: str, data: dict, user: Dict = Depends(get_c
 async def upload_file(file: UploadFile = File(...), user: Dict = Depends(get_current_user)):
     ext = Path(file.filename).suffix.lower()
     if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf']:
+        logger.warning(f"UPLOAD_REJECT: {user.get('email')} tried unsupported type {ext}")
         raise HTTPException(status_code=400, detail="Tipo de arquivo não permitido")
     
     content = await file.read()
+    size_kb = len(content) / 1024
+    logger.info(f"UPLOAD: {user.get('email')} file={file.filename} size={size_kb:.0f}KB")
     
     # Upload to object storage
     if objstore.is_available():
