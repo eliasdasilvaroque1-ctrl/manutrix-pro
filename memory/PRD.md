@@ -431,7 +431,16 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Regressão:** 21/21 pytest PASS, 10/10 rotas frontend PASS. **ZERO REGRESSÕES.**
 - **Veredicto:** APTO PARA CERTIFICAÇÃO RC1 (BLOCO D).
 
-### BLOCO D — Certificação RC1 Final ✅ (2026-07-11)
+### RC1.5 — Compliance, LGPD e Preparação Comercial ✅ (2026-07-11)
+- **Relatório completo:** `/app/memory/RC15_COMPLIANCE_RELATORIO.md`
+- **Termos de Uso v1.0** + **Política de Privacidade v1.0** (LGPD-compliant)
+- **Aceite obrigatório** com registro versionado (user, org, IP, user-agent, versão)
+- **Reaceite automático** quando versão dos documentos mudar
+- **Página "Sobre"** com versão, build, contato, links legais
+- **Footer permanente:** Termos de Uso | Privacidade | Sobre | v5.2.0-RC1
+- **Documentação comercial:** SLA, Onboarding
+- **Regressão:** 12/12 backend PASS, 11/11 frontend PASS. **ZERO REGRESSÕES.**
+- **Veredicto:** ✅ APROVADO — Preparado para piloto e demonstrações comerciais
 - **Relatório completo:** `/app/memory/BLOCO_D_CERTIFICACAO.md`
 - **58 testes executados, 58 PASS, 0 FAIL**
 - **Etapas validadas:** Autenticação (7/7), Multi-tenant (8/8), Ativos (4/4), OS (6/6), Inspeções (2/2), Dashboard (3/3), PWA (8/8), Performance (10/10 < 320ms), Segurança (4/4), Banco (4/4), UX (20/20 rotas)

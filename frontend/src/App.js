@@ -10870,8 +10870,8 @@ const ConsentGate = ({ children }) => {
           <label className="flex items-start gap-3 p-3 rounded-lg border border-surface hover:border-slate-600 cursor-pointer transition-colors" data-testid="privacy-checkbox">
             <input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="mt-1 accent-emerald-500" />
             <div>
-              <p className="text-sm text-primary font-medium">Politica de Privacidade</p>
-              <button type="button" onClick={() => loadDoc('privacy')} className="text-xs text-brand hover:underline">Ler Politica de Privacidade v1.0</button>
+              <p className="text-sm text-primary font-medium">Política de Privacidade</p>
+              <button type="button" onClick={() => loadDoc('privacy')} className="text-xs text-brand hover:underline">Ler Política de Privacidade v1.0</button>
             </div>
           </label>
         </div>
@@ -10898,7 +10898,7 @@ const SobrePage = () => {
   if (!info) return <Loading rows={2} />;
   return (
     <PageContainer>
-      <PageHeader title="Sobre o MAINTRIX" subtitle="Informacoes do sistema" />
+      <PageHeader title="Sobre o MAINTRIX" subtitle="Informações do sistema" />
       <div className="max-w-lg mx-auto space-y-6">
         <div className="glass-card p-6 text-center space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-brand-10 flex items-center justify-center mx-auto">
@@ -10906,7 +10906,7 @@ const SobrePage = () => {
           </div>
           <h2 className="text-2xl font-bold text-brand">{info.product}</h2>
           <div className="space-y-1 text-sm">
-            <p className="text-secondary">Versao <span className="text-primary font-mono">{info.version}</span></p>
+            <p className="text-secondary">Versão <span className="text-primary font-mono">{info.version}</span></p>
             <p className="text-secondary">Build <span className="text-primary font-mono">{info.build}</span></p>
             <p className="text-secondary">Ambiente: <span className="text-primary capitalize">{info.environment}</span></p>
           </div>
@@ -10938,7 +10938,7 @@ const LegalDocPage = ({ type }) => {
   if (!doc) return <Loading rows={4} />;
   return (
     <PageContainer>
-      <PageHeader title={type === 'terms' ? 'Termos de Uso' : 'Politica de Privacidade'} subtitle={`Versao ${doc.version}`} />
+      <PageHeader title={type === 'terms' ? 'Termos de Uso' : 'Política de Privacidade'} subtitle={`Versão ${doc.version}`} />
       <div className="glass-card p-6 max-w-3xl mx-auto">
         <div className="prose prose-invert prose-sm whitespace-pre-wrap text-sm text-slate-300 leading-relaxed">
           {doc.content}
