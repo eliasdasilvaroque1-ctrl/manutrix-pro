@@ -17,7 +17,7 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 /app/backend/routes/org.py      — Org config, White Label endpoints
 /app/backend/org_config.py      — Default config builder, numbering engine
 /app/backend/deps.py            — Auth, DB, RBAC logic
-/app/frontend/src/App.js        — Monolithic React app (~9,900 lines)
+/app/frontend/src/App.js        — Monolithic React app (~10,800 lines)
 /app/frontend/src/lib/branding.js — BrandingContext with race-condition protection
 /app/frontend/src/lib/api.js    — Axios API client
 /app/frontend/src/index.css     — Tailwind + brand utility CSS classes
@@ -398,3 +398,29 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - `PUT /api/org/config/tema` — Update theme colors (admin)
 - `POST /api/org/config/logo` — Upload logo (admin)
 - `POST /api/org/config/favicon` — Upload favicon (admin)
+
+
+## MISSÃO RC1 — OPERAÇÃO ESTABILIZAÇÃO ENTERPRISE
+
+### BLOCO A — Auditoria e Limpeza ✅ (2026-07-11)
+- **Relatório completo:** `/app/memory/BLOCO_A_RELATORIO.md`
+- **Resultado:** App.js 11.011 → 10.807 linhas (-204). 6 componentes mortos removidos. 10 React.memo aplicados. 13 imports órfãos removidos (frontend). 5 imports mortos removidos (backend). 3 bare except: corrigidos.
+- **MongoDB:** 41 coleções auditadas. 5 coleções backup identificadas. 7 coleções com 0 docs. 14 índices faltantes mapeados.
+- **Dependências:** 8 deps frontend possivelmente não utilizadas. Bundle total: 1 GB node_modules.
+- **Regressão:** 22/22 pytest PASS, 11/11 rotas frontend PASS. **ZERO REGRESSÕES.**
+- **Veredicto:** APROVADO para BLOCO B.
+
+### BLOCO B — Fluxos Críticos PWA (PENDENTE)
+- Validar offline, sincronização, caching, Service Workers, local queue recovery
+
+### BLOCO C — Hardening (PENDENTE)
+- Rate Limiting, Security Headers, Profiling, Logs, Timeouts, MongoDB indexes
+
+### BLOCO D — Certificação RC1 Final (PENDENTE)
+- Regressão final completa antes do go-live
+
+## Próximas Tarefas (v1.1 — NÃO IMPLEMENTAR EM RC1)
+- MAINTRIX Field Operations (PDFs, QR, batch print) — Arquitetura em `/app/memory/FIELD_OPERATIONS_ARCH.md`
+- Dashboard Executivo
+- IA Assistente
+- ERP/SAP Integrations
