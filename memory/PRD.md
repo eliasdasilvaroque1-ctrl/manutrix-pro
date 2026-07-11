@@ -431,8 +431,13 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Regressão:** 21/21 pytest PASS, 10/10 rotas frontend PASS. **ZERO REGRESSÕES.**
 - **Veredicto:** APTO PARA CERTIFICAÇÃO RC1 (BLOCO D).
 
-### BLOCO D — Certificação RC1 Final (PENDENTE)
-- Regressão final completa antes do go-live
+### BLOCO D — Certificação RC1 Final ✅ (2026-07-11)
+- **Relatório completo:** `/app/memory/BLOCO_D_CERTIFICACAO.md`
+- **58 testes executados, 58 PASS, 0 FAIL**
+- **Etapas validadas:** Autenticação (7/7), Multi-tenant (8/8), Ativos (4/4), OS (6/6), Inspeções (2/2), Dashboard (3/3), PWA (8/8), Performance (10/10 < 320ms), Segurança (4/4), Banco (4/4), UX (20/20 rotas)
+- **Fix aplicado:** Botão "INICIAR OS" agora visível para status `programada`/`disponivel`
+- **Compliance (RC2):** LGPD, Termos de Uso, Aceite — lacunas identificadas, não bloqueiam piloto
+- **PARECER: 🟢 GO — APTO PARA INICIAR O PILOTO ASTEC**
 
 ## Próximas Tarefas (v1.1 — NÃO IMPLEMENTAR EM RC1)
 - MAINTRIX Field Operations (PDFs, QR, batch print) — Arquitetura em `/app/memory/FIELD_OPERATIONS_ARCH.md`

@@ -5045,7 +5045,7 @@ const OSDetailPage = () => {
       {/* Actions — OS Detail */}
       {!['concluida', 'cancelada'].includes(os.status) && !['pcm','gerente'].includes(user?.role) && (
         <div className="space-y-2">
-          {os.status === 'aberta' && (
+          {(os.status === 'aberta' || os.status === 'programada' || os.status === 'disponivel') && (
             <button onClick={() => handleAction('iniciar')} disabled={updating} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="os-iniciar-btn">
               <Play size={20} /> {updating ? 'Iniciando...' : 'Iniciar OS'}
             </button>

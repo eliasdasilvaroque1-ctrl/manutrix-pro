@@ -60,7 +60,7 @@ _RATE_LIMITS = {
     "/api/auth/reset-password": (5, 60),    # 5 req/min
     "/api/auth/change-password": (5, 60),   # 5 req/min
     "/api/upload": (30, 60),                # 30 req/min (bulk photo upload)
-    "/api/public/": (60, 60),               # 60 req/min for public endpoints
+    "/api/public/": (120, 60),               # 120 req/min for public endpoints (branding fetched on each route)
 }
 
 def _get_client_ip(request: Request) -> str:
