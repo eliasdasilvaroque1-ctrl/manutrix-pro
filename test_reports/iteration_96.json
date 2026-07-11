@@ -1,0 +1,45 @@
+{
+  "summary": "BLOCO D — CERTIFICAÇÃO RC1 FINAL: Frontend validado em 20 rotas via sidebar (Central, Dashboard, Equipe, Ativos, OS, Inspeções, Unidades, Áreas/Setores, Estoque, Sobressalentes, Paradas, Biblioteca, Dossiê/Pesquisa, Admin Templates, Auditoria, Usuários, Config, White Label, Solicitar, Scanner, Ronda). Login master@maintrix.com e test.mec@maintrix.com em ASTEC Cedro funcionam. Todas as páginas principais renderizam corretamente com dados reais: Dashboard mostra KPIs (Disponibilidade 98.9%, MTBF 180h, MTTR 2h, Backlog 1, Solicitações 4, Estoque Crítico 7) e gráficos (Tendência MTBF/MTTR + Distribuição OS por Tipo). Ativos lista 55 cards com StatusBadge (Em Manutenção/Operacional) e filtro de área. Ativo Detail (AV-01) mostra prontuário completo: KPIs, tabs (Prontuário/Histórico Completo/Timeline(39)/Planos(0)/OS(10)/Docs(1)/BOM(0)), Saúde do Equipamento, Planos Permanentes, OS em Aberto (10 OS listadas), Últimos Eventos. OS Kanban mostra 5 colunas (Solicitadas 4 / Em Análise 0 / Aguard.Aprovação 0 / Programadas 16 / Distribuídas parcial) com 21 cards visíveis. OS em_execucao (#2026-00021) exibe botões PAUSAR + CONCLUIR + FINALIZAR RAPIDAMENTE corretamente (tec role). Estoque, Sobressalentes, Auditoria (747 registros), Setores (3 áreas), Unidades (1 unidade), Admin Usuários (todos listados), White Label (5 tabs + preview em tempo real) — todos funcionam. Role-based sidebar funciona: master vê 20 links; tec vê sidebar reduzida (Minha Jornada, Ativos, Inspeções, Solicitar, Scanner, Ronda, Estoque). Empty states presentes (Inspeções, Templates, Equipe, materiais em OS). Zero PageErrors JavaScript em qualquer rota. 0 console errors após reset de rate-limit window.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/public/branding/{org_id} + /api/public/organizations", "issue": "Durante navegação rápida entre rotas (~20 páginas em <60s), o frontend re-fetcha branding/organizations em cada mudança de rota. Isso satura o rate limit IP (10/min por prefix público) e retorna 429. Como consequência, o layout às vezes carrega com branding fallback 'CMMS' em vez de 'ASTEC Cedro'. Não bloqueia funcionalidade — apenas afeta consistência visual durante navegação intensa. Sugestão: cachear branding/organizations no client (sessionStorage) por 5-10 min, evitando refetch a cada route change."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "OS Detail (Programada)", "issue": "OS em estado 'Programada' NÃO exibe botão explícito 'INICIAR'. Ao abrir #2026-00036 (Programada) como master OU tec, os únicos botões de ação visíveis são 'Lançar HH', 'Adicionar' (Equipe) e 'Adicionar' (Materiais). Há apenas um ícone play (▶) minúsculo ao lado do cronômetro '00:00:00 Pronto' — sem label 'INICIAR' ou 'INICIAR EXECUÇÃO'. A certificação BLOCO D exige explicitamente 'abrir uma OS programada mostra botão INICIAR'. Recomendo adicionar botão primário 'INICIAR OS' visível no topo/rodapé do detalhe.", "selector": "button (Programada OS detail bottom actions)", "priority": "MEDIUM"},
+      {"component": "Ativo Detail tabs", "issue": "Requisito BLOCO D menciona tabs 'Timeline, Dossiê, BOM, Inspeções', mas tabs reais são 'Prontuário / Histórico Completo / Timeline / Planos / OS / Docs / BOM'. Não há tab 'Dossiê' nem 'Inspeções' no ativo — 'Dossiê / Pesquisa' fica em rota separada da sidebar; inspeções aparecem via 'Planos'. Não é bug — é mismatch de nomenclatura entre spec e implementação. Sugestão: alinhar labels ou atualizar checklist.", "selector": "[role=tab] on /ativos/:id", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Route navigation branding fallback", "issue": "Ao navegar rapidamente entre rotas, /api/public/branding retorna 429 e o UI faz fallback para branding 'CMMS Sistema de Gestão de Manutenção' em vez de 'ASTEC Cedro / Portal de Manutenção ASTEC'. Reprodução: login → visitar 15+ rotas em <60s. Correção: usar cache local + retry com backoff ou eliminar refetch em route changes (branding só muda em white-label update).", "affected_selectors": ["header .brand-name", "sidebar .org-name"]}
+    ],
+    "design_issues": [
+      {"screen": "Global", "issues": ["OK — dark theme consistente, contrastes adequados (verde/roxo/vermelho em fundo dark), spacing OK, empty states com ilustração + CTA em Inspeções/Templates/Equipe.", "Setores/Áreas: só 3 cards P1/P2/P3 — bem visual mas poderia mostrar breakdown de status por área.", "Equipe: métricas em zero durante teste — empty state 'Sem dados para o período' com explicação correta."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MEDIUM: Adicionar botão explícito 'INICIAR' no detalhe da OS Programada — apenas o ícone play (▶) ao lado do cronômetro é inconsistente com o requisito de certificação BLOCO D e com a UX esperada. Botão deve ser primário e legível.",
+    "MINOR: Cachear /api/public/branding e /api/public/organizations no client (sessionStorage com TTL 5-10 min) para eliminar rate-limit 429 durante navegação rápida. Isso também reduz load do backend.",
+    "LOW: Alinhar checklist de certificação com nomenclatura real dos tabs no Ativo Detail (a spec fala 'Dossiê/Inspeções' mas UI usa 'Histórico Completo/Planos').",
+    "OK — RC1 pronto para piloto industrial em ASTEC Cedro com ressalvas acima."
+  ],
+  "critical_code_review_comments": [
+    "Rate limit em memory (dict) — cf. iteration_95 já reportado. Se escalar para múltiplos pods, migrar para Redis. Durante navegação SPA rápida, o cliente satura esse budget porque não cacheia public endpoints — o problema é AGRAVADO por dupla ausência (server sem shared cache + client sem local cache).",
+    "OS state machine — botões de transição no detalhe da OS parecem ser role-scoped (tec vê PAUSAR/CONCLUIR em em_execucao). Mas nem master nem tec veem botão INICIAR em Programada; provavelmente o botão está oculto atrás de outro fluxo (Lançar HH?) — precisa de auditoria da lógica de renderização condicional em App.js OSDetail component.",
+    "Frontend App.js 10800+ linhas — cf. auditoria de RC anteriores. Split urgente em módulos por rota (OSDetail, AtivoDetail, Dashboard, Kanban) para manutenibilidade pós-pilot.",
+    "SPA route change deveria não re-executar fetch de branding em cada mount — usar Context com fetch único no bootstrap ou useSWR com dedupe/staleTime maior."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (não testado nesta iteração — cf. iteration_95 100%)",
+    "frontend": "95% — 20/20 rotas carregam sem crash; Dashboard/Ativos/OS Kanban/Estoque/Auditoria/White Label totalmente funcionais; empty states corretos; role-based nav funcionando; OS em_execucao tem PAUSAR/CONCLUIR. Desconto de 5% pelo botão INICIAR ausente no OS Programada e 429 no branding durante nav rápida."
+  },
+  "test_credentials": "master@maintrix.com/master123 e test.mec@maintrix.com/tec123 em ASTEC Cedro (9a232bf2-fc01-4253-813f-8df356be31c1)",
+  "seed_data_creation": "Nenhum dado criado — teste apenas navegou e validou estado existente conforme instruído em BLOCO D. Os cards TEST_XORG/TEST_GATE45 já existiam de iterations anteriores.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "BLOCO D certification: 20 sidebar routes validadas. Os únicos 2 achados não-triviais são: (1) OS Programada não tem botão INICIAR explícito — apenas ícone play próximo ao cronômetro HH; verificar o componente OSDetail em App.js para confirmar se INICIAR está condicionado a role/estado específico ou é bug de renderização; (2) 429 no /api/public/branding durante nav rápida — cache client-side resolveria. Ambos são não-bloqueantes para pilot. Login flow (org search + credenciais) funciona perfeitamente. Todas as tabs, KPIs, gráficos, kanban, tabelas, empty states carregam.",
+  "rca_of_the_issue": "OS Programada sem botão INICIAR: (1) Reprodução — login como master ou tec, ir /os, clicar em card 'Programada' (ex: TEST_XORG_FINAL #2026-00036), inspecionar todos os buttons no DOM. (2) Resultado — apenas 'Lançar HH', 'Adicionar' Equipe, 'Adicionar' Materiais. Não há INICIAR/EXECUTAR/APROVAR. (3) Hipótese RCA — O UI provavelmente considera que a transição Programada→em_execucao acontece automaticamente ao iniciar o cronômetro HH (ícone play ▶), mas isso é implícito e não sinalizado ao usuário. Alternativa: o botão pode ter sido removido em refactor anterior e nunca reintroduzido. (4) Mitigation — adicionar em OSDetail (App.js) botão primary <Button variant='primary'>INICIAR EXECUÇÃO</Button> visível quando os.status==='programada' e usuario.role in ['tecnico','supervisor'], acionando POST /api/ordens-servico/{id}/iniciar."
+}
