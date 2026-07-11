@@ -103,7 +103,8 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=(self)"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     # HSTS only in production (when not localhost)
-    if "localhost" not in request.url.hostname and "127.0.0.1" not in request.url.hostname:
+    hostname = request.url.hostname or ""
+    if "localhost" not in hostname and "127.0.0.1" not in hostname:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 

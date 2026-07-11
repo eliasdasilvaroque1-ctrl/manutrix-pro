@@ -421,8 +421,15 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Regressão:** 22/22 pytest PASS, 8/8 rotas + PWA checks PASS. **ZERO REGRESSÕES.**
 - **Veredicto:** APROVADO para BLOCO C.
 
-### BLOCO C — Hardening (PENDENTE)
-- Rate Limiting, Security Headers, Profiling, Logs, Timeouts, MongoDB indexes
+### BLOCO C — Hardening Enterprise ✅ (2026-07-11)
+- **Relatório completo:** `/app/memory/BLOCO_C_RELATORIO.md`
+- **Rate Limiting:** 7 endpoints protegidos (login 10/min, forgot-password 3/min, upload 30/min, public 60/min). HTTP 429 com logging.
+- **Security Headers:** 6 headers implementados (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, X-XSS-Protection, HSTS).
+- **MongoDB:** 14 índices criados (total: 69 customizados). background=True, zero impacto.
+- **Timeouts:** 120s global com HTTP 504 + logging.
+- **Logging:** Padronizado em auth (IP-aware), uploads, rate limit, timeouts.
+- **Regressão:** 21/21 pytest PASS, 10/10 rotas frontend PASS. **ZERO REGRESSÕES.**
+- **Veredicto:** APTO PARA CERTIFICAÇÃO RC1 (BLOCO D).
 
 ### BLOCO D — Certificação RC1 Final (PENDENTE)
 - Regressão final completa antes do go-live
