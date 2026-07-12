@@ -1,5 +1,63 @@
 # CHANGELOG — MAINTRIX Enterprise
 
+## v5.2.0-RC2.4.2 (2026-07-12) — "Security & Observability"
+
+### RC2.1 — Correção de Regressões da Modularização
+- 7 regressões corrigidas em páginas extraídas (Estoque, Inspeções, Sobressalentes, Paradas, Biblioteca, Equipe, ProtectedRoute)
+- Componentes movidos do App.js: `ModalNovoEstoque`, `ModalNovaInspecao`, `CameraCapture`
+- Constantes relocadas: `ORIGEM_OPTIONS`, `CONDICAO_CONFIG`, `PARADA_TIPOS`, `FIELD_TYPES`
+- App.js: 4.541 → 3.950 linhas (redução adicional de 591 linhas)
+- Quality Gate: build PASS, 17/17 rotas, zero ReferenceError
+
+### RC2.2 Bloco P0 — Confiabilidade & Observabilidade
+- Logging JSON estruturado (timestamp, request_id, duration_ms, IP, status_code)
+- Middleware de observabilidade: `X-Request-Id` e `X-Response-Time` em todas as respostas
+- Global Exception Handler (backend → JSON padronizado, nunca mais crash sem resposta)
+- Error Boundary (frontend → página amigável "Algo deu errado", elimina tela branca)
+- `GET /api/health` — público, DB ping + latência, retorna 503 quando degradado
+- `GET /api/system/status` — admin-only: version, uptime, git commit, memória, CPU, status de serviços
+- Dependência: `psutil` 7.2.2
+- API version: v5.2.0-RC1 → v5.2.0-RC2
+
+### RC2.3 — Security Audit (somente leitura)
+- Auditoria completa de 20 vetores de segurança
+- Score baseline: 68/100
+- 3 críticos, 5 altos, 6 médios, 3 baixos identificados
+- Documentos: `SECURITY_AUDIT.md`, `SECURITY_CHECKLIST.md`, `SECURITY_ROADMAP.md`
+
+### RC2.4 — Security Phase 1 (Críticos)
+- **CSP**: Content-Security-Policy adicionado (default-src, script-src, style-src, connect-src, img-src, font-src, frame-ancestors, base-uri, form-action)
+- **CORS**: Origins restritos para domínios oficiais (Vercel, Railway, localhost), methods e headers explícitos
+- **Upload Hardening**: Limite 10MB, validação magic bytes, `_validate_file()` centralizado em 4 endpoints
+- **Error Sanitization**: Removido `str(e)` do endpoint IA — stack trace apenas nos logs
+- **HSTS**: Adicionado `preload` directive
+
+### RC2.4.1 — Production Readiness Check (somente leitura)
+- Identificado bloqueador: auth em endpoints GET de servir arquivos quebrava `<img src>` (15+ locais)
+- CSP validado como seguro (aplicado apenas em respostas JSON API)
+- Documento: `PRODUCTION_READINESS.md`
+
+### RC2.4.2 — File Security Redesign
+- **Modelo UUID-Based Access**: arquivos públicos com UUID v4 (122 bits entropia) + rate limit 60/min/IP
+- Endpoints GET (servir arquivos): públicos com rate limit e logging
+- Endpoints POST (upload): auth JWT + size limit 10MB + magic bytes
+- Endpoints Export: auth JWT + RBAC admin/supervisor
+- Logo sidebar, thumbnails e fotos carregam corretamente
+- Score de segurança: 68 → 79/100
+- Documentos: `FILE_SECURITY_DESIGN.md`, `FILE_SECURITY_MATRIX.md`
+
+### Débitos Técnicos Atualizados
+- ~~App.js monolítico (10.855 linhas)~~ → 3.950 linhas (redução 64%)
+- Rate limiter in-memory (não distribuído) — planejado para Fase 3
+- ~~CSP header não implementado~~ → implementado em respostas API
+- ~~CORS aberto (allow_origins=*)~~ → restrito para domínios oficiais
+- Fotos offline com entityId temporário
+- Login offline não suportado (requer servidor)
+- Account lockout ausente — planejado para Fase 2
+- Password complexity ausente — planejado para Fase 2
+
+---
+
 ## v5.2.0-RC1 (2026-07-12) — "ASTEC Pilot Release"
 
 ### BLOCO A — Auditoria e Limpeza (2026-07-11)
@@ -59,14 +117,6 @@
 - Backend deployado no Railway (v5.2.0-RC1)
 - Script de validação: `/app/scripts/validate_deploy.py`
 - DEPLOY_CHECKLIST.md criado
-
-### Débitos Técnicos Conhecidos
-- App.js ainda monolítico (10.855 linhas) — modularização parcial
-- Rate limiter in-memory (não distribuído)
-- CSP header não implementado
-- CORS aberto (allow_origins=*)
-- Fotos offline com entityId temporário
-- Login offline não suportado (requer servidor)
 
 ---
 
