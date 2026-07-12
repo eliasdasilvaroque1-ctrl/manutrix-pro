@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Package, Tag, AlertTriangle, Download, Upload } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Edit, Trash2, Package, Tag, AlertTriangle, Download, Upload, ArrowLeft, Box, ChevronRight, Cog, Edit3, FileText, RefreshCw, Send, Wrench, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";
@@ -603,3 +604,4 @@ const PARADA_TIPOS = [
 
 
 export default SobressalentesPage;
+export { SolicitacaoServicoPage, AssistentePage };

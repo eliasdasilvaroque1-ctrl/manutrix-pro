@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BookOpen, Plus, FileText, ArrowLeft, Upload, Trash2, Download, Edit, Eye, Search } from "lucide-react";
+import { BookOpen, Plus, FileText, ArrowLeft, Upload, Trash2, Download, Edit, Eye, Search, Factory, Layers, List } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";

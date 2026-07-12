@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, AlertTriangle, ChevronDown, ChevronUp, Edit3, Trash2 } from "lucide-react";
+import { Plus, AlertTriangle, ChevronDown, ChevronUp, Edit3, Trash2, MapPin, Package } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";

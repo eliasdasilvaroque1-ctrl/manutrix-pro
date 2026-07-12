@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Activity, FileText, Calendar, Wrench, Clock, AlertTriangle, CheckCircle, XCircle, MapPin, ArrowLeft, Eye, Search, Filter, Hash, Building2 } from "lucide-react";
+import { Box, Activity, FileText, Calendar, Wrench, Clock, AlertTriangle, CheckCircle, XCircle, MapPin, ArrowLeft, Eye, Search, Filter, Hash, Building2, AlertCircle, Camera, ClipboardCheck, Cog, Download } from "lucide-react";
 import { toast } from "sonner";
 import { api, BACKEND_URL } from "@/lib/api";
+import { useBranding } from "@/lib/branding";
 import { StatusBadge, PriorityBadge, Loading, PageContainer, PageHeader, SearchInput, EmptyState } from "@/components/shared";
 
 const PortalPublicoPage = () => {

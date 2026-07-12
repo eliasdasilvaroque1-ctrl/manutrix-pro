@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Building, Palette, BookOpen, Hash, Cog, Save } from "lucide-react";
+import { Settings, Building, Palette, BookOpen, Hash, Cog, Save, Building2, FileText, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { QrCode, Camera, Search, Box, ArrowLeft, Eye, FileText, Activity, Calendar, Wrench, Clock, AlertTriangle, CheckCircle, MapPin, Hash, Building2 } from "lucide-react";
+import { QrCode, Camera, Search, Box, ArrowLeft, Eye, FileText, Activity, Calendar, Wrench, Clock, AlertTriangle, CheckCircle, MapPin, Hash, Building2, ChevronLeft, ChevronRight, ClipboardCheck, Cog } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth, BACKEND_URL } from "@/lib/api";
 import { normalizeError, ROLE_LABELS } from "@/lib/constants";

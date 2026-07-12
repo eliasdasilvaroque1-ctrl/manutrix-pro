@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Clock, Calendar, Wrench, AlertTriangle, Filter, CheckCircle, XCircle, Activity, Edit, Trash2, Play, Pause, Target } from "lucide-react";
+import { Plus, Clock, Calendar, Wrench, AlertTriangle, Filter, CheckCircle, XCircle, Activity, Edit, Trash2, Play, Pause, Target, ArrowLeft, Box, Building, ChevronRight, ClipboardCheck, Cog, Copy, Download, Edit3, Factory, FileText, Layers, List, Lock, MapPin, RefreshCw, Save, Search, Shield, Sparkles, Upload, User, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";
@@ -1526,3 +1526,4 @@ const UnidadesPage = () => {
 
 
 export default ParadasPage;
+export { PlanImportWizard, AdminTemplatesPage, AuditoriaPage, AdminUsuariosPage, ProtectedRoute, CatchAllRedirect, SetoresPage, UnidadesPage };

@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, memo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ClipboardCheck, Plus, Calendar, Clock, Activity, AlertTriangle, CheckCircle, XCircle,
-  Search, Eye, Camera, ArrowLeft, MapPin, Play, Edit, Filter, ChevronDown, ChevronRight, Save
+  Search, Eye, Camera, ArrowLeft, MapPin, Play, Edit, Filter, ChevronDown, ChevronRight, Save,
+  Box, Cog, Droplet, QrCode, RefreshCw, Shield, Sparkles, Target, Trash2, Upload, Wrench, X, Zap
 } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth } from "@/lib/api";
+import { api, useAuth, BACKEND_URL } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";
 import { queueOperation, queuePhoto } from "@/lib/offlineQueue";
 import { StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select } from "@/components/shared";
@@ -1383,4 +1384,4 @@ const ORIGEM_OPTIONS = [
 // ParadasPage → extracted to /pages/ParadasPage.js
 
 
-export { InspecoesPage, InspecaoDetailPage, RondaPage };
+export { InspecoesPage, InspecaoDetailPage, RondaPage, ScannerPage, PhotoUploader };

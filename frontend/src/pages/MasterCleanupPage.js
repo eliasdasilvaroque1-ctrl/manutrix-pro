@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Trash2, RefreshCw, AlertTriangle, CheckCircle } from "lucide-react";
+import { Trash2, RefreshCw, AlertTriangle, CheckCircle, Bell, Calendar, CheckSquare, ClipboardCheck, FileText, Image, Package, Shield, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";

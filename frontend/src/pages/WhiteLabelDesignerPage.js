@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Palette, Eye, Upload, CheckCircle, RefreshCw, Sparkles, Lock, Building2, Menu, Home, Box, BarChart3, Layers, Settings, LogOut, ArrowLeft } from "lucide-react";
+import { Palette, Eye, Upload, CheckCircle, RefreshCw, Sparkles, Lock, Building2, Menu, Home, Box, BarChart3, Layers, Settings, LogOut, ArrowLeft, Cog, Download, Image, MapPin, Plus, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth, BACKEND_URL } from "@/lib/api";
 import { normalizeError, ROLE_LABELS } from "@/lib/constants";
+import { useBranding } from "@/lib/branding";
 import { Loading, PageContainer, PageHeader, FormInput } from "@/components/shared";
 
 const PRESET_THEMES = [
