@@ -199,7 +199,7 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
 
     # Determine initial status based on role and origin
     execucao_direta = getattr(data, 'execucao_direta', False) or (hasattr(data, 'origem') and data.origem == 'execucao_direta')
-    if execucao_direta and role in (ROLE_GROUPS['execucao'] + ['supervisor']):
+    if execucao_direta and role in (ROLE_GROUPS['execucao'] + ['supervisor', 'admin', 'master', 'pcm']):
         # Direct execution: OS goes straight to em_execucao (no PCM backlog)
         status_inicial = "em_execucao"
         origem = "execucao_direta"

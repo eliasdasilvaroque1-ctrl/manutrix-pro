@@ -152,7 +152,7 @@ class UserCreate(UserBase):
 class UserLogin(BaseModel):
     email: str
     password: str
-    organization_id: str
+    organization_id: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
