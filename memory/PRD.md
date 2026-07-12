@@ -489,3 +489,10 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **App.js**: 4.541 → 3.950 linhas (redução adicional de 591 linhas de código morto)
 - **Build**: CI=true yarn build PASS (zero warnings/errors)
 - **Relatórios**: `/app/memory/REGRESSION_REPORT.md`, `/app/memory/MODULARIZACAO.md` (atualizado)
+
+### RC2.2 Bloco P0 — Confiabilidade & Observabilidade ✅ (2026-07-12)
+- **P0.1 Observabilidade**: Logging JSON estruturado (timestamp, request_id, duration_ms, IP, status_code), middleware de tracking com `X-Request-Id` e `X-Response-Time` headers
+- **P0.2 Robustez**: Global exception handler (backend) + ErrorBoundary (frontend) — elimina tela branca
+- **P0.3 Diagnóstico**: `GET /api/health` (público, MongoDB ping + latência), `GET /api/system/status` (admin-only, version, uptime, git commit, memória, CPU, status de todos os serviços)
+- **Dependência**: `psutil` 7.2.2
+- **Relatório**: `/app/memory/RC2_P0_REPORT.md`

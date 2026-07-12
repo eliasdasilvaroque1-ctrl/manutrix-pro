@@ -46,6 +46,7 @@ import { ConsultaEquipamentosPage, DossiePesquisaPage } from "./pages/ConsultaPa
 import { PortalPublicoPage, PortalTecnicoPage } from "./pages/PortalPages";
 import MasterCleanupPage from "./pages/MasterCleanupPage";
 import OrgConfigPage from "./pages/OrgConfigPage";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // Register PWA Service Worker
 registerServiceWorker();
@@ -3895,6 +3896,7 @@ const BrandingLoader = ({ children }) => {
 // App
 function App() {
   return (
+    <ErrorBoundary>
     <BrandingProvider>
       <AuthProvider>
         <BrowserRouter>
@@ -3943,6 +3945,7 @@ function App() {
         </BrowserRouter>
       </AuthProvider>
     </BrandingProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -6,7 +6,9 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import logging.handlers
 import io
+import json
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
@@ -19,6 +21,8 @@ import aiofiles
 import asyncio
 from collections import defaultdict
 import time
+import traceback
+import psutil
 
 # Import shared deps and models
 from deps import (
@@ -45,10 +49,45 @@ from routes.org import router as org_router
 from routes.biblioteca import router as biblioteca_router, BIBLIOTECA_INDEXES
 from routes.central import router as central_router
 
-app = FastAPI(title="MAINTRIX API", version="5.2.0-RC1")
+app = FastAPI(title="MAINTRIX API", version="5.2.0-RC2")
 api_router = APIRouter(prefix="/api")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# ============== STRUCTURED LOGGING ==============
+class JSONFormatter(logging.Formatter):
+    """Structured JSON log formatter for production observability."""
+    def format(self, record):
+        log_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if hasattr(record, 'request_id'):
+            log_entry["request_id"] = record.request_id
+        if hasattr(record, 'user_id'):
+            log_entry["user_id"] = record.user_id
+        if hasattr(record, 'action'):
+            log_entry["action"] = record.action
+        if hasattr(record, 'duration_ms'):
+            log_entry["duration_ms"] = record.duration_ms
+        if hasattr(record, 'status_code'):
+            log_entry["status_code"] = record.status_code
+        if hasattr(record, 'ip'):
+            log_entry["ip"] = record.ip
+        if record.exc_info and record.exc_info[1]:
+            log_entry["exception"] = {
+                "type": record.exc_info[0].__name__,
+                "message": str(record.exc_info[1]),
+                "traceback": traceback.format_exception(*record.exc_info),
+            }
+        return json.dumps(log_entry, ensure_ascii=False, default=str)
+
+_handler = logging.StreamHandler()
+_handler.setFormatter(JSONFormatter())
+logging.basicConfig(level=logging.INFO, handlers=[_handler])
+
+# App startup time for uptime calculation
+_APP_START_TIME = time.time()
 
 # ============== ETAPA 1: RATE LIMITING ==============
 # In-memory rate limiter for critical endpoints (corporate-friendly limits)
@@ -119,6 +158,73 @@ async def timeout_middleware(request: Request, call_next):
     except asyncio.TimeoutError:
         logger.error(f"TIMEOUT: {request.method} {request.url.path} exceeded {REQUEST_TIMEOUT_SECONDS}s")
         return JSONResponse(status_code=504, content={"detail": "Requisição excedeu o tempo limite."})
+
+# ============== P0.1: REQUEST OBSERVABILITY ==============
+@app.middleware("http")
+async def observability_middleware(request: Request, call_next):
+    """Tracks request_id, response time, and structured logging per request."""
+    request_id = request.headers.get("x-request-id", str(uuid.uuid4())[:8])
+    request.state.request_id = request_id
+    ip = _get_client_ip(request)
+    path = request.url.path
+    method = request.method
+
+    # Skip noisy paths from detailed logging
+    skip_log = path.startswith("/api/health") or path.startswith("/static") or path == "/favicon.ico"
+
+    start = time.time()
+    try:
+        response = await call_next(request)
+        duration_ms = round((time.time() - start) * 1000, 1)
+        response.headers["X-Request-Id"] = request_id
+        response.headers["X-Response-Time"] = f"{duration_ms}ms"
+        if not skip_log:
+            logger.info(
+                f"{method} {path} → {response.status_code} ({duration_ms}ms)",
+                extra={"request_id": request_id, "ip": ip, "duration_ms": duration_ms, "status_code": response.status_code}
+            )
+        return response
+    except Exception as exc:
+        duration_ms = round((time.time() - start) * 1000, 1)
+        logger.error(
+            f"{method} {path} → 500 UNHANDLED ({duration_ms}ms): {exc}",
+            extra={"request_id": request_id, "ip": ip, "duration_ms": duration_ms, "status_code": 500},
+            exc_info=True
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Erro interno do servidor.", "request_id": request_id},
+            headers={"X-Request-Id": request_id}
+        )
+
+# ============== P0.2: GLOBAL EXCEPTION HANDLER ==============
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch-all for unhandled exceptions — returns structured JSON instead of crash."""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    logger.error(
+        f"UNHANDLED EXCEPTION on {request.method} {request.url.path}: {exc}",
+        extra={"request_id": request_id, "action": "unhandled_exception"},
+        exc_info=True
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Erro interno do servidor. Tente novamente ou contate o suporte.",
+            "request_id": request_id,
+        },
+        headers={"X-Request-Id": request_id}
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Structured HTTPException handler with request_id."""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "request_id": request_id},
+        headers={"X-Request-Id": request_id}
+    )
 
 # Initialize object storage at startup
 @app.on_event("startup")
@@ -3783,7 +3889,108 @@ async def get_about():
 
 @api_router.get("/")
 async def root():
-    return {"message": "MAINTRIX API v5.2.0-RC1", "status": "online"}
+    return {"message": "MAINTRIX API v5.2.0-RC2", "status": "online"}
+
+# ============== P0.3: HEALTH & DIAGNOSTICS ==============
+
+@api_router.get("/health")
+async def health_check():
+    """Lightweight public health check — used by load balancers and uptime monitors."""
+    db_ok = False
+    db_latency_ms = None
+    try:
+        start = time.time()
+        await db.command("ping")
+        db_latency_ms = round((time.time() - start) * 1000, 1)
+        db_ok = True
+    except Exception:
+        pass
+
+    status_val = "healthy" if db_ok else "degraded"
+    return JSONResponse(
+        status_code=200 if db_ok else 503,
+        content={
+            "status": status_val,
+            "version": "5.2.0-RC2",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "database": {"connected": db_ok, "latency_ms": db_latency_ms},
+        }
+    )
+
+@api_router.get("/system/status")
+async def system_status(current_user=Depends(get_current_user)):
+    """Admin-only diagnostic endpoint with detailed system metrics."""
+    if current_user.get("role") not in ("admin", "master"):
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
+
+    # Database check
+    db_ok = False
+    db_latency_ms = None
+    db_collections = 0
+    try:
+        start = time.time()
+        await db.command("ping")
+        db_latency_ms = round((time.time() - start) * 1000, 1)
+        db_ok = True
+        cols = await db.list_collection_names()
+        db_collections = len(cols)
+    except Exception:
+        pass
+
+    # Storage check
+    storage_ok = False
+    try:
+        storage_ok = objstore.is_available()
+    except Exception:
+        pass
+
+    # System metrics
+    process = psutil.Process()
+    mem = process.memory_info()
+    uptime_seconds = time.time() - _APP_START_TIME
+    uptime_h = int(uptime_seconds // 3600)
+    uptime_m = int((uptime_seconds % 3600) // 60)
+
+    # Git commit (best-effort)
+    git_commit = "unknown"
+    try:
+        git_head = Path(__file__).parent.parent / ".git" / "HEAD"
+        if git_head.exists():
+            ref = git_head.read_text().strip()
+            if ref.startswith("ref:"):
+                ref_path = Path(__file__).parent.parent / ".git" / ref.split(" ")[1]
+                if ref_path.exists():
+                    git_commit = ref_path.read_text().strip()[:8]
+            else:
+                git_commit = ref[:8]
+    except Exception:
+        pass
+
+    environment = os.environ.get("ENVIRONMENT", "production" if "preview" not in os.environ.get("REACT_APP_BACKEND_URL", "") else "preview")
+
+    return {
+        "version": "5.2.0-RC2",
+        "environment": environment,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "uptime": f"{uptime_h}h{uptime_m}m",
+        "uptime_seconds": round(uptime_seconds),
+        "git_commit": git_commit,
+        "services": {
+            "backend": "online",
+            "database": "online" if db_ok else "offline",
+            "storage": "online" if storage_ok else "offline",
+        },
+        "database": {
+            "connected": db_ok,
+            "latency_ms": db_latency_ms,
+            "collections": db_collections,
+        },
+        "memory": {
+            "rss_mb": round(mem.rss / 1024 / 1024, 1),
+            "vms_mb": round(mem.vms / 1024 / 1024, 1),
+        },
+        "cpu_percent": process.cpu_percent(interval=0.1),
+    }
 
 app.include_router(api_router)
 
