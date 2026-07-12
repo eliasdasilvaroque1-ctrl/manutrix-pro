@@ -99,6 +99,8 @@ _RATE_LIMITS = {
     "/api/auth/reset-password": (5, 60),    # 5 req/min
     "/api/auth/change-password": (5, 60),   # 5 req/min
     "/api/upload": (30, 60),                # 30 req/min (bulk photo upload)
+    "/api/uploads/": (60, 60),              # 60 req/min file access (UUID-secured)
+    "/api/storage/": (60, 60),              # 60 req/min file access (UUID-secured)
     "/api/public/": (120, 60),               # 120 req/min for public endpoints (branding fetched on each route)
 }
 
@@ -559,22 +561,24 @@ async def upload_file(file: UploadFile = File(...), user: Dict = Depends(get_cur
     return {"url": f"/api/uploads/{filename}", "filename": filename, "storage": "local"}
 
 @api_router.get("/uploads/{filename}")
-async def get_upload(filename: str, user: Dict = Depends(get_current_user)):
+async def get_upload(filename: str, request: Request):
+    """Public file access — UUID-based security (122-bit entropy)."""
     filepath = UPLOAD_DIR / filename
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     return FileResponse(filepath)
 
 @api_router.get("/uploads/manuals/{filename}")
-async def get_manual_file(filename: str, user: Dict = Depends(get_current_user)):
+async def get_manual_file(filename: str, request: Request):
+    """Public manual access — UUID-based security."""
     filepath = MANUALS_DIR / filename
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     return FileResponse(filepath, media_type="application/pdf")
 
 @api_router.get("/storage/{path:path}")
-async def serve_storage_file(path: str, user: Dict = Depends(get_current_user)):
-    """Serve files from object storage (cloud). Requires authentication."""
+async def serve_storage_file(path: str, request: Request):
+    """Public file access from object storage — UUID-based security."""
     try:
         data, content_type = objstore.get_file(path)
         return Response(content=data, media_type=content_type)

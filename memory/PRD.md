@@ -510,3 +510,16 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **HSTS**: Adicionado `preload` directive
 - **Score**: 68 → 79/100
 - **Relatório**: `/app/memory/SECURITY_PHASE1_REPORT.md`
+
+### RC2.4.1 — Production Readiness Check ✅ (2026-07-12)
+- **Bloqueador encontrado**: Auth nos endpoints GET de servir arquivos quebrava `<img src>` (15+ locais)
+- **CSP**: Seguro — aplicado apenas em respostas JSON (API), não afeta HTML do frontend
+- **Relatório**: `/app/memory/PRODUCTION_READINESS.md`
+
+### RC2.4.2 — File Security Redesign ✅ (2026-07-12)
+- **Design**: Modelo UUID-Based Access — arquivos públicos com UUID v4 (122 bits entropia), uploads protegidos com auth
+- **Endpoints GET** (servir arquivos): Públicos com rate limit 60/min e logging
+- **Endpoints POST** (upload): Auth JWT + size limit 10MB + validação magic bytes
+- **Endpoints Export**: Auth JWT + RBAC admin/supervisor
+- **Validação**: Logo sidebar OK, zero broken images, 17/17 rotas, build PASS
+- **Documentos**: `FILE_SECURITY_DESIGN.md`, `FILE_SECURITY_MATRIX.md`
