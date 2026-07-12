@@ -453,3 +453,30 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - Dashboard Executivo
 - IA Assistente
 - ERP/SAP Integrations
+
+## Deploy & Modularização (2026-07-12)
+- **Modularização Fase 1:** 14 componentes UI extraídos para `/components/shared/index.js`. App.js: 11.040 → 10.855 linhas.
+- **Pipeline:** Frontend Vercel ✅ auto-deploy. Backend Railway ✅ v5.2.0-RC1.
+- **Fix produção:** Paths compliance relativos (funciona em Railway e Emergent)
+- **requirements.txt:** 144 → 24 pacotes. Removido emergentintegrations (private index).
+- **Tag Git:** v5.2.0-RC1
+- **Documentação:** CHANGELOG.md, ROADMAP.md, DEPLOY_CHECKLIST.md, PIPELINE_AUDIT.md, MODULARIZACAO.md, IMPORT_AUDIT.md, NEXT_STEPS.md
+
+## Documentação Completa
+- `/app/memory/PRD.md` — Requisitos do produto
+- `/app/memory/CHANGELOG.md` — Histórico de mudanças
+- `/app/memory/ROADMAP.md` — Plano RC2
+- `/app/memory/DEPLOY_CHECKLIST.md` — Checklist de deploy
+- `/app/memory/BLOCO_A_RELATORIO.md` — Relatório Auditoria
+- `/app/memory/BLOCO_B_RELATORIO.md` — Relatório PWA
+- `/app/memory/BLOCO_C_RELATORIO.md` — Relatório Hardening
+- `/app/memory/BLOCO_D_CERTIFICACAO.md` — Certificação RC1
+- `/app/memory/RC15_COMPLIANCE_RELATORIO.md` — Compliance LGPD
+- `/app/memory/MODULARIZACAO.md` — Plano modularização
+- `/app/memory/IMPORT_AUDIT.md` — Auditoria de imports
+- `/app/memory/PIPELINE_AUDIT.md` — Auditoria de pipeline
+- `/app/memory/NEXT_STEPS.md` — Próximos passos
+- `/app/memory/FIELD_OPERATIONS_ARCH.md` — Arquitetura Field Ops
+- `/app/compliance/` — Termos, Privacidade, LGPD, Changelog Jurídico
+- `/app/commercial/` — SLA, Onboarding
+- `/app/scripts/validate_deploy.py` — Validação pós-deploy

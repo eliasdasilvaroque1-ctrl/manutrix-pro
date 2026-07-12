@@ -3746,15 +3746,23 @@ async def get_compliance_history(user: Dict = Depends(get_current_user)):
     ).sort("accepted_at", -1).to_list(50)
     return history
 
+COMPLIANCE_DIR = Path(__file__).resolve().parent.parent / "compliance"
+
 @api_router.get("/compliance/terms")
 async def get_terms():
     """Get current terms of use (public)"""
-    return {"version": TERMS_VERSION, "content": open("/app/compliance/termos_de_uso.md").read()}
+    fpath = COMPLIANCE_DIR / "termos_de_uso.md"
+    if not fpath.exists():
+        return {"version": TERMS_VERSION, "content": "Documento em preparação."}
+    return {"version": TERMS_VERSION, "content": fpath.read_text(encoding="utf-8")}
 
 @api_router.get("/compliance/privacy")
 async def get_privacy():
     """Get current privacy policy (public)"""
-    return {"version": PRIVACY_VERSION, "content": open("/app/compliance/politica_privacidade.md").read()}
+    fpath = COMPLIANCE_DIR / "politica_privacidade.md"
+    if not fpath.exists():
+        return {"version": PRIVACY_VERSION, "content": "Documento em preparação."}
+    return {"version": PRIVACY_VERSION, "content": fpath.read_text(encoding="utf-8")}
 
 @api_router.get("/compliance/about")
 async def get_about():
