@@ -23,6 +23,7 @@ from collections import defaultdict
 import time
 import traceback
 import psutil
+import qrcode
 
 # Import shared deps and models
 from deps import (
@@ -331,11 +332,36 @@ async def register(user_data: UserCreate):
     Users must be created by an admin via POST /api/admin/users."""
     raise HTTPException(status_code=403, detail="Registro direto desabilitado. Contate o administrador da sua organização.")
 
+@api_router.post("/auth/lookup-email")
+async def lookup_email(data: dict):
+    """Resolve organization for a given email. Returns org info for auto-select."""
+    email = data.get("email", "").lower().strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email obrigatório")
+    user = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0, "organization_id": 1, "role": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="Email não encontrado")
+    org = await db.organizations.find_one({"id": user["organization_id"]}, {"_id": 0, "id": 1, "nome": 1})
+    return {
+        "organization_id": user["organization_id"],
+        "organization_name": org["nome"] if org else "",
+        "is_master": user.get("role") == "master",
+    }
+
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin, request: Request = None):
     email = credentials.email.lower().strip()
     org_id = credentials.organization_id
     ip = _get_client_ip(request) if request else "unknown"
+    
+    # Auto-resolve org for non-master users when org_id not provided
+    if not org_id:
+        user_lookup = await db.users.find_one({"email": email, "deleted_at": None}, {"_id": 0, "organization_id": 1, "role": 1})
+        if user_lookup and user_lookup.get("role") != "master":
+            org_id = user_lookup["organization_id"]
+    
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Selecione uma organização")
     
     user = await db.users.find_one({"email": email, "organization_id": org_id, "deleted_at": None}, {"_id": 0})
     if not user or not verify_password(credentials.password, user.get('password_hash', '')):
@@ -3011,6 +3037,233 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
         elements.append(t)
         doc.build(elements); buf.seek(0)
         return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=os_{empresa.replace(' ','_')}.pdf"})
+
+@api_router.get("/ordens-servico/{os_id}/pdf")
+async def print_os_pdf(os_id: str, user: Dict = Depends(get_current_user)):
+    """Generate a professional A4 PDF for a single work order."""
+    from fpdf import FPDF
+
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+
+    org_id = user.get('organization_id', '')
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0}) if org_id else None
+    empresa = (config or {}).get('identidade', {}).get('nome_empresa', 'MAINTRIX')
+    slogan = (config or {}).get('identidade', {}).get('slogan', '')
+
+    # Fetch related data
+    ativo = await db.ativos.find_one({"id": os_doc.get('ativo_id'), "deleted_at": None}, {"_id": 0, "tag": 1, "nome": 1, "sector": 1, "tipo_equipamento": 1})
+    responsavel = await db.users.find_one({"id": os_doc.get('responsavel_id')}, {"_id": 0, "nome": 1, "turno": 1, "disciplina_principal": 1}) if os_doc.get('responsavel_id') else None
+    executantes_names = []
+    for eid in (os_doc.get('executantes') or []):
+        eu = await db.users.find_one({"id": eid}, {"_id": 0, "nome": 1})
+        if eu:
+            executantes_names.append(eu['nome'])
+
+    # Generate QR Code
+    qr_img_path = f"/tmp/qr_os_{os_id}.png"
+    qr = qrcode.make(f"OS:{os_id}", box_size=4, border=1)
+    qr.save(qr_img_path)
+
+    # Build PDF
+    pdf = FPDF('P', 'mm', 'A4')
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    # --- HEADER ---
+    pdf.set_fill_color(15, 23, 42)
+    pdf.rect(0, 0, 210, 28, 'F')
+    pdf.set_font('Helvetica', 'B', 18)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_xy(10, 5)
+    pdf.cell(120, 10, empresa, ln=False)
+    pdf.set_font('Helvetica', '', 9)
+    pdf.set_xy(10, 15)
+    pdf.cell(120, 6, slogan or 'Ordem de Servico', ln=False)
+    # QR code
+    try:
+        pdf.image(qr_img_path, 172, 2, 24, 24)
+    except Exception:
+        pass
+
+    # --- OS Number bar ---
+    pdf.set_fill_color(99, 102, 241)
+    pdf.rect(0, 28, 210, 10, 'F')
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_xy(10, 29)
+    numero = os_doc.get('numero', os_id[:12])
+    pdf.cell(190, 8, f"ORDEM DE SERVICO  {numero}", align='C')
+
+    y = 42
+
+    # --- Helper functions ---
+    def section_title(title, y_pos):
+        pdf.set_fill_color(241, 245, 249)
+        pdf.rect(10, y_pos, 190, 7, 'F')
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.set_text_color(30, 41, 59)
+        pdf.set_xy(12, y_pos + 1)
+        pdf.cell(0, 5, title.upper())
+        return y_pos + 9
+
+    def field_pair(label, value, x, y_pos, w=85):
+        pdf.set_font('Helvetica', '', 7)
+        pdf.set_text_color(100, 116, 139)
+        pdf.set_xy(x, y_pos)
+        pdf.cell(w, 4, label)
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.set_text_color(15, 23, 42)
+        pdf.set_xy(x, y_pos + 4)
+        pdf.cell(w, 5, str(value or '-')[:60])
+        return y_pos
+
+    def line_sep(y_pos):
+        pdf.set_draw_color(226, 232, 240)
+        pdf.line(10, y_pos, 200, y_pos)
+        return y_pos + 1
+
+    # --- SECTION: Equipment ---
+    y = section_title('Equipamento', y)
+    tag = ativo['tag'] if ativo else '-'
+    nome_ativo = ativo['nome'] if ativo else '-'
+    tipo_eq = (ativo or {}).get('tipo_equipamento', '-')
+    setor_nome = (ativo or {}).get('sector', {}).get('nome', '-')
+
+    field_pair('TAG', tag, 12, y)
+    field_pair('Equipamento', nome_ativo, 107, y)
+    y += 12
+    field_pair('Tipo', tipo_eq, 12, y)
+    field_pair('Local', setor_nome, 107, y)
+    y += 14
+    y = line_sep(y)
+
+    # --- SECTION: OS Info ---
+    y = section_title('Informacoes da OS', y)
+    prioridade_map = {'baixa': 'BAIXA', 'media': 'MEDIA', 'alta': 'ALTA', 'critica': 'CRITICA'}
+    tipo_map = {'corretiva': 'Corretiva', 'preventiva': 'Preventiva', 'preditiva': 'Preditiva', 'melhoria': 'Melhoria'}
+
+    field_pair('Tipo', tipo_map.get(os_doc.get('tipo', ''), os_doc.get('tipo', '-')), 12, y)
+    field_pair('Prioridade', prioridade_map.get(os_doc.get('prioridade', ''), os_doc.get('prioridade', '-')), 107, y)
+    y += 12
+    field_pair('Disciplina', (os_doc.get('disciplina') or '-').capitalize(), 12, y)
+    field_pair('Status', (os_doc.get('status') or '-').replace('_', ' ').capitalize(), 107, y)
+    y += 14
+    y = line_sep(y)
+
+    # --- SECTION: Description ---
+    y = section_title('Descricao', y)
+    pdf.set_font('Helvetica', '', 9)
+    pdf.set_text_color(30, 41, 59)
+    pdf.set_xy(12, y)
+    desc = os_doc.get('descricao') or os_doc.get('titulo') or '-'
+    pdf.multi_cell(186, 5, desc[:500])
+    y = pdf.get_y() + 3
+    y = line_sep(y)
+
+    # --- SECTION: Team ---
+    y = section_title('Equipe', y)
+    resp_nome = responsavel['nome'] if responsavel else '-'
+    resp_turno = (responsavel or {}).get('turno', '-')
+    field_pair('Responsavel', resp_nome, 12, y)
+    field_pair('Turno', resp_turno, 107, y)
+    y += 12
+    equipe_str = ', '.join(executantes_names) if executantes_names else '-'
+    field_pair('Executantes', equipe_str, 12, y, w=186)
+    y += 14
+    y = line_sep(y)
+
+    # --- SECTION: Scheduling ---
+    y = section_title('Datas e Tempos', y)
+    data_abertura = (os_doc.get('data_abertura') or os_doc.get('created_at') or '-')[:16].replace('T', ' ')
+    data_inicio = (os_doc.get('data_inicio') or '')[:16].replace('T', ' ') or '___/___/____  ___:___'
+    data_fim = (os_doc.get('data_conclusao') or '')[:16].replace('T', ' ') or '___/___/____  ___:___'
+
+    field_pair('Data Abertura', data_abertura, 12, y)
+    field_pair('Hora Inicial', data_inicio, 107, y)
+    y += 12
+    field_pair('Hora Final', data_fim, 12, y)
+    tempo = os_doc.get('tempo_execucao_minutos')
+    field_pair('Duracao', f"{tempo} min" if tempo else '____________ min', 107, y)
+    y += 14
+    y = line_sep(y)
+
+    # --- SECTION: Materials ---
+    materiais = os_doc.get('materiais') or []
+    if materiais:
+        y = section_title('Materiais Utilizados', y)
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.set_text_color(100, 116, 139)
+        pdf.set_xy(12, y); pdf.cell(80, 5, 'Material')
+        pdf.set_xy(92, y); pdf.cell(30, 5, 'Qtd')
+        pdf.set_xy(122, y); pdf.cell(40, 5, 'Unidade')
+        y += 6
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_text_color(30, 41, 59)
+        for m in materiais[:10]:
+            pdf.set_xy(12, y); pdf.cell(80, 5, str(m.get('nome', m.get('item_nome', '-')))[:40])
+            pdf.set_xy(92, y); pdf.cell(30, 5, str(m.get('quantidade', '-')))
+            pdf.set_xy(122, y); pdf.cell(40, 5, str(m.get('unidade', '-')))
+            y += 5
+        y += 3
+        y = line_sep(y)
+
+    # --- SECTION: Observations (blank box) ---
+    y = section_title('Observacoes de Campo', y)
+    pdf.set_draw_color(203, 213, 225)
+    box_h = min(30, 297 - y - 45)
+    pdf.rect(12, y, 186, box_h)
+    y += box_h + 4
+
+    # --- SECTION: Signatures ---
+    if y > 240:
+        pdf.add_page()
+        y = 15
+
+    y = section_title('Assinaturas', y)
+    y += 20
+
+    # Executor signature line
+    pdf.set_draw_color(100, 116, 139)
+    pdf.line(15, y, 95, y)
+    pdf.set_font('Helvetica', '', 8)
+    pdf.set_text_color(100, 116, 139)
+    pdf.set_xy(15, y + 1)
+    pdf.cell(80, 5, 'Executor')
+    pdf.set_xy(15, y + 5)
+    pdf.cell(80, 5, f'Nome: {resp_nome}')
+
+    # Supervisor signature line
+    pdf.line(115, y, 195, y)
+    pdf.set_xy(115, y + 1)
+    pdf.cell(80, 5, 'Supervisor')
+    pdf.set_xy(115, y + 5)
+    pdf.cell(80, 5, 'Nome: _________________________')
+
+    y += 16
+    # Date line
+    pdf.set_xy(15, y)
+    pdf.cell(80, 5, 'Data: ____/____/________')
+    pdf.set_xy(115, y)
+    pdf.cell(80, 5, 'Data: ____/____/________')
+
+    # --- FOOTER ---
+    pdf.set_y(-15)
+    pdf.set_font('Helvetica', 'I', 7)
+    pdf.set_text_color(148, 163, 184)
+    pdf.cell(0, 5, f'{empresa} | OS {numero} | Impresso em {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")} UTC', align='C')
+
+    # Output
+    buf = io.BytesIO()
+    buf.write(pdf.output())
+    buf.seek(0)
+    # Cleanup QR
+    try:
+        os.remove(qr_img_path)
+    except Exception:
+        pass
+    return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename=OS_{numero}.pdf"})
 
 @api_router.get("/export/estoque")
 async def export_estoque(format: str = "excel", user: Dict = Depends(get_current_user)):

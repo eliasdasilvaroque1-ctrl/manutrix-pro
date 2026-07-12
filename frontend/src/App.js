@@ -15,7 +15,7 @@ import {
   DollarSign, AlertCircle, Users, Tag,
   Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy, Factory,
   Building2, Palette, BookOpen, CheckCircle2, Sparkles, Send,
-  ZoomIn, Maximize2, ImagePlus
+  ZoomIn, Maximize2, ImagePlus, Printer
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
 import { BrandingProvider, useBranding } from "@/lib/branding";
@@ -961,8 +961,10 @@ const LoginPage = () => {
   const { user } = useAuth();
 
   // Determine org source for UX clarity
-  const [orgSource, setOrgSource] = useState(null); // 'subdomain' | 'remembered' | 'single' | 'manual' | null
+  const [orgSource, setOrgSource] = useState(null); // 'subdomain' | 'remembered' | 'single' | 'manual' | 'auto' | null
   const [showOrgSelector, setShowOrgSelector] = useState(false);
+  const [isMasterUser, setIsMasterUser] = useState(false);
+  const [autoOrgLoading, setAutoOrgLoading] = useState(false);
 
   useEffect(() => { loadOrganizations(); }, [loadOrganizations]);
 
@@ -1016,6 +1018,28 @@ const LoginPage = () => {
     setShowOrgSelector(true);
     setEmpresaBusca('');
     setShowEmpresaDropdown(false);
+    setIsMasterUser(false);
+  };
+
+  // Auto-detect org from email (for non-master users)
+  const handleEmailBlur = async () => {
+    if (!email || orgId) return;
+    setAutoOrgLoading(true);
+    try {
+      const res = await axios.post(`${API}/auth/lookup-email`, { email: email.trim() });
+      if (res.data.is_master) {
+        setIsMasterUser(true);
+        setShowOrgSelector(true);
+      } else {
+        selectOrg(res.data.organization_id);
+        setEmpresaBusca(res.data.organization_name);
+        setOrgSource('auto');
+        setIsMasterUser(false);
+      }
+    } catch {
+      // Email not found — show org selector as fallback
+      if (!orgId) setShowOrgSelector(true);
+    } finally { setAutoOrgLoading(false); }
   };
 
   const filteredOrgs = organizations.filter(o =>
@@ -1122,10 +1146,11 @@ const LoginPage = () => {
                       {orgSource === 'remembered' && 'Última organização utilizada'}
                       {orgSource === 'single' && 'Organização única'}
                       {orgSource === 'manual' && 'Selecionada manualmente'}
+                      {orgSource === 'auto' && 'Detectado pelo email'}
                     </p>
                   </div>
-                  {orgSource === 'subdomain' ? (
-                    <Lock size={16} className="text-secondary shrink-0" />
+                  {orgSource === 'subdomain' || orgSource === 'auto' ? (
+                    <Lock size={16} className="text-secondary shrink-0" title={orgSource === 'auto' ? 'Organização vinculada ao email' : 'Ambiente detectado'} />
                   ) : (
                     <button type="button" onClick={handleTrocarOrg} className="text-xs px-2 py-1 rounded border border-surface hover:bg-surface-hover text-secondary transition-colors" data-testid="trocar-org-btn">
                       Trocar
@@ -1171,7 +1196,7 @@ const LoginPage = () => {
             )}
 
             <FormInput label="Email">
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-industrial w-full px-4" placeholder="seu@email.com" required data-testid="login-email" />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={handleEmailBlur} className="input-industrial w-full px-4" placeholder="seu@email.com" required data-testid="login-email" />
             </FormInput>
             <FormInput label="Senha">
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-industrial w-full px-4" placeholder="Sua senha" required data-testid="login-password" />
@@ -3601,6 +3626,15 @@ const OSDetailPage = () => {
           )}
         </div>
       )}
+
+      {/* Print OS Button — always visible */}
+      <button
+        onClick={() => window.open(`${BACKEND_URL}/api/ordens-servico/${id}/pdf`, '_blank')}
+        className="btn-secondary w-full flex items-center justify-center gap-2 mt-2"
+        data-testid="os-print-btn"
+      >
+        <Printer size={18} /> Imprimir OS
+      </button>
 
       {/* Modal Concluir OS */}
       <Modal isOpen={showConcluir} onClose={() => setShowConcluir(false)} title="Concluir Ordem de Serviço" size="md">
