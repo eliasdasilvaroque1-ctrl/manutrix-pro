@@ -197,8 +197,13 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
     role = user.get('role', '')
     is_operacional = role in ROLE_GROUPS['operacional']
 
-    # Determine initial status based on role
-    if role == 'operador':
+    # Determine initial status based on role and origin
+    execucao_direta = getattr(data, 'execucao_direta', False) or (hasattr(data, 'origem') and data.origem == 'execucao_direta')
+    if execucao_direta and role in (ROLE_GROUPS['execucao'] + ['supervisor']):
+        # Direct execution: OS goes straight to em_execucao (no PCM backlog)
+        status_inicial = "em_execucao"
+        origem = "execucao_direta"
+    elif role == 'operador':
         status_inicial = "solicitada"
         origem = data.origem or "operador"
     elif role in ('supervisor',):
@@ -232,7 +237,9 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "aprovacao": aprovacao,
         "responsavel_id": data.responsavel_id, "equipe": data.equipe or [],
         "data_abertura": datetime.now(timezone.utc).isoformat(),
-        "data_planejada": data.data_planejada, "data_inicio": None, "data_conclusao": None,
+        "data_planejada": data.data_planejada,
+        "data_inicio": datetime.now(timezone.utc).isoformat() if execucao_direta else None,
+        "data_conclusao": None,
         "custo_pecas": data.custo_pecas, "custo_mao_obra": data.custo_mao_obra,
         "custo_total": custo_total,
         "causa_falha": data.causa_falha,
@@ -241,7 +248,8 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "tempo_execucao_minutos": None, "observacoes": None, "servicos_realizados": None,
         "criado_por": user.get('id'),
         "planejado_por": None, "data_planejamento": None,
-        "iniciado_por": None, "concluido_por": None,
+        "iniciado_por": user.get('id') if execucao_direta else None,
+        "concluido_por": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None
     }

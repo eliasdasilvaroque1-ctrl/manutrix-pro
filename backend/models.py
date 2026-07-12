@@ -234,6 +234,7 @@ class OSCreate(BaseModel):
     descricao: Optional[str] = None
     justificativa: Optional[str] = None
     origem: str = "manual"
+    execucao_direta: bool = False
     responsavel_id: Optional[str] = None
     equipe: List[str] = []
     data_planejada: Optional[str] = None

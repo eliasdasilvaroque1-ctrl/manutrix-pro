@@ -47,6 +47,7 @@ import { PortalPublicoPage, PortalTecnicoPage } from "./pages/PortalPages";
 import MasterCleanupPage from "./pages/MasterCleanupPage";
 import OrgConfigPage from "./pages/OrgConfigPage";
 import ErrorBoundary from "./components/ErrorBoundary";
+import FieldOpsPage from "./pages/FieldOpsPage";
 
 // Register PWA Service Worker
 registerServiceWorker();
@@ -752,6 +753,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       label: 'PRINCIPAL',
       items: [
         { icon: LayoutDashboard, label: isOperacional ? 'Minha Jornada' : 'Central de Trabalho', path: '/' },
+        ...(isOperacional ? [{ icon: Target, label: 'Minha Área', path: '/minha-area' }] : []),
         ...(!isOperacional ? [{ icon: BarChart3, label: 'Dashboard', path: '/dashboard' }] : []),
         ...(!isOperacional ? [{ icon: Users, label: 'Equipe', path: '/equipe' }] : []),
       ]
@@ -760,6 +762,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       label: 'OPERAÇÃO',
       items: [
         { icon: Box, label: 'Ativos', path: '/ativos' },
+        ...(isOperacional ? [{ icon: Wrench, label: 'Minhas OS', path: '/os' }] : []),
         ...(!isOperacional ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
         { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
         ...(isOperacional ? [{ icon: AlertTriangle, label: 'Solicitar Serviço', path: '/solicitar' }] : []),
@@ -2905,7 +2908,7 @@ const OSDetailPage = () => {
   const [historico, setHistorico] = useState([]);
   const [showConcluir, setShowConcluir] = useState(false);
   const [showFinalizarRapido, setShowFinalizarRapido] = useState(false);
-  const [concluirForm, setConcluirForm] = useState({ servicos_realizados: '', causa_falha: '', solucao: '', tempo_execucao_minutos: '', observacoes: '' });
+  const [concluirForm, setConcluirForm] = useState({ servicos_realizados: '', causa_falha: '', solucao: '', tempo_execucao_minutos: '', observacoes: '', hora_inicio: '', hora_final: '' });
   const [hhManualForm, setHhManualForm] = useState({ executante_id: '', data_inicio: '', data_fim: '', horas: '', descricao: '' });
   const [showHhManual, setShowHhManual] = useState(false);
   const [materiais, setMateriais] = useState([]);
@@ -3097,6 +3100,8 @@ const OSDetailPage = () => {
         servicos_realizados: concluirForm.servicos_realizados.trim(),
         tempo_execucao_minutos: tempo,
         observacoes: concluirForm.observacoes || null,
+        data_inicio: concluirForm.hora_inicio ? new Date(concluirForm.hora_inicio).toISOString() : null,
+        data_conclusao: concluirForm.hora_final ? new Date(concluirForm.hora_final).toISOString() : null,
       };
       if (!navigator.onLine) {
         await queueOperation({ method: 'POST', url: `/ordens-servico/${id}/concluir`, data: concluirData, priority: 2 });
@@ -3646,13 +3651,41 @@ const OSDetailPage = () => {
               <span className="text-slate-300 text-sm ml-2">{os.ativo.nome}</span>
             </div>
           )}
-          <FormInput label="Serviço Executado" required>
+          <FormInput label="Servico Executado" required>
             <textarea value={concluirForm.servicos_realizados} onChange={(e) => setConcluirForm({...concluirForm, servicos_realizados: e.target.value})}
-              className="input-industrial w-full px-4 py-3 min-h-[120px]" placeholder="Descreva o serviço realizado..." data-testid="os-servico-input" />
+              className="input-industrial w-full px-4 py-3 min-h-[120px]" placeholder="Descreva o servico realizado..." data-testid="os-servico-input" />
           </FormInput>
+          <div className="grid grid-cols-2 gap-3">
+            <FormInput label="Hora Inicial">
+              <input type="datetime-local" value={concluirForm.hora_inicio} onChange={(e) => {
+                const val = e.target.value;
+                setConcluirForm(prev => {
+                  const updated = {...prev, hora_inicio: val};
+                  if (val && prev.hora_final) {
+                    const diff = Math.round((new Date(prev.hora_final) - new Date(val)) / 60000);
+                    if (diff > 0) updated.tempo_execucao_minutos = String(diff);
+                  }
+                  return updated;
+                });
+              }} className="input-industrial w-full px-4" data-testid="os-hora-inicio" />
+            </FormInput>
+            <FormInput label="Hora Final">
+              <input type="datetime-local" value={concluirForm.hora_final} onChange={(e) => {
+                const val = e.target.value;
+                setConcluirForm(prev => {
+                  const updated = {...prev, hora_final: val};
+                  if (prev.hora_inicio && val) {
+                    const diff = Math.round((new Date(val) - new Date(prev.hora_inicio)) / 60000);
+                    if (diff > 0) updated.tempo_execucao_minutos = String(diff);
+                  }
+                  return updated;
+                });
+              }} className="input-industrial w-full px-4" data-testid="os-hora-final" />
+            </FormInput>
+          </div>
           <FormInput label="Tempo Gasto (minutos)">
             <input type="number" min="1" value={concluirForm.tempo_execucao_minutos} onChange={(e) => setConcluirForm({...concluirForm, tempo_execucao_minutos: e.target.value})}
-              className="input-industrial w-full px-4" placeholder="Ex: 60" data-testid="os-tempo-input" />
+              className="input-industrial w-full px-4" placeholder="Calculado automaticamente" data-testid="os-tempo-input" />
           </FormInput>
           <FormInput label="Observações">
             <textarea value={concluirForm.observacoes} onChange={(e) => setConcluirForm({...concluirForm, observacoes: e.target.value})}
@@ -3955,6 +3988,7 @@ function App() {
               <Route path="/sobressalentes" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
               <Route path="/paradas" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
               <Route path="/solicitar" element={<ProtectedRoute allow={['master','admin','pcm','supervisor','tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor','operador']}><AppLayout><SolicitacaoServicoPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/minha-area" element={<ProtectedRoute><AppLayout><FieldOpsPage /></AppLayout></ProtectedRoute>} />
               <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/usuarios" element={<ProtectedRoute allow={['master','admin']}><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/templates" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />

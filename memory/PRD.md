@@ -523,3 +523,15 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Endpoints Export**: Auth JWT + RBAC admin/supervisor
 - **Validação**: Logo sidebar OK, zero broken images, 17/17 rotas, build PASS
 - **Documentos**: `FILE_SECURITY_DESIGN.md`, `FILE_SECURITY_MATRIX.md`
+### RC3.1 — Business Critical Fixes ✅ (2026-07-12)
+- **Multiempresa**: lookup-email + login auto-resolve org para nao-masters + cadeado no seletor
+- **PDF OS**: Endpoint `ordens-servico/{id}/pdf` — A4 profissional com QR Code, equipamento, equipe, assinaturas
+- **Field Ops stub**: `FieldOpsPage.js` criado, deps fpdf2+qrcode
+
+### RC3.2 — Operational Core (Asset-Centric Foundation) ✅ (2026-07-12)
+- **Minha Area**: `/minha-area` com equipamentos, planos por ativo, inspecoes pendentes, minhas OS
+- **OS Direta**: Tecnicos criam OS que vai direto para `em_execucao` (bypass PCM)
+- **Indicadores**: `/indicadores` por colaborador, disciplina, turno, equipamento, periodo
+- **Hora Inicial/Final**: Campos datetime-local na conclusao da OS com calculo HH automatico
+- **Backlog**: OS direta nao entra no PCM; operador/inspecao entram
+
