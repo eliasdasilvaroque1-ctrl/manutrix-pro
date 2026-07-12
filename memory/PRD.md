@@ -535,3 +535,15 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **Hora Inicial/Final**: Campos datetime-local na conclusao da OS com calculo HH automatico
 - **Backlog**: OS direta nao entra no PCM; operador/inspecao entram
 
+
+### RC3.2.1 — Full QA & Homologation ✅ (2026-07-12)
+- **2 bugs corrigidos**: BUG-001 (UserLogin.organization_id obrigatorio) + BUG-002 (OS Direta master/admin/pcm)
+- **18/18 rotas OK**, zero PAGE ERROR, zero ReferenceError, 6/6 roles login OK
+- **Relatorios**: `QA_FINAL_REPORT.md`, `BUG_REPORT.md`, `REGRESSION_REPORT_RC3.md`
+
+### RC4.0 — Asset Dossier (EAM Core) ✅ (2026-07-12)
+- **Dossie do Ativo**: `/ativos/:id` — tela central do sistema com 8 abas
+- **Backend**: `GET /api/ativos/{id}/dossie` — endpoint agregado (ativo, OS, inspecoes, planos, solicitacoes, documentos, KPIs)
+- **KPIs**: MTBF, MTTR, Disponibilidade, custos (materiais + HH), contadores
+- **8 Abas**: Visao Geral, OS (filtros), Planos, Execucoes Inspecao (fotos), Solicitacoes, Documentos (PDF), Historico (timeline visual), Indicadores
+- **Relatorios**: `RC4_REPORT.md`, `ASSET_DOSSIER.md`, `DATABASE_RELATIONSHIP.md`

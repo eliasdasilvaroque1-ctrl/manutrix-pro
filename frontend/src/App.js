@@ -48,6 +48,7 @@ import MasterCleanupPage from "./pages/MasterCleanupPage";
 import OrgConfigPage from "./pages/OrgConfigPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 import FieldOpsPage from "./pages/FieldOpsPage";
+import AssetDossierPage from "./pages/AssetDossierPage";
 
 // Register PWA Service Worker
 registerServiceWorker();
@@ -3977,7 +3978,7 @@ function App() {
               <Route path="/" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><CentralTrabalhoPage /></AppLayout></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
               <Route path="/ativos" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><AtivosPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/ativos/:id" element={<ProtectedRoute><AppLayout><AtivoDetailPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/ativos/:id" element={<ProtectedRoute><AppLayout><AssetDossierPage /></AppLayout></ProtectedRoute>} />
               <Route path="/os" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><OSPage /></AppLayout></ProtectedRoute>} />
               <Route path="/os/:id" element={<ProtectedRoute><AppLayout><OSDetailPage /></AppLayout></ProtectedRoute>} />
               <Route path="/estoque" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><EstoquePage /></AppLayout></ProtectedRoute>} />

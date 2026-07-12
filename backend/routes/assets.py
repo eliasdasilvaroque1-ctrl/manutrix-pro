@@ -605,3 +605,135 @@ async def get_ativo_saude(ativo_id: str, user: Dict = Depends(get_current_user))
         "ultima_os": await format_event(last_os, "os"),
         "ultima_anomalia": await format_event(last_anom, "anomalia") if last_anom else None,
     }
+
+
+# ============== ASSET DOSSIER ==============
+
+@router.get("/ativos/{ativo_id}/dossie")
+async def get_ativo_dossie(ativo_id: str, user: Dict = Depends(get_current_user)):
+    """Comprehensive asset dossier — aggregates all data for the asset-centric view."""
+    from datetime import timedelta
+
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
+
+    org_id = ativo.get('organization_id', '')
+
+    # Parallel data fetch
+    sector = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0}) or {}
+
+    # OS (all, most recent first)
+    os_all = await db.ordens_servico.find(
+        {"ativo_id": ativo_id, "deleted_at": None},
+        {"_id": 0, "id": 1, "numero": 1, "titulo": 1, "tipo": 1, "disciplina": 1,
+         "prioridade": 1, "status": 1, "responsavel_id": 1, "data_abertura": 1,
+         "data_inicio": 1, "data_conclusao": 1, "tempo_execucao_minutos": 1,
+         "materiais": 1, "created_at": 1, "origem": 1}
+    ).sort("created_at", -1).to_list(500)
+
+    # Inspections (all)
+    insp_all = await db.inspecoes.find(
+        {"ativo_id": ativo_id, "deleted_at": None},
+        {"_id": 0, "id": 1, "tipo": 1, "status": 1, "resultado": 1,
+         "responsavel_id": 1, "data_programada": 1, "data_inicio": 1,
+         "data_conclusao": 1, "duracao_minutos": 1, "plano_id": 1,
+         "checklist": 1, "fotos": 1, "observacoes": 1, "created_at": 1}
+    ).sort("created_at", -1).to_list(500)
+
+    # Plans
+    planos = await db.planos_inspecao.find(
+        {"$or": [{"ativo_id": ativo_id}, {"tipo_equipamento": ativo.get('tipo_equipamento', '__none__')}],
+         "organization_id": org_id, "deleted_at": None},
+        {"_id": 0}
+    ).to_list(100)
+
+    # Solicitações
+    solicitacoes = await db.solicitacoes.find(
+        {"ativo_id": ativo_id, "deleted_at": None},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+
+    # Documents (manuals + attachments)
+    manuais = await db.manuais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(50)
+    attachments = await db.attachments.find(
+        {"entity_type": "ativo", "entity_id": ativo_id, "deleted_at": None},
+        {"_id": 0}
+    ).to_list(100)
+
+    # BOM (materials list)
+    materiais = await db.ativo_materiais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(100)
+
+    # KPI calculation
+    os_corretivas = [o for o in os_all if o.get('tipo') == 'corretiva' and o.get('status') == 'concluida']
+    os_concluidas = [o for o in os_all if o.get('status') == 'concluida']
+    tempos_reparo = [o['tempo_execucao_minutos'] for o in os_corretivas if o.get('tempo_execucao_minutos')]
+    total_falhas = len(os_corretivas)
+
+    mttr_horas = round(sum(tempos_reparo) / len(tempos_reparo) / 60, 2) if tempos_reparo else 0
+    mtbf_horas = round(720 / total_falhas, 1) if total_falhas > 0 else 0
+    disponibilidade = round(mtbf_horas / (mtbf_horas + mttr_horas) * 100, 1) if (mtbf_horas + mttr_horas) > 0 else 100
+
+    # Cost indicators
+    custo_materiais = 0
+    custo_hh = 0
+    for o in os_concluidas:
+        for m in (o.get('materiais') or []):
+            custo_materiais += (m.get('custo_unitario', 0) or 0) * (m.get('quantidade', 0) or 0)
+        hh_minutos = o.get('tempo_execucao_minutos', 0) or 0
+        custo_hh += (hh_minutos / 60) * 80  # R$80/h average
+
+    # Resolve user names for OS and inspections
+    user_ids = set()
+    for o in os_all:
+        if o.get('responsavel_id'): user_ids.add(o['responsavel_id'])
+    for i in insp_all:
+        if i.get('responsavel_id'): user_ids.add(i['responsavel_id'])
+    for s in solicitacoes:
+        if s.get('solicitante_id'): user_ids.add(s['solicitante_id'])
+
+    users_map = {}
+    if user_ids:
+        async for u in db.users.find({"id": {"$in": list(user_ids)}}, {"_id": 0, "id": 1, "nome": 1}):
+            users_map[u['id']] = u['nome']
+
+    # Enrich with user names
+    for o in os_all:
+        o['responsavel_nome'] = users_map.get(o.get('responsavel_id'), '')
+    for i in insp_all:
+        i['responsavel_nome'] = users_map.get(i.get('responsavel_id'), '')
+    for s in solicitacoes:
+        s['solicitante_nome'] = users_map.get(s.get('solicitante_id'), '')
+
+    # Plan names map
+    plano_names = {p['id']: p.get('nome', '') for p in planos}
+    for i in insp_all:
+        i['plano_nome'] = plano_names.get(i.get('plano_id'), '')
+
+    os_abertas = [o for o in os_all if o.get('status') in ('aberta', 'em_execucao', 'pausada', 'programada', 'disponivel', 'solicitada')]
+    insp_pendentes = [i for i in insp_all if i.get('status') in ('pendente', 'em_andamento')]
+
+    return {
+        "ativo": {**ativo, "sector": sector},
+        "kpis": {
+            "mtbf_horas": mtbf_horas,
+            "mttr_horas": mttr_horas,
+            "disponibilidade": disponibilidade,
+            "total_os": len(os_all),
+            "os_abertas": len(os_abertas),
+            "os_concluidas": len(os_concluidas),
+            "total_falhas": total_falhas,
+            "total_inspecoes": len(insp_all),
+            "inspecoes_pendentes": len(insp_pendentes),
+            "custo_materiais": round(custo_materiais, 2),
+            "custo_hh": round(custo_hh, 2),
+            "custo_total": round(custo_materiais + custo_hh, 2),
+        },
+        "os": os_all,
+        "inspecoes": insp_all,
+        "planos": planos,
+        "solicitacoes": solicitacoes,
+        "documentos": {"manuais": manuais, "attachments": attachments},
+        "materiais_bom": materiais,
+    }
