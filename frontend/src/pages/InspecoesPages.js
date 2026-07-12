@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef, memo, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ClipboardCheck, Plus, Calendar, Clock, Activity, AlertTriangle, CheckCircle, XCircle,
   Search, Eye, Camera, ArrowLeft, MapPin, Play, Edit, Filter, ChevronDown, ChevronRight, Save,
-  Box, Cog, Droplet, QrCode, RefreshCw, Shield, Sparkles, Target, Trash2, Upload, Wrench, X, Zap
+  Box, Cog, Droplet, QrCode, RefreshCw, Shield, Sparkles, Target, Trash2, Upload, Wrench, X, Zap,
+  AlertCircle, CheckCircle2
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth, BACKEND_URL } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";
 import { queueOperation, queuePhoto } from "@/lib/offlineQueue";
-import { StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select } from "@/components/shared";
+import { StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "@/components/shared";
 import ExportButtons from "@/components/widgets/ExportButtons";
 
 const InspecoesPage = () => {
@@ -1362,26 +1363,295 @@ const PhotoUploader = ({ entityType, entityId, categoria = 'foto', label = 'Foto
   );
 };
 
-// ============== SOBRESSALENTES PAGE ==============
 
-const CONDICAO_CONFIG = {
-  novo: { label: 'Novo', class: 'text-emerald-400 bg-brand-10' },
-  reformado: { label: 'Reformado', class: 'text-blue-400 bg-blue-500/10' },
-  em_reforma: { label: 'Em Reforma', class: 'text-amber-400 bg-amber-500/10' },
-  reservado: { label: 'Reservado', class: 'text-purple-400 bg-purple-500/10' },
-  instalado: { label: 'Instalado', class: 'text-cyan-400 bg-cyan-500/10' },
-  descartado: { label: 'Descartado', class: 'text-red-400 bg-red-500/10' },
+// ============== CAMERA CAPTURE ==============
+
+const CameraCapture = ({ onCapture, onClose }) => {
+  const videoRef = useRef(null);
+  const [stream, setStream] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const startCamera = async () => {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        setStream(mediaStream);
+        if (videoRef.current) videoRef.current.srcObject = mediaStream;
+      } catch (err) {
+        setError('Não foi possível acessar a câmera. Verifique as permissões.');
+      }
+    };
+    startCamera();
+    return () => { if (stream) stream.getTracks().forEach(t => t.stop()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const takePhoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `foto_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        onCapture(file);
+      }
+    }, 'image/jpeg', 0.85);
+    if (stream) stream.getTracks().forEach(t => t.stop());
+  };
+
+  if (error) {
+    return (
+      <div className="fixed inset-0 z-[70] bg-black flex items-center justify-center">
+        <div className="text-center p-6">
+          <AlertCircle size={48} className="text-red-400 mx-auto mb-4" />
+          <p className="text-white mb-4">{error}</p>
+          <button onClick={onClose} className="btn-secondary">Fechar</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black flex flex-col" data-testid="camera-capture">
+      <video ref={videoRef} autoPlay playsInline className="flex-1 object-cover" />
+      <div className="absolute bottom-0 left-0 right-0 p-6 flex items-center justify-center gap-6 bg-gradient-to-t from-black/80">
+        <button onClick={onClose} className="p-3 rounded-full bg-white/20 text-white" data-testid="camera-close">
+          <X size={24} />
+        </button>
+        <button onClick={takePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-white/30 hover:bg-gray-200 transition-all" data-testid="camera-shutter" />
+        <div className="w-12" />
+      </div>
+    </div>
+  );
 };
-const ORIGEM_OPTIONS = [
-  { value: 'compra_nova', label: 'Compra Nova' },
-  { value: 'reforma_interna', label: 'Reforma Interna' },
-  { value: 'reforma_externa', label: 'Reforma Externa' },
-  { value: 'transferencia', label: 'Transferência' },
-];
 
-// SobressalentesPage → extracted to /pages/SobressalentesPage.js
 
-// ParadasPage → extracted to /pages/ParadasPage.js
+// ============== MODAL NOVA INSPEÇÃO ==============
+
+const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = [], tecnicos = [], preSelectedAtivoId = null }) => {
+  const [loading, setLoading] = useState(false);
+  const [planosDisponiveis, setPlanosDisponiveis] = useState([]);
+  const [selectedPlano, setSelectedPlano] = useState(null);
+  const [checklist, setChecklist] = useState([]);
+  const [form, setForm] = useState({
+    ativo_id: '', responsavel_id: '', executantes: [], data_planejada: '', observacoes: ''
+  });
+  const { user } = useAuth();
+  
+  useEffect(() => {
+    if (isOpen) {
+      setPlanosDisponiveis([]);
+      setSelectedPlano(null);
+      setChecklist([]);
+      setForm({ ativo_id: preSelectedAtivoId || '', responsavel_id: user?.id || '', executantes: [], data_planejada: '', observacoes: '' });
+    }
+  }, [isOpen, user, preSelectedAtivoId]);
+
+  const loadPlanos = async (ativoId) => {
+    if (!ativoId) { setPlanosDisponiveis([]); return; }
+    try {
+      const res = await api.get(`/planos-inspecao/por-ativo/${ativoId}`);
+      setPlanosDisponiveis(res.data);
+    } catch {
+      setPlanosDisponiveis([]);
+    }
+  };
+
+  useEffect(() => {
+    const ativoId = preSelectedAtivoId || form.ativo_id;
+    if (ativoId && isOpen) loadPlanos(ativoId);
+  }, [form.ativo_id, preSelectedAtivoId, isOpen]);
+
+  const handleAtivoChange = (ativoId) => {
+    setForm(prev => ({...prev, ativo_id: ativoId}));
+    setSelectedPlano(null);
+    setChecklist([]);
+  };
+
+  const handleSelectPlano = (plano) => {
+    setSelectedPlano(plano);
+    const perguntas = (plano.perguntas || []).map(p => ({
+      id: p.id || String(Date.now()),
+      descricao: p.texto || p.descricao || '',
+      tipo: p.tipo_campo || p.tipo || 'boolean',
+      obrigatorio: p.obrigatoria ?? p.obrigatorio ?? true,
+      unidade: p.unidade || '',
+      conforme: null, valor: null, observacao: ''
+    }));
+    setChecklist(perguntas);
+  };
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.ativo_id) { toast.error('Selecione o ativo'); return; }
+    if (!selectedPlano) { toast.error('Selecione um plano de inspeção'); return; }
+    
+    setLoading(true);
+    try {
+      const payload = {
+        ativo_id: form.ativo_id,
+        plano_id: selectedPlano.id,
+        tipo: selectedPlano.tipo || selectedPlano.categoria || 'inspecao',
+        disciplina: selectedPlano.disciplina || null,
+        responsavel_id: form.responsavel_id || null,
+        executantes: form.executantes || [],
+        checklist: checklist,
+        data_planejada: form.data_planejada || null,
+        observacoes: form.observacoes || null,
+      };
+
+      if (!navigator.onLine) {
+        await queueOperation({ method: 'POST', url: '/inspecoes', data: payload });
+        toast.info('Sem conexão — inspeção salva localmente');
+      } else {
+        await api.post('/inspecoes', payload);
+        toast.success('Execução criada com sucesso!');
+      }
+      onSuccess();
+      onClose();
+    } catch (error) {
+      toast.error(normalizeError(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectedAtivo = ativos.find(a => a.id === form.ativo_id);
+  const tipoLabels = { inspecao: 'Inspeção', preventiva: 'Preventiva', lubrificacao: 'Lubrificação', limpeza: 'Limpeza', melhoria: 'Melhoria', mecanica: 'Mecânica', eletrica: 'Elétrica' };
+  
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Nova Execução de Inspeção" size="lg">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="glass-card p-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormInput label="Ativo / Equipamento" required>
+              {preSelectedAtivoId ? (
+                <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                  {(() => { const a = ativos.find(x => x.id === preSelectedAtivoId); return a ? (
+                    <div>
+                      {a.sector && <p className="text-xs text-slate-500 uppercase">{a.sector.nome}</p>}
+                      <span className="font-mono text-brand text-sm">{a.tag}</span>
+                      <span className="text-slate-300 text-sm ml-2">{a.nome}</span>
+                    </div>
+                  ) : <span className="text-slate-400">Ativo vinculado</span>; })()}
+                </div>
+              ) : (
+                <Select value={form.ativo_id} onChange={(val) => handleAtivoChange(val)}
+                  options={ativos.map(a => ({ value: a.id, label: `${a.sector?.nome || ''} • ${a.tag} - ${a.nome}` }))} placeholder="Selecione o equipamento..." />
+              )}
+            </FormInput>
+            <FormInput label="Responsável">
+              <Select value={form.responsavel_id} onChange={(val) => setForm({...form, responsavel_id: val})}
+                options={tecnicos.map(t => ({ value: t.id, label: t.nome }))} placeholder="Selecione..." />
+            </FormInput>
+            <FormInput label="Data Planejada">
+              <input type="date" value={form.data_planejada} onChange={(e) => setForm({...form, data_planejada: e.target.value})} className="input-industrial w-full px-4" />
+            </FormInput>
+          </div>
+          <FormInput label="Executantes">
+            <div className="space-y-1">
+              <div className="flex flex-wrap gap-1 min-h-[32px]">
+                {(form.executantes || []).map(uid => {
+                  const t = tecnicos.find(x => x.id === uid);
+                  return t ? (
+                    <span key={uid} className="bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded flex items-center gap-1">
+                      {t.nome} <button type="button" onClick={() => setForm({...form, executantes: form.executantes.filter(id => id !== uid)})} className="hover:text-red-400"><X size={12} /></button>
+                    </span>
+                  ) : null;
+                })}
+              </div>
+              <select onChange={e => {
+                if (e.target.value && !(form.executantes || []).includes(e.target.value)) {
+                  setForm({...form, executantes: [...(form.executantes || []), e.target.value]});
+                }
+                e.target.value = '';
+              }} className="input-industrial w-full px-3 text-sm" data-testid="inspecao-executantes-select">
+                <option value="">Adicionar executante...</option>
+                {tecnicos.filter(t => !(form.executantes || []).includes(t.id)).map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              </select>
+            </div>
+          </FormInput>
+        </div>
+
+        {form.ativo_id && (
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider">
+              Planos Aprovados ({planosDisponiveis.length})
+            </h3>
+            {planosDisponiveis.length === 0 ? (
+              <div className="text-center py-6">
+                <ClipboardCheck size={32} className="text-slate-600 mx-auto mb-2" />
+                <p className="text-sm text-slate-500">Nenhum plano aprovado para este ativo.</p>
+                <p className="text-xs text-slate-600 mt-1">O PCM precisa criar e aprovar planos antes de executar inspeções.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {planosDisponiveis.map(plano => (
+                  <button key={plano.id} type="button"
+                    onClick={() => handleSelectPlano(plano)}
+                    className={`w-full text-left p-3 rounded-lg border transition-all ${
+                      selectedPlano?.id === plano.id
+                        ? 'border-emerald-500/50 bg-brand-10'
+                        : 'border-slate-700 hover:border-slate-500 bg-slate-800/30'
+                    }`}
+                    data-testid={`plano-option-${plano.id}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`font-medium text-sm ${selectedPlano?.id === plano.id ? 'text-emerald-400' : 'text-slate-200'}`}>{plano.nome}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 capitalize">{tipoLabels[plano.tipo] || plano.tipo}</span>
+                          {plano.disciplina && <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 capitalize">{plano.disciplina}</span>}
+                          <span className="text-xs text-slate-500">{(plano.perguntas || []).length} perguntas</span>
+                          <span className="text-xs text-slate-600">v{plano.versao || 1}</span>
+                          {plano._generico && <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">Genérico</span>}
+                        </div>
+                      </div>
+                      {selectedPlano?.id === plano.id && <CheckCircle2 size={20} className="text-brand" />}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {selectedPlano && checklist.length > 0 && (
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider">
+              Checklist — {selectedPlano.nome} ({checklist.length} itens)
+            </h3>
+            <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
+              {checklist.map((item, idx) => (
+                <div key={item.id || idx} className="flex items-center gap-2 text-xs text-slate-400 py-1 border-b border-slate-800/50">
+                  <span className="text-slate-600 w-5">{idx + 1}.</span>
+                  <span className="flex-1">{item.descricao}</span>
+                  <span className="text-slate-600 capitalize">{item.tipo}</span>
+                  {item.obrigatorio && <span className="text-red-400">*</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <FormInput label="Observações">
+          <textarea value={form.observacoes} onChange={(e) => setForm({...form, observacoes: e.target.value})} className="input-industrial w-full px-4 py-3 min-h-[60px]" placeholder="Observações adicionais..." />
+        </FormInput>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button type="submit" disabled={loading || !selectedPlano} className="btn-primary" data-testid="submit-inspecao">
+            {loading ? 'Salvando...' : `Executar ${selectedPlano ? selectedPlano.nome : 'Inspeção'}`}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
 
 
 export { InspecoesPage, InspecaoDetailPage, RondaPage, ScannerPage, PhotoUploader };

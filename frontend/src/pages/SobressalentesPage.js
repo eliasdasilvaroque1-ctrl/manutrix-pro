@@ -4,8 +4,24 @@ import { Plus, Edit, Trash2, Package, Tag, AlertTriangle, Download, Upload, Arro
 import { toast } from "sonner";
 import { api, useAuth } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";
-import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, DataTable, DataRow, FormInput, Select, ConfirmDialog } from "@/components/shared";
+import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "@/components/shared";
 import ExportButtons from "@/components/widgets/ExportButtons";
+import { MaterialThumbnail, MaterialImageModal, MaterialImageUploader } from "@/components/widgets/MaterialComponents";
+
+const CONDICAO_CONFIG = {
+  novo: { label: 'Novo', class: 'text-emerald-400 bg-brand-10' },
+  reformado: { label: 'Reformado', class: 'text-blue-400 bg-blue-500/10' },
+  em_reforma: { label: 'Em Reforma', class: 'text-amber-400 bg-amber-500/10' },
+  reservado: { label: 'Reservado', class: 'text-purple-400 bg-purple-500/10' },
+  instalado: { label: 'Instalado', class: 'text-cyan-400 bg-cyan-500/10' },
+  descartado: { label: 'Descartado', class: 'text-red-400 bg-red-500/10' },
+};
+const ORIGEM_OPTIONS = [
+  { value: 'compra_nova', label: 'Compra Nova' },
+  { value: 'reforma_interna', label: 'Reforma Interna' },
+  { value: 'reforma_externa', label: 'Reforma Externa' },
+  { value: 'transferencia', label: 'Transferência' },
+];
 
 const SobressalentesPage = () => {
   const [spares, setSpares] = useState([]);

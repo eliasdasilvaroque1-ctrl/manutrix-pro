@@ -1,65 +1,62 @@
-# MODULARIZAÇÃO — MAINTRIX Frontend
-**Data:** 2026-07-12 | **Fase:** Início (RC2-prep)
+# MAINTRIX — Frontend Modularization Report
 
----
+**Versão:** v5.2.0-RC1  
+**Última atualização:** 2026-07-12 (RC2.1)
 
-## RESUMO
+## Objetivo
 
-Primeira fase da modularização do `App.js` (11.040 → 10.855 linhas, -185 linhas). Extraídos **14 componentes UI puros** para `/components/shared/index.js` (190 linhas). Zero alteração de comportamento, layout ou rotas.
+Reduzir o monolito `App.js` de ~11.000 linhas para arquivos modulares organizados, sem alterar comportamento funcional.
 
-## COMPONENTES EXTRAÍDOS
+## Status: CONCLUÍDO (RC2.1)
 
-| Componente | Linhas | Tipo | Uso |
-|---|---|---|---|
-| StatusBadge | 35 | memo | Badges de status em OS, Inspeções, Ativos |
-| PriorityBadge | 8 | memo | Badges de prioridade em OS |
-| Modal | 21 | pure | Modal genérico (15+ usos) |
-| ConfirmDialog | 14 | pure | Diálogo de confirmação (8+ usos) |
-| Loading | 10 | memo | Skeleton loader (20+ usos) |
-| EmptyState | 11 | memo | Estado vazio (10+ usos) |
-| DataTable | 16 | memo | Tabelas (estoque, sobressalentes, auditoria) |
-| DataRow | 5 | memo | Linhas de tabela |
-| PageContainer | 2 | pure | Wrapper de página |
-| PageHeader | 9 | pure | Cabeçalho de página |
-| PageToolbar | 2 | pure | Barra de ferramentas |
-| FormInput | 7 | pure | Campo de formulário com label/erro |
-| Select | 8 | pure | Select dropdown |
-| SearchInput | 5 | pure | Campo de busca com ícone |
-
-## ESTRUTURA CRIADA
+## Arquitetura Resultante
 
 ```
-frontend/src/
-├── components/
-│   ├── shared/
-│   │   └── index.js          (190 linhas — 14 componentes)
-│   └── ui/                   (shadcn — já existia)
-├── App.js                    (10.855 linhas — reduzido de 11.040)
-└── lib/
-    ├── api.js
-    ├── branding.js
-    └── offlineQueue.js
+src/
+  App.js (3.950 linhas — routing core, sidebar, auth, modals remanescentes)
+  pages/
+    DashboardPage.js
+    EstoquePage.js (inclui ModalNovoEstoque)
+    InspecoesPages.js (InspecoesPage, InspecaoDetailPage, RondaPage, ScannerPage, PhotoUploader, CameraCapture, ModalNovaInspecao)
+    SobressalentesPage.js (SobressalentesPage, SolicitacaoServicoPage, AssistentePage)
+    ParadasPage.js (ParadasPage, PlanImportWizard, AdminTemplatesPage, AuditoriaPage, AdminUsuariosPage, ProtectedRoute, CatchAllRedirect, SetoresPage, UnidadesPage)
+    BibliotecaPage.js
+    EquipePage.js
+    WhiteLabelDesignerPage.js
+    ConsultaPages.js (ConsultaEquipamentosPage, DossiePesquisaPage)
+    PortalPages.js (PortalPublicoPage, PortalTecnicoPage)
+    MasterCleanupPage.js
+    OrgConfigPage.js
+  components/
+    shared/ (StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, etc.)
+    widgets/ (MaterialComponents.js, ExportButtons.js)
+  lib/
+    api.js, branding.js, offlineQueue.js, constants.js
 ```
 
-## PRÓXIMAS FASES (RC2)
+## Métricas
 
-### Fase 2 — Modals e Forms (estimativa: -500 linhas)
-- Extrair: ModalNovaOS, ModalNovoAtivo, ModalNovoEstoque, ModalNovaInspecao
-- Para: `/components/modals/`
+| Métrica | Valor |
+|---------|-------|
+| App.js original | 11.040 linhas |
+| App.js final | 3.950 linhas |
+| Redução | 64.2% |
+| Arquivos de página extraídos | 12 |
+| Componentes compartilhados extraídos | 2 (shared, widgets) |
+| Regressões corrigidas (RC2.1) | 7 (6 páginas + ProtectedRoute) |
+| Build status | PASS (zero warnings) |
 
-### Fase 3 — Widgets (estimativa: -400 linhas)
-- Extrair: KanbanBoard, TrendChart, OSDistChart, MaterialThumbnail, PhotoUploader
-- Para: `/components/widgets/`
+## Componentes Movidos em RC2.1
 
-### Fase 4 — Pages (estimativa: -6000 linhas)
-- Extrair cada page component para arquivo próprio
-- Para: `/pages/Dashboard.js`, `/pages/OS.js`, `/pages/Ativos.js`, etc.
-- Requer: shared context para user, branding, navigation
+- `ModalNovoEstoque` → `EstoquePage.js`
+- `ModalNovaInspecao` → `InspecoesPages.js`
+- `CameraCapture` → `InspecoesPages.js`
+- `CONDICAO_CONFIG`, `ORIGEM_OPTIONS` → `SobressalentesPage.js`
+- `PARADA_TIPOS`, `FIELD_TYPES` → `ParadasPage.js`
 
-### Meta Final
-- App.js: ~500 linhas (router + providers + layout)
-- Pages: 31 arquivos separados
-- Components: ~40 arquivos organizados por categoria
+## Próximos Passos (Futuros — NÃO IMPLEMENTAR AGORA)
 
----
-*Modularização iniciada sem alterar comportamento, layout ou rotas*
+- Extrair `ModalNovaOS` para `OSPage.js` (quando OS for modularizada)
+- Extrair `Sidebar` para `components/layout/Sidebar.js`
+- Extrair login/auth forms para `pages/AuthPage.js`
+- Continuar reduzindo App.js até <2000 linhas

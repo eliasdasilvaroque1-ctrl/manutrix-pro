@@ -480,3 +480,12 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - `/app/compliance/` — Termos, Privacidade, LGPD, Changelog Jurídico
 - `/app/commercial/` — SLA, Onboarding
 - `/app/scripts/validate_deploy.py` — Validação pós-deploy
+
+
+### RC2.1 — Correção de Regressões da Modularização ✅ (2026-07-12)
+- **7 regressões corrigidas**: 6 páginas + ProtectedRoute com imports/constantes faltantes
+- **Componentes movidos do App.js**: `ModalNovoEstoque` → EstoquePage, `ModalNovaInspecao` + `CameraCapture` → InspecoesPages
+- **Constantes relocadas**: `ORIGEM_OPTIONS`, `CONDICAO_CONFIG` → SobressalentesPage; `PARADA_TIPOS`, `FIELD_TYPES` → ParadasPage
+- **App.js**: 4.541 → 3.950 linhas (redução adicional de 591 linhas de código morto)
+- **Build**: CI=true yarn build PASS (zero warnings/errors)
+- **Relatórios**: `/app/memory/REGRESSION_REPORT.md`, `/app/memory/MODULARIZACAO.md` (atualizado)

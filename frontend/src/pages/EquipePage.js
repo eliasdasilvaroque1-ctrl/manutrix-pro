@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Users, Wrench, Clock, Activity, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 import { api, useAuth } from "@/lib/api";
 import { toast } from "sonner";
-import { Loading, PageContainer, PageHeader } from "@/components/shared";
+import { EmptyState, Loading, PageContainer, PageHeader } from "@/components/shared";
 
 const EquipePage = () => {
   const [periodo, setPeriodo] = useState('semana');

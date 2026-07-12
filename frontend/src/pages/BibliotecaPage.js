@@ -4,7 +4,7 @@ import { BookOpen, Plus, FileText, ArrowLeft, Upload, Trash2, Download, Edit, Ey
 import { toast } from "sonner";
 import { api, useAuth } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";
-import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput } from "@/components/shared";
+import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, ConfirmDialog } from "@/components/shared";
 
 const BibliotecaPage = () => {
   const [tab, setTab] = useState('categorias');

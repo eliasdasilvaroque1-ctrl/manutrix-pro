@@ -1,11 +1,28 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { Plus, Clock, Calendar, Wrench, AlertTriangle, Filter, CheckCircle, XCircle, Activity, Edit, Trash2, Play, Pause, Target, ArrowLeft, Box, Building, ChevronRight, ClipboardCheck, Cog, Copy, Download, Edit3, Factory, FileText, Layers, List, Lock, MapPin, RefreshCw, Save, Search, Shield, Sparkles, Upload, User, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";
 import { StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "@/components/shared";
 import ExportButtons from "@/components/widgets/ExportButtons";
+
+const PARADA_TIPOS = [
+  { value: 'preventiva', label: 'Preventiva' },
+  { value: 'corretiva', label: 'Corretiva' },
+  { value: 'grande_parada', label: 'Grande Parada' },
+  { value: 'parada_geral', label: 'Parada Geral' },
+];
+
+const FIELD_TYPES = [
+  { value: 'boolean', label: 'Conforme / Não Conforme' },
+  { value: 'numerico', label: 'Número' },
+  { value: 'temperatura', label: 'Temperatura' },
+  { value: 'vibracao', label: 'Vibração' },
+  { value: 'opcao', label: 'Opção (Bom/Regular/Ruim)' },
+  { value: 'texto', label: 'Texto' },
+  { value: 'observacao', label: 'Observação' },
+];
 
 const ParadasPage = () => {
   const [paradas, setParadas] = useState([]);
