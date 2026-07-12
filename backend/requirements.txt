@@ -43,3 +43,6 @@ supabase==2.31.0
 
 # Emergent Integrations (requires extra index)
 emergentintegrations==0.1.0
+
+# Testing
+pytest>=8.0.0
