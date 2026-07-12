@@ -496,3 +496,17 @@ A highly robust, field-ready CMMS/EAM SaaS platform for industrial maintenance. 
 - **P0.3 Diagnóstico**: `GET /api/health` (público, MongoDB ping + latência), `GET /api/system/status` (admin-only, version, uptime, git commit, memória, CPU, status de todos os serviços)
 - **Dependência**: `psutil` 7.2.2
 - **Relatório**: `/app/memory/RC2_P0_REPORT.md`
+
+### RC2.3 — Security Audit ✅ (2026-07-12)
+- **Auditoria completa** de 20 vetores de segurança, score baseline: 68/100
+- **Documentos**: `SECURITY_AUDIT.md`, `SECURITY_CHECKLIST.md`, `SECURITY_ROADMAP.md`
+
+### RC2.4 — Security Phase 1 (Críticos) ✅ (2026-07-12)
+- **CSP**: Content-Security-Policy adicionado (script-src, connect-src, frame-ancestors, etc.)
+- **CORS**: Origins restritos para domínios oficiais, methods/headers explícitos
+- **File Access**: Endpoints `/uploads/`, `/manuals/`, `/storage/` agora exigem autenticação
+- **Upload Hardening**: Limite 10MB, validação magic bytes, `_validate_file()` centralizado
+- **Error Sanitization**: Removido `str(e)` do endpoint IA
+- **HSTS**: Adicionado `preload` directive
+- **Score**: 68 → 79/100
+- **Relatório**: `/app/memory/SECURITY_PHASE1_REPORT.md`

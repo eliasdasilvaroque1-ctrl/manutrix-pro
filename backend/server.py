@@ -141,10 +141,23 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=(self)"
     response.headers["X-XSS-Protection"] = "1; mode=block"
+    # CSP — restrict script/style/connect sources
+    csp_parts = [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://procure-manutrix.preview.emergentagent.com https://*.emergentagent.com https://*.supabase.co",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+    ]
+    response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
     # HSTS only in production (when not localhost)
     hostname = request.url.hostname or ""
     if "localhost" not in hostname and "127.0.0.1" not in hostname:
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
     return response
 
 # ============== ETAPA 4: REQUEST TIMEOUT ==============
@@ -499,14 +512,37 @@ async def admin_update_user(user_id: str, data: dict, user: Dict = Depends(get_c
 
 # ============== UPLOAD ==============
 
+MAX_UPLOAD_SIZE_MB = 10
+MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+# Magic bytes for file type validation
+_MAGIC_BYTES = {
+    b'\xff\xd8\xff': '.jpg',
+    b'\x89PNG': '.png',
+    b'GIF8': '.gif',
+    b'RIFF': '.webp',
+    b'%PDF': '.pdf',
+}
+
+def _validate_file(content: bytes, filename: str, allowed_exts: list):
+    """Validate file extension, size, and magic bytes."""
+    ext = Path(filename).suffix.lower()
+    if ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail=f"Tipo de arquivo não permitido. Aceitos: {', '.join(allowed_exts)}")
+    if len(content) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail=f"Arquivo excede o limite de {MAX_UPLOAD_SIZE_MB}MB")
+    if len(content) > 0:
+        header = content[:4]
+        matched = any(header.startswith(magic) for magic in _MAGIC_BYTES)
+        if not matched and ext != '.webp':
+            logger.warning(f"UPLOAD_SUSPECT: file '{filename}' ext={ext} but magic bytes don't match")
+
 @api_router.post("/upload")
 async def upload_file(file: UploadFile = File(...), user: Dict = Depends(get_current_user)):
-    ext = Path(file.filename).suffix.lower()
-    if ext not in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf']:
-        logger.warning(f"UPLOAD_REJECT: {user.get('email')} tried unsupported type {ext}")
-        raise HTTPException(status_code=400, detail="Tipo de arquivo não permitido")
-    
     content = await file.read()
+    _validate_file(content, file.filename, ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf'])
+    
+    ext = Path(file.filename).suffix.lower()
     size_kb = len(content) / 1024
     logger.info(f"UPLOAD: {user.get('email')} file={file.filename} size={size_kb:.0f}KB")
     
@@ -523,22 +559,22 @@ async def upload_file(file: UploadFile = File(...), user: Dict = Depends(get_cur
     return {"url": f"/api/uploads/{filename}", "filename": filename, "storage": "local"}
 
 @api_router.get("/uploads/{filename}")
-async def get_upload(filename: str):
+async def get_upload(filename: str, user: Dict = Depends(get_current_user)):
     filepath = UPLOAD_DIR / filename
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     return FileResponse(filepath)
 
 @api_router.get("/uploads/manuals/{filename}")
-async def get_manual_file(filename: str):
+async def get_manual_file(filename: str, user: Dict = Depends(get_current_user)):
     filepath = MANUALS_DIR / filename
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     return FileResponse(filepath, media_type="application/pdf")
 
 @api_router.get("/storage/{path:path}")
-async def serve_storage_file(path: str):
-    """Serve files from object storage (cloud). Backward-compatible proxy."""
+async def serve_storage_file(path: str, user: Dict = Depends(get_current_user)):
+    """Serve files from object storage (cloud). Requires authentication."""
     try:
         data, content_type = objstore.get_file(path)
         return Response(content=data, media_type=content_type)
@@ -2686,11 +2722,8 @@ async def upload_manual(ativo_id: str, file: UploadFile = File(...), user: Dict 
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     
-    ext = Path(file.filename).suffix.lower()
-    if ext != '.pdf':
-        raise HTTPException(status_code=400, detail="Apenas arquivos PDF são permitidos")
-    
     content = await file.read()
+    _validate_file(content, file.filename, ['.pdf'])
     
     # Extract text from PDF for AI context (from bytes in memory)
     extracted_text = ""
@@ -2828,7 +2861,8 @@ Se não souber a resposta ou não encontrar nos manuais, diga honestamente e sug
         return {"response": response, "session_id": session_id}
     except Exception as e:
         logger.error(f"AI Assistant error: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro no assistente: {str(e)}")
+        logger.error(f"Assistente error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro no assistente. Tente novamente.")
 
 @api_router.get("/assistente/historico")
 async def get_chat_history(session_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
@@ -3109,6 +3143,7 @@ async def upload_material_image(
         raise HTTPException(status_code=400, detail="Apenas imagens são permitidas (jpg, png, gif, webp)")
     
     content = await file.read()
+    _validate_file(content, file.filename, ['.jpg', '.jpeg', '.png', '.gif', '.webp'])
     
     if objstore.is_available():
         storage_path = objstore.upload_file(f"material_{tipo}", item_id, file.filename, content, file.content_type or "image/jpeg")
@@ -3166,6 +3201,7 @@ async def upload_attachment(
         raise HTTPException(status_code=400, detail="Tipo de arquivo não permitido")
     
     content = await file.read()
+    _validate_file(content, file.filename, ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf'])
     
     # Upload to object storage
     if objstore.is_available():
@@ -4000,9 +4036,9 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(','),
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-Id", "X-Requested-With"],
 )
 
 @app.on_event("startup")
