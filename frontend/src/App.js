@@ -9327,19 +9327,19 @@ const WhiteLabelDesignerPage = () => {
   const { user } = useAuth();
   const configReqVer = useRef(0);
 
-  const loadOrgs = async () => {
+  const loadOrgs = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get('/master/organizations');
       setOrgs(res.data);
-      if (res.data.length > 0 && !selectedOrgId) {
-        setSelectedOrgId(res.data[0].id);
+      if (res.data.length > 0) {
+        setSelectedOrgId(prev => prev || res.data[0].id);
       }
     } catch (err) { toast.error(normalizeError(err)); }
     finally { setLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { loadOrgs(); }, []);
+  useEffect(() => { loadOrgs(); }, [loadOrgs]);
 
   useEffect(() => {
     if (!selectedOrgId) { setConfig(null); return; }
