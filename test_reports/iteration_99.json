@@ -1,0 +1,50 @@
+{
+  "summary": "CRITICAL REGRESSION — Modularization broke the router. After login, the entire app is blank/black with runtime error 'ProtectedRoute is not defined'. Root cause: 10 symbols that are still referenced in App.js Route definitions were physically moved into extracted page files but never re-exported nor re-imported into App.js. Webpack build passed ('Compiled successfully') because CRA does not fail on undeclared JSX identifiers, but at runtime React throws immediately on the first Route element. 100% of authenticated pages are unreachable — Central de Trabalho, Dashboard, Ativos, OS, Estoque, Inspeções, Sobressalentes, Paradas, Biblioteca, Equipe, White Label, Admin Config, Setores, Unidades, Assistente, Solicitar, Scanner, Admin/Usuarios, Admin/Templates, Admin/Auditoria — all crash. Also blocks /termos, /privacidade, /sobre because they use ProtectedRoute too. Testing was aborted after login because no downstream page can be reached.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "App.js router",
+        "issue": "Runtime error 'ProtectedRoute is not defined' — entire app is blank after login. 10 symbols used by App.js Routes are defined only inside extracted page files (ParadasPage.js / SobressalentesPage.js / InspecoesPages.js) without being exported. Webpack compile passes because CRA does not fail on undeclared JSX identifiers, but runtime crashes on the very first <ProtectedRoute> element in the Routes tree.",
+        "selector": "N/A — the whole route tree fails to render",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Post-login navigation (all pages)",
+        "issue": "Every authenticated route (/, /dashboard, /ativos, /os, /estoque, /inspecoes, /sobressalentes, /paradas, /biblioteca, /equipe, /admin/config, /master/white-label, /setores, /unidades, /assistente, /solicitar, /scanner, /admin/usuarios, /admin/templates, /admin/auditoria, /sobre, /termos, /privacidade) renders a blank page.",
+        "affected_selectors": ["nav a", "aside a", "main"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL — Restore the 10 missing symbols referenced by App.js Routes. Recommended approach (minimal, keeps modularization intent): add named exports to the three files below AND add corresponding imports at the top of App.js. Alternative: move ProtectedRoute + CatchAllRedirect + the 'admin/settings' pages that are NOT part of the intended modularization back into App.js.",
+    "Missing from App.js — defined in /app/frontend/src/pages/ParadasPage.js (lines ~1239, ~1260, ~1267, and later blocks): ProtectedRoute, CatchAllRedirect, SetoresPage, UnidadesPage, AdminUsuariosPage, AdminTemplatesPage, AuditoriaPage",
+    "Missing from App.js — defined in /app/frontend/src/pages/SobressalentesPage.js: AssistentePage, SolicitacaoServicoPage",
+    "Missing from App.js — defined in /app/frontend/src/pages/InspecoesPages.js: ScannerPage",
+    "After the fix, verify the app renders past login and re-run full navigation smoke test across the 17 sidebar entries.",
+    "Recommended: enable ESLint 'react/jsx-no-undef' as an error (or 'no-undef' with react plugin) — this class of bug would have failed the CI=true yarn build if the rule were enforced. Current CRA config silently compiles undefined JSX identifiers.",
+    "Recommended: name the pages file 'ParadasPage.js' but be aware it currently contains 7 unrelated pages (Setores/Unidades/Assistente already moved AND Admin/* pages). Consider a follow-up refactor to move ProtectedRoute/CatchAllRedirect to /components/shared/ProtectedRoute.js (they are cross-cutting infra, not tied to Paradas)."
+  ],
+  "critical_code_review_comments": [
+    "App.js linhas 4495–4528: 25 ocorrências de <ProtectedRoute> sem import/definição — runtime crash garantido.",
+    "ParadasPage.js está com 1529 linhas e contém código NÃO relacionado a Paradas: ProtectedRoute (linha 1239), CatchAllRedirect (1260), SetoresPage (1267), UnidadesPage, AdminUsuariosPage, AdminTemplatesPage, AuditoriaPage. Isto contradiz o objetivo 'ZERO alteração de comportamento' e sugere que o corte foi feito por linha em vez de por AST/símbolo. Recomendo mover essas 7 entidades para arquivos apropriados (ProtectedRoute→shared, Admin* →/pages/admin/, Setores/Unidades→/pages/).",
+    "SobressalentesPage.js contém AssistentePage e SolicitacaoServicoPage — mesmo problema de escopo.",
+    "InspecoesPages.js contém ScannerPage — mesmo problema.",
+    "O CI=true yarn build passou porque o CRA/webpack padrão não trata identificador JSX indefinido como erro. Sugestão: adicionar 'no-undef' via eslint-plugin-react ou executar 'react-scripts build' com eslintConfig customizado no package.json (rules: { 'no-undef': 'error' }) — teria pegado esse regression na CI."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A — testing_type=frontend only",
+    "frontend": "0% — login page renders, but 0/17 pages listed in features_or_bugs_to_test are reachable due to router crash"
+  },
+  "test_credentials": "master@maintrix.com / master123 em ASTEC Cedro (usado — login funciona, mas post-login é blank).",
+  "seed_data_creation": "Nenhum.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Após a fix do E1, valide primeiro se o /dashboard renderiza depois do login (era blank preto por causa do 'ProtectedRoute is not defined'). Só então prossiga com o smoke de todas as 17 páginas do sidebar. Comando para reproduzir a lista de símbolos ausentes: `grep -oE '\\b(ProtectedRoute|CatchAllRedirect|SetoresPage|UnidadesPage|AtivosPage|OSPage|OSDetailPage|AtivoDetailPage|AssistentePage|AdminUsuariosPage|AdminTemplatesPage|AuditoriaPage|SolicitacaoServicoPage|ScannerPage)\\b' /app/frontend/src/App.js | sort -u` — cada símbolo precisa estar declarado ou importado em App.js.",
+  "rca_of_the_issue": "RCA: A extração massiva descrita como '6316 linhas movidas de App.js para 12 files' foi feita por corte de linhas contíguas (aparentemente com base em delimitadores de comentário como '// ============== X ==============') em vez de análise semântica. Isso levou 10 símbolos globais (ProtectedRoute, CatchAllRedirect, SetoresPage, UnidadesPage, AdminUsuariosPage, AdminTemplatesPage, AuditoriaPage, AssistentePage, SolicitacaoServicoPage, ScannerPage) a serem fisicamente movidos para dentro dos arquivos ParadasPage.js/SobressalentesPage.js/InspecoesPages.js — arquivos que exportam apenas 'default' para a página principal. Como App.js continua referenciando esses símbolos como JSX (<ProtectedRoute>, <CatchAllRedirect>, <SetoresPage> etc.) sem import nem definição local, o ReferenceError acontece assim que o React tenta avaliar o primeiro <Route path='/' element={<ProtectedRoute>...}> no render. O webpack não pegou porque JSX de PascalCase indefinido não é erro de compilação no CRA padrão.\n\nRepro:\n1. Abrir https://procure-manutrix.preview.emergentagent.com\n2. Login com master@maintrix.com / master123 em ASTEC Cedro\n3. Após clique em Entrar, tela fica preta/vazia\n4. Console mostra: 'ProtectedRoute is not defined'\n\nMitigação (mínima, ~5 min):\n1. Em /app/frontend/src/pages/ParadasPage.js: adicionar 'export' antes das declarações const de ProtectedRoute, CatchAllRedirect, SetoresPage, UnidadesPage, AdminUsuariosPage, AdminTemplatesPage, AuditoriaPage.\n2. Em /app/frontend/src/pages/SobressalentesPage.js: idem para AssistentePage, SolicitacaoServicoPage.\n3. Em /app/frontend/src/pages/InspecoesPages.js: idem para ScannerPage (já é exportado junto com InspecoesPage/InspecaoDetailPage/RondaPage — verificar).\n4. Em /app/frontend/src/App.js, adicionar imports nomeados:\n   import ParadasPage, { ProtectedRoute, CatchAllRedirect, SetoresPage, UnidadesPage, AdminUsuariosPage, AdminTemplatesPage, AuditoriaPage } from './pages/ParadasPage';\n   import SobressalentesPage, { AssistentePage, SolicitacaoServicoPage } from './pages/SobressalentesPage';\n   import { InspecoesPage, InspecaoDetailPage, RondaPage, ScannerPage } from './pages/InspecoesPages';\n\nMitigação (arquitetural, recomendada como follow-up): mover ProtectedRoute e CatchAllRedirect para /components/shared/ (são infra transversal, não pertencem a Paradas), e mover Admin*Page/SetoresPage/UnidadesPage para /pages/admin/*.js — o nome dos arquivos atualmente é enganoso."
+}
