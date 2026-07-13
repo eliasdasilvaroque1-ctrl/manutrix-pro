@@ -18,11 +18,13 @@ const DashboardPage = () => {
   const [osPorSetor, setOsPorSetor] = useState([]);
   const [osPorDisciplina, setOsPorDisciplina] = useState([]);
   const [ativosMaisFalhas, setAtivosMaisFalhas] = useState([]);
+  const [executivo, setExecutivo] = useState(null);
   const { user } = useAuth();
   const navigate = useNavigate();
   
   useEffect(() => {
     api.get('/sectors').then(r => setSectors(r.data)).catch(() => {});
+    api.get('/dashboard/executivo').then(r => setExecutivo(r.data)).catch(() => {});
   }, []);
   
   useEffect(() => {
@@ -384,6 +386,83 @@ const DashboardPage = () => {
           </div>
         </div>
       </div>
+
+      {/* PAINEL EXECUTIVO */}
+      {executivo && (
+        <div data-testid="painel-executivo">
+          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Painel Executivo</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Disponibilidade por Area */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+              <h3 className="text-sm font-bold text-slate-300 mb-3">Disponibilidade por Area</h3>
+              <div className="space-y-2">
+                {(executivo.disponibilidade_area || []).map((a, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400 w-28 truncate">{a.area}</span>
+                    <div className="flex-1 h-4 bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${a.disponibilidade}%`, backgroundColor: a.disponibilidade >= 90 ? '#10b981' : a.disponibilidade >= 70 ? '#f59e0b' : '#ef4444' }} />
+                    </div>
+                    <span className="text-xs font-bold w-12 text-right" style={{ color: a.disponibilidade >= 90 ? '#10b981' : a.disponibilidade >= 70 ? '#f59e0b' : '#ef4444' }}>{a.disponibilidade}%</span>
+                  </div>
+                ))}
+                {(executivo.disponibilidade_area || []).length === 0 && <p className="text-xs text-slate-600 text-center py-4">Sem dados</p>}
+              </div>
+            </div>
+
+            {/* Top Causas de Falha */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+              <h3 className="text-sm font-bold text-slate-300 mb-3">Top Causas de Falha</h3>
+              <div className="space-y-2">
+                {(executivo.top_causas || []).map((c, i) => (
+                  <div key={i} className="flex items-center justify-between p-2 bg-slate-800/30 rounded-lg">
+                    <span className="text-xs text-slate-400 capitalize">{c.causa.replace(/_/g, ' ')}</span>
+                    <span className="text-xs font-bold text-red-400">{c.quantidade}</span>
+                  </div>
+                ))}
+                {(executivo.top_causas || []).length === 0 && <p className="text-xs text-slate-600 text-center py-4">Sem dados</p>}
+              </div>
+            </div>
+
+            {/* Top 10 Custo por Ativo */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+              <h3 className="text-sm font-bold text-slate-300 mb-3">Custo por Ativo (Top 10)</h3>
+              <div className="space-y-2">
+                {(executivo.top_custo || []).map((a, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2 bg-slate-800/30 rounded-lg">
+                    <span className="text-xs font-mono text-brand w-16">{a.tag}</span>
+                    <span className="text-xs text-slate-400 flex-1 truncate">{a.nome}</span>
+                    <span className="text-xs font-bold text-amber-400">R$ {a.custo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                  </div>
+                ))}
+                {(executivo.top_custo || []).length === 0 && <p className="text-xs text-slate-600 text-center py-4">Sem dados</p>}
+              </div>
+            </div>
+
+            {/* Tendencia 12 Meses */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+              <h3 className="text-sm font-bold text-slate-300 mb-3">Tendencia 12 Meses (Abertas x Concluidas)</h3>
+              <div className="flex items-end gap-1 h-32">
+                {(executivo.trend_12m || []).map((m, i) => {
+                  const maxVal = Math.max(...(executivo.trend_12m || []).map(x => Math.max(x.abertas, x.concluidas)), 1);
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                      <div className="w-full flex gap-px justify-center" style={{ height: '100px' }}>
+                        <div className="w-2 rounded-t" style={{ backgroundColor: '#6366f1', height: `${(m.abertas / maxVal) * 100}%`, minHeight: m.abertas > 0 ? '4px' : '0' }} title={`Abertas: ${m.abertas}`} />
+                        <div className="w-2 rounded-t" style={{ backgroundColor: '#10b981', height: `${(m.concluidas / maxVal) * 100}%`, minHeight: m.concluidas > 0 ? '4px' : '0' }} title={`Concluidas: ${m.concluidas}`} />
+                      </div>
+                      <span className="text-[8px] text-slate-600">{m.mes}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-4 mt-2 justify-center">
+                <span className="text-[10px] text-slate-500 flex items-center gap-1"><span className="w-2 h-2 rounded bg-indigo-500 inline-block" /> Abertas</span>
+                <span className="text-[10px] text-slate-500 flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500 inline-block" /> Concluidas</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Drill-Down Modal */}
       <Modal isOpen={drillModal.open} onClose={() => setDrillModal({open:false,type:'',title:'',data:[]})} title={drillModal.title} size="lg">

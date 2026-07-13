@@ -370,3 +370,157 @@ async def migration_report(user: Dict = Depends(get_current_user)):
         },
         "sectors": sector_details
     }
+
+
+# ============== DASHBOARD EXECUTIVO ==============
+
+@router.get("/dashboard/executivo")
+async def dashboard_executivo(user: Dict = Depends(get_current_user)):
+    """Executive dashboard with consolidated KPIs, trends, and rankings."""
+    org_id = user.get('organization_id', '')
+    base_q = {"organization_id": org_id, "deleted_at": None} if org_id else {"deleted_at": None}
+    now = datetime.now(timezone.utc)
+    mes_inicio = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    ano_inicio = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+    # --- All OS this year ---
+    os_ano = await db.ordens_servico.find(
+        {**base_q, "created_at": {"$gte": ano_inicio}},
+        {"_id": 0, "id": 1, "status": 1, "tipo": 1, "disciplina": 1, "prioridade": 1,
+         "ativo_id": 1, "responsavel_id": 1, "tempo_execucao_minutos": 1,
+         "data_abertura": 1, "data_conclusao": 1, "causa_falha": 1,
+         "materiais": 1, "created_at": 1}
+    ).to_list(10000)
+
+    os_concluidas = [o for o in os_ano if o.get('status') == 'concluida']
+    os_abertas = [o for o in os_ano if o.get('status') not in ('concluida', 'encerrada', 'cancelada')]
+    os_corretivas = [o for o in os_concluidas if o.get('tipo') == 'corretiva']
+    os_preventivas = [o for o in os_concluidas if o.get('tipo') == 'preventiva']
+
+    # --- KPIs ---
+    tempos_reparo = [o['tempo_execucao_minutos'] for o in os_corretivas if o.get('tempo_execucao_minutos')]
+    total_ativos = await db.ativos.count_documents(base_q)
+    total_falhas = len(os_corretivas)
+
+    mttr = round(sum(tempos_reparo) / len(tempos_reparo) / 60, 2) if tempos_reparo else 0
+    mtbf = round(720 / total_falhas, 1) if total_falhas > 0 else (720 if total_ativos > 0 else 0)
+    disponibilidade = round(mtbf / (mtbf + mttr) * 100, 1) if (mtbf + mttr) > 0 else 100
+
+    # Preventive plan compliance
+    planos_aprovados = await db.planos_inspecao.count_documents({**base_q, "status": "aprovado"})
+    insp_realizadas = await db.inspecoes.count_documents({**base_q, "status": {"$in": ["concluida", "com_pendencias"]}, "created_at": {"$gte": mes_inicio}})
+    cumprimento_preventivo = round(insp_realizadas / max(planos_aprovados, 1) * 100, 1) if planos_aprovados > 0 else 0
+
+    # --- Costs ---
+    custo_materiais = 0
+    custo_hh = 0
+    for o in os_concluidas:
+        for m in (o.get('materiais') or []):
+            custo_materiais += (m.get('custo_unitario', 0) or 0) * (m.get('quantidade', 0) or 0)
+        hh = o.get('tempo_execucao_minutos', 0) or 0
+        custo_hh += (hh / 60) * 80
+
+    # --- Top 10 assets with most failures ---
+    falhas_por_ativo = {}
+    for o in os_corretivas:
+        aid = o.get('ativo_id', '')
+        if aid:
+            falhas_por_ativo[aid] = falhas_por_ativo.get(aid, 0) + 1
+    top_falhas = sorted(falhas_por_ativo.items(), key=lambda x: x[1], reverse=True)[:10]
+    if top_falhas:
+        aids = [a[0] for a in top_falhas]
+        ativos_map = {}
+        async for a in db.ativos.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1}):
+            ativos_map[a['id']] = a
+        top_falhas_enriched = [{"tag": ativos_map.get(a, {}).get("tag", "?"), "nome": ativos_map.get(a, {}).get("nome", "?"), "falhas": c} for a, c in top_falhas]
+    else:
+        top_falhas_enriched = []
+
+    # --- Top failure causes ---
+    causas = {}
+    for o in os_corretivas:
+        c = o.get('causa_falha', 'nao_informada') or 'nao_informada'
+        causas[c] = causas.get(c, 0) + 1
+    top_causas = sorted(causas.items(), key=lambda x: x[1], reverse=True)[:8]
+
+    # --- Cost per asset (top 10) ---
+    custo_por_ativo = {}
+    for o in os_concluidas:
+        aid = o.get('ativo_id', '')
+        if not aid:
+            continue
+        c = 0
+        for m in (o.get('materiais') or []):
+            c += (m.get('custo_unitario', 0) or 0) * (m.get('quantidade', 0) or 0)
+        c += ((o.get('tempo_execucao_minutos', 0) or 0) / 60) * 80
+        custo_por_ativo[aid] = custo_por_ativo.get(aid, 0) + c
+    top_custo = sorted(custo_por_ativo.items(), key=lambda x: x[1], reverse=True)[:10]
+    if top_custo:
+        aids_c = [a[0] for a in top_custo]
+        ativos_c = {}
+        async for a in db.ativos.find({"id": {"$in": aids_c}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1}):
+            ativos_c[a['id']] = a
+        top_custo_enriched = [{"tag": ativos_c.get(a, {}).get("tag", "?"), "nome": ativos_c.get(a, {}).get("nome", "?"), "custo": round(c, 2)} for a, c in top_custo]
+    else:
+        top_custo_enriched = []
+
+    # --- Availability by area ---
+    sectors = await db.sectors.find({"organization_id": org_id, "deleted_at": None}, {"_id": 0, "id": 1, "nome": 1}).to_list(50)
+    disp_por_area = []
+    for s in sectors:
+        at_total = await db.ativos.count_documents({"sector_id": s['id'], "deleted_at": None})
+        at_parado = await db.ativos.count_documents({"sector_id": s['id'], "deleted_at": None, "status": {"$in": ["parado", "manutencao"]}})
+        disp = round((at_total - at_parado) / max(at_total, 1) * 100, 1)
+        disp_por_area.append({"area": s['nome'], "disponibilidade": disp, "ativos": at_total, "parados": at_parado})
+
+    # --- 12 month trend ---
+    trend_12m = []
+    labels = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+    for i in range(11, -1, -1):
+        m = now.month - i
+        y = now.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        key = f"{y}-{m:02d}"
+        os_mes = [o for o in os_ano if (o.get('created_at') or '').startswith(key)]
+        conc = [o for o in os_mes if o.get('status') == 'concluida']
+        trend_12m.append({
+            "mes": labels[m - 1], "mes_num": m, "ano": y,
+            "abertas": len(os_mes), "concluidas": len(conc),
+            "corretivas": len([o for o in conc if o.get('tipo') == 'corretiva']),
+            "preventivas": len([o for o in conc if o.get('tipo') == 'preventiva']),
+        })
+
+    # --- OS by type and status ---
+    os_por_tipo = {}
+    for o in os_ano:
+        t = o.get('tipo', 'outros')
+        os_por_tipo[t] = os_por_tipo.get(t, 0) + 1
+    os_por_status = {}
+    for o in os_ano:
+        s = o.get('status', 'outros')
+        os_por_status[s] = os_por_status.get(s, 0) + 1
+
+    return {
+        "kpis": {
+            "disponibilidade": disponibilidade,
+            "mtbf_horas": mtbf,
+            "mttr_horas": mttr,
+            "backlog": len(os_abertas),
+            "cumprimento_preventivo": cumprimento_preventivo,
+            "os_abertas": len(os_abertas),
+            "os_concluidas": len(os_concluidas),
+            "total_falhas": total_falhas,
+            "custo_total": round(custo_materiais + custo_hh, 2),
+            "custo_materiais": round(custo_materiais, 2),
+            "custo_hh": round(custo_hh, 2),
+        },
+        "top_falhas": top_falhas_enriched,
+        "top_causas": [{"causa": c, "quantidade": q} for c, q in top_causas],
+        "top_custo": top_custo_enriched,
+        "disponibilidade_area": disp_por_area,
+        "trend_12m": trend_12m,
+        "os_por_tipo": os_por_tipo,
+        "os_por_status": os_por_status,
+    }

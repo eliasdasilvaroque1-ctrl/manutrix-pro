@@ -17,6 +17,68 @@ from models import (
 
 router = APIRouter()
 
+# ============== STATE MACHINE ==============
+# Valid transitions: { current_status: { next_status: [allowed_roles] } }
+OS_TRANSITIONS = {
+    "solicitada": {
+        "em_analise": ["master", "admin", "pcm"],
+        "rejeitada": ["master", "admin", "pcm"],
+        "cancelada": ["master", "admin"],
+    },
+    "em_analise": {
+        "aprovada": ["master", "admin", "pcm"],
+        "rejeitada": ["master", "admin", "pcm"],
+        "cancelada": ["master", "admin"],
+    },
+    "aprovada": {
+        "planejada": ["master", "admin", "pcm"],
+        "cancelada": ["master", "admin"],
+    },
+    "aberta": {
+        "planejada": ["master", "admin", "pcm"],
+        "programada": ["master", "admin", "pcm"],
+        "em_execucao": ["master", "admin", "pcm", "supervisor"] + ROLE_GROUPS['execucao'],
+        "cancelada": ["master", "admin"],
+    },
+    "planejada": {
+        "programada": ["master", "admin", "pcm"],
+        "cancelada": ["master", "admin"],
+    },
+    "programada": {
+        "disponivel": ["master", "admin", "pcm"],
+        "em_execucao": ["master", "admin", "supervisor"] + ROLE_GROUPS['execucao'],
+        "cancelada": ["master", "admin"],
+    },
+    "disponivel": {
+        "em_execucao": ["master", "admin", "supervisor"] + ROLE_GROUPS['execucao'],
+        "cancelada": ["master", "admin"],
+    },
+    "em_execucao": {
+        "pausada": ["master", "admin", "supervisor"] + ROLE_GROUPS['execucao'],
+        "concluida": ["master", "admin", "supervisor"] + ROLE_GROUPS['execucao'],
+        "cancelada": ["master", "admin"],
+    },
+    "pausada": {
+        "em_execucao": ["master", "admin", "supervisor"] + ROLE_GROUPS['execucao'],
+        "cancelada": ["master", "admin"],
+    },
+    "concluida": {
+        "encerrada": ["master", "admin", "gerente"],
+    },
+    # Terminal states: "encerrada", "cancelada", "rejeitada" — no transitions allowed
+}
+
+def validate_os_transition(current_status, new_status, user_role):
+    """Validate state machine transition. Returns (valid, error_message)."""
+    allowed = OS_TRANSITIONS.get(current_status, {})
+    if new_status not in allowed:
+        valid_targets = list(allowed.keys()) or ["(estado terminal)"]
+        return False, f"Transicao {current_status} → {new_status} nao permitida. Transicoes validas: {', '.join(valid_targets)}"
+    allowed_roles = allowed[new_status]
+    if user_role not in allowed_roles:
+        return False, f"Perfil '{user_role}' nao pode executar transicao {current_status} → {new_status}"
+    return True, None
+
 
 @router.get("/ordens-servico")
 async def list_os(
@@ -334,30 +396,44 @@ async def pausar_os(os_id: str, user: Dict = Depends(get_current_user)):
 
 @router.patch("/ordens-servico/{os_id}/status")
 async def update_os_status(os_id: str, body: KanbanMoveBody, user: Dict = Depends(get_current_user)):
-    """Kanban drag-and-drop status update"""
-    check_write_permission(user, ['admin', 'pcm', 'supervisor'])
-    valid = ['solicitada', 'em_analise', 'aguardando_aprovacao', 'aguardando_material',
-             'programada', 'disponivel', 'em_execucao', 'pausada',
-             'aberta', 'planejada']
-    if body.new_status not in valid:
-        raise HTTPException(status_code=400, detail=f"Status inválido. Use: {', '.join(valid)}.")
+    """Kanban drag-and-drop status update — validated by state machine."""
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
     verify_org_access(user, os_doc, "OS")
-    if os_doc.get('status') == 'concluida':
-        raise HTTPException(status_code=400, detail="OS concluída não pode ser reaberta via Kanban")
-    update = {"status": body.new_status, "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}
-    if body.new_status in ('planejada', 'programada') and not os_doc.get('planejado_por'):
+
+    current_status = os_doc.get('status', '')
+    new_status = body.new_status
+    user_role = user.get('role', '')
+
+    # Validate transition via state machine
+    valid, error = validate_os_transition(current_status, new_status, user_role)
+    if not valid:
+        raise HTTPException(status_code=400, detail=error)
+
+    update = {"status": new_status, "alterado_por": user.get('id'), "updated_at": datetime.now(timezone.utc).isoformat()}
+    if new_status in ('planejada', 'programada') and not os_doc.get('planejado_por'):
         update['planejado_por'] = user.get('id')
         update['data_planejamento'] = datetime.now(timezone.utc).isoformat()
-    if body.new_status == 'em_execucao' and not os_doc.get('data_inicio'):
+    if new_status == 'em_execucao' and not os_doc.get('data_inicio'):
         update['data_inicio'] = datetime.now(timezone.utc).isoformat()
         update['iniciado_por'] = user.get('id')
     await db.ordens_servico.update_one({"id": os_id}, {"$set": update})
-    await audit_log("kanban_move", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → {body.new_status}")
-    return {"success": True, "new_status": body.new_status}
+    await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} {current_status} → {new_status}")
+    return {"success": True, "new_status": new_status, "from_status": current_status}
 
+
+@router.get("/ordens-servico/{os_id}/transitions")
+async def get_os_transitions(os_id: str, user: Dict = Depends(get_current_user)):
+    """Return valid state transitions for the current OS status and user role."""
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0, "status": 1})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+    status = os_doc.get('status', '')
+    role = user.get('role', '')
+    allowed = OS_TRANSITIONS.get(status, {})
+    transitions = [s for s, roles in allowed.items() if role in roles]
+    return {"current_status": status, "valid_transitions": transitions}
 
 @router.post("/ordens-servico/{os_id}/concluir")
 async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user: Dict = Depends(get_current_user)):
