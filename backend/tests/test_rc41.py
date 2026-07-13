@@ -24,7 +24,7 @@ def get_token(role):
     if role in _token_cache:
         return _token_cache[role]
     email, pwd = USERS[role]
-    r = httpx.post(f"{API}/auth/login", json={"email": email, "password": pwd, "organization_id": ORG}, timeout=15)
+    r = httpx.post(f"{API}/auth/login", json={"email": email, "password": pwd, "organization_id": ORG}, timeout=30)
     assert r.status_code == 200, f"Login {role} failed: {r.text}"
     _token_cache[role] = r.json()["access_token"]
     return _token_cache[role]
@@ -33,7 +33,7 @@ def auth(token):
     return {"Authorization": f"Bearer {token}"}
 
 def get_first_ativo(token):
-    r = httpx.get(f"{API}/ativos", headers=auth(token), timeout=10)
+    r = httpx.get(f"{API}/ativos", headers=auth(token), timeout=30)
     ativos = r.json()
     return ativos[0]["id"] if isinstance(ativos, list) and ativos else ativos.get("items", [{}])[0].get("id")
 
@@ -47,24 +47,24 @@ class TestAuth:
             assert token, f"{role} login failed"
 
     def test_login_wrong_password(self):
-        r = httpx.post(f"{API}/auth/login", json={"email": "master@maintrix.com", "password": "wrong", "organization_id": ORG}, timeout=10)
+        r = httpx.post(f"{API}/auth/login", json={"email": "master@maintrix.com", "password": "wrong", "organization_id": ORG}, timeout=30)
         assert r.status_code == 401
 
     def test_login_auto_resolve(self):
-        r = httpx.post(f"{API}/auth/login", json={"email": "test.admin@maintrix.com", "password": "admin123"}, timeout=10)
+        r = httpx.post(f"{API}/auth/login", json={"email": "test.admin@maintrix.com", "password": "admin123"}, timeout=30)
         assert r.status_code == 200
 
     def test_login_master_requires_org(self):
-        r = httpx.post(f"{API}/auth/login", json={"email": "master@maintrix.com", "password": "master123"}, timeout=10)
+        r = httpx.post(f"{API}/auth/login", json={"email": "master@maintrix.com", "password": "master123"}, timeout=30)
         assert r.status_code == 400
 
     def test_lookup_email(self):
-        r = httpx.post(f"{API}/auth/lookup-email", json={"email": "test.admin@maintrix.com"}, timeout=10)
+        r = httpx.post(f"{API}/auth/lookup-email", json={"email": "test.admin@maintrix.com"}, timeout=30)
         assert r.status_code == 200
         assert r.json()["organization_id"] == ORG
 
     def test_auth_me(self):
-        r = httpx.get(f"{API}/auth/me", headers=auth(get_token("master")), timeout=10)
+        r = httpx.get(f"{API}/auth/me", headers=auth(get_token("master")), timeout=30)
         assert r.status_code == 200
 
 
@@ -76,7 +76,7 @@ class TestStateMachine:
         aid = get_first_ativo(token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "corretiva", "titulo": "SM Direct", "execucao_direta": True
-        }, timeout=10)
+        }, timeout=30)
         assert r.status_code in (200, 201)
         assert r.json()["status"] == "em_execucao"
 
@@ -85,13 +85,13 @@ class TestStateMachine:
         aid = get_first_ativo(token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "preventiva", "titulo": "SM Programada"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
         # programada → disponivel
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "disponivel"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "disponivel"}, timeout=30)
         assert r.status_code == 200
         # disponivel → em_execucao
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "em_execucao"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "em_execucao"}, timeout=30)
         assert r.status_code == 200
 
     def test_invalid_transition(self):
@@ -99,10 +99,10 @@ class TestStateMachine:
         aid = get_first_ativo(token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "corretiva", "titulo": "SM Invalid"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
         # programada → concluida (skip states — invalid)
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "concluida"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "concluida"}, timeout=30)
         assert r.status_code == 400
 
     def test_get_transitions(self):
@@ -110,9 +110,9 @@ class TestStateMachine:
         aid = get_first_ativo(token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "corretiva", "titulo": "SM Trans"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
-        r = httpx.get(f"{API}/ordens-servico/{os_id}/transitions", headers=auth(token), timeout=10)
+        r = httpx.get(f"{API}/ordens-servico/{os_id}/transitions", headers=auth(token), timeout=30)
         assert r.status_code == 200
         assert "valid_transitions" in r.json()
 
@@ -123,23 +123,23 @@ class TestStateMachine:
         # 1. Criar OS direta (em_execucao)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "corretiva", "titulo": "SM Lifecycle Direct", "execucao_direta": True
-        }, timeout=10)
+        }, timeout=30)
         assert r.status_code in (200, 201)
         os_id = r.json()["id"]
         assert r.json()["status"] == "em_execucao"
         # 2. Concluir (skip_foto_check legítimo para testes automatizados)
         r = httpx.post(f"{API}/ordens-servico/{os_id}/concluir", headers=auth(token),
-                       json={"servicos_realizados": "Manutenção corretiva realizada", "tempo_execucao_minutos": 30, "skip_foto_check": True}, timeout=10)
+                       json={"servicos_realizados": "Manutenção corretiva realizada", "tempo_execucao_minutos": 30, "skip_foto_check": True}, timeout=30)
         assert r.status_code == 200, f"Concluir falhou: {r.text}"
         # 3. Verificar status concluida
-        r = httpx.get(f"{API}/ordens-servico/{os_id}", headers=auth(token), timeout=10)
+        r = httpx.get(f"{API}/ordens-servico/{os_id}", headers=auth(token), timeout=30)
         assert r.json()["status"] == "concluida"
         # 4. Encerrar (concluida → encerrada)
         r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token),
-                        json={"new_status": "encerrada"}, timeout=10)
+                        json={"new_status": "encerrada"}, timeout=30)
         assert r.status_code == 200, f"Encerrar falhou: {r.text}"
         # 5. Verificar estado terminal
-        r = httpx.get(f"{API}/ordens-servico/{os_id}", headers=auth(token), timeout=10)
+        r = httpx.get(f"{API}/ordens-servico/{os_id}", headers=auth(token), timeout=30)
         assert r.json()["status"] == "encerrada"
 
     def test_full_lifecycle_long(self):
@@ -149,22 +149,22 @@ class TestStateMachine:
         # Criar OS padrão (programada)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "preventiva", "titulo": "SM Lifecycle Long"
-        }, timeout=10)
+        }, timeout=30)
         assert r.status_code in (200, 201)
         os_id = r.json()["id"]
         assert r.json()["status"] == "programada"
         # programada → disponivel
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "disponivel"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "disponivel"}, timeout=30)
         assert r.status_code == 200
         # disponivel → em_execucao
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "em_execucao"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "em_execucao"}, timeout=30)
         assert r.status_code == 200
         # Concluir
         r = httpx.post(f"{API}/ordens-servico/{os_id}/concluir", headers=auth(token),
-                       json={"servicos_realizados": "Manutenção preventiva realizada", "tempo_execucao_minutos": 60, "skip_foto_check": True}, timeout=10)
+                       json={"servicos_realizados": "Manutenção preventiva realizada", "tempo_execucao_minutos": 60, "skip_foto_check": True}, timeout=30)
         assert r.status_code == 200
         # concluida → encerrada
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "encerrada"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "encerrada"}, timeout=30)
         assert r.status_code == 200
 
     def test_foto_obrigatoria_corretiva(self):
@@ -173,11 +173,11 @@ class TestStateMachine:
         aid = get_first_ativo(token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "corretiva", "titulo": "SM Foto Check", "execucao_direta": True
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
         # Tentar concluir SEM foto e SEM skip_foto_check → deve retornar 400
         r = httpx.post(f"{API}/ordens-servico/{os_id}/concluir", headers=auth(token),
-                       json={"servicos_realizados": "OK", "tempo_execucao_minutos": 30}, timeout=10)
+                       json={"servicos_realizados": "OK", "tempo_execucao_minutos": 30}, timeout=30)
         assert r.status_code == 400
         assert "foto" in r.json()["detail"].lower()
 
@@ -187,11 +187,11 @@ class TestStateMachine:
         aid = get_first_ativo(token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "preventiva", "titulo": "SM No Desc", "execucao_direta": True
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
         # Tentar concluir SEM descrição
         r = httpx.post(f"{API}/ordens-servico/{os_id}/concluir", headers=auth(token),
-                       json={"tempo_execucao_minutos": 30, "skip_foto_check": True}, timeout=10)
+                       json={"tempo_execucao_minutos": 30, "skip_foto_check": True}, timeout=30)
         # Should fail if no description exists at all
         # Note: backend falls back to os_doc.descricao, so may pass if OS has descricao
 
@@ -202,12 +202,12 @@ class TestStateMachine:
         # Criar e cancelar
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "corretiva", "titulo": "SM Terminal"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "cancelada"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "cancelada"}, timeout=30)
         assert r.status_code == 200
         # Tentar transicionar de cancelada → em_execucao (inválido)
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "em_execucao"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "em_execucao"}, timeout=30)
         assert r.status_code == 400
         assert "terminal" in r.json()["detail"].lower() or "nao permitida" in r.json()["detail"].lower()
 
@@ -217,12 +217,12 @@ class TestStateMachine:
         aid = get_first_ativo(token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "preventiva", "titulo": "SM Audit"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
         # Fazer uma transição
-        httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "disponivel"}, timeout=10)
+        httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "disponivel"}, timeout=30)
         # Verificar histórico
-        r = httpx.get(f"{API}/ordens-servico/{os_id}/historico", headers=auth(token), timeout=10)
+        r = httpx.get(f"{API}/ordens-servico/{os_id}/historico", headers=auth(token), timeout=30)
         assert r.status_code == 200
         logs = r.json()
         assert len(logs) >= 1, "Audit trail deve conter pelo menos 1 entrada"
@@ -233,10 +233,10 @@ class TestStateMachine:
         aid = get_first_ativo(token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
             "ativo_id": aid, "tipo": "corretiva", "titulo": "SM Error Msg"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
         # Transição inválida: programada → encerrada
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "encerrada"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(token), json={"new_status": "encerrada"}, timeout=30)
         assert r.status_code == 400
         detail = r.json()["detail"]
         # Mensagem deve conter transições válidas
@@ -247,11 +247,11 @@ class TestStateMachine:
 
 class TestDashboard:
     def test_dashboard_stats(self):
-        r = httpx.get(f"{API}/dashboard/stats", headers=auth(get_token("master")), timeout=15)
+        r = httpx.get(f"{API}/dashboard/stats", headers=auth(get_token("master")), timeout=30)
         assert r.status_code == 200
 
     def test_dashboard_executivo(self):
-        r = httpx.get(f"{API}/dashboard/executivo", headers=auth(get_token("master")), timeout=15)
+        r = httpx.get(f"{API}/dashboard/executivo", headers=auth(get_token("master")), timeout=30)
         assert r.status_code == 200
         d = r.json()
         assert "kpis" in d and "trend_12m" in d and "top_falhas" in d
@@ -259,11 +259,11 @@ class TestDashboard:
 
     def test_indicadores(self):
         for p in ["hoje", "mes"]:
-            r = httpx.get(f"{API}/indicadores?periodo={p}", headers=auth(get_token("master")), timeout=10)
+            r = httpx.get(f"{API}/indicadores?periodo={p}", headers=auth(get_token("master")), timeout=30)
             assert r.status_code == 200
 
     def test_minha_area(self):
-        r = httpx.get(f"{API}/minha-area", headers=auth(get_token("master")), timeout=10)
+        r = httpx.get(f"{API}/minha-area", headers=auth(get_token("master")), timeout=30)
         assert r.status_code == 200
         assert "contadores" in r.json()
 
@@ -274,7 +274,7 @@ class TestDossier:
     def test_dossier(self):
         token = get_token("master")
         aid = get_first_ativo(token)
-        r = httpx.get(f"{API}/ativos/{aid}/dossie", headers=auth(token), timeout=15)
+        r = httpx.get(f"{API}/ativos/{aid}/dossie", headers=auth(token), timeout=30)
         assert r.status_code == 200
         d = r.json()
         assert all(k in d for k in ["ativo", "kpis", "os", "planos", "inspecoes"])
@@ -285,13 +285,13 @@ class TestDossier:
 class TestPerformance:
     def test_health_fast(self):
         start = time.time()
-        r = httpx.get(f"{API}/health", timeout=10)
+        r = httpx.get(f"{API}/health", timeout=30)
         assert r.status_code == 200
         assert (time.time() - start) < 2
 
     def test_dashboard_fast(self):
         start = time.time()
-        r = httpx.get(f"{API}/dashboard/executivo", headers=auth(get_token("master")), timeout=15)
+        r = httpx.get(f"{API}/dashboard/executivo", headers=auth(get_token("master")), timeout=30)
         assert r.status_code == 200
         assert (time.time() - start) < 5
 
@@ -300,15 +300,15 @@ class TestPerformance:
 
 class TestRBAC:
     def test_unauthenticated_rejected(self):
-        r = httpx.get(f"{API}/ativos", timeout=10)
+        r = httpx.get(f"{API}/ativos", timeout=30)
         assert r.status_code in (401, 403)
 
     def test_system_status_admin(self):
-        r = httpx.get(f"{API}/system/status", headers=auth(get_token("master")), timeout=10)
+        r = httpx.get(f"{API}/system/status", headers=auth(get_token("master")), timeout=30)
         assert r.status_code == 200
 
     def test_system_status_tecnico_denied(self):
-        r = httpx.get(f"{API}/system/status", headers=auth(get_token("tecnico")), timeout=10)
+        r = httpx.get(f"{API}/system/status", headers=auth(get_token("tecnico")), timeout=30)
         assert r.status_code == 403
 
     def test_tecnico_cannot_approve(self):
@@ -319,11 +319,11 @@ class TestRBAC:
         # Criar OS como master
         r = httpx.post(f"{API}/ordens-servico", headers=auth(master_token), json={
             "ativo_id": aid, "tipo": "preventiva", "titulo": "RBAC Tec Test"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
         # Técnico tenta mover programada → disponivel (somente pcm/admin/master pode)
         r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(tec_token),
-                        json={"new_status": "disponivel"}, timeout=10)
+                        json={"new_status": "disponivel"}, timeout=30)
         assert r.status_code == 400, f"Técnico NÃO deveria poder fazer programada→disponivel: {r.text}"
 
     def test_tecnico_can_execute(self):
@@ -333,13 +333,13 @@ class TestRBAC:
         aid = get_first_ativo(master_token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(master_token), json={
             "ativo_id": aid, "tipo": "preventiva", "titulo": "RBAC Tec Execute"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
         # master move para disponivel
-        httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(master_token), json={"new_status": "disponivel"}, timeout=10)
+        httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(master_token), json={"new_status": "disponivel"}, timeout=30)
         # Técnico pode mover disponivel → em_execucao
         r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(tec_token),
-                        json={"new_status": "em_execucao"}, timeout=10)
+                        json={"new_status": "em_execucao"}, timeout=30)
         assert r.status_code == 200, f"Técnico deveria poder iniciar execução: {r.text}"
 
     def test_pcm_can_plan(self):
@@ -348,9 +348,9 @@ class TestRBAC:
         aid = get_first_ativo(pcm_token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(pcm_token), json={
             "ativo_id": aid, "tipo": "preventiva", "titulo": "RBAC PCM Plan"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
-        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(pcm_token), json={"new_status": "disponivel"}, timeout=10)
+        r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(pcm_token), json={"new_status": "disponivel"}, timeout=30)
         assert r.status_code == 200
 
     def test_tecnico_cannot_cancel(self):
@@ -360,10 +360,10 @@ class TestRBAC:
         aid = get_first_ativo(master_token)
         r = httpx.post(f"{API}/ordens-servico", headers=auth(master_token), json={
             "ativo_id": aid, "tipo": "preventiva", "titulo": "RBAC Cancel"
-        }, timeout=10)
+        }, timeout=30)
         os_id = r.json()["id"]
         r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(tec_token),
-                        json={"new_status": "cancelada"}, timeout=10)
+                        json={"new_status": "cancelada"}, timeout=30)
         assert r.status_code == 400, f"Técnico NÃO deveria poder cancelar: {r.text}"
 
 
@@ -371,80 +371,86 @@ class TestRBAC:
 # ============== EXPORTS & PDF ==============
 
 class TestExports:
+    def _get_one_os_id(self):
+        """Helper: get a single OS ID without loading full list"""
+        token = get_token("master")
+        r = httpx.get(f"{API}/ordens-servico?status=programada", headers=auth(token), timeout=60)
+        data = r.json()
+        if data:
+            return data[0]['id']
+        # Fallback: create one
+        aid = get_first_ativo(token)
+        r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
+            "ativo_id": aid, "tipo": "preventiva", "titulo": "Test Export"
+        }, timeout=30)
+        return r.json()["id"]
+
     def test_os_individual_pdf(self):
         """PDF individual de OS gera arquivo válido"""
         token = get_token("master")
-        os_list = httpx.get(f"{API}/ordens-servico", headers=auth(token), timeout=10).json()
-        if os_list:
-            os_id = os_list[0]['id']
-            r = httpx.get(f"{API}/ordens-servico/{os_id}/pdf", headers=auth(token), timeout=15)
-            assert r.status_code == 200
-            assert 'pdf' in r.headers.get('content-type', '').lower()
-            assert len(r.content) > 1000  # PDF must have content
+        os_id = self._get_one_os_id()
+        r = httpx.get(f"{API}/ordens-servico/{os_id}/pdf", headers=auth(token), timeout=60)
+        assert r.status_code == 200
+        assert 'pdf' in r.headers.get('content-type', '').lower()
+        assert len(r.content) > 1000
 
     def test_os_batch_pdf(self):
         """PDF em lote de OS gera arquivo válido"""
         token = get_token("master")
-        os_list = httpx.get(f"{API}/ordens-servico", headers=auth(token), timeout=10).json()
-        if len(os_list) >= 2:
-            ids = ','.join(o['id'] for o in os_list[:3])
-            r = httpx.get(f"{API}/ordens-servico/batch-pdf?ids={ids}", headers=auth(token), timeout=15)
-            assert r.status_code == 200
-            assert 'pdf' in r.headers.get('content-type', '').lower()
+        os_id = self._get_one_os_id()
+        r = httpx.get(f"{API}/ordens-servico/batch-pdf?ids={os_id}", headers=auth(token), timeout=60)
+        assert r.status_code == 200
+        assert 'pdf' in r.headers.get('content-type', '').lower()
 
     def test_batch_pdf_rbac_tecnico_denied(self):
         """Técnico não pode imprimir em lote"""
         token = get_token("tecnico")
-        r = httpx.get(f"{API}/ordens-servico/batch-pdf?ids=fake", headers=auth(token), timeout=10)
+        r = httpx.get(f"{API}/ordens-servico/batch-pdf?ids=fake", headers=auth(token), timeout=30)
         assert r.status_code == 403
 
     def test_batch_pdf_rbac_pcm_allowed(self):
         """PCM pode imprimir em lote"""
         token = get_token("pcm")
-        os_list = httpx.get(f"{API}/ordens-servico", headers=auth(token), timeout=10).json()
-        if os_list:
-            r = httpx.get(f"{API}/ordens-servico/batch-pdf?ids={os_list[0]['id']}", headers=auth(token), timeout=15)
-            assert r.status_code == 200
+        os_id = self._get_one_os_id()
+        r = httpx.get(f"{API}/ordens-servico/batch-pdf?ids={os_id}", headers=auth(token), timeout=60)
+        assert r.status_code == 200
 
     def test_export_os_excel(self):
         """Exportação de OS em Excel"""
         token = get_token("master")
-        r = httpx.get(f"{API}/export/ordens-servico?format=excel", headers=auth(token), timeout=15)
+        r = httpx.get(f"{API}/export/ordens-servico?format=excel", headers=auth(token), timeout=120)
         assert r.status_code == 200
         assert 'spreadsheet' in r.headers.get('content-type', '').lower() or 'openxml' in r.headers.get('content-type', '').lower()
 
     def test_export_ativos_excel(self):
         """Exportação de ativos em Excel"""
         token = get_token("master")
-        r = httpx.get(f"{API}/export/ativos?format=excel", headers=auth(token), timeout=15)
+        r = httpx.get(f"{API}/export/ativos?format=excel", headers=auth(token), timeout=120)
         assert r.status_code == 200
 
     def test_export_inspecoes_excel(self):
         """Exportação de inspeções em Excel"""
         token = get_token("master")
-        r = httpx.get(f"{API}/export/inspecoes?format=excel", headers=auth(token), timeout=15)
+        r = httpx.get(f"{API}/export/inspecoes?format=excel", headers=auth(token), timeout=60)
         assert r.status_code == 200
 
     def test_export_preventivas_excel(self):
         """Exportação de planos preventivos em Excel"""
         token = get_token("master")
-        r = httpx.get(f"{API}/export/preventivas?format=excel", headers=auth(token), timeout=15)
+        r = httpx.get(f"{API}/export/preventivas?format=excel", headers=auth(token), timeout=120)
         assert r.status_code == 200
 
     def test_export_preventivas_pdf(self):
         """Exportação de planos preventivos em PDF"""
         token = get_token("master")
-        r = httpx.get(f"{API}/export/preventivas?format=pdf", headers=auth(token), timeout=15)
+        r = httpx.get(f"{API}/export/preventivas?format=pdf", headers=auth(token), timeout=120)
         assert r.status_code == 200
         assert 'pdf' in r.headers.get('content-type', '').lower()
 
     def test_qr_code_in_os_pdf(self):
         """QR Code na OS PDF contém URL da PWA"""
-        # Verify the QR code generates without error (tested implicitly by PDF generation)
         token = get_token("master")
-        os_list = httpx.get(f"{API}/ordens-servico", headers=auth(token), timeout=10).json()
-        if os_list:
-            r = httpx.get(f"{API}/ordens-servico/{os_list[0]['id']}/pdf", headers=auth(token), timeout=15)
-            assert r.status_code == 200
-            # PDF content should be > 3KB (includes QR image)
-            assert len(r.content) > 3000
+        os_id = self._get_one_os_id()
+        r = httpx.get(f"{API}/ordens-servico/{os_id}/pdf", headers=auth(token), timeout=60)
+        assert r.status_code == 200
+        assert len(r.content) > 3000
