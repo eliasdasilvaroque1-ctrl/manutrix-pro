@@ -4193,7 +4193,7 @@ async def get_about():
     """System information"""
     return {
         "product": "MAINTRIX Enterprise",
-        "version": "5.2.0-RC1",
+        "version": "1.0.0",
         "build": "2026-07-11",
         "environment": os.environ.get("MAINTRIX_ENV", "homologacao"),
         "copyright": "MAINTRIX Tecnologia Ltda.",
@@ -4207,7 +4207,7 @@ async def get_about():
 
 @api_router.get("/")
 async def root():
-    return {"message": "MAINTRIX API v5.2.0-RC2", "status": "online"}
+    return {"message": "MAINTRIX API v1.0.0", "status": "online"}
 
 # ============== P0.3: HEALTH & DIAGNOSTICS ==============
 
@@ -4229,7 +4229,7 @@ async def health_check():
         status_code=200 if db_ok else 503,
         content={
             "status": status_val,
-            "version": "5.2.0-RC2",
+            "version": "1.0.0",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "database": {"connected": db_ok, "latency_ms": db_latency_ms},
         }
@@ -4287,7 +4287,7 @@ async def system_status(current_user=Depends(get_current_user)):
     environment = os.environ.get("ENVIRONMENT", "production" if "preview" not in os.environ.get("REACT_APP_BACKEND_URL", "") else "preview")
 
     return {
-        "version": "5.2.0-RC2",
+        "version": "1.0.0",
         "environment": environment,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "uptime": f"{uptime_h}h{uptime_m}m",
