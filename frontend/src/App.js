@@ -2534,7 +2534,7 @@ const KanbanBoard = ({ columns, items, onMove, onCardClick, onEdit, onDelete, pl
         return (
           <div
             key={col.id}
-            className={`flex-shrink-0 w-56 md:w-64 rounded-xl border ${col.color} ${col.bg} flex flex-col snap-start ${isDragOver ? 'ring-2 ring-emerald-400/50' : ''}`}
+            className={`flex-shrink-0 w-48 md:w-60 rounded-xl border ${col.color} ${col.bg} flex flex-col snap-start ${isDragOver ? 'ring-2 ring-emerald-400/50' : ''}`}
             onDragOver={(e) => handleDragOver(e, col.id)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, col.id)}
