@@ -51,7 +51,7 @@ from routes.biblioteca import router as biblioteca_router, BIBLIOTECA_INDEXES
 from routes.central import router as central_router
 from routes.exports import router as exports_router
 
-app = FastAPI(title="MAINTRIX API", version="5.2.0-RC2")
+app = FastAPI(title="MAINTRIX API", version="1.0.0")
 api_router = APIRouter(prefix="/api")
 
 # ============== STRUCTURED LOGGING ==============
@@ -128,13 +128,19 @@ def _check_rate_limit(ip: str, path: str) -> bool:
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
-    if request.method == "POST" or path.startswith("/api/public/"):
+    if request.method == "POST" or path.startswith("/api/public/") or path.startswith("/api/storage/"):
         ip = _get_client_ip(request)
         if not _check_rate_limit(ip, path):
             logger.warning(f"RATE_LIMIT: {ip} blocked on {path}")
             return JSONResponse(status_code=429, content={"detail": "Muitas requisições. Aguarde um momento."})
-    response = await call_next(request)
-    return response
+    try:
+        response = await call_next(request)
+        return response
+    except RuntimeError as e:
+        if "No response returned" in str(e):
+            logger.warning(f"Middleware chain dropped response on {request.method} {path}")
+            return JSONResponse(status_code=503, content={"detail": "Serviço temporariamente indisponível. Tente novamente."})
+        raise
 
 # ============== ETAPA 2: SECURITY HEADERS ==============
 @app.middleware("http")
@@ -152,7 +158,7 @@ async def security_headers_middleware(request: Request, call_next):
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: blob: https:",
         "font-src 'self' data:",
-        "connect-src 'self' https://procure-manutrix.preview.emergentagent.com https://*.emergentagent.com https://*.supabase.co",
+        f"connect-src 'self' {' '.join(os.environ.get('CORS_ORIGINS', '').split(','))} https://*.supabase.co",
         "frame-ancestors 'none'",
         "base-uri 'self'",
         "form-action 'self'",
@@ -169,12 +175,26 @@ REQUEST_TIMEOUT_SECONDS = 120  # 2 minutes max for any request (uploads can be l
 
 @app.middleware("http")
 async def timeout_middleware(request: Request, call_next):
+    # Skip timeout for streaming endpoints (PDF, storage, uploads)
+    path = request.url.path
+    if path.endswith("/pdf") or "/batch-pdf" in path or path.startswith("/api/storage/") or path.startswith("/api/upload"):
+        try:
+            response = await call_next(request)
+            return response
+        except RuntimeError as e:
+            if "No response returned" in str(e):
+                return JSONResponse(status_code=503, content={"detail": "Serviço temporariamente indisponível."})
+            raise
     try:
         response = await asyncio.wait_for(call_next(request), timeout=REQUEST_TIMEOUT_SECONDS)
         return response
     except asyncio.TimeoutError:
-        logger.error(f"TIMEOUT: {request.method} {request.url.path} exceeded {REQUEST_TIMEOUT_SECONDS}s")
+        logger.error(f"TIMEOUT: {request.method} {path} exceeded {REQUEST_TIMEOUT_SECONDS}s")
         return JSONResponse(status_code=504, content={"detail": "Requisição excedeu o tempo limite."})
+    except RuntimeError as e:
+        if "No response returned" in str(e):
+            return JSONResponse(status_code=503, content={"detail": "Serviço temporariamente indisponível."})
+        raise
 
 # ============== P0.1: REQUEST OBSERVABILITY ==============
 @app.middleware("http")
