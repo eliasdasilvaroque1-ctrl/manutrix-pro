@@ -173,8 +173,8 @@ export const FormInput = ({ label, required, error, children }) => (
   </div>
 );
 
-export const Select = ({ value, onChange, options, placeholder, className = "" }) => (
-  <select value={value} onChange={(e) => onChange(e.target.value)} className={`input-industrial w-full px-4 ${className}`}>
+export const Select = ({ value, onChange, options, placeholder, className = "", ...rest }) => (
+  <select value={value} onChange={(e) => onChange(e.target.value)} className={`input-industrial w-full px-4 ${className}`} {...rest}>
     <option value="">{placeholder || "Selecione..."}</option>
     {options.map((opt) => (
       <option key={opt.value} value={opt.value}>{opt.label}</option>

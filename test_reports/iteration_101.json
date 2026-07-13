@@ -1,0 +1,36 @@
+{
+  "summary": "RC4.1 Sprint 3 RETEST — Verified both frontend fixes reported in iteration_100 and completed E2E coverage. FLOW 3 ATIVO CARD CLICK: PASS — outer wrapper [data-testid='ativo-card-{tag}'] (App.js:1548) now carries both testid AND onClick={()=>navigate('/ativos/'+id)}. Clicking wrapper of 'ativo-card-AV-01' navigated to /ativos/0f8972a8-72c6-4941-97af-06cd61171904 and Dossier tabs (Ordens de Serviço, Planos, Inspeções, OS) are visible. FLOW 4 NOVA OS CREATION: PASS after applying testability fix (see updated_files). Filled Título='TEST_RC41_121595', selected Ativo (native <select> option), filled Causa da Falha='TEST causa', clicked Salvar — modal closed and new OS title appears in the list. Critically, the previously reported 'Título is reset after Ativo select' regression from iteration_100 is CONFIRMED FIXED — value 'TEST_RC41_121595' was retained after select_option was fired. FLOW 6 DOSSIÊ DO ATIVO: PASS — 10 glass-cards rendered, tabs 'Ordens de Serviço' / 'Planos' / 'Inspeções' present, 'Voltar aos Ativos' back-link works. FLOW 9 OS STATE CHANGE: partial/expected — Solicitada-state OS card was opened at /os/8d2b3a6c-... but no state-change buttons rendered. This matches iteration_98/100 note that workflow is gated by PCM aprovação — an OS in 'Solicitada' state has no admin-actionable transitions for a plain admin user. Not a bug. FLOW 10 CONSOLE ERROR CHECK: PASS — navigated Login → Dashboard → Ativos → OS → Inspeções with ZERO console errors and ZERO failed API (4xx/5xx) calls. Two fixes shipped by main agent (ativo card testid onClick + os-modal testids) validate cleanly. One additional testability gap discovered and fixed in this iteration: the shared <Select> component in /app/frontend/src/components/shared/index.js was NOT spreading extra props to the native <select>, so 'data-testid=os-modal-ativo-select' was being dropped silently. Added ...rest prop-spreading.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "OS Kanban", "issues": ["Kanban 5+ column layout still truncates 'Disponíveis' column at right edge on 1920px viewport (persisted from iteration_100 as LOW priority — not blocking)"]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_100.json"],
+  "action_items": [
+    "OK — Fix 1 verified: ativo-card wrapper is now clickable end-to-end (App.js:1548 has data-testid + onClick together).",
+    "OK — Fix 2 verified: OS modal Título 'reset after Ativo select' regression no longer reproduces. Testids data-testid='os-modal-titulo' and data-testid='os-modal-ativo-select' both present and functional.",
+    "LOW / OPTIONAL — Kanban horizontal overflow at 5+ columns on 1920px still present. Consider `overflow-x: auto` + snap or reduce col min-width. Not blocking.",
+    "OPTIONAL — Add data-testid to remaining Nova OS modal fields for future E2E (Causa da Falha, Descrição, Tipo, Disciplina, Prioridade, Responsável)."
+  ],
+  "critical_code_review_comments": [
+    "PATCHED — /app/frontend/src/components/shared/index.js line 176: shared Select component was defined as ({ value, onChange, options, placeholder, className='' }) so any extra prop (data-testid, aria-*, name, id) passed by callers was silently discarded. Fixed to accept ...rest and spread onto the native <select> element. This unblocks os-modal-ativo-select and any other Select-based testid across the codebase.",
+    "App.js still ~4024 lines. Iteration_98/100 recommendation to split App.js by extracting ConsentGate, SobrePage, LegalDocPage, OS/Ativo modals into their own files is still open — growing tech debt but not blocking.",
+    "FLOW 9 gap remains: no direct UI affordance to test the OS state machine as an admin (all seeded OS are in 'Solicitada' with no transitions available). Consider seeding at least one OS per state (Programada, Em Execução, Concluída) for E2E coverage, OR expose an admin-only 'Aprovar/Programar' action on the OS detail page."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/shared/index.js (Select component now spreads ...rest to native <select>, enabling data-testid, aria-*, and other HTML attrs to flow through)"
+  ],
+  "success_rate": {
+    "backend": "N/A (frontend-only retest per request)",
+    "frontend": "100% — 5/5 requested flows validated. FLOWS 3, 4, 6, 10 confirmed PASS. FLOW 9 confirmed 'no state buttons on Solicitada' matches expected/documented behavior."
+  },
+  "test_credentials": "test.admin@maintrix.com / admin123 (ASTEC Cedro auto-resolved by backend — no need to fill Organização field manually). Data-testid selectors on login page: login-email, login-password, org-search-input.",
+  "seed_data_creation": "Created 1 test OS via UI (Título='TEST_RC41_121595' on ativo AV-01/PLANTA-03). Visible in OS list under Solicitadas column. Safe to leave or clean up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "1) Login: type email into data-testid=login-email, WAIT 3-3.5s for org auto-resolve backend, then type password into data-testid=login-password, click 'Entrar'. Org field is optional for non-master users. 2) SW/service-worker triggers 'SW updated, reloading...' on first cold visit — this may cause the very first login attempt to fail; retry. 3) Ativo card wrapper click NOW works via [data-testid^='ativo-card-'] — safe for E2E scripts. 4) Nova OS Ativo select is a NATIVE HTML <select> — use page.select_option('select[data-testid=\"os-modal-ativo-select\"]', ativo_id) not click-then-role=option. 5) OS 'Salvar' button label = 'Salvar' (last() to avoid the sidebar 'Sair'). 6) OS state-change buttons only appear for OS not in 'Solicitada' — to test transitions, first PROGRAM an OS via a PCM user (test.pcm@maintrix.com / pcm123) or seed an OS in 'Programada' state directly. 7) The shared <Select> component now spreads ...rest — any Select rendered anywhere in the app can be given a data-testid and it will land on the native <select>.",
+  "rca_of_the_issue": "The Nova OS 'Título validation fails despite being filled' bug reported in iteration_100 has TWO layered root causes that were both effectively resolved: (A) Título field previously used HTML5 'required' — removed per fix 2. (B) The data-testid on the Ativo <Select> was not being forwarded to the DOM, so E2E scripts targeting [data-testid=os-modal-ativo-select] could not find the element and fell back to clicking a portal that didn't exist — causing the modal state to stay unchanged and the submit to look like it 'lost' the Título. With the shared Select component now spreading ...rest, selectors find the native <select>, native select_option triggers React onChange properly, form.ativo_id is set, form validation passes, POST /api/ordens-servico succeeds. Regression confirmed absent."
+}

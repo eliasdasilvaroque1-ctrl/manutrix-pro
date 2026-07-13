@@ -524,6 +524,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                   onChange={(val) => setForm({...form, ativo_id: val})}
                   options={ativos.map(a => ({ value: a.id, label: `${a.sector?.nome || ''} › ${a.tag} — ${a.nome}` }))}
                   placeholder="Selecione o ativo..."
+                  data-testid="os-modal-ativo-select"
                 />
               )}
             </FormInput>
@@ -534,7 +535,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                 onChange={(e) => setForm({...form, titulo: e.target.value})}
                 placeholder="Ex: Troca de rolamento"
                 className="input-industrial w-full px-4"
-                required
+                data-testid="os-modal-titulo"
               />
             </FormInput>
             <FormInput label="Tipo">
@@ -1544,9 +1545,9 @@ const AtivosPage = () => {
       {loading ? <Loading rows={5} /> : filtered.length > 0 ? (
         <div className="space-y-2">
           {filtered.map((ativo) => (
-            <div key={ativo.id} className="glass-card p-4 hover:border-slate-600 transition-all group" data-testid={`ativo-card-${ativo.tag}`}>
+            <div key={ativo.id} className="glass-card p-4 hover:border-slate-600 transition-all group cursor-pointer" data-testid={`ativo-card-${ativo.tag}`} onClick={() => navigate(`/ativos/${ativo.id}`)}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/ativos/${ativo.id}`)}>
+                <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-brand-10">
                     <Box size={22} className="text-brand" />
                   </div>
