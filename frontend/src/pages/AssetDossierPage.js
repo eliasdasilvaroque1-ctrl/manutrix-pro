@@ -3,11 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Box, Wrench, ClipboardCheck, AlertTriangle, FileText, Clock, BarChart3,
   ChevronRight, Plus, Edit, Download, RefreshCw, Eye, Calendar, Target, Shield, Zap,
-  Activity, TrendingUp, MapPin, Package
+  Activity, TrendingUp, MapPin, Package, QrCode, Printer
 } from "lucide-react";
 import { api, useAuth, BACKEND_URL } from "@/lib/api";
 import { StatusBadge, PriorityBadge, EmptyState, Loading, PageContainer, Modal, FormInput, Select } from "@/components/shared";
 import { toast } from "sonner";
+import { QRCodeSVG } from "qrcode.react";
 
 // ============== HEADER ==============
 const DossierHeader = ({ ativo, kpis }) => {
@@ -41,19 +42,26 @@ const DossierHeader = ({ ativo, kpis }) => {
             <StatusBadge status={a.status || a.status_operacional || 'operando'} size="sm" />
           </div>
         </div>
-        {/* KPI Cards */}
-        <div className="grid grid-cols-3 gap-2 shrink-0">
-          <div className="text-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
-            <p className="text-sm font-bold text-emerald-400">{kpis?.disponibilidade || 0}%</p>
-            <p className="text-[9px] text-slate-500 uppercase">Disp.</p>
-          </div>
-          <div className="text-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
-            <p className="text-sm font-bold text-blue-400">{kpis?.mtbf_horas || 0}h</p>
-            <p className="text-[9px] text-slate-500 uppercase">MTBF</p>
-          </div>
-          <div className="text-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
-            <p className="text-sm font-bold text-amber-400">{kpis?.mttr_horas || 0}h</p>
-            <p className="text-[9px] text-slate-500 uppercase">MTTR</p>
+        {/* KPI Cards + QR */}
+        <div className="flex flex-col items-center gap-2 shrink-0">
+          {a.qr_code && (
+            <div className="bg-white p-1.5 rounded-lg" data-testid="ativo-qr-code">
+              <QRCodeSVG value={`${window.location.origin}/ativos/${a.id}`} size={64} />
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="text-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
+              <p className="text-sm font-bold text-emerald-400">{kpis?.disponibilidade || 0}%</p>
+              <p className="text-[9px] text-slate-500 uppercase">Disp.</p>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
+              <p className="text-sm font-bold text-blue-400">{kpis?.mtbf_horas || 0}h</p>
+              <p className="text-[9px] text-slate-500 uppercase">MTBF</p>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
+              <p className="text-sm font-bold text-amber-400">{kpis?.mttr_horas || 0}h</p>
+              <p className="text-[9px] text-slate-500 uppercase">MTTR</p>
+            </div>
           </div>
         </div>
       </div>

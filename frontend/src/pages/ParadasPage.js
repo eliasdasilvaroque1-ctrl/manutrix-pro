@@ -893,6 +893,7 @@ const AdminTemplatesPage = () => {
           <p className="text-sm text-slate-500">Gerenciar perguntas por tipo de equipamento e por ativo</p>
         </div>
         <div className="flex gap-2">
+          <ExportButtons entity="preventivas" />
           <button onClick={() => setShowImportWizard(true)} className="flex items-center gap-2 px-4 py-2 bg-brand-10 hover:bg-brand-20 text-brand rounded-lg text-sm font-medium transition-all" data-testid="import-plan-btn"><Upload size={16} /> Importar</button>
           <button onClick={openNew} className="btn-primary flex items-center gap-2" data-testid="new-template-btn"><Plus size={20} /> Novo Plano</button>
         </div>

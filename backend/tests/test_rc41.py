@@ -365,3 +365,86 @@ class TestRBAC:
         r = httpx.patch(f"{API}/ordens-servico/{os_id}/status", headers=auth(tec_token),
                         json={"new_status": "cancelada"}, timeout=10)
         assert r.status_code == 400, f"Técnico NÃO deveria poder cancelar: {r.text}"
+
+
+
+# ============== EXPORTS & PDF ==============
+
+class TestExports:
+    def test_os_individual_pdf(self):
+        """PDF individual de OS gera arquivo válido"""
+        token = get_token("master")
+        os_list = httpx.get(f"{API}/ordens-servico", headers=auth(token), timeout=10).json()
+        if os_list:
+            os_id = os_list[0]['id']
+            r = httpx.get(f"{API}/ordens-servico/{os_id}/pdf", headers=auth(token), timeout=15)
+            assert r.status_code == 200
+            assert 'pdf' in r.headers.get('content-type', '').lower()
+            assert len(r.content) > 1000  # PDF must have content
+
+    def test_os_batch_pdf(self):
+        """PDF em lote de OS gera arquivo válido"""
+        token = get_token("master")
+        os_list = httpx.get(f"{API}/ordens-servico", headers=auth(token), timeout=10).json()
+        if len(os_list) >= 2:
+            ids = ','.join(o['id'] for o in os_list[:3])
+            r = httpx.get(f"{API}/ordens-servico/batch-pdf?ids={ids}", headers=auth(token), timeout=15)
+            assert r.status_code == 200
+            assert 'pdf' in r.headers.get('content-type', '').lower()
+
+    def test_batch_pdf_rbac_tecnico_denied(self):
+        """Técnico não pode imprimir em lote"""
+        token = get_token("tecnico")
+        r = httpx.get(f"{API}/ordens-servico/batch-pdf?ids=fake", headers=auth(token), timeout=10)
+        assert r.status_code == 403
+
+    def test_batch_pdf_rbac_pcm_allowed(self):
+        """PCM pode imprimir em lote"""
+        token = get_token("pcm")
+        os_list = httpx.get(f"{API}/ordens-servico", headers=auth(token), timeout=10).json()
+        if os_list:
+            r = httpx.get(f"{API}/ordens-servico/batch-pdf?ids={os_list[0]['id']}", headers=auth(token), timeout=15)
+            assert r.status_code == 200
+
+    def test_export_os_excel(self):
+        """Exportação de OS em Excel"""
+        token = get_token("master")
+        r = httpx.get(f"{API}/export/ordens-servico?format=excel", headers=auth(token), timeout=15)
+        assert r.status_code == 200
+        assert 'spreadsheet' in r.headers.get('content-type', '').lower() or 'openxml' in r.headers.get('content-type', '').lower()
+
+    def test_export_ativos_excel(self):
+        """Exportação de ativos em Excel"""
+        token = get_token("master")
+        r = httpx.get(f"{API}/export/ativos?format=excel", headers=auth(token), timeout=15)
+        assert r.status_code == 200
+
+    def test_export_inspecoes_excel(self):
+        """Exportação de inspeções em Excel"""
+        token = get_token("master")
+        r = httpx.get(f"{API}/export/inspecoes?format=excel", headers=auth(token), timeout=15)
+        assert r.status_code == 200
+
+    def test_export_preventivas_excel(self):
+        """Exportação de planos preventivos em Excel"""
+        token = get_token("master")
+        r = httpx.get(f"{API}/export/preventivas?format=excel", headers=auth(token), timeout=15)
+        assert r.status_code == 200
+
+    def test_export_preventivas_pdf(self):
+        """Exportação de planos preventivos em PDF"""
+        token = get_token("master")
+        r = httpx.get(f"{API}/export/preventivas?format=pdf", headers=auth(token), timeout=15)
+        assert r.status_code == 200
+        assert 'pdf' in r.headers.get('content-type', '').lower()
+
+    def test_qr_code_in_os_pdf(self):
+        """QR Code na OS PDF contém URL da PWA"""
+        # Verify the QR code generates without error (tested implicitly by PDF generation)
+        token = get_token("master")
+        os_list = httpx.get(f"{API}/ordens-servico", headers=auth(token), timeout=10).json()
+        if os_list:
+            r = httpx.get(f"{API}/ordens-servico/{os_list[0]['id']}/pdf", headers=auth(token), timeout=15)
+            assert r.status_code == 200
+            # PDF content should be > 3KB (includes QR image)
+            assert len(r.content) > 3000

@@ -34,7 +34,7 @@ import {
 } from "./lib/constants";
 import DashboardPage from "./pages/DashboardPage";
 import { MaterialThumbnail, MaterialImageModal, MaterialImageUploader } from "./components/widgets/MaterialComponents";
-import ExportButtons from "./components/widgets/ExportButtons";
+import ExportButtons, { BatchPrintBar, BatchCheckbox } from "./components/widgets/ExportButtons";
 import EstoquePage from "./pages/EstoquePage";
 import SobressalentesPage, { SolicitacaoServicoPage, AssistentePage } from "./pages/SobressalentesPage";
 import ParadasPage, { AdminTemplatesPage, AuditoriaPage, AdminUsuariosPage, ProtectedRoute, CatchAllRedirect, SetoresPage, UnidadesPage } from "./pages/ParadasPage";
@@ -2658,6 +2658,7 @@ const OSPage = () => {
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
   const [viewMode, setViewMode] = useState('kanban');
+  const [selectedOsIds, setSelectedOsIds] = useState([]);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
@@ -2862,6 +2863,7 @@ const OSPage = () => {
               {filtered.map((os) => (
                 <div key={os.id} className="glass-card p-4 hover:border-slate-600 transition-all group">
                   <div className="flex items-center justify-between">
+                    {['master','admin','pcm'].includes(user?.role) && <BatchCheckbox id={os.id} selectedIds={selectedOsIds} setSelectedIds={setSelectedOsIds} />}
                     <div className="flex-1 cursor-pointer" onClick={() => navigate(`/os/${os.id}`)}>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-brand">#{os.numero}</span>
@@ -2897,6 +2899,7 @@ const OSPage = () => {
       
       <ModalNovaOS isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} onSuccess={fetchData} ativos={ativos} tecnicos={tecnicos} editData={editItem} preSelectedAtivoId={searchParams.get('ativo') || null} />
       <ConfirmDialog isOpen={!!deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} title="Excluir OS" message={`Tem certeza que deseja excluir a OS #${deleteItem?.numero}?`} confirmText="Excluir" danger />
+      <BatchPrintBar selectedIds={selectedOsIds} entity="ordens-servico" onClear={() => setSelectedOsIds([])} entityLabel="OS" />
     </PageContainer>
   );
 };

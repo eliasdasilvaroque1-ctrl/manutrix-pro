@@ -4,14 +4,14 @@ import {
   ClipboardCheck, Plus, Calendar, Clock, Activity, AlertTriangle, CheckCircle, XCircle,
   Search, Eye, Camera, ArrowLeft, MapPin, Play, Edit, Filter, ChevronDown, ChevronRight, Save,
   Box, Cog, Droplet, QrCode, RefreshCw, Shield, Sparkles, Target, Trash2, Upload, Wrench, X, Zap,
-  AlertCircle, CheckCircle2
+  AlertCircle, CheckCircle2, Printer
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth, BACKEND_URL } from "@/lib/api";
 import { normalizeError } from "@/lib/constants";
 import { queueOperation, queuePhoto } from "@/lib/offlineQueue";
 import { StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "@/components/shared";
-import ExportButtons from "@/components/widgets/ExportButtons";
+import ExportButtons, { BatchPrintBar, BatchCheckbox } from "@/components/widgets/ExportButtons";
 
 const InspecoesPage = () => {
   const [inspecoes, setInspecoes] = useState([]);
@@ -25,6 +25,7 @@ const InspecoesPage = () => {
   const [deleteItem, setDeleteItem] = useState(null);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterArea, setFilterArea] = useState('');
+  const [selectedInspIds, setSelectedInspIds] = useState([]);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
@@ -121,6 +122,7 @@ const InspecoesPage = () => {
           {filteredInspecoes.map((insp) => (
             <div key={insp.id} className="glass-card p-4 hover:border-slate-600 transition-all group">
               <div className="flex items-center justify-between">
+                {['master','admin','pcm'].includes(user?.role) && <BatchCheckbox id={insp.id} selectedIds={selectedInspIds} setSelectedIds={setSelectedInspIds} />}
                 <div className="flex-1 cursor-pointer" onClick={() => navigate(`/inspecoes/${insp.id}`)}>
                   <div className="flex items-center gap-2 mb-1">
                     {insp.ativo && (
@@ -190,6 +192,7 @@ const InspecoesPage = () => {
         confirmText="Excluir"
         danger
       />
+      <BatchPrintBar selectedIds={selectedInspIds} entity="inspecoes" onClear={() => setSelectedInspIds([])} entityLabel="inspeções" />
     </PageContainer>
   );
 };
@@ -622,6 +625,15 @@ const InspecaoDetailPage = () => {
           </div>
         </div>
       )}
+
+      {/* Print Inspection PDF */}
+      <button
+        onClick={() => window.open(`${BACKEND_URL}/api/inspecoes/${id}/pdf`, '_blank')}
+        className="btn-secondary w-full flex items-center justify-center gap-2"
+        data-testid="inspecao-print-btn"
+      >
+        <Printer size={18} /> Imprimir Inspeção
+      </button>
 
       {/* Action */}
       {inspecao.status === 'em_andamento' && !['pcm','gerente'].includes(user?.role) && (

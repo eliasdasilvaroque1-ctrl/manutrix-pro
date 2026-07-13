@@ -49,6 +49,7 @@ from routes.events import router as events_router
 from routes.org import router as org_router
 from routes.biblioteca import router as biblioteca_router, BIBLIOTECA_INDEXES
 from routes.central import router as central_router
+from routes.exports import router as exports_router
 
 app = FastAPI(title="MAINTRIX API", version="5.2.0-RC2")
 api_router = APIRouter(prefix="/api")
@@ -318,6 +319,7 @@ async def startup_create_indexes():
 # Include modularized routers
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(assets_router, prefix="/api")
+app.include_router(exports_router, prefix="/api")
 app.include_router(work_orders_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(org_router, prefix="/api")
@@ -3061,9 +3063,12 @@ async def print_os_pdf(os_id: str, user: Dict = Depends(get_current_user)):
         if eu:
             executantes_names.append(eu['nome'])
 
-    # Generate QR Code
+    # Generate QR Code with full PWA URL
+    app_url = os.environ.get("APP_URL", "")
+    if not app_url:
+        app_url = os.environ.get("REACT_APP_BACKEND_URL", "")
     qr_img_path = f"/tmp/qr_os_{os_id}.png"
-    qr = qrcode.make(f"OS:{os_id}", box_size=4, border=1)
+    qr = qrcode.make(f"{app_url}/os/{os_id}", box_size=4, border=1)
     qr.save(qr_img_path)
 
     # Build PDF
