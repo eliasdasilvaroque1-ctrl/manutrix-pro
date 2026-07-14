@@ -3308,7 +3308,7 @@ async def print_os_pdf(os_id: str, user: Dict = Depends(get_current_user)):
             fname = att.get('filename', 'arquivo')[:50]
             cat = (att.get('categoria') or '').capitalize()
             size_kb = round((att.get('size_bytes') or 0) / 1024, 1)
-            pdf.cell(186, 5, f"  {fname} ({cat}) — {size_kb}KB")
+            pdf.cell(186, 5, f"  {fname} ({cat}) - {size_kb}KB")
             y += 5
         y += 3
         y = line_sep(y)
