@@ -345,7 +345,7 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
                     <span className="text-sm text-slate-300">{m.filename}</span>
                     <span className="text-xs text-slate-600">{(m.size_bytes / 1024).toFixed(0)}KB</span>
                   </div>
-                  <button type="button" onClick={() => window.open(`${BACKEND_URL}${m.url}`, '_blank')} className="text-xs text-blue-400 hover:text-blue-300">Abrir</button>
+                  <button type="button" onClick={() => { import('@/lib/api').then(mod => mod.openAuthenticatedPdf(m.url, (msg) => toast.error(msg))); }} className="text-xs text-blue-400 hover:text-blue-300">Abrir</button>
                 </div>
               ))}
             </div>
@@ -3639,7 +3639,7 @@ const OSDetailPage = () => {
 
       {/* Print OS Button — always visible */}
       <button
-        onClick={() => window.open(`${BACKEND_URL}/api/ordens-servico/${id}/pdf`, '_blank')}
+        onClick={() => { import('@/lib/api').then(m => m.openAuthenticatedPdf(`/ordens-servico/${id}/pdf`, (msg) => toast.error(msg))); }}
         className="btn-secondary w-full flex items-center justify-center gap-2 mt-2"
         data-testid="os-print-btn"
       >

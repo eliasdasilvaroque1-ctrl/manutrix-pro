@@ -628,7 +628,7 @@ const InspecaoDetailPage = () => {
 
       {/* Print Inspection PDF */}
       <button
-        onClick={() => window.open(`${BACKEND_URL}/api/inspecoes/${id}/pdf`, '_blank')}
+        onClick={() => { import('@/lib/api').then(m => m.openAuthenticatedPdf(`/inspecoes/${id}/pdf`, (msg) => toast.error(msg))); }}
         className="btn-secondary w-full flex items-center justify-center gap-2"
         data-testid="inspecao-print-btn"
       >

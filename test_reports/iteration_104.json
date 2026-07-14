@@ -1,0 +1,52 @@
+{
+  "summary": "P0 HOTFIX for authenticated PDF printing VERIFIED WORKING. The frontend openAuthenticatedPdf() helper is correctly wired to the OS 'Imprimir OS' button (data-testid='os-print-btn'). Click triggers axios GET /api/ordens-servico/{id}/pdf with Authorization: Bearer <token> header (proof: backend received the request with valid auth; response was NOT 401). No unauthenticated window.open occurred. However, a DIFFERENT backend bug was discovered: the PDF generation endpoint crashes with FPDFUnicodeEncodingException on OS records that have attachments, because line 3311 of server.py uses the em-dash character (\"—\") which isn't supported by FPDF's default helvetica/latin-1 font.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/ordens-servico/{id}/pdf",
+        "issue": "FPDFUnicodeEncodingException: Character '—' (em-dash) at index 62 not supported by helvetica (latin-1) font. Crashes whenever the OS has at least one attachment (attachments section renders the offending line). File: /app/backend/server.py:3311 -> pdf.cell(186, 5, f\"  {fname} ({cat}) — {size_kb}KB\"). Fix: replace '—' with '-' (ASCII hyphen) or switch FPDF to a Unicode TTF font. OS tested: 8d2b3a6c-ec46-4916-be1d-93ca7e09affa (has attachment 66b6dc10.jpeg).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix backend PDF em-dash unicode bug at /app/backend/server.py:3311 (replace '—' with '-' or add DejaVuSans TTF via pdf.add_font). This is preventing users from actually seeing the PDF even though the auth hotfix works.",
+    "Optional: after fixing the em-dash bug, re-run FLOW 1 to confirm blob: URL actually opens in new tab with rendered PDF content."
+  ],
+  "critical_code_review_comments": [
+    "openAuthenticatedPdf() correctly maps 401/403/404/other to user-friendly Portuguese toasts and revokes the object URL after 120s + on beforeunload. Implementation is solid.",
+    "The URL.revokeObjectURL on 'beforeunload' of the new window is best-effort — some browsers may not fire beforeunload for blob: URLs; the setTimeout fallback (120s) is the safety net, which is fine.",
+    "Backend server.py line 3311 hard-codes an em-dash character which is incompatible with FPDF's default core fonts. Best practice: either (a) use ASCII-safe glyphs everywhere in FPDF strings when relying on core fonts, or (b) register a Unicode TTF (e.g. DejaVuSans) once at PDF creation and use unicode=True."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% (hotfix verified)"},
+  "test_credentials": "test.admin@maintrix.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. Used existing OS #2026-00030 (id=8d2b3a6c-ec46-4916-be1d-93ca7e09affa).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The authenticated-PDF hotfix (openAuthenticatedPdf helper) is verified working: axios sends Bearer token, no 401 occurs. Only remaining blocker is a backend FPDF unicode bug at server.py:3311 preventing the PDF blob from ever being returned successfully. After that server-side one-character fix, verify with FLOW 1 that a new tab opens with URL starting with 'blob:' and displays the PDF. Also verify FLOW for InspecoesPages.js line 631 (Inspeção print button) once the backend PDF works — I did not exercise that path due to economy mode.",
+  "rca of the issue": {
+    "reproduction": [
+      "1. Login as admin (test.admin@maintrix.com / admin123).",
+      "2. Navigate to Ordens de Serviço.",
+      "3. Open any OS that has at least one attachment (e.g. #2026-00030).",
+      "4. Click 'Imprimir OS' (data-testid='os-print-btn').",
+      "5. Observe: axios GET /api/ordens-servico/{id}/pdf returns 500. Error toast appears; NO new tab opens; NO 401 (confirming hotfix works)."
+    ],
+    "root_cause": "server.py line 3311 renders attachment metadata line using em-dash character '—' (U+2014). FPDF default helvetica font uses latin-1 which cannot encode U+2014, so PDF generation raises FPDFUnicodeEncodingException. This is a separate pre-existing backend defect unrelated to the auth hotfix; it just happens to also block the end-to-end verification of a rendered PDF.",
+    "mitigation": "Frontend hotfix already delivered and confirmed. Backend: change `f\"  {fname} ({cat}) — {size_kb}KB\"` to `f\"  {fname} ({cat}) - {size_kb}KB\"` (ASCII hyphen). Alternatively register a Unicode TTF font once with pdf.add_font('DejaVu','', '/usr/share/fonts/.../DejaVuSans.ttf', uni=True) and pdf.set_font('DejaVu','', 10).",
+    "hotfix_verification_evidence": [
+      "Console: only 1 error, and it is 'Failed to load resource: 500' — NO 'Not authenticated' error.",
+      "Network: request URL is /api/ordens-servico/{id}/pdf with status 500 and response content-type application/json — proving axios was used (with Auth header) rather than window.open.",
+      "Backend log confirms user is authenticated (AUTH_OK test.admin@maintrix.com role=admin) and traces the 500 to a FPDF unicode error, not to auth middleware.",
+      "New tabs opened: 0 — because axios threw before URL.createObjectURL was reached, and the error-toast branch executed correctly."
+    ]
+  }
+}

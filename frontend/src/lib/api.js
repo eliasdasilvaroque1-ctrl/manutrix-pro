@@ -71,3 +71,28 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+
+/**
+ * Open an authenticated PDF in a new tab using blob URL.
+ * Sends Authorization header via axios, creates a blob URL, opens it.
+ */
+export async function openAuthenticatedPdf(endpoint, errorToast) {
+  const toast = errorToast || ((msg) => alert(msg));
+  try {
+    const res = await api.get(endpoint, { responseType: 'blob', timeout: 120000 });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (win) {
+      win.addEventListener('beforeunload', () => URL.revokeObjectURL(url));
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status === 401) toast('Sua sessão expirou. Entre novamente.');
+    else if (status === 403) toast('Você não tem permissão para imprimir este documento.');
+    else if (status === 404) toast('Documento não encontrado.');
+    else toast('Não foi possível gerar o PDF. Tente novamente.');
+  }
+}
