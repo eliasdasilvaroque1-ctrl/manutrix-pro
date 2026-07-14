@@ -1,0 +1,37 @@
+{
+  "summary": "RC4.2 Production Hardening regression — 10 flows tested against MongoDB Atlas. RESULTS: FLOW 1 LOGIN (admin) PASS — dashboard loads with KPIs (79 OS Abertas, 55 Ativos, 20 Atividades). FLOW 2 ATIVOS PASS — /ativos loaded in 6.98s, 55 ativo cards, Dossier navigates to /ativos/{uuid}, data-testid='ativo-qr-code' renders SVG QR. FLOW 3 OS KANBAN PASS ✓ N+1 fix VERIFIED — /os page loaded in 1.33s (well under 5s target); export-btns-ordens-servico + view-kanban + view-list testids all present; batch-check-{id} testids rendered for OS rows. FLOW 4 OS PDF PASS — os-print-btn testid present; PDF endpoint (/api/ordens-servico/{id}/pdf) verified via curl → HTTP 200 application/pdf 4665 bytes 0.72s. FLOW 5 EXPORT EXCEL PARTIAL — button data-testid='ordens-servico-export-excel' present and clickable, HOWEVER backend /api/export/ordens-servico?format=excel takes ~37 seconds (Playwright 15s download timeout triggered). Direct curl confirms endpoint returns valid xlsx (19213 bytes) but ⚠️ 37s is a UX/performance regression. FLOW 6 INSPEÇÕES PASS — /inspecoes loads, export-btns-inspecoes present. FLOW 7 PREVENTIVAS PASS — /admin/templates route has export-btns-preventivas. FLOW 8 DASHBOARD PASS — /dashboard loaded in 5.28s (marginally over 5s target); MTBF/MTTR/Backlog/OS KPIs, charts and executive panels all render. FLOW 9 WHITE LABEL ✓ FIX VERIFIED — master login (master@maintrix.com/master123 with manual ASTEC org selection) succeeds; /master/white-label page renders 'Designer de Marca' with 5 tabs (Identidade/Cores/Login/Domínios/Temas), org cards, upload buttons, live preview panel; ZERO 'useCallback is not defined' or ReferenceError. FLOW 10 CONSOLE ERRORS PASS — 0 console errors and 0 failed /api requests across all navigation. RBAC técnico blocking preventiva OS was not exercised by frontend (backend-side; iteration 102 confirmed backend suite 41/41 PASS).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/export/ordens-servico?format=excel", "issue": "Response takes ~37s for full org export (returns valid 19KB xlsx). Frontend download timers and users may perceive as hung. Consider pagination/streaming or async job pattern."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "OS Excel export click", "issue": "Backend takes 37s; UI shows no clear progress indicator during long download. Consider adding a loading toast or disabling button with spinner for >5s downloads.", "affected_selectors": ["[data-testid='ordens-servico-export-excel']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "PERF — Optimize /api/export/ordens-servico?format=excel (currently ~37s for ASTEC Cedro with 113 OS). Investigate N+1 in the export builder or add streaming response.",
+    "UX — Add loading indicator / progress toast when Excel export button is clicked (current UI has no feedback during 30+s wait).",
+    "INFO — Dashboard load 5.28s marginally exceeds the 5s target; not a blocker but consider parallel-fetching the KPI/chart endpoints.",
+    "INFO — Master login requires manual ASTEC org selection (Buscar organização input). This is by-design per lookup-email endpoint returning is_master=true, but ensure documented for future test scripts."
+  ],
+  "critical_code_review_comments": [
+    "App.js is still 4027 lines (persistent tech debt reported since iteration ~95). Consider splitting OSPage/OSDetailPage/LoginPage/CentralTrabalhoPage into /pages/*.js files.",
+    "LoginPage useEffect at line 977 handles subdomain/localStorage/single-org auto-selection but does NOT handle the case where localStorage 'maintrix_last_org' is stale after logout — master login sometimes retains prior ASTEC selection, sometimes shows fresh org selector depending on cookies. Deterministic clear on logout would improve testability.",
+    "Excel export endpoint (backend) — 37s response time suggests missing MongoDB indexes on ordens-servico or unbounded joins to ativos/usuarios per row. Same class of bug as the N+1 already fixed in listing.",
+    "SW behavior: initial page load triggers 'SW updated, reloading...' which occasionally wipes filled form inputs during login. In production this can cause user login retries. Consider skipWaiting/clientsClaim being called on install rather than update, or delaying reload until user has navigated."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only per request; sampled endpoints: /auth/login 200, /ordens-servico 200 1.6s, /ativos 200 0.55s, /export xlsx 200 37s, /os/{id}/pdf 200 0.72s)", "frontend": "10/10 flows validated (FLOW 5 partial — button works, backend perf issue prevents UI download completion within 15s)"},
+  "test_credentials": "admin: test.admin@maintrix.com/admin123 (auto-org). master: master@maintrix.com/master123 (must MANUALLY select ASTEC in 'Buscar organização' input).",
+  "seed_data_creation": "None. All flows used existing seed data (55 ativos, 113 OS, 0 inspeções in ASTEC Cedro).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "1) OS list route is /os (not /ordens-servico). 2) White Label route is /master/white-label. 3) Master login requires manual ASTEC selection after typing email — use 'input[placeholder*=Buscar organiza]' then click text=/ASTEC/. 4) SW may reload during initial /login load — wait 5-6s after goto and re-navigate if URL changed. 5) OS list backend now 1.6s (down from 35s — N+1 fix confirmed). 6) White Label page renders WITHOUT useCallback error — fix confirmed. 7) Excel export backend is SLOW (37s) — either extend Playwright download timeout to 60s+ or trigger via curl in future tests.",
+  "rca_of_the_issue": "N+1 fix (backend/routes/work_orders.py 121-149): CONFIRMED — /api/ordens-servico now 1.6s vs previously 35s. useCallback fix (frontend/src/pages/WhiteLabelDesignerPage.js line 1 import): CONFIRMED — page renders without ReferenceError. RBAC fix (técnico blocked from creating preventiva OS at work_orders.py:260): backend regression suite (iteration 102) reports 41/41 pass, not exercised in this frontend-only iteration. The one identified issue (Excel export 37s) is a separate performance issue not part of the RC4.2 change set — recommend follow-up as an independent perf item."
+}

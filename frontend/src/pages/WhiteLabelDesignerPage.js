@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Palette, Eye, Upload, CheckCircle, RefreshCw, Sparkles, Lock, Building2, Menu, Home, Box, BarChart3, Layers, Settings, LogOut, ArrowLeft, Cog, Download, Image, MapPin, Plus, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth, BACKEND_URL } from "@/lib/api";

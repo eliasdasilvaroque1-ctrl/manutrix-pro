@@ -120,23 +120,31 @@ async def list_os(
 
     ativo_ids = list(set(o.get('ativo_id') for o in os_list if o.get('ativo_id')))
     resp_ids = list(set(o.get('responsavel_id') for o in os_list if o.get('responsavel_id')))
+    equipe_all_ids = list(set(uid for o in os_list for uid in (o.get('equipe') or [])))
+
     ativos_batch = await db.ativos.find({"id": {"$in": ativo_ids}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1, "sector_id": 1}).to_list(len(ativo_ids)) if ativo_ids else []
     resp_batch = await db.users.find({"id": {"$in": resp_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(resp_ids)) if resp_ids else []
+
+    sector_ids = list(set(a.get('sector_id') for a in ativos_batch if a.get('sector_id')))
+    sectors_batch = await db.sectors.find({"id": {"$in": sector_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(sector_ids)) if sector_ids else []
+    sector_map = {s['id']: s for s in sectors_batch}
+
+    equipe_batch = await db.users.find({"id": {"$in": equipe_all_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(equipe_all_ids)) if equipe_all_ids else []
+    equipe_map = {u['id']: u.get('nome', '') for u in equipe_batch}
+
     ativo_map = {a['id']: a for a in ativos_batch}
     resp_map = {r['id']: r for r in resp_batch}
 
+    for a in ativos_batch:
+        if a.get('sector_id'):
+            a['sector'] = sector_map.get(a['sector_id'])
+
     for os in os_list:
-        ativo = ativo_map.get(os.get('ativo_id'))
-        if ativo and ativo.get('sector_id'):
-            sector = await db.sectors.find_one({"id": ativo['sector_id']}, {"_id": 0, "nome": 1})
-            ativo['sector'] = sector
-        os['ativo'] = ativo
+        os['ativo'] = ativo_map.get(os.get('ativo_id'))
         os['responsavel'] = resp_map.get(os.get('responsavel_id'))
-        # Enrich equipe names
         equipe_ids = os.get('equipe', [])
         if equipe_ids:
-            equipe_users = await db.users.find({"id": {"$in": equipe_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(equipe_ids))
-            os['equipe_nomes'] = [u.get('nome') for u in equipe_users]
+            os['equipe_nomes'] = [equipe_map.get(uid, '') for uid in equipe_ids if uid in equipe_map]
         try:
             if os.get('data_planejada') and os.get('status') not in ['concluida', 'cancelada']:
                 planned = datetime.fromisoformat(str(os['data_planejada']).replace('Z', '+00:00'))
@@ -249,6 +257,12 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
     allowed_roles = ['admin', 'master', 'pcm', 'supervisor', 'operador'] + ROLE_GROUPS['execucao']
     check_write_permission(user, allowed_roles)
     check_not_gerente(user)
+
+    # Técnicos só podem criar OS corretiva (execução direta)
+    role = user.get('role', '')
+    if role in ROLE_GROUPS['execucao'] and data.tipo != 'corretiva':
+        raise HTTPException(status_code=403, detail="Técnicos podem criar apenas OS corretiva (execução direta)")
+
     ativo = await db.ativos.find_one({"id": data.ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
