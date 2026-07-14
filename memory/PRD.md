@@ -1,32 +1,21 @@
 # MAINTRIX ENTERPRISE — Product Requirements Document
 
 ## Visão do Produto
-CMMS/EAM SaaS multi-tenant para gestão de manutenção industrial. PWA com capacidade offline, RBAC estrito, dossiê de ativos e máquina de estados para ordens de serviço.
+CMMS/EAM SaaS multi-tenant para gestão de manutenção industrial.
 
-## Stack Tecnológico
-- **Frontend:** React (PWA), TailwindCSS, Shadcn/UI, Lucide Icons, qrcode.react
-- **Backend:** FastAPI (Python), Motor (MongoDB async), fpdf2, openpyxl, qrcode, reportlab
-- **Database:** MongoDB
-- **Build:** Craco (CRA override)
-- **Testes:** Pytest (backend 41 tests), Playwright (frontend 19 E2E flows)
+## Stack: React PWA + FastAPI + MongoDB Atlas + Supabase (Storage)
 
-## v1.0 — Release Completa (Fev 2026)
+## v1.0 Release (Fev 2026) ✅
+- Core: PWA Offline, RBAC 7 roles, Multi-tenant, Dossiê Ativo, Dashboard Executivo, State Machine OS, Auditoria
+- Export: PDF/Excel (OS, Ativos, Inspeções, Preventivas), Batch Print, QR Code
 
-### Core System ✅
-- PWA Offline, RBAC 7 roles, Multi-tenant, Dossiê Ativo, Dashboard Executivo, Máquina de Estados OS, Auditoria
-
-### Export & Print Package ✅
-- PDF Individual (OS + Inspeção), Impressão em Lote, Export Excel/PDF (OS, Ativos, Inspeções, Preventivas)
-
-### QR Code ✅
-- QR por ativo (UUID permanente), QR na OS impressa, QR no Dossiê
-
-### Deploy Audit ✅ (Jul 2026)
-- Corrigido: Middleware 500 errors, CSP hardcoded, vercel.json, versão 1.0.0, rate limiter
-- 41/41 testes backend, 28/28 endpoints validados, Build PASS
-- Relatório: /app/memory/DEPLOY_AUDIT_REPORT.md
+## RC4.2 Production Hardening (Jul 2026) ✅
+- N+1 eliminados: OS listing 35s→1.1s, Export 37s→1.6s
+- Bugs: useCallback fix, RBAC técnico/preventiva, export N+1
+- Migração MongoDB: localhost → Atlas Cluster0 (2468 docs, 49 collections)
+- **Parecer: APTO PARA PILOTO ASTEC**
 
 ## Backlog
-- P1: Integrações ERP/SAP
-- P2: IA Assistente
-- Tech Debt: Refatorar App.js (~4k linhas) e server.py (~4.4k linhas)
+- P1: Railway/Vercel deploy config
+- P2: Refresh Token, ERP/SAP integrations
+- P3: IA Assistente, App.js refactor

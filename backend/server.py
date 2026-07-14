@@ -3015,8 +3015,13 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
     empresa = config.get('identidade', {}).get('nome_empresa', 'CMMS') if config else 'CMMS'
     cor_primaria = config.get('tema', {}).get('cor_primaria', '#3b82f6') if config else '#3b82f6'
 
+    # Batch lookup ativos (eliminate N+1)
+    ativo_ids = list(set(o.get('ativo_id') for o in os_list if o.get('ativo_id')))
+    ativos_batch = await db.ativos.find({"id": {"$in": ativo_ids}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1}).to_list(len(ativo_ids)) if ativo_ids else []
+    ativo_map = {a['id']: a for a in ativos_batch}
+
     for os_item in os_list:
-        ativo = await db.ativos.find_one({"id": os_item.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
+        ativo = ativo_map.get(os_item.get('ativo_id'))
         os_item['ativo_tag'] = ativo.get('tag', '') if ativo else ''
         os_item['ativo_nome'] = ativo.get('nome', '') if ativo else ''
     
@@ -3356,8 +3361,13 @@ async def export_inspecoes(format: str = "excel", user: Dict = Depends(get_curre
     empresa = config.get('identidade', {}).get('nome_empresa', 'CMMS') if config else 'CMMS'
     cor_primaria = config.get('tema', {}).get('cor_primaria', '#f59e0b') if config else '#f59e0b'
 
+    # Batch lookup ativos (eliminate N+1)
+    ativo_ids = list(set(i.get('ativo_id') for i in inspecoes if i.get('ativo_id')))
+    ativos_batch = await db.ativos.find({"id": {"$in": ativo_ids}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1}).to_list(len(ativo_ids)) if ativo_ids else []
+    ativo_map = {a['id']: a for a in ativos_batch}
+
     for insp in inspecoes:
-        ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
+        ativo = ativo_map.get(insp.get('ativo_id'))
         insp['ativo_tag'] = ativo.get('tag', '') if ativo else ''
         insp['ativo_nome'] = ativo.get('nome', '') if ativo else ''
     
