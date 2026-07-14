@@ -13,7 +13,7 @@ from deps import db, get_current_user, can_export, build_visibility_query
 
 router = APIRouter()
 
-APP_URL = os.environ.get("APP_URL", "")
+APP_URL = os.environ.get("APP_URL", "") or os.environ.get("REACT_APP_BACKEND_URL", "")
 
 
 async def get_org_config(user):
@@ -22,7 +22,27 @@ async def get_org_config(user):
     empresa = (config or {}).get('identidade', {}).get('nome_empresa', 'MAINTRIX')
     slogan = (config or {}).get('identidade', {}).get('slogan', '')
     cor = (config or {}).get('tema', {}).get('cor_primaria', '#3b82f6')
-    return empresa, slogan, cor, config
+    logo_url = (config or {}).get('identidade', {}).get('logo_url', '')
+    return empresa, slogan, cor, config, logo_url
+
+
+async def fetch_logo(logo_url, org_id):
+    """Download company logo and return temp file path."""
+    if not logo_url:
+        return None
+    try:
+        import httpx as httpx_lib
+        full_url = f"{APP_URL}{logo_url}" if logo_url.startswith('/') else logo_url
+        async with httpx_lib.AsyncClient() as hc:
+            lr = await hc.get(full_url, timeout=5)
+            if lr.status_code == 200:
+                path = f"/tmp/logo_{org_id[:8]}.png"
+                with open(path, 'wb') as f:
+                    f.write(lr.content)
+                return path
+    except Exception:
+        pass
+    return None
 
 
 def make_qr(data_str, size=4):
@@ -39,16 +59,23 @@ def cleanup_qr(path):
         pass
 
 
-def build_pdf_header(pdf, empresa, slogan, subtitle, qr_path=None):
-    """Standard header: dark bar + company name + subtitle + QR"""
+def build_pdf_header(pdf, empresa, slogan, subtitle, qr_path=None, logo_path=None):
+    """Standard header: dark bar + company logo + name + subtitle + QR"""
     pdf.set_fill_color(15, 23, 42)
     pdf.rect(0, 0, 210, 28, 'F')
+    logo_x = 10
+    if logo_path:
+        try:
+            pdf.image(logo_path, 10, 3, 22, 22)
+            logo_x = 35
+        except Exception:
+            pass
     pdf.set_font('Helvetica', 'B', 18)
     pdf.set_text_color(255, 255, 255)
-    pdf.set_xy(10, 5)
+    pdf.set_xy(logo_x, 5)
     pdf.cell(120, 10, empresa[:40])
     pdf.set_font('Helvetica', '', 9)
-    pdf.set_xy(10, 15)
+    pdf.set_xy(logo_x, 15)
     pdf.cell(120, 6, slogan or subtitle)
     if qr_path:
         try:
@@ -133,11 +160,15 @@ async def print_inspecao_pdf(insp_id: str, user=Depends(get_current_user)):
     if not insp:
         raise HTTPException(status_code=404, detail="Inspeção não encontrada")
 
-    empresa, slogan, cor, config = await get_org_config(user)
+    empresa, slogan, cor, config, logo_url = await get_org_config(user)
     ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "tipo_equipamento": 1, "sector": 1})
     executor = await db.users.find_one({"id": insp.get('concluido_por') or insp.get('criado_por')}, {"_id": 0, "nome": 1}) if (insp.get('concluido_por') or insp.get('criado_por')) else None
 
-    # QR Code
+    # Fetch attachments
+    attachments = await db.attachments.find({"entity_type": "inspection", "entity_id": insp_id}, {"_id": 0}).to_list(20)
+
+    # Logo + QR Code
+    logo_path = await fetch_logo(logo_url, user.get('organization_id', ''))
     app_url = APP_URL or f"https://{os.environ.get('HOSTNAME', 'app')}"
     qr_url = f"{app_url}/inspecoes/{insp_id}"
     qr_path = make_qr(qr_url)
@@ -147,7 +178,7 @@ async def print_inspecao_pdf(insp_id: str, user=Depends(get_current_user)):
     pdf.add_page()
 
     tipo_insp = (insp.get('tipo') or 'Inspeção').capitalize()
-    y = build_pdf_header(pdf, empresa, slogan, f"INSPECAO  {tipo_insp.upper()}", qr_path)
+    y = build_pdf_header(pdf, empresa, slogan, f"INSPECAO  {tipo_insp.upper()}", qr_path, logo_path)
 
     # Equipment
     y = section_title(pdf, 'Equipamento', y)
@@ -281,6 +312,25 @@ async def print_inspecao_pdf(insp_id: str, user=Depends(get_current_user)):
         pdf.rect(12, y, 186, box_h)
         y += box_h + 4
 
+    # Attachments / Evidence
+    if attachments:
+        y = section_title(pdf, f'Evidencias ({len(attachments)} arquivo(s))', y)
+        for att in attachments[:10]:
+            if y > 265:
+                build_pdf_footer(pdf, empresa, f"Inspeção {tipo_insp}")
+                pdf.add_page()
+                y = 15
+            pdf.set_font('Helvetica', '', 8)
+            pdf.set_text_color(30, 41, 59)
+            pdf.set_xy(12, y)
+            fname = att.get('filename', 'arquivo')[:50]
+            cat = (att.get('categoria') or '').capitalize()
+            size_kb = round((att.get('size_bytes') or 0) / 1024, 1)
+            pdf.cell(186, 5, f"  {fname} ({cat}) - {size_kb}KB")
+            y += 5
+        y += 3
+        y = line_sep(pdf, y)
+
     # Signatures
     y = build_signature_block(pdf, y, executor_nome)
 
@@ -291,6 +341,8 @@ async def print_inspecao_pdf(insp_id: str, user=Depends(get_current_user)):
     buf.write(pdf.output())
     buf.seek(0)
     cleanup_qr(qr_path)
+    if logo_path:
+        cleanup_qr(logo_path)
     return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename=Inspecao_{insp_id[:8]}.pdf"})
 
 
@@ -310,7 +362,8 @@ async def batch_os_pdf(ids: str = Query(..., description="Comma-separated OS IDs
     if not os_ids:
         raise HTTPException(status_code=400, detail="Nenhuma OS informada")
 
-    empresa, slogan, cor, config = await get_org_config(user)
+    empresa, slogan, cor, config, logo_url = await get_org_config(user)
+    logo_path = await fetch_logo(logo_url, user.get('organization_id', ''))
     app_url = APP_URL or f"https://{os.environ.get('HOSTNAME', 'app')}"
 
     pdf = FPDF('P', 'mm', 'A4')
@@ -332,7 +385,7 @@ async def batch_os_pdf(ids: str = Query(..., description="Comma-separated OS IDs
         qr_path = make_qr(f"{app_url}/os/{os_id}")
         pdf.add_page()
         numero = os_doc.get('numero', os_id[:12])
-        y = build_pdf_header(pdf, empresa, slogan, f"ORDEM DE SERVICO  {numero}", qr_path)
+        y = build_pdf_header(pdf, empresa, slogan, f"ORDEM DE SERVICO  {numero}", qr_path, logo_path)
 
         # Equipment
         y = section_title(pdf, 'Equipamento', y)
@@ -432,7 +485,8 @@ async def batch_inspecoes_pdf(ids: str = Query(..., description="Comma-separated
     if not insp_ids:
         raise HTTPException(status_code=400, detail="Nenhuma inspeção informada")
 
-    empresa, slogan, cor, config = await get_org_config(user)
+    empresa, slogan, cor, config, logo_url = await get_org_config(user)
+    logo_path = await fetch_logo(logo_url, user.get('organization_id', ''))
     app_url = APP_URL or f"https://{os.environ.get('HOSTNAME', 'app')}"
 
     pdf = FPDF('P', 'mm', 'A4')
@@ -449,7 +503,7 @@ async def batch_inspecoes_pdf(ids: str = Query(..., description="Comma-separated
         qr_path = make_qr(f"{app_url}/inspecoes/{insp_id}")
         pdf.add_page()
         tipo_insp = (insp.get('tipo') or 'Inspeção').capitalize()
-        y = build_pdf_header(pdf, empresa, slogan, f"INSPECAO  {tipo_insp.upper()}", qr_path)
+        y = build_pdf_header(pdf, empresa, slogan, f"INSPECAO  {tipo_insp.upper()}", qr_path, logo_path)
 
         # Equipment
         y = section_title(pdf, 'Equipamento', y)
@@ -544,7 +598,7 @@ async def export_preventivas(format: str = "excel", user=Depends(get_current_use
     query = {"organization_id": user.get('organization_id', ''), "deleted_at": None}
     planos = await db.planos_inspecao.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
 
-    empresa, slogan, cor, config = await get_org_config(user)
+    empresa, slogan, cor, config, logo_url = await get_org_config(user)
 
     for p in planos:
         ativo = await db.ativos.find_one({"id": p.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1})
