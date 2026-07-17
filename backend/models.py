@@ -243,6 +243,10 @@ class OSCreate(BaseModel):
     causa_falha: Optional[str] = None
     equipamento_parado: bool = False
     horas_parada: Optional[float] = None
+    # Procedimento estruturado (snapshot salvo na OS)
+    procedimento: Optional[dict] = None   # {titulo, objetivo, pre_requisitos, etapas[], ferramentas[], materiais[], observacoes}
+    # Segurança estruturada (snapshot salvo na OS)
+    seguranca: Optional[dict] = None      # {riscos[], medidas_controle[], epis[], epcs[], loto, apr, pt, bloqueios[], observacoes}
 
 class OSUpdate(BaseModel):
     tipo: Optional[str] = None
@@ -261,6 +265,8 @@ class OSUpdate(BaseModel):
     equipamento_parado: Optional[bool] = None
     horas_parada: Optional[float] = None
     status: Optional[str] = None
+    procedimento: Optional[dict] = None
+    seguranca: Optional[dict] = None
 
 class KanbanMoveBody(BaseModel):
     new_status: str

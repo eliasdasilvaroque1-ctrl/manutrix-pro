@@ -42,6 +42,7 @@ import { InspecoesPage, InspecaoDetailPage, RondaPage, ScannerPage, PhotoUploade
 import BibliotecaPage from "./pages/BibliotecaPage";
 import EquipePage from "./pages/EquipePage";
 import WhiteLabelDesignerPage from "./pages/WhiteLabelDesignerPage";
+import DocConfigPage from "./pages/DocConfigPage";
 import { ConsultaEquipamentosPage, DossiePesquisaPage } from "./pages/ConsultaPages";
 import { PortalPublicoPage, PortalTecnicoPage } from "./pages/PortalPages";
 import MasterCleanupPage from "./pages/MasterCleanupPage";
@@ -799,6 +800,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       items: [
         ...(isAdmin ? [{ icon: Users, label: 'Usuários', path: '/admin/usuarios' }] : []),
         ...(isAdmin || isPCM ? [{ icon: ClipboardCheck, label: 'Planos de Inspeção', path: '/admin/templates' }] : []),
+        ...(isAdmin || isPCM ? [{ icon: FileText, label: 'Documentos e Formulários', path: '/config/documentos' }] : []),
         { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
         ...(isAdmin ? [{ icon: Cog, label: 'Configurações', path: '/admin/config' }] : []),
         ...(isMaster ? [{ icon: Palette, label: 'White Label', path: '/master/white-label' }] : []),
@@ -3997,6 +3999,7 @@ function App() {
               <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/usuarios" element={<ProtectedRoute allow={['master','admin']}><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/templates" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/config/documentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><DocConfigPage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/auditoria" element={<ProtectedRoute allow={['master','admin','gerente','supervisor']}><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
               <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
               <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />

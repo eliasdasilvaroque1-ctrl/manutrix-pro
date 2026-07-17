@@ -50,6 +50,7 @@ from routes.org import router as org_router
 from routes.biblioteca import router as biblioteca_router, BIBLIOTECA_INDEXES
 from routes.central import router as central_router
 from routes.exports import router as exports_router
+from routes.doc_config import router as doc_config_router
 
 app = FastAPI(title="MAINTRIX API", version="1.0.0")
 api_router = APIRouter(prefix="/api")
@@ -340,6 +341,7 @@ async def startup_create_indexes():
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(assets_router, prefix="/api")
 app.include_router(exports_router, prefix="/api")
+app.include_router(doc_config_router, prefix="/api")
 app.include_router(work_orders_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(org_router, prefix="/api")
@@ -3066,308 +3068,153 @@ async def export_os(format: str = "excel", user: Dict = Depends(get_current_user
         return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=os_{empresa.replace(' ','_')}.pdf"})
 
 @api_router.get("/ordens-servico/{os_id}/pdf")
-async def print_os_pdf(os_id: str, user: Dict = Depends(get_current_user)):
-    """Generate a professional A4 PDF for a single work order."""
-    from fpdf import FPDF
-    import httpx as httpx_lib
+async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(get_current_user)):
+    """Generate professional A4 PDF. modo=digital|manual"""
+    from fastapi.responses import StreamingResponse
+    from pdf_engine import MaintrixPDF, make_qr, fetch_file, cleanup_files, _safe, _safe_long
 
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None}, {"_id": 0})
     if not os_doc:
-        raise HTTPException(status_code=404, detail="OS não encontrada")
+        raise HTTPException(status_code=404, detail="OS nao encontrada")
 
     org_id = user.get('organization_id', '')
     config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0}) if org_id else None
+    doc_cfg = await db.doc_config.find_one({"organization_id": org_id}, {"_id": 0}) or {}
+
     empresa = (config or {}).get('identidade', {}).get('nome_empresa', 'MAINTRIX')
-    slogan = (config or {}).get('identidade', {}).get('slogan', '')
     logo_url = (config or {}).get('identidade', {}).get('logo_url', '')
+    cor = (config or {}).get('tema', {}).get('cor_primaria', '#6366f1')
 
-    # Fetch related data
-    ativo = await db.ativos.find_one({"id": os_doc.get('ativo_id'), "deleted_at": None}, {"_id": 0, "tag": 1, "nome": 1, "sector": 1, "tipo_equipamento": 1})
-    responsavel = await db.users.find_one({"id": os_doc.get('responsavel_id')}, {"_id": 0, "nome": 1, "turno": 1, "disciplina_principal": 1}) if os_doc.get('responsavel_id') else None
+    ativo = await db.ativos.find_one({"id": os_doc.get('ativo_id'), "deleted_at": None}, {"_id": 0, "tag": 1, "nome": 1, "sector": 1, "tipo_equipamento": 1, "fabricante": 1, "numero_serie": 1})
+    responsavel = await db.users.find_one({"id": os_doc.get('responsavel_id')}, {"_id": 0, "nome": 1, "turno": 1}) if os_doc.get('responsavel_id') else None
     equipe_ids = os_doc.get('equipe') or os_doc.get('executantes') or []
-    executantes_batch = await db.users.find({"id": {"$in": equipe_ids}}, {"_id": 0, "nome": 1}).to_list(50) if equipe_ids else []
-    executantes_names = [u['nome'] for u in executantes_batch]
-
-    # Fetch ativo materials
-    ativo_materiais = await db.ativo_materiais.find({"ativo_id": os_doc.get('ativo_id'), "deleted_at": None}, {"_id": 0}).to_list(50)
-    os_materiais = os_doc.get('materiais') or os_doc.get('materiais_utilizados') or []
-
-    # Fetch attachments (photos/evidence)
+    equipe_batch = await db.users.find({"id": {"$in": equipe_ids}}, {"_id": 0, "nome": 1}).to_list(50) if equipe_ids else []
+    ativo_materiais = await db.ativo_materiais.find({"ativo_id": os_doc.get('ativo_id'), "deleted_at": None}, {"_id": 0}).to_list(30)
     attachments = await db.attachments.find({"entity_type": "work_order", "entity_id": os_id}, {"_id": 0}).to_list(20)
 
-    # Download logo
-    logo_path = None
-    if logo_url:
-        try:
-            app_url = os.environ.get("APP_URL", "") or os.environ.get("REACT_APP_BACKEND_URL", "")
-            full_logo_url = f"{app_url}{logo_url}" if logo_url.startswith('/') else logo_url
-            async with httpx_lib.AsyncClient() as hc:
-                lr = await hc.get(full_logo_url, timeout=5)
-                if lr.status_code == 200:
-                    logo_path = f"/tmp/logo_{org_id[:8]}.png"
-                    with open(logo_path, 'wb') as f:
-                        f.write(lr.content)
-        except Exception:
-            logo_path = None
+    for att in attachments:
+        url = att.get('file_url') or att.get('url', '')
+        if url:
+            att['_local_path'] = await fetch_file(url, 'os_foto')
 
-    # Generate QR Code with full PWA URL
-    app_url = os.environ.get("APP_URL", "")
-    if not app_url:
-        app_url = os.environ.get("REACT_APP_BACKEND_URL", "")
-    qr_img_path = f"/tmp/qr_os_{os_id}.png"
-    qr = qrcode.make(f"{app_url}/os/{os_id}", box_size=4, border=1)
-    qr.save(qr_img_path)
+    is_manual = modo == 'manual'
+    logo_path = await fetch_file(logo_url, 'logo')
+    numero = os_doc.get('numero', os_id[:12])
+    qr_path = make_qr(f"{os.environ.get('APP_URL', '')}/os/{os_id}")
 
-    # Build PDF
-    pdf = FPDF('P', 'mm', 'A4')
-    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf = MaintrixPDF(empresa=empresa, doc_title=f"Ordem de Servico {numero}", logo_path=logo_path, qr_path=qr_path, cor_primaria=cor, modo_manual=is_manual)
+    pdf.alias_nb_pages()
     pdf.add_page()
 
-    # --- HEADER with LOGO ---
-    pdf.set_fill_color(15, 23, 42)
-    pdf.rect(0, 0, 210, 28, 'F')
-    logo_x = 10
-    if logo_path:
-        try:
-            pdf.image(logo_path, 10, 3, 22, 22)
-            logo_x = 35
-        except Exception:
-            pass
-    pdf.set_font('Helvetica', 'B', 18)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_xy(logo_x, 5)
-    pdf.cell(120, 10, empresa[:40])
-    pdf.set_font('Helvetica', '', 9)
-    pdf.set_xy(logo_x, 15)
-    pdf.cell(120, 6, slogan or 'Sistema de Gestao de Manutencao')
-    try:
-        pdf.image(qr_img_path, 172, 2, 24, 24)
-    except Exception:
-        pass
+    # EQUIPMENT
+    pdf.section_title('Equipamento', 28)
+    cy = pdf.get_y()
+    pdf.field_pair('TAG', (ativo or {}).get('tag'), 10, cy)
+    pdf.field_pair('Equipamento', (ativo or {}).get('nome'), 105, cy)
+    cy += 11
+    pdf.field_pair('Tipo', (ativo or {}).get('tipo_equipamento'), 10, cy)
+    sec = (ativo or {}).get('sector', {})
+    pdf.field_pair('Local', sec.get('nome') if isinstance(sec, dict) else str(sec or ''), 105, cy)
+    cy += 11
+    pdf.field_pair('Fabricante', (ativo or {}).get('fabricante'), 10, cy)
+    pdf.field_pair('N/Serie', (ativo or {}).get('numero_serie'), 105, cy)
+    pdf.set_y(cy + 13); pdf.line_sep()
 
-    # --- OS Number bar ---
-    pdf.set_fill_color(99, 102, 241)
-    pdf.rect(0, 28, 210, 10, 'F')
-    pdf.set_font('Helvetica', 'B', 12)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_xy(10, 29)
-    numero = os_doc.get('numero', os_id[:12])
-    pdf.cell(190, 8, f"ORDEM DE SERVICO  {numero}", align='C')
+    # OS INFO
+    pdf.section_title('Informacoes da OS')
+    cy = pdf.get_y()
+    tipo_map = {'corretiva':'Corretiva','preventiva':'Preventiva','preditiva':'Preditiva','melhoria':'Melhoria','lubrificacao':'Lubrificacao','limpeza_organizacao':'Limpeza/Org.'}
+    prio_map = {'baixa':'BAIXA','media':'MEDIA','alta':'ALTA','critica':'CRITICA'}
+    pdf.field_pair('Tipo', tipo_map.get(os_doc.get('tipo',''), os_doc.get('tipo','')), 10, cy)
+    pdf.field_pair('Prioridade', prio_map.get(os_doc.get('prioridade',''), os_doc.get('prioridade','')), 105, cy)
+    cy += 11
+    pdf.field_pair('Disciplina', (os_doc.get('disciplina') or '').capitalize(), 10, cy)
+    pdf.field_pair('Status', (os_doc.get('status') or '').replace('_',' ').capitalize(), 105, cy)
+    cy += 11
+    pdf.field_pair('Origem', (os_doc.get('origem') or '').replace('_',' ').capitalize(), 10, cy)
+    pdf.field_pair('Equip. Parado', 'Sim' if os_doc.get('equipamento_parado') else 'Nao', 105, cy)
+    pdf.set_y(cy + 13); pdf.line_sep()
 
-    y = 42
+    # DESCRIPTION
+    pdf.section_title('Descricao')
+    pdf.set_font('Helvetica', 'B', 9); pdf.set_text_color(15, 23, 42)
+    pdf.set_xy(10, pdf.get_y()); pdf.cell(190, 5, _safe(os_doc.get('titulo',''), 80))
+    pdf.set_y(pdf.get_y() + 6)
+    desc = os_doc.get('descricao', '')
+    if desc: pdf.text_block(desc)
+    elif is_manual: pdf.manual_box('Descricao do servico:', 20)
+    pdf.line_sep()
 
-    # --- Helper functions ---
-    def section_title(title, y_pos):
-        if y_pos > 270:
-            pdf.add_page(); y_pos = 15
-        pdf.set_fill_color(241, 245, 249)
-        pdf.rect(10, y_pos, 190, 7, 'F')
-        pdf.set_font('Helvetica', 'B', 9)
-        pdf.set_text_color(30, 41, 59)
-        pdf.set_xy(12, y_pos + 1)
-        pdf.cell(0, 5, title.upper())
-        return y_pos + 9
+    # TEAM
+    pdf.section_title('Equipe')
+    cy = pdf.get_y()
+    resp_nome = responsavel['nome'] if responsavel else ''
+    pdf.field_pair('Responsavel', resp_nome, 10, cy)
+    pdf.field_pair('Turno', (responsavel or {}).get('turno'), 105, cy)
+    cy += 11
+    pdf.field_pair('Executantes', ', '.join(u['nome'] for u in equipe_batch) if equipe_batch else '', 10, cy, w=190)
+    pdf.set_y(cy + 13); pdf.line_sep()
 
-    def field_pair(label, value, x, y_pos, w=85):
-        pdf.set_font('Helvetica', '', 7)
-        pdf.set_text_color(100, 116, 139)
-        pdf.set_xy(x, y_pos)
-        pdf.cell(w, 4, label)
-        pdf.set_font('Helvetica', 'B', 9)
-        pdf.set_text_color(15, 23, 42)
-        pdf.set_xy(x, y_pos + 4)
-        pdf.cell(w, 5, str(value or '-')[:60])
-        return y_pos
-
-    def line_sep(y_pos):
-        pdf.set_draw_color(226, 232, 240)
-        pdf.line(10, y_pos, 200, y_pos)
-        return y_pos + 1
-
-    # --- SECTION: Equipment ---
-    y = section_title('Equipamento', y)
-    tag = ativo['tag'] if ativo else '-'
-    nome_ativo = ativo['nome'] if ativo else '-'
-    tipo_eq = (ativo or {}).get('tipo_equipamento', '-')
-    setor_nome = (ativo or {}).get('sector', {}).get('nome', '-')
-
-    field_pair('TAG', tag, 12, y)
-    field_pair('Equipamento', nome_ativo, 107, y)
-    y += 12
-    field_pair('Tipo', tipo_eq, 12, y)
-    field_pair('Local', setor_nome, 107, y)
-    y += 14
-    y = line_sep(y)
-
-    # --- SECTION: OS Info ---
-    y = section_title('Informacoes da OS', y)
-    prioridade_map = {'baixa': 'BAIXA', 'media': 'MEDIA', 'alta': 'ALTA', 'critica': 'CRITICA'}
-    tipo_map = {'corretiva': 'Corretiva', 'preventiva': 'Preventiva', 'preditiva': 'Preditiva', 'melhoria': 'Melhoria',
-                'lubrificacao': 'Lubrificacao', 'limpeza_organizacao': 'Limpeza/Org.', 'preparacao_material': 'Prep. Material',
-                'fabricacao_melhorias': 'Fabricacao/Melhorias'}
-
-    field_pair('Tipo', tipo_map.get(os_doc.get('tipo', ''), os_doc.get('tipo', '-')), 12, y)
-    field_pair('Prioridade', prioridade_map.get(os_doc.get('prioridade', ''), os_doc.get('prioridade', '-')), 107, y)
-    y += 12
-    field_pair('Disciplina', (os_doc.get('disciplina') or '-').capitalize(), 12, y)
-    field_pair('Status', (os_doc.get('status') or '-').replace('_', ' ').capitalize(), 107, y)
-    y += 12
-    field_pair('Origem', (os_doc.get('origem') or '-').replace('_', ' ').capitalize(), 12, y)
-    parada = 'Sim' if os_doc.get('equipamento_parado') else 'Nao'
-    field_pair('Equip. Parado', parada, 107, y)
-    y += 14
-    y = line_sep(y)
-
-    # --- SECTION: Description ---
-    y = section_title('Descricao / Titulo', y)
-    pdf.set_font('Helvetica', 'B', 10)
-    pdf.set_text_color(15, 23, 42)
-    pdf.set_xy(12, y)
-    pdf.cell(186, 5, (os_doc.get('titulo') or '-')[:80])
-    y += 7
-    desc = os_doc.get('descricao') or ''
-    if desc:
-        pdf.set_font('Helvetica', '', 9)
-        pdf.set_xy(12, y)
-        pdf.multi_cell(186, 5, desc[:500])
-        y = pdf.get_y() + 2
-    justif = os_doc.get('justificativa') or ''
-    if justif:
-        pdf.set_font('Helvetica', 'I', 8)
-        pdf.set_text_color(100, 116, 139)
-        pdf.set_xy(12, y)
-        pdf.multi_cell(186, 4, f"Justificativa: {justif[:300]}")
-        y = pdf.get_y() + 2
-    y = line_sep(y)
-
-    # --- SECTION: Team ---
-    y = section_title('Equipe', y)
-    resp_nome = responsavel['nome'] if responsavel else '-'
-    resp_turno = (responsavel or {}).get('turno', '-')
-    field_pair('Responsavel', resp_nome, 12, y)
-    field_pair('Turno', resp_turno, 107, y)
-    y += 12
-    equipe_str = ', '.join(executantes_names) if executantes_names else '-'
-    field_pair('Executantes', equipe_str, 12, y, w=186)
-    y += 14
-    y = line_sep(y)
-
-    # --- SECTION: Scheduling ---
-    y = section_title('Datas e Tempos', y)
-    data_abertura = (os_doc.get('data_abertura') or os_doc.get('created_at') or '-')[:16].replace('T', ' ')
-    data_inicio = (os_doc.get('data_inicio') or '')[:16].replace('T', ' ') or '___/___/____  ___:___'
-    data_fim = (os_doc.get('data_conclusao') or '')[:16].replace('T', ' ') or '___/___/____  ___:___'
-
-    field_pair('Data Abertura', data_abertura, 12, y)
-    field_pair('Hora Inicial', data_inicio, 107, y)
-    y += 12
-    field_pair('Hora Final', data_fim, 12, y)
+    # DATES
+    pdf.section_title('Datas e Tempos')
+    cy = pdf.get_y()
+    da = (os_doc.get('data_abertura') or os_doc.get('created_at') or '')[:16].replace('T',' ')
+    di = (os_doc.get('data_inicio') or '')[:16].replace('T',' ')
+    df = (os_doc.get('data_conclusao') or '')[:16].replace('T',' ')
+    pdf.field_pair('Data Abertura', da, 10, cy)
+    pdf.field_pair('Hora Inicial', di if di else None, 105, cy)
+    cy += 11
+    pdf.field_pair('Hora Final', df if df else None, 10, cy)
     tempo = os_doc.get('tempo_execucao_minutos')
-    field_pair('Duracao', f"{tempo} min" if tempo else '____________ min', 107, y)
-    y += 12
-    horas_parada = os_doc.get('horas_parada')
-    field_pair('Horas Parada', f"{horas_parada}h" if horas_parada else '-', 12, y)
-    causa = os_doc.get('causa_falha') or ''
-    field_pair('Causa da Falha', causa[:50] if causa else '-', 107, y)
-    y += 14
-    y = line_sep(y)
+    pdf.field_pair('Duracao', f"{tempo} min" if tempo else None, 105, cy)
+    pdf.set_y(cy + 13); pdf.line_sep()
 
-    # --- SECTION: Materials (from OS + ativo_materiais) ---
-    all_materiais = os_materiais + ativo_materiais
-    if all_materiais:
-        y = section_title('Materiais e Pecas', y)
-        pdf.set_font('Helvetica', 'B', 8)
-        pdf.set_text_color(100, 116, 139)
-        pdf.set_xy(12, y); pdf.cell(70, 5, 'Material')
-        pdf.set_xy(82, y); pdf.cell(20, 5, 'Codigo')
-        pdf.set_xy(120, y); pdf.cell(20, 5, 'Qtd')
-        pdf.set_xy(145, y); pdf.cell(20, 5, 'Unid.')
-        y += 6
-        pdf.set_font('Helvetica', '', 8)
-        pdf.set_text_color(30, 41, 59)
-        for m in all_materiais[:15]:
-            if y > 270:
-                pdf.add_page(); y = 15
-            pdf.set_xy(12, y); pdf.cell(70, 5, str(m.get('nome', m.get('item_nome', '-')))[:35])
-            pdf.set_xy(82, y); pdf.cell(20, 5, str(m.get('codigo', '-'))[:15])
-            pdf.set_xy(120, y); pdf.cell(20, 5, str(m.get('quantidade', '-')))
-            pdf.set_xy(145, y); pdf.cell(20, 5, str(m.get('unidade', 'UN')))
-            y += 5
-        y += 3
-        y = line_sep(y)
+    # PROCEDURE
+    pdf.procedure_section(os_doc.get('procedimento'), manual=is_manual)
 
-    # --- SECTION: Attachments / Evidence ---
+    # SAFETY
+    pdf.safety_section(os_doc.get('seguranca'), manual=is_manual)
+
+    # MATERIALS
+    all_mat = (os_doc.get('materiais') or []) + ativo_materiais
+    if all_mat or is_manual:
+        pdf.section_title('Materiais e Pecas')
+        if all_mat:
+            cy = pdf.get_y()
+            pdf.set_font('Helvetica', 'B', 7); pdf.set_text_color(100, 116, 139)
+            pdf.set_xy(10, cy); pdf.cell(75, 4, 'Material')
+            pdf.set_xy(85, cy); pdf.cell(20, 4, 'Codigo')
+            pdf.set_xy(110, cy); pdf.cell(15, 4, 'Qtd')
+            cy += 5
+            for m in all_mat[:15]:
+                if cy > 270: pdf.add_page(); cy = 30
+                pdf.set_font('Helvetica', '', 7.5); pdf.set_text_color(30, 41, 59)
+                pdf.set_xy(10, cy); pdf.cell(75, 4, _safe(m.get('nome', m.get('item_nome', '')), 38))
+                pdf.set_xy(85, cy); pdf.cell(20, 4, _safe(m.get('codigo', ''), 12))
+                pdf.set_xy(110, cy); pdf.cell(15, 4, _safe(str(m.get('quantidade', '')), 6))
+                cy += 5
+            pdf.set_y(cy + 2)
+        elif is_manual:
+            pdf.manual_box('Listar materiais utilizados:', 18)
+        pdf.line_sep()
+
+    # OBSERVATIONS
+    pdf.section_title('Observacoes')
+    obs = os_doc.get('observacoes') or os_doc.get('servicos_realizados', '')
+    if obs: pdf.text_block(obs)
+    else: pdf.manual_box('' if not is_manual else 'Observacoes do executor:', 18)
+    pdf.line_sep()
+
+    # PHOTOS
     if attachments:
-        y = section_title(f'Evidencias ({len(attachments)} arquivo(s))', y)
-        for att in attachments[:10]:
-            if y > 270:
-                pdf.add_page(); y = 15
-            pdf.set_font('Helvetica', '', 8)
-            pdf.set_text_color(30, 41, 59)
-            pdf.set_xy(12, y)
-            fname = att.get('filename', 'arquivo')[:50]
-            cat = (att.get('categoria') or '').capitalize()
-            size_kb = round((att.get('size_bytes') or 0) / 1024, 1)
-            pdf.cell(186, 5, f"  {fname} ({cat}) - {size_kb}KB")
-            y += 5
-        y += 3
-        y = line_sep(y)
+        pdf.photo_grid(attachments, doc_cfg.get('foto_config', {}))
 
-    # --- SECTION: Observations ---
-    obs = os_doc.get('observacoes') or ''
-    y = section_title('Observacoes de Campo', y)
-    if obs:
-        pdf.set_font('Helvetica', '', 9)
-        pdf.set_text_color(30, 41, 59)
-        pdf.set_xy(12, y)
-        pdf.multi_cell(186, 5, obs[:500])
-        y = pdf.get_y() + 3
-    else:
-        pdf.set_draw_color(203, 213, 225)
-        box_h = min(25, 297 - y - 45)
-        if box_h > 5:
-            pdf.rect(12, y, 186, box_h)
-            y += box_h + 3
+    # SIGNATURES
+    pdf.signature_block([('Executor', resp_nome or '-'), ('Supervisor', '-')])
 
-    # --- SECTION: Signatures ---
-    if y > 235:
-        pdf.add_page()
-        y = 15
-
-    y = section_title('Assinaturas', y)
-    y += 20
-    pdf.set_draw_color(100, 116, 139)
-    pdf.line(15, y, 95, y)
-    pdf.set_font('Helvetica', '', 8)
-    pdf.set_text_color(100, 116, 139)
-    pdf.set_xy(15, y + 1); pdf.cell(80, 5, 'Executor')
-    pdf.set_xy(15, y + 5); pdf.cell(80, 5, f'Nome: {resp_nome}')
-    pdf.line(115, y, 195, y)
-    pdf.set_xy(115, y + 1); pdf.cell(80, 5, 'Supervisor')
-    pdf.set_xy(115, y + 5); pdf.cell(80, 5, 'Nome: _________________________')
-    y += 16
-    pdf.set_xy(15, y); pdf.cell(80, 5, 'Data: ____/____/________')
-    pdf.set_xy(115, y); pdf.cell(80, 5, 'Data: ____/____/________')
-
-    # --- FOOTER ---
-    pdf.set_y(-15)
-    pdf.set_font('Helvetica', 'I', 7)
-    pdf.set_text_color(148, 163, 184)
-    pdf.cell(0, 5, f'{empresa} | OS {numero} | Impresso em {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")} UTC | Pag {pdf.page_no()}', align='C')
-
-    # Output
-    buf = io.BytesIO()
-    buf.write(pdf.output())
-    buf.seek(0)
-    try:
-        os.remove(qr_img_path)
-    except Exception:
-        pass
-    if logo_path:
-        try:
-            os.remove(logo_path)
-        except Exception:
-            pass
+    temp_files = [qr_path, logo_path] + [a.get('_local_path') for a in attachments if a.get('_local_path')]
+    buf = pdf.output_bytes()
+    cleanup_files(*temp_files)
     return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename=OS_{numero}.pdf"})
 
 @api_router.get("/export/estoque")

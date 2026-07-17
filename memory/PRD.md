@@ -1,21 +1,34 @@
 # MAINTRIX ENTERPRISE — Product Requirements Document
 
-## Visão do Produto
-CMMS/EAM SaaS multi-tenant para gestão de manutenção industrial.
+## Visão: CMMS/EAM SaaS multi-tenant
+## Stack: React PWA + FastAPI + MongoDB Atlas + Supabase
 
-## Stack: React PWA + FastAPI + MongoDB Atlas + Supabase (Storage)
+## RC — Documentos Profissionais Configuráveis — FASE 1 ✅
 
-## v1.0 Release (Fev 2026) ✅
-- Core: PWA Offline, RBAC 7 roles, Multi-tenant, Dossiê Ativo, Dashboard Executivo, State Machine OS, Auditoria
-- Export: PDF/Excel (OS, Ativos, Inspeções, Preventivas), Batch Print, QR Code
+### Backend (3 novos arquivos + alterações)
+- `backend/pdf_engine.py` — Motor PDF v2.0 (MaintrixPDF class)
+- `backend/routes/doc_config.py` — API CRUD: doc_config, procedimentos, segurança
+- `backend/models.py` — OSCreate/OSUpdate com campos procedimento e segurança
+- `backend/server.py` — OS PDF reescrito usando pdf_engine
 
-## RC4.2 Production Hardening (Jul 2026) ✅
-- N+1 eliminados: OS listing 35s→1.1s, Export 37s→1.6s
-- Bugs: useCallback fix, RBAC técnico/preventiva, export N+1
-- Migração MongoDB: localhost → Atlas Cluster0 (2468 docs, 49 collections)
-- **Parecer: APTO PARA PILOTO ASTEC**
+### Frontend (1 novo arquivo + alterações)
+- `frontend/src/pages/DocConfigPage.js` — Menu Documentos e Formulários (5 tabs)
+- `frontend/src/App.js` — Rota /config/documentos + menu sidebar
 
-## Backlog
-- P1: Railway/Vercel deploy config
-- P2: Refresh Token, ERP/SAP integrations
-- P3: IA Assistente, App.js refactor
+### Collections MongoDB novas
+- `doc_config` — Configuração de documentos por empresa
+- `procedimentos_padrao` — Biblioteca de procedimentos por empresa
+- `seguranca_padrao` — Biblioteca de segurança por empresa
+
+### Endpoints novos
+- GET/PUT `/api/doc-config` — Config documentos por org
+- GET/POST/PUT/DELETE `/api/doc-config/procedimentos` — CRUD procedimentos
+- GET/POST/PUT/DELETE `/api/doc-config/seguranca` — CRUD segurança
+- GET `/api/ordens-servico/{id}/pdf?modo=manual` — Modo formulário manual
+
+### Validação
+- Build: PASS
+- Backend: 41/41 testes PASS
+- OS PDF Digital: 200 (44KB)
+- OS PDF Manual: 200 (44.5KB)
+- Doc Config APIs: 200
