@@ -21,6 +21,7 @@ import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
 import { BrandingProvider, useBranding } from "@/lib/branding";
 import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData, queuePhoto } from "@/lib/offlineQueue";
 import axios from "axios";
+import { DynamicFieldRenderer, SignaturePad } from "@/components/DynamicFieldRenderer";
 
 // ============== SHARED COMPONENTS (extracted to /components/shared/) ==============
 import {
@@ -419,6 +420,9 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
 // Modal Nova OS
 const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], editData = null, preSelectedAtivoId = null }) => {
   const [loading, setLoading] = useState(false);
+  const [camposConfig, setCamposConfig] = useState([]);
+  const [camposValores, setCamposValores] = useState({});
+  const { user } = useAuth();
   const [form, setForm] = useState({
     ativo_id: '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
     titulo: '', descricao: '', responsavel_id: '',
@@ -443,6 +447,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
         equipamento_parado: editData.equipamento_parado || false,
         horas_parada: editData.horas_parada || null
       });
+      setCamposValores(editData.campos_personalizados_valores || {});
     } else {
       setForm({
         ativo_id: preSelectedAtivoId || '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
@@ -450,8 +455,15 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
         data_planejada: '', custo_pecas: 0, custo_mao_obra: 0,
         causa_falha: '', equipamento_parado: false, horas_parada: null
       });
+      setCamposValores({});
     }
   }, [editData, isOpen, preSelectedAtivoId]);
+  
+  // Load custom fields for the OS type
+  useEffect(() => {
+    if (!isOpen || !form.tipo) return;
+    api.get(`/doc-config/campos/por-modulo/os?tipo=${form.tipo}`).then(r => setCamposConfig(r.data)).catch(() => setCamposConfig([]));
+  }, [isOpen, form.tipo]);
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -464,6 +476,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
     try {
       const payload = {
         ...form,
+        campos_personalizados_valores: Object.keys(camposValores).length > 0 ? camposValores : undefined,
         custo_pecas: parseFloat(form.custo_pecas) || 0,
         custo_mao_obra: parseFloat(form.custo_mao_obra) || 0,
         horas_parada: form.horas_parada ? parseFloat(form.horas_parada) : null,
@@ -698,6 +711,18 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
             </div>
           </div>
         </div>
+        
+        {/* Campos Personalizados Dinâmicos */}
+        {camposConfig.length > 0 && (
+          <div className="glass-card p-4 space-y-4">
+            <DynamicFieldRenderer
+              campos={camposConfig}
+              valores={camposValores}
+              onChange={(ident, val) => setCamposValores(prev => ({...prev, [ident]: val}))}
+              userRole={user?.role}
+            />
+          </div>
+        )}
         
         {/* Actions */}
         <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
@@ -3739,6 +3764,21 @@ const OSDetailPage = () => {
             <input value={concluirForm.observacoes} onChange={(e) => setConcluirForm({...concluirForm, observacoes: e.target.value})}
               className="input-industrial w-full px-3 text-sm h-10" placeholder="Notas adicionais..." data-testid="rapido-obs" />
           </FormInput>
+          <SignaturePad
+            label="Assinatura do Executor"
+            width={280}
+            height={80}
+            onCapture={async (dataUrl) => {
+              try {
+                await api.post('/assinaturas/capturar', {
+                  entity_type: 'os', entity_id: id, papel: 'executor',
+                  nome: user?.nome || user?.email || '-', cargo: user?.role || '',
+                  imagem_base64: dataUrl, status: 'assinado'
+                });
+                toast.success('Assinatura capturada');
+              } catch { toast.error('Erro ao capturar assinatura'); }
+            }}
+          />
           <button onClick={handleFinalizarRapido} disabled={updating || !concluirForm.servicos_realizados?.trim()}
             className="w-full py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 bg-brand text-slate-950 active:scale-[0.98] transition-all disabled:opacity-50"
             data-testid="rapido-confirmar">
