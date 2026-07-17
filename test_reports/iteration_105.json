@@ -1,0 +1,45 @@
+{
+  "summary": "Sprint 1 (Corporate Library Versioning) full validation — Backend: 20/20 new versioning tests PASS + 52/53 regression pass. Frontend: version badges, VersionHistoryModal, restore buttons all working. Full flow verified: create→v1, update→v2/v3, list versions (desc), restore v1→v4, unicode preservation, RBAC (tecnico blocked / PCM allowed).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/doc-config/procedimentos/{id}/versoes", "issue": "Legacy items created BEFORE Sprint 1 rollout have no archived versions — modal shows 'Nenhuma versao encontrada' but item is displayed with badge v1. No auto-backfill for existing rows. Cosmetic — no data corruption. Suggest a one-time migration to seed v1 archive for pre-existing items."},
+      {"endpoint": "POST /api/auth/login", "issue": "Aggressive rate-limiter (429) affects rapid successive logins in tests. Regression test test_rc41.py::TestAuth::test_login_master_requires_org failed with 429 (was expected 400). Pre-existing infra flake, not related to Sprint 1."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "DocConfigPage — tab name", "issues": ["Tab labeled 'Seguranca' (no cedilha ç). Sidebar and page labels use plain ASCII (e.g. 'Historico de Versoes', 'Restaurar', 'Configuracao'). Cosmetic only — user-facing Portuguese should use proper accents."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint1_versioning.py",
+    "/app/test_reports/pytest/sprint1_versioning.xml",
+    "/app/test_reports/pytest/rc41_regression.xml"
+  ],
+  "action_items": [
+    "(Optional) Add one-time migration/backfill to create v1 archive entries in biblioteca_versoes for procedimentos & seguranca that existed before Sprint 1 (so version modal is never empty).",
+    "(Optional) Fix rate-limit-affected regression test test_rc41.py::TestAuth::test_login_master_requires_org — add sleep or use token cache to avoid 429.",
+    "(Cosmetic) Restore Portuguese diacritics in tab labels ('Segurança', 'Histórico', 'Configuração', 'Procedimento padrão')."
+  ],
+  "critical_code_review_comments": [
+    "doc_config.py archive_version() correctly captures snapshot AFTER mutation for create/update/restore — one archive entry per version, matches spec.",
+    "Restore endpoint correctly excludes id/organization_id/versao/created_at from snapshot when writing back (avoids clobbering primary keys). Good.",
+    "require_editor() reads role and returns (org_id, user_id) — clean helper; RBAC verified for master/admin/pcm allowed and tecnico blocked (403).",
+    "GET /versoes has no pagination limit beyond .to_list(100) — currently OK; if any item exceeds 100 versions the oldest may be truncated silently. Consider bumping or making explicit.",
+    "biblioteca_versoes documents contain full snapshot dict — could grow unbounded per org over time. Not a blocker for MVP but worth noting for retention policy.",
+    "Version modal empty-state handles missing archives correctly ('Nenhuma versao encontrada'), but doesn't hint that current item still has versao=N. Minor UX polish opportunity."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint1_versioning.py (new)"
+  ],
+  "success_rate": {"backend": "100% (20/20 Sprint1) + 98% (52/53 regression, 1 rate-limit flake)", "frontend": "100% of testable flows"},
+  "test_credentials": "Present at /app/memory/test_credentials.md — validated. NOTE: For master login the org 'ASTEC Cedro' is labeled 'Indústria Demo' in the frontend org list (name mismatch with credentials doc). test.admin@maintrix.com auto-resolves to org 9a232bf2-fc01-4253-813f-8df356be31c1 correctly.",
+  "seed_data_creation": "Tests created TEST_-prefixed procedimentos and seguranca items during runs. Not cleaned up (following existing test_rc41.py pattern). Manual cleanup via DELETE endpoints if required.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sprint 1 versioning fully working. Test file /app/backend/tests/test_sprint1_versioning.py has 20 tests: TestLogin, TestProcedimentoVersioning (7 sequential tests with class-scoped _proc_id), TestSegurancaVersioning (4), TestRBAC (6), TestUnicodeVersioning (1). Frontend VersionHistoryModal at /config/documentos → Procedimentos/Seguranca tabs → click 'Versoes' button. data-testid pattern: version-history-modal, version-{n}, restore-v{n}, proc-history-{id}, seg-history-{id}. Master login requires org selection in UI (Organização input, ASTEC Cedro shown as 'Indústria Demo' in list — use test.admin@maintrix.com to auto-resolve). Rate limiter is aggressive: space out login calls with 30s sleeps if you see 429.",
+  "rca_of_the_issue": "N/A — no bugs found in Sprint 1 versioning. Only observation is pre-existing library items (created before Sprint 1) have empty version history (no archive rows exist for them yet). This is expected and self-heals on first update. Root cause: archive_version() only runs on POST/PUT/DELETE/restaurar — not backfilled for existing rows."
+}

@@ -198,6 +198,10 @@ INDEXES = {
     "admin_actions": [
         {"keys": [("organization_id", 1), ("created_at", -1)], "name": "org_created"},
     ],
+    "biblioteca_versoes": [
+        {"keys": [("item_type", 1), ("item_id", 1), ("versao", -1)], "name": "type_item_versao"},
+        {"keys": [("organization_id", 1), ("item_type", 1)], "name": "org_type"},
+    ],
 }
 
 

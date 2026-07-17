@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { FileText, Settings, Shield, Wrench, Camera, PenTool, Plus, Save, Trash2, ChevronRight, Eye, GripVertical } from "lucide-react";
+import { FileText, Settings, Shield, Wrench, Camera, PenTool, Plus, Save, Trash2, ChevronRight, Eye, GripVertical, History, RotateCcw } from "lucide-react";
 import { api, useAuth } from "@/lib/api";
 import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "@/components/shared";
 import { toast } from "sonner";
@@ -133,6 +133,7 @@ const IdentidadeTab = ({ config, onSave, canEdit }) => {
 // ===== PROCEDIMENTOS TAB =====
 const ProcedimentosTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) => {
   const [showForm, setShowForm] = useState(false);
+  const [versionItem, setVersionItem] = useState(null);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Excluir este procedimento?')) return;
@@ -142,7 +143,7 @@ const ProcedimentosTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) 
   return (
     <div data-testid="procedimentos-tab">
       <div className="flex justify-between items-center mb-4">
-        <p className="text-xs text-slate-500">Procedimentos padrao de execucao. Ao planejar uma OS, o PCM seleciona o procedimento e uma copia versionada e salva na OS.</p>
+        <p className="text-xs text-slate-500">Procedimentos padrao de execucao. Cada alteracao gera uma nova versao imutavel.</p>
         {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="new-procedimento"><Plus size={16} /> Novo Procedimento</button>}
       </div>
       {items.length === 0 ? <EmptyState title="Nenhum procedimento cadastrado" /> : (
@@ -153,19 +154,21 @@ const ProcedimentosTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) 
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-primary">{p.nome}</span>
                   {p.codigo && <span className="text-xs bg-slate-700 px-2 py-0.5 rounded">{p.codigo}</span>}
-                  <span className="text-xs text-slate-500">v{p.versao || 1}</span>
+                  <span className="text-xs text-brand bg-brand/10 px-2 py-0.5 rounded">v{p.versao || 1}</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">{p.tipo_atividade || '-'} | {p.disciplina || '-'} | {(p.etapas || []).length} etapas</p>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => { setEditItem(p); setShowForm(true); }} className="text-xs text-blue-400 hover:text-blue-300">Editar</button>
-                <button onClick={() => handleDelete(p.id)} className="text-xs text-red-400 hover:text-red-300"><Trash2 size={14} /></button>
+              <div className="flex gap-2 items-center">
+                <button onClick={() => setVersionItem(p)} className="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1" data-testid={`proc-history-${p.id}`}><History size={14} /> Versoes</button>
+                {canEdit && <button onClick={() => { setEditItem(p); setShowForm(true); }} className="text-xs text-blue-400 hover:text-blue-300">Editar</button>}
+                {canEdit && <button onClick={() => handleDelete(p.id)} className="text-xs text-red-400 hover:text-red-300"><Trash2 size={14} /></button>}
               </div>
             </div>
           ))}
         </div>
       )}
       {showForm && <ProcedimentoForm item={editItem} onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); onRefresh(); }} />}
+      {versionItem && <VersionHistoryModal itemType="procedimentos" itemId={versionItem.id} itemName={versionItem.nome} onClose={() => setVersionItem(null)} onRestore={() => { setVersionItem(null); onRefresh(); }} />}
     </div>
   );
 };
@@ -227,6 +230,11 @@ const ProcedimentoForm = ({ item, onClose, onSuccess }) => {
           <FormInput label="Materiais (separar por virgula)"><input value={(form.materiais || []).join(', ')} onChange={e => setForm({...form, materiais: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} className="input-industrial w-full px-3" /></FormInput>
         </div>
         <FormInput label="Observacoes"><textarea value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})} className="input-industrial w-full px-3 h-12" /></FormInput>
+        {item?.id && (
+          <FormInput label="Motivo da alteracao (opcional)">
+            <input value={form.motivo_alteracao || ''} onChange={e => setForm({...form, motivo_alteracao: e.target.value})} className="input-industrial w-full px-3" placeholder="Ex: Adicionada etapa de verificacao" data-testid="proc-motivo" />
+          </FormInput>
+        )}
       </div>
       <div className="flex gap-3 mt-4">
         <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
@@ -239,6 +247,8 @@ const ProcedimentoForm = ({ item, onClose, onSuccess }) => {
 // ===== SEGURANCA TAB =====
 const SegurancaTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) => {
   const [showForm, setShowForm] = useState(false);
+  const [versionItem, setVersionItem] = useState(null);
+
   const handleDelete = async (id) => {
     if (!window.confirm('Excluir?')) return;
     try { await api.delete(`/doc-config/seguranca/${id}`); toast.success('Excluido'); onRefresh(); } catch { toast.error('Erro'); }
@@ -246,7 +256,7 @@ const SegurancaTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) => {
   return (
     <div data-testid="seguranca-tab">
       <div className="flex justify-between items-center mb-4">
-        <p className="text-xs text-slate-500">Modelos de seguranca por tipo de atividade. Incluem riscos, EPIs, EPCs, LOTO, APR e PT.</p>
+        <p className="text-xs text-slate-500">Modelos de seguranca versionados. Cada alteracao gera uma nova versao imutavel.</p>
         {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="new-seguranca"><Plus size={16} /> Novo Modelo</button>}
       </div>
       {items.length === 0 ? <EmptyState title="Nenhum modelo de seguranca" /> : (
@@ -254,18 +264,23 @@ const SegurancaTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) => {
           {items.map(s => (
             <div key={s.id} className="glass-card p-4 flex items-center justify-between" data-testid={`seg-${s.id}`}>
               <div className="flex-1">
-                <span className="text-sm font-medium text-primary">{s.nome}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-primary">{s.nome}</span>
+                  <span className="text-xs text-brand bg-brand/10 px-2 py-0.5 rounded">v{s.versao || 1}</span>
+                </div>
                 <p className="text-xs text-slate-500 mt-1">{(s.riscos || []).length} riscos | {(s.epis || []).length} EPIs | {s.loto?.necessario ? 'LOTO' : ''} {s.apr?.necessaria ? 'APR' : ''} {s.pt?.necessaria ? 'PT' : ''}</p>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => { setEditItem(s); setShowForm(true); }} className="text-xs text-blue-400">Editar</button>
-                <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400"><Trash2 size={14} /></button>
+              <div className="flex gap-2 items-center">
+                <button onClick={() => setVersionItem(s)} className="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1" data-testid={`seg-history-${s.id}`}><History size={14} /> Versoes</button>
+                {canEdit && <button onClick={() => { setEditItem(s); setShowForm(true); }} className="text-xs text-blue-400 hover:text-blue-300">Editar</button>}
+                {canEdit && <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:text-red-300"><Trash2 size={14} /></button>}
               </div>
             </div>
           ))}
         </div>
       )}
       {showForm && <SegurancaForm item={editItem} onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); onRefresh(); }} />}
+      {versionItem && <VersionHistoryModal itemType="seguranca" itemId={versionItem.id} itemName={versionItem.nome} onClose={() => setVersionItem(null)} onRestore={() => { setVersionItem(null); onRefresh(); }} />}
     </div>
   );
 };
@@ -311,10 +326,103 @@ const SegurancaForm = ({ item, onClose, onSuccess }) => {
           <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.pt?.necessaria || false} onChange={e => setForm({...form, pt: {...(form.pt || {}), necessaria: e.target.checked}})} /> PT</label>
         </div>
         <FormInput label="Observacoes de Seguranca"><textarea value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})} className="input-industrial w-full px-3 h-12" /></FormInput>
+        {item?.id && (
+          <FormInput label="Motivo da alteracao (opcional)">
+            <input value={form.motivo_alteracao || ''} onChange={e => setForm({...form, motivo_alteracao: e.target.value})} className="input-industrial w-full px-3" placeholder="Ex: Adicionado novo risco" data-testid="seg-motivo" />
+          </FormInput>
+        )}
       </div>
       <div className="flex gap-3 mt-4">
         <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
         <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2" data-testid="save-seg"><Save size={16} /> {saving ? 'Salvando...' : 'Salvar'}</button>
+      </div>
+    </Modal>
+  );
+};
+
+// ===== VERSION HISTORY MODAL =====
+const VersionHistoryModal = ({ itemType, itemId, itemName, onClose, onRestore }) => {
+  const [versions, setVersions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [restoring, setRestoring] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const { user } = useAuth();
+  const canRestore = ['master', 'admin', 'pcm'].includes(user?.role);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const r = await api.get(`/doc-config/${itemType}/${itemId}/versoes`);
+        setVersions(r.data);
+      } catch { toast.error('Erro ao carregar versoes'); }
+      setLoading(false);
+    };
+    load();
+  }, [itemType, itemId]);
+
+  const handleRestore = async (versao) => {
+    const motivo = window.prompt('Motivo da restauracao (opcional):') || '';
+    setRestoring(versao);
+    try {
+      await api.post(`/doc-config/${itemType}/${itemId}/restaurar/${versao}?motivo=${encodeURIComponent(motivo)}`);
+      toast.success(`Restaurado para v${versao}`);
+      onRestore();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Erro ao restaurar');
+    }
+    setRestoring(null);
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Historico de Versoes — ${itemName}`} size="xl">
+      <div className="max-h-[70vh] overflow-y-auto" data-testid="version-history-modal">
+        {loading ? <Loading /> : versions.length === 0 ? (
+          <p className="text-sm text-slate-500 py-4">Nenhuma versao encontrada.</p>
+        ) : (
+          <div className="space-y-2">
+            {versions.map((v, i) => {
+              const s = v.snapshot || {};
+              const isFirst = i === 0;
+              return (
+                <div key={v.id} className={`rounded-lg border p-3 ${isFirst ? 'border-brand/30 bg-brand/5' : 'border-slate-700 bg-slate-800/50'}`} data-testid={`version-${v.versao}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${isFirst ? 'bg-brand text-white' : 'bg-slate-700 text-slate-300'}`}>v{v.versao}</span>
+                      <span className="text-sm text-primary">{s.nome || '-'}</span>
+                      {isFirst && <span className="text-xs text-emerald-400">(atual)</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">{(v.created_at || '').slice(0, 16).replace('T', ' ')}</span>
+                      {canRestore && !isFirst && (
+                        <button onClick={() => handleRestore(v.versao)} disabled={restoring === v.versao}
+                          className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 ml-2" data-testid={`restore-v${v.versao}`}>
+                          <RotateCcw size={12} /> {restoring === v.versao ? 'Restaurando...' : 'Restaurar'}
+                        </button>
+                      )}
+                      <button onClick={() => setExpanded(expanded === v.versao ? null : v.versao)} className="text-xs text-slate-400 hover:text-white ml-1">
+                        {expanded === v.versao ? 'Ocultar' : 'Detalhes'}
+                      </button>
+                    </div>
+                  </div>
+                  {v.motivo && <p className="text-xs text-slate-400 mt-1 italic">{v.motivo}</p>}
+                  {expanded === v.versao && (
+                    <div className="mt-3 p-2 bg-slate-900/60 rounded text-xs text-slate-300 space-y-1">
+                      {s.codigo && <p><strong>Codigo:</strong> {s.codigo}</p>}
+                      {s.objetivo && <p><strong>Objetivo:</strong> {s.objetivo}</p>}
+                      {s.disciplina && <p><strong>Disciplina:</strong> {s.disciplina}</p>}
+                      {s.etapas?.length > 0 && <p><strong>Etapas:</strong> {s.etapas.map(e => e.descricao).join(' → ')}</p>}
+                      {s.ferramentas?.length > 0 && <p><strong>Ferramentas:</strong> {s.ferramentas.join(', ')}</p>}
+                      {s.materiais?.length > 0 && <p><strong>Materiais:</strong> {s.materiais.join(', ')}</p>}
+                      {s.riscos?.length > 0 && <p><strong>Riscos:</strong> {s.riscos.map(r => typeof r === 'string' ? r : r.descricao).join(', ')}</p>}
+                      {s.epis?.length > 0 && <p><strong>EPIs:</strong> {s.epis.join(', ')}</p>}
+                      {s.observacoes && <p><strong>Obs:</strong> {s.observacoes}</p>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </Modal>
   );
