@@ -314,6 +314,16 @@ async def startup_create_indexes():
                 await db[coll_name].create_index(idx["keys"], name=idx["name"], background=True)
             except Exception as e:
                 logger.warning(f"Biblioteca index {idx['name']} on {coll_name}: {e}")
+    # Create personalizacao indexes
+    for coll_name, idx_list in PERS_INDEXES.items():
+        for idx in idx_list:
+            try:
+                kwargs = {"name": idx["name"], "background": True}
+                if idx.get("unique"):
+                    kwargs["unique"] = True
+                await db[coll_name].create_index(idx["keys"], **kwargs)
+            except Exception as e:
+                logger.warning(f"Pers index {idx['name']} on {coll_name}: {e}")
 
     # ============== ETAPA 3: BLOCO A IDENTIFIED INDEXES (14 missing) ==============
     bloco_a_indexes = [
