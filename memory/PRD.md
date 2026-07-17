@@ -6,68 +6,60 @@
 
 ---
 
-## RC — Documentos Profissionais Configuráveis — FASE 1 ✅ (17 Jul 2026)
-
-### Entregas
-- `pdf_engine.py` — Motor PDF v2.0 com DejaVu Unicode (µm, °C, Ω, Ø, ±, ≥, ≤, Δ, α, β, ², ³, →)
-- `routes/doc_config.py` — API CRUD: doc_config, procedimentos, segurança
-- `routes/exports.py` — Batch PDF OS/Inspeções com Unicode
-- `DocConfigPage.js` — Menu Documentos e Formulários (5 tabs)
-- Validação: 95/95 testes (42 Unicode + 53 regressão)
-
----
+## RC — Documentos Profissionais — Fase 1 ✅ (17 Jul 2026)
+- Motor PDF Unicode (DejaVu Sans), 95 testes
 
 ## RC — Biblioteca Corporativa — Sprint 1: Governança ✅ (17 Jul 2026)
+- Versionamento completo para Procedimentos e Segurança
+- Histórico + Restauração + Backfill automático
+
+## RC — Biblioteca Corporativa — Sprint 2: Conteúdo Reutilizável ✅ (17 Jul 2026)
 
 ### Entregas
-- **Versionamento completo** para Procedimentos e Segurança
-  - Cada criação/atualização gera versão imutável em `biblioteca_versoes`
-  - Histórico completo com snapshot, motivo, data, usuário
-  - Restauração de qualquer versão anterior (cria nova versão incrementada)
-  - Backfill automático para itens pré-existentes
-- **Frontend**: Botão "Versões" em cada item, modal com histórico e botão "Restaurar"
-- **Campo `motivo_alteracao`** opcional em atualizações
-- **Diacríticos corrigidos** em todos os labels do frontend
+- **Biblioteca de Checklists**: CRUD + versionamento + itens com tipo/tolerância/unidade/ordem
+- **Modelos de Inspeção**: CRUD + versionamento + associação (checklist, procedimento, segurança)
+- **Modelos de OS**: CRUD + versionamento + associação + prioridade padrão
+- **Auto-snapshot**: ao referenciar item da biblioteca via *_id, snapshot é criado automaticamente
+- **Snapshot isolation**: alterações na biblioteca NÃO afetam snapshots já capturados
+- **Frontend**: 3 novas tabs (Checklists, Modelos Inspeção, Modelos OS) com formulários completos
 
 ### Endpoints novos
-- `GET /api/doc-config/procedimentos/{id}/versoes` — Histórico de versões
-- `POST /api/doc-config/procedimentos/{id}/restaurar/{versao}?motivo=` — Restaurar versão
-- `GET /api/doc-config/seguranca/{id}/versoes`
-- `POST /api/doc-config/seguranca/{id}/restaurar/{versao}?motivo=`
+- `/api/doc-config/checklists` (CRUD + versões + restaurar)
+- `/api/doc-config/modelos-inspecao` (CRUD + versões + restaurar)
+- `/api/doc-config/modelos-os` (CRUD + versões + restaurar)
 
-### Collections MongoDB
-- `biblioteca_versoes` — Arquivo imutável de todas as versões de itens da biblioteca
+### Collections MongoDB novas
+- `checklists_padrao`, `modelos_inspecao`, `modelos_os`
 
 ### Validação
-- Sprint 1 versioning: 20/20 testes PASS
-- Regressão: 52/53 (1 flake de rate-limit pré-existente)
-- Frontend: VersionHistoryModal, badges de versão, restore — todos OK
+- Sprint 2: 29/29 testes PASS
+- Sprint 1: 20/20 testes PASS
+- Regressão rc41: 52/53 (1 flake pré-existente de rate-limit)
+- Unicode PDF: 42/42
+- **Total: ~143 testes**
 
 ---
 
 ## Funcionalidades Concluídas
-- Auth multi-tenant com RBAC (master/admin/pcm/tecnico)
+- Auth multi-tenant com RBAC
 - Dashboard executivo + indicadores
 - CRUD Ativos com dossiê completo
-- Ordens de Serviço com máquina de estados (8 estados, 12 transições)
+- OS com máquina de estados (8 estados, 12 transições)
 - Planos de Inspeção + Checklist
 - Gestão de Estoque
 - Exportações Excel + PDF
-- PDF profissional multi-tenant com fotos, QR code, procedimentos, segurança
-- Unicode/UTF-8 completo nos PDFs
-- Download autenticado de PDFs via Blob
-- Performance: N+1 queries eliminados
-- MongoDB Atlas migration completa
-- **Versionamento completo de Procedimentos e Segurança**
+- PDF profissional multi-tenant com Unicode
+- Download autenticado de PDFs
+- Performance otimizada (N+1 eliminados)
+- MongoDB Atlas
+- Versionamento completo (Procedimentos, Segurança)
+- **Biblioteca de Checklists (versionada)**
+- **Modelos de Inspeção (versionados, com snapshot)**
+- **Modelos de OS (versionados, com snapshot)**
 
 ---
 
 ## Backlog Priorizado
-
-### P1 — Sprint 2: Conteúdo Reutilizável
-- Biblioteca de Checklists
-- Modelos de Inspeção
-- Modelos de OS
 
 ### P1 — Sprint 3: Personalização
 - Campos Personalizados (17 tipos)
@@ -75,7 +67,7 @@
 - Layouts por empresa
 
 ### P1 — Após Sprints
-- RC Construtor Visual (Drag-and-Drop) — consome base da Biblioteca
+- RC Construtor Visual (Drag-and-Drop)
 - QR Code MVP (Fase 2 Piloto)
 
 ### P2
