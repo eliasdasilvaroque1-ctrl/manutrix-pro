@@ -1,0 +1,46 @@
+{
+  "summary": "RC Visual Constructor Wave 1 tested end-to-end. Backend: 24/24 new tests PASS (test_rc_visual_wave1.py) covering block CRUD, validators (invalid type/dup IDs/max-1 header/footer → 422), publication flow (deactivates prior published same tipo_documento), duplicate (new block IDs, rascunho), preview-data, get published, versioning + restore (v1→v3), RBAC (tecnico 403 on create/update/publish/delete/duplicate, 200 on read), cross-tenant library ref block (400), backward compat, 50-block stress (<3s), and OS-without-layout PDF fallback. Regression: 53/53 rc41 PASS — zero regressions. Frontend: /config/construtor route loads for pcm role, shows layout-builder-list, New Layout opens the 3-panel builder (block-palette, document-canvas, properties-panel, layout-name-input all render). Adding blocks via add-block-{type} palette clicks correctly renders SortableBlock items with drag handles. Attempting to add a 2nd header shows the toast 'Apenas 1 bloco Cabeçalho permitido' — client-side singular guard works and mirrors backend validator. Save draft persists via POST /doc-config/layouts with schema_version=1, blocks[]; toast 'Layout criado' shown; back-to-list renders new layout 'UI_TEST_LAYOUT_WV1' with 'Rascunho' badge and correct block count.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rc_visual_wave1.py",
+    "/app/test_reports/pytest/iteration109_wave1.xml",
+    "/app/test_reports/pytest/iteration109_rc41.xml"
+  ],
+  "action_items": [
+    "(P3 — nice-to-have) LayoutBuilderPage.js:174 newLayout() sets dirty=true but currentLayout stays null so 'Preview'/'Publicar' buttons only appear after first save — correct behavior, but consider disabling Publicar button with tooltip 'Salve o rascunho primeiro' before first save for clarity.",
+    "(P3 — nice-to-have) LayoutBuilderPage.js:262 handleDuplicate has an unused variable r (return value). Minor lint noise, not functional.",
+    "(P3 — nice-to-have) Duplicate layout endpoint (personalizacao.py:470) does not reset publication_status of duplicated layout for tipo_documento uniqueness — since it's set to 'rascunho' this is fine, just noting the source tipo_documento is copied 1:1 (may cause 'multiple rascunhos for same tipo' — allowed by spec)."
+  ],
+  "critical_code_review_comments": [
+    "personalizacao.py LayoutBlock/LayoutDocumento validators are clean: BLOCK_TYPES enum whitelist, ID dedup + SINGULAR_BLOCKS count in @field_validator('blocks') — Pydantic raises before hitting DB (422 as spec).",
+    "publicar_layout (personalizacao.py:493) correctly enforces cross-tenant library ref validation for procedure/safety/checklist/signature/header/footer/custom_fields with same-org + not-deleted lookup, returning 400 with meaningful detail. Deactivation of other publicado layouts of same tipo_documento is atomic via update_many.",
+    "get_published_layout returns null (not 404) when no publicado layout exists — good for frontend consumption (no error handling burden).",
+    "duplicar_layout regenerates block IDs (line 486-487) preventing collisions on future edits — verified via test that new_block_ids ∩ orig_block_ids = ∅.",
+    "50-block create was under 3s wall-clock — Pydantic validator O(n) with set lookup for dup IDs, no performance issue.",
+    "Frontend LayoutBuilderPage.js:185 client-side singular guard mirrors backend validator — clean UX (immediate feedback, no round-trip).",
+    "Frontend @dnd-kit sensors config (PointerSensor 5px, TouchSensor 150ms delay) is standard and doesn't interfere with click-to-add semantics observed.",
+    "No MongoDB _id leakage in any response (verified in create/get/duplicate/preview/versoes responses).",
+    "Backward compat verified: layout with blocks=[] still creates + reads; OS without layout_snapshot generates PDF (fallback to defaults in server.py:3143)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rc_visual_wave1.py (new — 24 Wave 1 tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (24/24 Wave 1 + 53/53 rc41 regression = 77/77 total)",
+    "frontend": "100% (list/new/palette/canvas/properties/name/add-block/singular-toast/save-draft/rascunho-badge all verified)"
+  },
+  "test_credentials": "master@maintrix.com/master123, test.pcm@maintrix.com/pcm123, test.mec@maintrix.com/tec123 — all from /app/memory/test_credentials.md, all logged in successfully.",
+  "seed_data_creation": "Wave 1 tests created ~15 layouts prefixed 'WV1_LAY_' via master account (auto soft-deleted in session-scoped cleanup fixture). Frontend created 1 layout 'UI_TEST_LAYOUT_WV1' via pcm account (not cleaned up — leftover for manual inspection).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC Visual Constructor Wave 1 backend + frontend is production-ready. Test file: /app/backend/tests/test_rc_visual_wave1.py (24 tests, uses master/pcm/tecnico from creds.md). Regression: rc41 still 53/53 green. Frontend routes /config/construtor works for pcm/admin/master. All expected data-testids from problem statement are present: layout-builder-list, new-layout-btn, layout-builder, layout-name-input, block-palette, document-canvas, properties-panel, add-block-{type} (all 21 block types), block-{id}, drag-{id}, save-draft, preview-btn, publish-btn, back-to-list, layout-item-{id}, dup-{id}, del-{id}, block-properties. Publish endpoint validates library refs by org (400 on cross-tenant). Preview endpoint /preview-data resolves library_ref_id → library_data dict. Duplicate creates rascunho with new block IDs. Restore endpoint /restaurar/{versao} creates a new version (not overwrite). Frontend LayoutBuilderPage.js:132 gates edit actions on ['master','admin','pcm'] roles.",
+  "rca_of_the_issue": "N/A — no bugs found. Only issues discovered during test writing were test bugs (mutable default and blocks=[] falsy) which I fixed. Wave 1 implementation is aligned with spec across backend, frontend, and integration."
+}

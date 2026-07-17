@@ -141,11 +141,41 @@ class BlocoAssinatura(BaseModel):
     motivo_alteracao: Optional[str] = None
 
 
+BLOCK_TYPES = [
+    "header", "footer", "equipment", "info", "description", "team", "dates",
+    "procedure", "safety", "checklist", "signature", "qr_code", "photos",
+    "materials", "indicators", "history", "custom_fields", "free_text",
+    "separator", "page_break", "observations",
+]
+
+SINGULAR_BLOCKS = {"header", "footer"}  # max 1 of each
+
+
+class LayoutBlock(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: str
+    order: int = 0
+    visible: bool = True
+    settings: dict = {}
+    library_ref_id: Optional[str] = None
+    library_ref_type: Optional[str] = None
+
+    @field_validator('type')
+    @classmethod
+    def validate_block_type(cls, v):
+        if v not in BLOCK_TYPES:
+            raise ValueError(f"Tipo de bloco inválido: {v}. Válidos: {', '.join(BLOCK_TYPES)}")
+        return v
+
+
 class LayoutDocumento(BaseModel):
     nome: str
     tipo_documento: Optional[str] = None
     orientacao: str = "retrato"
     tamanho_pagina: str = "A4"
+    schema_version: int = 1
+    blocks: List[LayoutBlock] = []
+    # Legacy flat fields (backward compat)
     cabecalho_id: Optional[str] = None
     cabecalho_snapshot: Optional[dict] = None
     rodape_id: Optional[str] = None
@@ -165,6 +195,7 @@ class LayoutDocumento(BaseModel):
     mostrar_qr_code: bool = True
     quebras_pagina: List[str] = []
     colunas: int = 1
+    publication_status: str = "rascunho"  # rascunho, publicado, inativo
     status: str = "ativo"
     motivo_alteracao: Optional[str] = None
 
@@ -173,6 +204,30 @@ class LayoutDocumento(BaseModel):
     def validate_orientacao(cls, v):
         if v not in ('retrato', 'paisagem'):
             raise ValueError("Orientação deve ser 'retrato' ou 'paisagem'")
+        return v
+
+    @field_validator('publication_status')
+    @classmethod
+    def validate_pub_status(cls, v):
+        if v not in ('rascunho', 'publicado', 'inativo'):
+            raise ValueError("Status de publicação deve ser 'rascunho', 'publicado' ou 'inativo'")
+        return v
+
+    @field_validator('blocks')
+    @classmethod
+    def validate_blocks(cls, v):
+        if not v:
+            return v
+        ids = set()
+        singular_counts = {}
+        for block in v:
+            if block.id in ids:
+                raise ValueError(f"ID de bloco duplicado: {block.id}")
+            ids.add(block.id)
+            if block.type in SINGULAR_BLOCKS:
+                singular_counts[block.type] = singular_counts.get(block.type, 0) + 1
+                if singular_counts[block.type] > 1:
+                    raise ValueError(f"Apenas 1 bloco '{block.type}' permitido por layout")
         return v
 
 
@@ -408,6 +463,103 @@ async def capturar_assinatura(body: SignatureCapture, user=Depends(get_current_u
 
     logger.info(f"Signature captured: {body.papel} on {body.entity_type}/{body.entity_id}")
     return {"id": sig_doc["id"], "hash": sig_doc["hash_referencia"], "status": "captured"}
+
+
+# ============== LAYOUT BUILDER ENDPOINTS ==============
+
+@router.post("/doc-config/layouts/{layout_id}/duplicar", tags=["layout_builder"])
+async def duplicar_layout(layout_id: str, user=Depends(get_current_user)):
+    """Duplicate a layout as a new draft."""
+    org_id, user_id = require_editor(user)
+    source = await db.layouts_documento.find_one({"id": layout_id, "organization_id": org_id, "deleted_at": None}, {"_id": 0})
+    if not source:
+        raise HTTPException(status_code=404, detail="Layout não encontrado")
+    new_id = str(uuid.uuid4())
+    new_doc = {k: v for k, v in source.items() if k not in ("_id", "id", "versao", "created_at", "created_by", "updated_at")}
+    new_doc.update({
+        "id": new_id, "nome": f"{source['nome']} (Cópia)",
+        "versao": 1, "publication_status": "rascunho",
+        "created_at": datetime.now(timezone.utc).isoformat(), "created_by": user_id,
+        "updated_at": None,
+    })
+    # Regenerate block IDs to avoid conflicts
+    for block in new_doc.get("blocks", []):
+        block["id"] = str(uuid.uuid4())
+    await db.layouts_documento.insert_one(new_doc)
+    await archive_version("layout_documento", new_doc, user_id, f"Duplicado de {source['nome']}")
+    return {"id": new_id, "nome": new_doc["nome"], "status": "created"}
+
+
+@router.post("/doc-config/layouts/{layout_id}/publicar", tags=["layout_builder"])
+async def publicar_layout(layout_id: str, user=Depends(get_current_user)):
+    """Publish a draft layout. Only one published layout per tipo_documento per org."""
+    org_id, user_id = require_editor(user)
+    layout = await db.layouts_documento.find_one({"id": layout_id, "organization_id": org_id, "deleted_at": None})
+    if not layout:
+        raise HTTPException(status_code=404, detail="Layout não encontrado")
+    if layout.get("publication_status") == "publicado":
+        raise HTTPException(status_code=400, detail="Layout já está publicado")
+    # Validate blocks
+    blocks = layout.get("blocks", [])
+    if blocks:
+        for block in blocks:
+            if block.get("library_ref_id"):
+                ref_type_map = {"procedure": "procedimentos_padrao", "safety": "seguranca_padrao", "checklist": "checklists_padrao", "signature": "blocos_assinatura", "header": "cabecalhos_rodapes", "footer": "cabecalhos_rodapes", "custom_fields": "campos_personalizados"}
+                coll = ref_type_map.get(block["type"])
+                if coll:
+                    ref = await db[coll].find_one({"id": block["library_ref_id"], "organization_id": org_id, "deleted_at": None})
+                    if not ref:
+                        raise HTTPException(status_code=400, detail=f"Referência inválida no bloco '{block['type']}': {block['library_ref_id']} não pertence à empresa ou não existe")
+    # Deactivate other published layouts of same tipo_documento
+    tipo = layout.get("tipo_documento")
+    if tipo:
+        await db.layouts_documento.update_many(
+            {"organization_id": org_id, "tipo_documento": tipo, "publication_status": "publicado", "id": {"$ne": layout_id}, "deleted_at": None},
+            {"$set": {"publication_status": "inativo", "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    await db.layouts_documento.update_one(
+        {"id": layout_id, "organization_id": org_id},
+        {"$set": {"publication_status": "publicado", "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user_id}}
+    )
+    updated = await db.layouts_documento.find_one({"id": layout_id}, {"_id": 0})
+    await archive_version("layout_documento", updated, user_id, "Publicação")
+    return {"status": "published", "versao": updated.get("versao", 1)}
+
+
+@router.get("/doc-config/layouts/publicado/{tipo_documento}", tags=["layout_builder"])
+async def get_published_layout(tipo_documento: str, user=Depends(get_current_user)):
+    """Get the active published layout for a document type."""
+    org_id = user.get('organization_id', '')
+    layout = await db.layouts_documento.find_one(
+        {"organization_id": org_id, "tipo_documento": tipo_documento, "publication_status": "publicado", "deleted_at": None},
+        {"_id": 0}
+    )
+    if not layout:
+        return None
+    return layout
+
+
+@router.get("/doc-config/layouts/{layout_id}/preview-data", tags=["layout_builder"])
+async def get_layout_preview_data(layout_id: str, user=Depends(get_current_user)):
+    """Get resolved block data for preview — resolves library references."""
+    org_id = user.get('organization_id', '')
+    layout = await db.layouts_documento.find_one({"id": layout_id, "organization_id": org_id, "deleted_at": None}, {"_id": 0})
+    if not layout:
+        raise HTTPException(status_code=404, detail="Layout não encontrado")
+    blocks = layout.get("blocks", [])
+    resolved = []
+    for block in sorted(blocks, key=lambda b: b.get("order", 0)):
+        b = {**block}
+        if block.get("library_ref_id"):
+            ref_map = {"procedure": "procedimentos_padrao", "safety": "seguranca_padrao", "checklist": "checklists_padrao", "signature": "blocos_assinatura", "header": "cabecalhos_rodapes", "footer": "cabecalhos_rodapes", "custom_fields": "campos_personalizados"}
+            coll = ref_map.get(block["type"])
+            if coll:
+                ref_doc = await db[coll].find_one({"id": block["library_ref_id"], "organization_id": org_id, "deleted_at": None}, {"_id": 0})
+                if ref_doc:
+                    b["library_data"] = {k: v for k, v in ref_doc.items() if k not in ("_id", "organization_id")}
+        resolved.append(b)
+    return {"layout": layout, "resolved_blocks": resolved}
+
 
 
 # ============== REGISTER ALL MODULES ==============
