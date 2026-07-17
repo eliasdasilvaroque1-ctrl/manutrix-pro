@@ -337,6 +337,28 @@ async def startup_create_indexes():
             logger.warning(f"BLOCO_A index {name} on {coll}: {e}")
     logger.info(f"BLOCO_C: {len(bloco_a_indexes)} performance indexes created/verified")
 
+    # ============== BACKFILL: Seed v1 archives for pre-existing library items ==============
+    try:
+        for item_type, collection in [("procedimento", "procedimentos_padrao"), ("seguranca", "seguranca_padrao")]:
+            existing_ids = set()
+            async for v in db.biblioteca_versoes.find({"item_type": item_type}, {"item_id": 1}):
+                existing_ids.add(v["item_id"])
+            backfilled = 0
+            async for item in db[collection].find({"deleted_at": None}, {"_id": 0}):
+                if item.get("id") not in existing_ids:
+                    await db.biblioteca_versoes.insert_one({
+                        "id": str(uuid.uuid4()), "item_type": item_type, "item_id": item["id"],
+                        "organization_id": item.get("organization_id", ""),
+                        "versao": item.get("versao", 1), "snapshot": item,
+                        "motivo": "Backfill v1 (migração)", "created_at": item.get("created_at", datetime.now(timezone.utc).isoformat()),
+                        "created_by": item.get("created_by", "system"),
+                    })
+                    backfilled += 1
+            if backfilled:
+                logger.info(f"Backfill: {backfilled} {item_type} items seeded in biblioteca_versoes")
+    except Exception as e:
+        logger.warning(f"Backfill biblioteca_versoes: {e}")
+
 # Include modularized routers
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(assets_router, prefix="/api")

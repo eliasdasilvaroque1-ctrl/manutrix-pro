@@ -45,16 +45,16 @@ const DocConfigPage = () => {
   const tabs = [
     { id: 'identidade', label: 'Identidade Visual', icon: PenTool },
     { id: 'procedimentos', label: 'Procedimentos', icon: Wrench },
-    { id: 'seguranca', label: 'Seguranca', icon: Shield },
+    { id: 'seguranca', label: 'Segurança', icon: Shield },
     { id: 'fotos', label: 'Fotografias', icon: Camera },
-    { id: 'preview', label: 'Pre-visualizacao', icon: Eye },
+    { id: 'preview', label: 'Pré-visualização', icon: Eye },
   ];
 
   if (loading) return <Loading />;
 
   return (
     <PageContainer>
-      <PageHeader title="Documentos e Formularios" subtitle="Configuracao de impressao por empresa" testId="doc-config-title" />
+      <PageHeader title="Documentos e Formulários" subtitle="Configuração de impressão por empresa" testId="doc-config-title" />
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2" data-testid="doc-config-tabs">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} data-testid={`tab-${t.id}`}
@@ -143,7 +143,7 @@ const ProcedimentosTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) 
   return (
     <div data-testid="procedimentos-tab">
       <div className="flex justify-between items-center mb-4">
-        <p className="text-xs text-slate-500">Procedimentos padrao de execucao. Cada alteracao gera uma nova versao imutavel.</p>
+        <p className="text-xs text-slate-500">Procedimentos padrão de execução. Cada alteração gera uma nova versão imutável.</p>
         {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="new-procedimento"><Plus size={16} /> Novo Procedimento</button>}
       </div>
       {items.length === 0 ? <EmptyState title="Nenhum procedimento cadastrado" /> : (
@@ -256,7 +256,7 @@ const SegurancaTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) => {
   return (
     <div data-testid="seguranca-tab">
       <div className="flex justify-between items-center mb-4">
-        <p className="text-xs text-slate-500">Modelos de seguranca versionados. Cada alteracao gera uma nova versao imutavel.</p>
+        <p className="text-xs text-slate-500">Modelos de segurança versionados. Cada alteração gera uma nova versão imutável.</p>
         {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="new-seguranca"><Plus size={16} /> Novo Modelo</button>}
       </div>
       {items.length === 0 ? <EmptyState title="Nenhum modelo de seguranca" /> : (
@@ -374,10 +374,10 @@ const VersionHistoryModal = ({ itemType, itemId, itemName, onClose, onRestore })
   };
 
   return (
-    <Modal isOpen onClose={onClose} title={`Historico de Versoes — ${itemName}`} size="xl">
+    <Modal isOpen onClose={onClose} title={`Histórico de Versões — ${itemName}`} size="xl">
       <div className="max-h-[70vh] overflow-y-auto" data-testid="version-history-modal">
         {loading ? <Loading /> : versions.length === 0 ? (
-          <p className="text-sm text-slate-500 py-4">Nenhuma versao encontrada.</p>
+          <p className="text-sm text-slate-500 py-4">Nenhuma versão encontrada.</p>
         ) : (
           <div className="space-y-2">
             {versions.map((v, i) => {
@@ -435,7 +435,7 @@ const FotosTab = ({ config, onSave, canEdit }) => {
 
   return (
     <div className="glass-card p-5" data-testid="fotos-tab">
-      <h3 className="text-sm font-semibold text-primary mb-4">Configuracao de Fotografias no Documento</h3>
+      <h3 className="text-sm font-semibold text-primary mb-4">Configuração de Fotografias no Documento</h3>
       <div className="grid grid-cols-2 gap-4">
         <FormInput label="Colunas na grade de fotos">
           <select value={form.grid_colunas} onChange={e => setForm({...form, grid_colunas: parseInt(e.target.value)})} className="input-industrial w-full px-3" disabled={!canEdit}>
@@ -482,7 +482,7 @@ const PreviewTab = () => {
 
   return (
     <div className="glass-card p-5" data-testid="preview-tab">
-      <h3 className="text-sm font-semibold text-primary mb-4">Pre-visualizacao do Documento</h3>
+      <h3 className="text-sm font-semibold text-primary mb-4">Pré-visualização do Documento</h3>
       <FormInput label="Selecionar OS para preview">
         <select value={osId} onChange={e => setOsId(e.target.value)} className="input-industrial w-full px-3">
           {osList.map(o => <option key={o.id} value={o.id}>{o.numero} - {o.titulo}</option>)}
