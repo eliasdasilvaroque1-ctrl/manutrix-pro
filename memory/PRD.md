@@ -4,65 +4,63 @@
 
 ---
 
-## RC — Biblioteca Corporativa — Sprint 3: Personalização Corporativa ✅
+## ✅ RC Construtor Visual de Documentos — Onda 1 (17 Jul 2026)
 
-### Módulos Implementados (Fundação + Integração)
-1. **Campos Personalizados**: 17 tipos, Pydantic validators, aplicação por módulo/tipo
-2. **Cabeçalhos/Rodapés**: Configuráveis por empresa (razão social, CNPJ, endereço, etc.)
-3. **Blocos de Assinatura**: Campos estruturados, captura digital (canvas touch)
-4. **Layouts de Documento**: Blocos visíveis/ocultos/ordem, cabeçalho/rodapé com auto-snapshot
+### Arquitetura
+- **Camada visual sobre a Biblioteca Corporativa** — não duplica lógica
+- **Schema JSON estruturado** (schema_version: 1) com blocos tipados e validados
+- **@dnd-kit/core** + @dnd-kit/sortable para DnD (mouse + touch + teclado)
+- **3-panel layout**: Paleta (esquerda) → Canvas (centro) → Propriedades (direita)
+- **Workflow**: Rascunho → Publicado → Inativo (1 publicado por tipo_documento por org)
 
-### Integrações Completas
-- **PDF Personalizado**: Motor PDF usa layout congelado (cabecalho custom, rodapé custom, campos, assinaturas)
-- **Auto-snapshot na OS**: Layout + campos + cabeçalho/rodapé congelados automaticamente na criação
-- **Renderização Dinâmica**: DynamicFieldRenderer no formulário de criação de OS (17 tipos)
-- **Assinatura Digital**: Canvas touch + captura base64 + POST /api/assinaturas/capturar
-- **SignaturePad**: Integrado na modal "Finalizar Rapidamente" da OS
-- **Snapshot Isolation**: Alterações futuras não afetam documentos já emitidos (verificado por pdfplumber)
-- **Compatibilidade**: OS antigas sem layout geram PDF normalmente (fallback padrão)
+### Schema de Blocos
+```json
+{ "schema_version": 1, "blocks": [
+  {"id": "uuid", "type": "header", "order": 0, "visible": true, "settings": {}, "library_ref_id": null}
+]}
+```
+15 tipos de bloco: header, footer, equipment, info, description, team, dates, procedure, safety, checklist, signature, qr_code, photos, materials, indicators, history, custom_fields, free_text, separator, page_break, observations
 
-### Endpoints
-- `/api/doc-config/campos` (CRUD + versões + restaurar + `/por-modulo/{modulo}?tipo=`)
-- `/api/doc-config/cabecalhos-rodapes` (CRUD + versões)
-- `/api/doc-config/assinaturas` (CRUD + versões)
-- `/api/doc-config/layouts` (CRUD + versões)
-- `/api/assinaturas/capturar` (POST — captura digital com base64)
+### Validações Backend (Pydantic)
+- Tipos de bloco: whitelist BLOCK_TYPES
+- IDs duplicados → 422
+- Max 1 header/footer → 422
+- Referências cross-tenant → 400 na publicação
+- HTML/scripts rejeitados
 
-### Validação
-- Sprint 3 foundation: 42/42 PASS
-- Sprint 3 integration: 25/25 PASS
-- Regressão rc41: 53/53 PASS
-- Unicode PDF: 42/42 PASS
-- **Total: ~210+ testes**
+### Endpoints novos
+- POST `/api/doc-config/layouts/{id}/publicar`
+- POST `/api/doc-config/layouts/{id}/duplicar`
+- GET `/api/doc-config/layouts/publicado/{tipo_documento}`
+- GET `/api/doc-config/layouts/{id}/preview-data`
+
+### Testes Wave 1: 24/24 PASS
+### Regressão: 53/53 PASS
+### Total acumulado: ~235+ testes
 
 ---
 
 ## Concluído
-- Auth multi-tenant RBAC
-- Dashboard executivo
-- CRUD Ativos + Dossiê
-- OS máquina de estados
-- Inspeções + Checklists
-- Estoque
-- Exportações Excel/PDF
-- PDF profissional Unicode
-- Download autenticado Blob
-- Performance otimizada
-- MongoDB Atlas
-- Sprint 1: Versionamento (Procedimentos + Segurança)
-- Sprint 2: Checklists + Modelos Inspeção + Modelos OS
-- Sprint 3: Campos Personalizados + Cabeçalhos/Rodapés + Assinaturas + Layouts + PDF Integration
+- Auth multi-tenant RBAC | Dashboard | CRUD Ativos | OS máquina de estados | Inspeções | Estoque
+- Exportações Excel/PDF | PDF Unicode (DejaVu Sans) | Download Blob | Performance
+- Sprint 1: Versionamento | Sprint 2: Checklists/Modelos | Sprint 3: Personalização completa
+- **Construtor Visual Onda 1**: DnD, validação, publicação, snapshot isolation
 
 ---
 
 ## Backlog
 
+### P1 (Onda 2/3 Construtor)
+- Config por bloco (fontes, margens, cores)
+- WYSIWYG preview em tempo real
+- Texto livre avançado
+
 ### P1
-- RC Construtor Visual (Drag-and-Drop)
 - QR Code MVP (Fase 2 Piloto)
 
 ### P2
 - ERP/SAP
+- Dataset homologação
 
 ### P3
 - IA Assistente
