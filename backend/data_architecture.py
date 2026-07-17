@@ -202,6 +202,15 @@ INDEXES = {
         {"keys": [("item_type", 1), ("item_id", 1), ("versao", -1)], "name": "type_item_versao"},
         {"keys": [("organization_id", 1), ("item_type", 1)], "name": "org_type"},
     ],
+    "checklists_padrao": [
+        {"keys": [("organization_id", 1), ("deleted_at", 1)], "name": "org_active"},
+    ],
+    "modelos_inspecao": [
+        {"keys": [("organization_id", 1), ("deleted_at", 1)], "name": "org_active"},
+    ],
+    "modelos_os": [
+        {"keys": [("organization_id", 1), ("deleted_at", 1)], "name": "org_active"},
+    ],
 }
 
 

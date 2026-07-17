@@ -1,0 +1,49 @@
+{
+  "summary": "Sprint 2 (Biblioteca Corporativa — Checklists/Modelos Inspecao/Modelos OS) full validation. Backend: 29/29 new Sprint 2 tests PASS including snapshot isolation, RBAC, full versioning lifecycle. Regression: 72/73 (Sprint1 20/20 + rc41 52/53; the 1 failure is the pre-existing 429 rate-limit flake on TestAuth::test_login_master_requires_org, documented in iteration_105). Frontend: 3 new tabs visible (Checklists / Modelos Inspeção / Modelos OS), form-based create works end-to-end with 'Checklist salvo' toast, version badges (v1/v2/v3) render on rows, 'Versões' and 'Editar' actions visible per row.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/login", "issue": "Aggressive rate-limiter continues to trigger 429 during rapid test runs. Same pre-existing issue as iteration_105 — test_rc41::TestAuth::test_login_master_requires_org fails intermittently. Not related to Sprint 2 code."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Login flow", "issues": ["Terms & Privacy modal blocks first-time login for all test users on this preview env; user must check 2 boxes and click ACEITAR before hitting the app. Not a bug but adds friction for automated tests. Consider seeding accepted terms for TEST_ accounts."]},
+      {"screen": "Checklists row actions", "issues": ["'Versões' and 'Editar' controls in the list rows do not carry data-testid attributes (only new-checklist/cl-nome/save-cl have testids). Adding testids like cl-history-{id} and cl-edit-{id} would harden UI regression tests."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint2_biblioteca.py",
+    "/app/test_reports/pytest/sprint2_biblioteca.xml",
+    "/app/test_reports/pytest/sprint2_regression.xml"
+  ],
+  "action_items": [
+    "(Optional / nice-to-have) Add data-testid to per-row Versões and Editar buttons: e.g. `cl-history-{id}`, `cl-edit-{id}`, mi-history-{id}, mo-history-{id}. Would enable deterministic UI history-modal validation.",
+    "(Pre-existing) Fix rate-limit-affected regression test_rc41::TestAuth::test_login_master_requires_org (unchanged from iteration_105).",
+    "(Optional) Seed 'termos_aceitos' flag for TEST_* users so automated smoke tests bypass Terms modal."
+  ],
+  "critical_code_review_comments": [
+    "biblioteca_corporativa.py uses a clean factory (`register_library_crud`) — DRY and consistent with doc_config.archive_version. Endpoints for all 3 types share identical semantics.",
+    "_resolve_snapshots correctly strips `_id`, `organization_id`, `deleted_at`, `deleted_by` from the source doc before embedding — no cross-tenant leakage, no MongoDB ObjectId leakage.",
+    "SNAPSHOT ISOLATION VERIFIED: After updating a source checklist to v2, the referencing modelo-inspecao's `checklist_snapshot` still holds the ORIGINAL v1 payload. This is the crown-jewel guarantee of Sprint 2 and it passes.",
+    "Delete endpoint archives BEFORE writing the tombstone (line 150) — good for audit.",
+    "restore_item drops (id, org_id, versao, created_at, created_by, updated_at, updated_by, deleted_at) from snapshot before overlay — prevents PK/timestamp clobber. Good.",
+    "GET /versoes limited to 100 items via .to_list(100) — same silent-truncation observation noted in iteration_105 applies to all 3 new types.",
+    "biblioteca_versoes collection grows unbounded across all 5 library types (procedimentos, seguranca, checklists, modelos_inspecao, modelos_os). Retention/archive policy should be considered post-MVP.",
+    "PyDantic models: `ChecklistPadrao.itens: List[dict]` is loosely typed — no schema validation on item shape (descricao/tipo/tolerancia/etc.). Consider a nested `ChecklistItem` model to catch bad payloads at 422 boundary.",
+    "No unique-name constraint on nome per org — you can create duplicates. Not a bug per spec, but worth calling out.",
+    "list_items sorts by nome asc; that's fine. Consider excluding heavy snapshot payloads from list responses if items list gets large (currently returns full doc)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint2_biblioteca.py (new — 29 tests)"
+  ],
+  "success_rate": {"backend": "100% (29/29 Sprint2 + 20/20 Sprint1 + 52/53 rc41 regression — the 1 flake is pre-existing rate-limit, not Sprint 2)", "frontend": "100% of verified flows: tabs render, form create works, version badges show, toast fires"},
+  "test_credentials": "Present at /app/memory/test_credentials.md — validated. For UI automation, sessionStorage bootstrap works: set maintrix_token + maintrix_user (JSON) before navigating to protected route to bypass the login form and rate limiter.",
+  "seed_data_creation": "Tests created TEST_-prefixed records in checklists_padrao, modelos_inspecao, modelos_os and their archive rows in biblioteca_versoes. Not cleaned up (matches existing pattern). Cleanup via DELETE endpoints if desired.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sprint 2 fully working. Test file /app/backend/tests/test_sprint2_biblioteca.py has 29 tests across TestLogin, TestChecklistsCRUD (7 sequential — uses class attr _cl_id), TestModelosInspecao (6 — including CRITICAL snapshot isolation test #03), TestModelosOS (5), TestRBAC (7), TestEdgeCases (2). The snapshot isolation guarantee is verified: source library update to v2 does NOT mutate previously-taken snapshots on referencing modelos. Frontend testids: tab-checklists, tab-modelos-inspecao, tab-modelos-os, new-checklist, cl-nome, save-cl, mi-nome, save-mi, mo-nome, save-mo. Per-row 'Versões'/'Editar' actions do NOT have data-testid — use text selectors (`button:has-text('Versões')`) for now. UI bootstrap pattern: httpx POST /api/auth/login → inject sessionStorage(maintrix_token,maintrix_user) → navigate → accept Terms modal on first login → app. Rate limiter still aggressive on /auth/login (429 after ~5 rapid logins).",
+  "rca_of_the_issue": "N/A — no bugs found. Sprint 2 implementation is clean, DRY, follows the Sprint 1 pattern, and correctly enforces snapshot isolation (the primary design invariant)."
+}

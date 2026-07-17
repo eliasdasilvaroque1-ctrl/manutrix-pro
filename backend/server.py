@@ -51,6 +51,7 @@ from routes.biblioteca import router as biblioteca_router, BIBLIOTECA_INDEXES
 from routes.central import router as central_router
 from routes.exports import router as exports_router
 from routes.doc_config import router as doc_config_router
+from routes.biblioteca_corporativa import router as bib_corp_router, INDEXES as BIB_CORP_INDEXES
 
 app = FastAPI(title="MAINTRIX API", version="1.0.0")
 api_router = APIRouter(prefix="/api")
@@ -339,7 +340,7 @@ async def startup_create_indexes():
 
     # ============== BACKFILL: Seed v1 archives for pre-existing library items ==============
     try:
-        for item_type, collection in [("procedimento", "procedimentos_padrao"), ("seguranca", "seguranca_padrao")]:
+        for item_type, collection in [("procedimento", "procedimentos_padrao"), ("seguranca", "seguranca_padrao"), ("checklist", "checklists_padrao"), ("modelo_inspecao", "modelos_inspecao"), ("modelo_os", "modelos_os")]:
             existing_ids = set()
             async for v in db.biblioteca_versoes.find({"item_type": item_type}, {"item_id": 1}):
                 existing_ids.add(v["item_id"])
@@ -364,6 +365,7 @@ app.include_router(dashboard_router, prefix="/api")
 app.include_router(assets_router, prefix="/api")
 app.include_router(exports_router, prefix="/api")
 app.include_router(doc_config_router, prefix="/api")
+app.include_router(bib_corp_router, prefix="/api")
 app.include_router(work_orders_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(org_router, prefix="/api")
