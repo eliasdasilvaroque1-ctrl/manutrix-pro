@@ -151,200 +151,201 @@ def build_signature_block(pdf, y, nome_executor='-'):
 # ============== INDIVIDUAL INSPEÇÃO PDF ==============
 
 @router.get("/inspecoes/{insp_id}/pdf")
-async def print_inspecao_pdf(insp_id: str, user=Depends(get_current_user)):
-    """Generate professional A4 PDF for a single inspection."""
-    from fpdf import FPDF
+async def print_inspecao_pdf(insp_id: str, modo: str = "digital", user=Depends(get_current_user)):
+    """Generate professional A4 PDF for a single inspection using pdf_engine v2."""
     from fastapi.responses import StreamingResponse
+    from pdf_engine import MaintrixPDF, make_qr, fetch_file, cleanup_files, _safe, _safe_long
 
     insp = await db.inspecoes.find_one({"id": insp_id, "deleted_at": None}, {"_id": 0})
     if not insp:
         raise HTTPException(status_code=404, detail="Inspeção não encontrada")
 
     empresa, slogan, cor, config, logo_url = await get_org_config(user)
-    ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "tipo_equipamento": 1, "sector": 1})
+    ativo = await db.ativos.find_one({"id": insp.get('ativo_id')}, {"_id": 0, "tag": 1, "nome": 1, "tipo_equipamento": 1, "sector": 1, "fabricante": 1})
     executor = await db.users.find_one({"id": insp.get('concluido_por') or insp.get('criado_por')}, {"_id": 0, "nome": 1}) if (insp.get('concluido_por') or insp.get('criado_por')) else None
-
-    # Fetch attachments
     attachments = await db.attachments.find({"entity_type": "inspection", "entity_id": insp_id}, {"_id": 0}).to_list(20)
+    doc_cfg = await db.doc_config.find_one({"organization_id": user.get('organization_id', '')}, {"_id": 0}) or {}
 
-    # Logo + QR Code
-    logo_path = await fetch_logo(logo_url, user.get('organization_id', ''))
-    app_url = APP_URL or f"https://{os.environ.get('HOSTNAME', 'app')}"
-    qr_url = f"{app_url}/inspecoes/{insp_id}"
-    qr_path = make_qr(qr_url)
+    for att in attachments:
+        url = att.get('file_url') or att.get('url', '')
+        if url:
+            att['_local_path'] = await fetch_file(url, 'insp_foto')
 
-    pdf = FPDF('P', 'mm', 'A4')
-    pdf.set_auto_page_break(auto=True, margin=20)
+    is_manual = modo == 'manual'
+    logo_path = await fetch_file(logo_url, 'logo')
+    tipo_insp = (insp.get('tipo') or 'Inspeção').capitalize()
+    qr_path = make_qr(f"{os.environ.get('APP_URL', '')}/inspecoes/{insp_id}")
+
+    pdf = MaintrixPDF(empresa=empresa, doc_title=f"Inspeção {tipo_insp}", logo_path=logo_path, qr_path=qr_path, cor_primaria=cor, modo_manual=is_manual)
+    pdf.alias_nb_pages()
     pdf.add_page()
 
-    tipo_insp = (insp.get('tipo') or 'Inspeção').capitalize()
-    y = build_pdf_header(pdf, empresa, slogan, f"INSPECAO  {tipo_insp.upper()}", qr_path, logo_path)
+    # EQUIPMENT
+    pdf.section_title('Equipamento', 28)
+    cy = pdf.get_y()
+    pdf.field_pair('TAG', (ativo or {}).get('tag'), 10, cy)
+    pdf.field_pair('Equipamento', (ativo or {}).get('nome'), 105, cy)
+    cy += 11
+    pdf.field_pair('Tipo', (ativo or {}).get('tipo_equipamento'), 10, cy)
+    sec = (ativo or {}).get('sector', {})
+    pdf.field_pair('Local', sec.get('nome') if isinstance(sec, dict) else str(sec or ''), 105, cy)
+    pdf.set_y(cy + 13); pdf.line_sep()
 
-    # Equipment
-    y = section_title(pdf, 'Equipamento', y)
-    field_pair(pdf, 'TAG', (ativo or {}).get('tag', '-'), 12, y)
-    field_pair(pdf, 'Equipamento', (ativo or {}).get('nome', '-'), 107, y)
-    y += 12
-    field_pair(pdf, 'Tipo', (ativo or {}).get('tipo_equipamento', '-'), 12, y)
-    sector_name = (ativo or {}).get('sector', {})
-    if isinstance(sector_name, dict):
-        sector_name = sector_name.get('nome', '-')
-    field_pair(pdf, 'Local', sector_name or '-', 107, y)
-    y += 14
-    y = line_sep(pdf, y)
-
-    # Info
-    y = section_title(pdf, 'Informacoes da Inspecao', y)
-    field_pair(pdf, 'Tipo', tipo_insp, 12, y)
-    field_pair(pdf, 'Disciplina', (insp.get('disciplina') or '-').capitalize(), 107, y)
-    y += 12
-    field_pair(pdf, 'Frequencia', (insp.get('frequencia') or '-').capitalize(), 12, y)
-    field_pair(pdf, 'Status', (insp.get('status') or '-').replace('_', ' ').capitalize(), 107, y)
-    y += 12
-    field_pair(pdf, 'Resultado', (insp.get('resultado') or '-').replace('_', ' ').capitalize(), 12, y)
+    # INSPECTION INFO
+    pdf.section_title('Informações da Inspeção')
+    cy = pdf.get_y()
     executor_nome = executor.get('nome', '-') if executor else '-'
-    field_pair(pdf, 'Executor', executor_nome, 107, y)
-    y += 14
-    y = line_sep(pdf, y)
+    pdf.field_pair('Tipo', tipo_insp, 10, cy)
+    pdf.field_pair('Disciplina', (insp.get('disciplina') or '-').capitalize(), 105, cy)
+    cy += 11
+    pdf.field_pair('Frequência', (insp.get('frequencia') or '-').capitalize(), 10, cy)
+    pdf.field_pair('Status', (insp.get('status') or '-').replace('_', ' ').capitalize(), 105, cy)
+    cy += 11
+    pdf.field_pair('Resultado', (insp.get('resultado') or '-').replace('_', ' ').capitalize(), 10, cy)
+    pdf.field_pair('Executor', executor_nome, 105, cy)
+    pdf.set_y(cy + 13); pdf.line_sep()
 
-    # Dates
-    y = section_title(pdf, 'Datas', y)
+    # DATES
+    pdf.section_title('Datas')
+    cy = pdf.get_y()
     data_prog = (insp.get('data_programada') or '')[:16].replace('T', ' ') or '-'
-    data_conc = (insp.get('data_conclusao') or '')[:16].replace('T', ' ') or '___/___/____  ___:___'
-    field_pair(pdf, 'Data Programada', data_prog, 12, y)
-    field_pair(pdf, 'Data Conclusao', data_conc, 107, y)
-    y += 12
+    data_conc = (insp.get('data_conclusao') or '')[:16].replace('T', ' ')
+    pdf.field_pair('Data Programada', data_prog, 10, cy)
+    pdf.field_pair('Data Conclusão', data_conc if data_conc else None, 105, cy)
+    cy += 11
     dur = insp.get('duracao_minutos')
-    field_pair(pdf, 'Duracao', f"{dur} min" if dur else '____________ min', 12, y)
-    y += 14
-    y = line_sep(pdf, y)
+    pdf.field_pair('Duração', f"{dur} min" if dur else None, 10, cy)
+    pdf.set_y(cy + 13); pdf.line_sep()
 
-    # Checklist
+    # CHECKLIST
     checklist = insp.get('checklist') or []
-    if checklist:
-        y = section_title(pdf, 'Checklist de Inspecao', y)
-        for idx, item in enumerate(checklist):
-            if y > 260:
-                build_pdf_footer(pdf, empresa, f"Inspeção {tipo_insp}")
-                pdf.add_page()
-                y = 15
-            desc = item.get('descricao', f'Item {idx+1}')
-            resp = item.get('resposta', '')
-            obs = item.get('observacao', '')
-            
-            pdf.set_font('Helvetica', 'B', 8)
-            pdf.set_text_color(30, 41, 59)
-            pdf.set_xy(12, y)
-            pdf.cell(130, 5, f"{idx+1}. {desc[:70]}")
-            
-            # Status indicator
-            if resp in ('conforme', 'aprovado', 'sim', 'ok'):
-                pdf.set_text_color(16, 185, 129)
-                status_txt = 'CONFORME'
-            elif resp in ('nao_conforme', 'reprovado', 'nao'):
-                pdf.set_text_color(239, 68, 68)
-                status_txt = 'NAO CONFORME'
-            elif resp:
-                pdf.set_text_color(100, 116, 139)
-                status_txt = str(resp).upper()[:20]
+    if checklist or is_manual:
+        pdf.section_title('Checklist de Inspeção')
+        if checklist:
+            # Header
+            cy = pdf.get_y()
+            pdf.set_font('Helvetica', 'B', 7)
+            pdf.set_text_color(100, 116, 139)
+            pdf.set_xy(10, cy); pdf.cell(8, 4, '#')
+            pdf.set_xy(18, cy); pdf.cell(90, 4, 'Item')
+            pdf.set_xy(110, cy); pdf.cell(25, 4, 'Resultado')
+            if is_manual:
+                pdf.set_xy(140, cy); pdf.cell(30, 4, 'Medição')
+                pdf.set_xy(172, cy); pdf.cell(28, 4, 'Obs')
             else:
-                pdf.set_text_color(100, 116, 139)
-                status_txt = '[ ]'
-            
-            pdf.set_font('Helvetica', 'B', 8)
-            pdf.set_xy(150, y)
-            pdf.cell(48, 5, status_txt, align='R')
-            y += 6
-            
-            if obs:
-                pdf.set_font('Helvetica', 'I', 7)
-                pdf.set_text_color(100, 116, 139)
-                pdf.set_xy(16, y)
-                pdf.cell(180, 4, f"Obs: {obs[:80]}")
-                y += 5
+                pdf.set_xy(140, cy); pdf.cell(25, 4, 'Medição')
+                pdf.set_xy(168, cy); pdf.cell(32, 4, 'Observação')
+            cy += 5
 
-            # Tolerance
-            tol_min = item.get('tolerancia_min')
-            tol_max = item.get('tolerancia_max')
-            valor = item.get('valor_medido')
-            if tol_min is not None or tol_max is not None:
-                pdf.set_font('Helvetica', '', 7)
-                pdf.set_text_color(100, 116, 139)
-                pdf.set_xy(16, y)
-                tol_str = f"Faixa: {tol_min or '-'} a {tol_max or '-'} {item.get('unidade', '')}"
-                if valor is not None:
-                    tol_str += f" | Medido: {valor}"
-                pdf.cell(180, 4, tol_str)
-                y += 5
-            y += 2
+            for idx, item in enumerate(checklist):
+                if cy > 268:
+                    pdf.add_page(); cy = 30
+                desc = item.get('descricao', f'Item {idx+1}')
+                resp = item.get('resposta', '')
+                obs = item.get('observacao', '')
+                valor = item.get('valor_medido')
+                tol_min = item.get('tolerancia_min')
+                tol_max = item.get('tolerancia_max')
+                unidade = item.get('unidade', '')
 
-        y = line_sep(pdf, y)
+                # Item number
+                pdf.set_font('Helvetica', 'B', 7.5)
+                pdf.set_text_color(pdf.cor_r, pdf.cor_g, pdf.cor_b)
+                pdf.set_xy(10, cy); pdf.cell(8, 5, str(idx + 1))
 
-    # Non-conformities summary
+                # Description
+                pdf.set_font('Helvetica', '', 8)
+                pdf.set_text_color(30, 41, 59)
+                pdf.set_xy(18, cy); pdf.cell(90, 5, _safe(desc, 48))
+
+                # Result with color
+                if is_manual:
+                    pdf.set_draw_color(200, 200, 200)
+                    pdf.rect(110, cy, 28, 5)  # checkbox area
+                    pdf.rect(140, cy, 30, 5)  # measurement
+                    pdf.rect(172, cy, 28, 5)  # obs
+                else:
+                    if resp in ('conforme', 'aprovado', 'sim', 'ok'):
+                        pdf.set_text_color(16, 185, 129)
+                        st = 'CONFORME'
+                    elif resp in ('nao_conforme', 'reprovado', 'nao'):
+                        pdf.set_text_color(239, 68, 68)
+                        st = 'NÃO CONFORME'
+                    elif resp in ('na', 'nao_aplicavel'):
+                        pdf.set_text_color(160, 160, 160)
+                        st = 'N/A'
+                    elif resp:
+                        pdf.set_text_color(100, 116, 139)
+                        st = _safe(str(resp).upper(), 15)
+                    else:
+                        pdf.set_text_color(100, 116, 139)
+                        st = '-'
+                    pdf.set_font('Helvetica', 'B', 7.5)
+                    pdf.set_xy(110, cy); pdf.cell(25, 5, st)
+
+                    # Measurement
+                    pdf.set_font('Helvetica', '', 7)
+                    pdf.set_text_color(30, 41, 59)
+                    med_str = ''
+                    if valor is not None:
+                        med_str = f"{valor}"
+                        if unidade: med_str += f" {unidade}"
+                    if tol_min is not None or tol_max is not None:
+                        med_str += f" [{tol_min or ''}-{tol_max or ''}]"
+                    pdf.set_xy(140, cy); pdf.cell(25, 5, _safe(med_str, 18))
+
+                    # Observation
+                    pdf.set_xy(168, cy); pdf.cell(32, 5, _safe(obs, 20))
+
+                cy += 6
+
+            pdf.set_y(cy + 2)
+        elif is_manual:
+            pdf.manual_box('Registrar itens inspecionados:', 40)
+        pdf.line_sep()
+
+    # NON-CONFORMITIES SUMMARY
     nao_conformes = [c for c in checklist if c.get('resposta') in ('nao_conforme', 'reprovado', 'nao')]
     if nao_conformes:
-        y = section_title(pdf, f'Nao Conformidades ({len(nao_conformes)})', y)
+        pdf.section_title(f'Não Conformidades ({len(nao_conformes)})')
         for nc in nao_conformes:
-            if y > 260:
-                build_pdf_footer(pdf, empresa, f"Inspeção {tipo_insp}")
-                pdf.add_page()
-                y = 15
+            cy = pdf.get_y()
+            if cy > 268: pdf.add_page()
             pdf.set_font('Helvetica', '', 8)
             pdf.set_text_color(239, 68, 68)
-            pdf.set_xy(12, y)
-            pdf.cell(186, 5, f"- {nc.get('descricao', '-')[:80]}")
-            y += 6
-        y += 2
-        y = line_sep(pdf, y)
+            pdf.set_xy(10, cy)
+            pdf.cell(190, 5, _safe(f"- {nc.get('descricao', '-')}", 90))
+            if nc.get('observacao'):
+                pdf.set_font('Helvetica', 'I', 7)
+                pdf.set_text_color(100, 100, 100)
+                pdf.set_xy(14, cy + 5)
+                pdf.cell(186, 4, _safe(f"Obs: {nc['observacao']}", 80))
+                pdf.set_y(cy + 10)
+            else:
+                pdf.set_y(cy + 6)
+        pdf.line_sep()
 
-    # Observations
+    # OBSERVATIONS
+    pdf.section_title('Observações')
     obs_geral = insp.get('observacoes') or insp.get('observacao_geral', '')
-    y = section_title(pdf, 'Observacoes', y)
     if obs_geral:
-        pdf.set_font('Helvetica', '', 9)
-        pdf.set_text_color(30, 41, 59)
-        pdf.set_xy(12, y)
-        pdf.multi_cell(186, 5, obs_geral[:500])
-        y = pdf.get_y() + 3
+        pdf.text_block(obs_geral)
     else:
-        pdf.set_draw_color(203, 213, 225)
-        box_h = min(25, 297 - y - 50)
-        pdf.rect(12, y, 186, box_h)
-        y += box_h + 4
+        pdf.manual_box('' if not is_manual else 'Observações do inspetor:', 18)
+    pdf.line_sep()
 
-    # Attachments / Evidence
+    # PHOTOS
     if attachments:
-        y = section_title(pdf, f'Evidencias ({len(attachments)} arquivo(s))', y)
-        for att in attachments[:10]:
-            if y > 265:
-                build_pdf_footer(pdf, empresa, f"Inspeção {tipo_insp}")
-                pdf.add_page()
-                y = 15
-            pdf.set_font('Helvetica', '', 8)
-            pdf.set_text_color(30, 41, 59)
-            pdf.set_xy(12, y)
-            fname = att.get('filename', 'arquivo')[:50]
-            cat = (att.get('categoria') or '').capitalize()
-            size_kb = round((att.get('size_bytes') or 0) / 1024, 1)
-            pdf.cell(186, 5, f"  {fname} ({cat}) - {size_kb}KB")
-            y += 5
-        y += 3
-        y = line_sep(pdf, y)
+        foto_cfg = doc_cfg.get('foto_config', {})
+        pdf.photo_grid(attachments, foto_cfg)
 
-    # Signatures
-    y = build_signature_block(pdf, y, executor_nome)
+    # SIGNATURES
+    pdf.signature_block([('Inspetor', executor_nome), ('Supervisor', '-')])
 
-    # Footer
-    build_pdf_footer(pdf, empresa, f"Inspeção {tipo_insp}")
-
-    buf = io.BytesIO()
-    buf.write(pdf.output())
-    buf.seek(0)
-    cleanup_qr(qr_path)
-    if logo_path:
-        cleanup_qr(logo_path)
+    temp_files = [qr_path, logo_path] + [a.get('_local_path') for a in attachments if a.get('_local_path')]
+    buf = pdf.output_bytes()
+    cleanup_files(*temp_files)
     return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename=Inspecao_{insp_id[:8]}.pdf"})
-
 
 # ============== BATCH PDF — OS ==============
 

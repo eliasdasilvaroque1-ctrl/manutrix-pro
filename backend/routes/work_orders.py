@@ -321,6 +321,8 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "causa_falha": data.causa_falha,
         "equipamento_parado": data.equipamento_parado,
         "horas_parada": data.horas_parada,
+        "procedimento": data.procedimento,
+        "seguranca": data.seguranca,
         "tempo_execucao_minutos": None, "observacoes": None, "servicos_realizados": None,
         "criado_por": user.get('id'),
         "planejado_por": None, "data_planejamento": None,

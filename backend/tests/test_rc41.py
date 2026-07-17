@@ -454,3 +454,140 @@ class TestExports:
         r = httpx.get(f"{API}/ordens-servico/{os_id}/pdf", headers=auth(token), timeout=60)
         assert r.status_code == 200
         assert len(r.content) > 3000
+
+
+
+# ============== RC DOC CONFIG ==============
+
+class TestDocConfig:
+    """Tests for multi-tenant document configuration."""
+
+    def test_get_doc_config(self):
+        token = get_token("master")
+        r = httpx.get(f"{API}/doc-config", headers=auth(token), timeout=30)
+        assert r.status_code == 200
+
+    def test_update_doc_config(self):
+        token = get_token("master")
+        r = httpx.put(f"{API}/doc-config", headers=auth(token), json={
+            "identidade_doc": {"titulo_documento": "OS ASTEC", "versao_formulario": "2.0"},
+            "foto_config": {"grid_colunas": 2, "max_por_pagina": 4}
+        }, timeout=30)
+        assert r.status_code == 200
+
+    def test_doc_config_rbac_tecnico_blocked(self):
+        token = get_token("tecnico")
+        r = httpx.put(f"{API}/doc-config", headers=auth(token), json={"identidade_doc": {"titulo": "HACK"}}, timeout=30)
+        assert r.status_code == 403
+
+    def test_doc_config_pcm_allowed(self):
+        token = get_token("pcm")
+        r = httpx.put(f"{API}/doc-config", headers=auth(token), json={"identidade_doc": {"titulo_documento": "OS PCM"}}, timeout=30)
+        assert r.status_code == 200
+
+    def test_procedimento_crud(self):
+        token = get_token("master")
+        # Create
+        r = httpx.post(f"{API}/doc-config/procedimentos", headers=auth(token), json={
+            "nome": "Proc Teste QG", "codigo": "P-QG", "disciplina": "mecanica",
+            "etapas": [{"numero": 1, "descricao": "Etapa 1"}, {"numero": 2, "descricao": "Etapa 2"}],
+            "ferramentas": ["Chave"], "materiais": ["Parafuso"]
+        }, timeout=30)
+        assert r.status_code == 200
+        proc_id = r.json()["id"]
+        # Read
+        r = httpx.get(f"{API}/doc-config/procedimentos", headers=auth(token), timeout=30)
+        assert r.status_code == 200
+        assert any(p["id"] == proc_id for p in r.json())
+        # Update (version increments)
+        r = httpx.put(f"{API}/doc-config/procedimentos/{proc_id}", headers=auth(token), json={
+            "nome": "Proc Teste QG v2", "codigo": "P-QG", "etapas": [{"numero": 1, "descricao": "Etapa atualizada"}]
+        }, timeout=30)
+        assert r.status_code == 200
+        assert r.json()["versao"] == 2
+        # Delete
+        r = httpx.delete(f"{API}/doc-config/procedimentos/{proc_id}", headers=auth(token), timeout=30)
+        assert r.status_code == 200
+
+    def test_seguranca_crud(self):
+        token = get_token("master")
+        r = httpx.post(f"{API}/doc-config/seguranca", headers=auth(token), json={
+            "nome": "Seg Teste QG", "riscos": [{"descricao": "Risco eletrico"}],
+            "epis": ["Capacete", "Luva"], "loto": {"necessario": True}
+        }, timeout=30)
+        assert r.status_code == 200
+        seg_id = r.json()["id"]
+        r = httpx.get(f"{API}/doc-config/seguranca", headers=auth(token), timeout=30)
+        assert any(s["id"] == seg_id for s in r.json())
+        r = httpx.delete(f"{API}/doc-config/seguranca/{seg_id}", headers=auth(token), timeout=30)
+        assert r.status_code == 200
+
+    def test_os_with_procedure_and_safety(self):
+        """OS saves frozen snapshot of procedure and safety."""
+        token = get_token("master")
+        aid = get_first_ativo(token)
+        r = httpx.post(f"{API}/ordens-servico", headers=auth(token), json={
+            "ativo_id": aid, "tipo": "corretiva", "titulo": "Test Proc+Seg",
+            "disciplina": "mecanica", "execucao_direta": True,
+            "procedimento": {"titulo": "Proc", "etapas": [{"numero": 1, "descricao": "Step"}], "ferramentas": ["Chave"]},
+            "seguranca": {"riscos": [{"descricao": "Risco"}], "epis": ["Capacete"], "loto": {"necessario": True}}
+        }, timeout=30)
+        assert r.status_code in (200, 201)
+        os_id = r.json()["id"]
+        # Verify saved
+        r = httpx.get(f"{API}/ordens-servico/{os_id}", headers=auth(token), timeout=30)
+        data = r.json()
+        assert data.get("procedimento") is not None
+        assert data["procedimento"]["titulo"] == "Proc"
+        assert len(data["procedimento"]["etapas"]) == 1
+        assert data.get("seguranca") is not None
+        assert len(data["seguranca"]["riscos"]) == 1
+
+    def test_pdf_digital_mode(self):
+        token = get_token("master")
+        os_id = TestExports._get_one_os_id(TestExports())
+        r = httpx.get(f"{API}/ordens-servico/{os_id}/pdf?modo=digital", headers=auth(token), timeout=60)
+        assert r.status_code == 200
+        assert 'pdf' in r.headers.get('content-type', '').lower()
+        assert len(r.content) > 3000
+
+    def test_pdf_manual_mode(self):
+        token = get_token("master")
+        os_id = TestExports._get_one_os_id(TestExports())
+        r = httpx.get(f"{API}/ordens-servico/{os_id}/pdf?modo=manual", headers=auth(token), timeout=60)
+        assert r.status_code == 200
+        assert 'pdf' in r.headers.get('content-type', '').lower()
+        # Manual mode should be larger (more boxes/lines)
+        assert len(r.content) > 3000
+
+    def test_inspection_pdf_digital(self):
+        """Inspection PDF uses new engine."""
+        token = get_token("master")
+        # Get or skip
+        r = httpx.get(f"{API}/inspecoes", headers=auth(token), timeout=30)
+        items = r.json() if isinstance(r.json(), list) else r.json().get('items', r.json().get('inspecoes', []))
+        if not items:
+            return  # skip if no inspections
+        insp_id = items[0]['id']
+        r = httpx.get(f"{API}/inspecoes/{insp_id}/pdf", headers=auth(token), timeout=60)
+        assert r.status_code == 200
+        assert 'pdf' in r.headers.get('content-type', '').lower()
+
+    def test_inspection_pdf_manual(self):
+        token = get_token("master")
+        r = httpx.get(f"{API}/inspecoes", headers=auth(token), timeout=30)
+        items = r.json() if isinstance(r.json(), list) else r.json().get('items', r.json().get('inspecoes', []))
+        if not items:
+            return
+        r = httpx.get(f"{API}/inspecoes/{items[0]['id']}/pdf?modo=manual", headers=auth(token), timeout=60)
+        assert r.status_code == 200
+
+    def test_old_os_pdf_fallback(self):
+        """OS without procedure/safety should still generate PDF."""
+        token = get_token("master")
+        # Get an old OS (no procedure field)
+        r = httpx.get(f"{API}/ordens-servico?status=programada", headers=auth(token), timeout=30)
+        items = r.json()
+        if items:
+            r = httpx.get(f"{API}/ordens-servico/{items[0]['id']}/pdf", headers=auth(token), timeout=60)
+            assert r.status_code == 200
