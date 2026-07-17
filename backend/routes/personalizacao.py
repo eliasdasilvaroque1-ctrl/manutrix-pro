@@ -343,6 +343,73 @@ async def get_campos_por_modulo(
     return fields
 
 
+
+# ============== SIGNATURE CAPTURE ENDPOINT ==============
+
+class SignatureCapture(BaseModel):
+    entity_type: str  # "os" or "inspecao"
+    entity_id: str
+    bloco_assinatura_id: Optional[str] = None
+    papel: str = "executor"
+    nome: str
+    cargo: Optional[str] = None
+    matricula: Optional[str] = None
+    imagem_base64: str  # base64 PNG from canvas
+    status: str = "assinado"
+
+
+@router.post("/assinaturas/capturar", tags=["assinatura_digital"])
+async def capturar_assinatura(body: SignatureCapture, user=Depends(get_current_user)):
+    """Capture a digital signature and attach to an OS or Inspection."""
+    org_id = user.get('organization_id', '')
+    user_id = user.get('id', '')
+
+    # Validate entity exists
+    collection = "ordens_servico" if body.entity_type == "os" else "inspecoes"
+    entity = await db[collection].find_one({"id": body.entity_id, "organization_id": org_id}, {"_id": 0, "id": 1})
+    if not entity:
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    sig_doc = {
+        "id": str(uuid.uuid4()),
+        "organization_id": org_id,
+        "entity_type": body.entity_type,
+        "entity_id": body.entity_id,
+        "bloco_assinatura_id": body.bloco_assinatura_id,
+        "papel": body.papel,
+        "nome": body.nome,
+        "cargo": body.cargo,
+        "matricula": body.matricula,
+        "imagem_base64": body.imagem_base64,
+        "status": body.status,
+        "usuario_id": user_id,
+        "data_assinatura": datetime.now(timezone.utc).isoformat(),
+        "hash_referencia": str(uuid.uuid4())[:12],
+    }
+    await db.assinaturas_digitais.insert_one(sig_doc)
+
+    # Also update the entity's assinaturas_dados array
+    ass_entry = {
+        "bloco_id": body.bloco_assinatura_id,
+        "papel": body.papel,
+        "nome": body.nome,
+        "cargo": body.cargo,
+        "matricula": body.matricula,
+        "data": sig_doc["data_assinatura"],
+        "status": body.status,
+        "imagem_url": f"sig:{sig_doc['id']}",
+        "hash": sig_doc["hash_referencia"],
+        "usuario_id": user_id,
+    }
+    await db[collection].update_one(
+        {"id": body.entity_id, "organization_id": org_id},
+        {"$push": {"assinaturas_dados": ass_entry}}
+    )
+
+    logger.info(f"Signature captured: {body.papel} on {body.entity_type}/{body.entity_id}")
+    return {"id": sig_doc["id"], "hash": sig_doc["hash_referencia"], "status": "captured"}
+
+
 # ============== REGISTER ALL MODULES ==============
 
 _register_crud("campo_personalizado", "campos_personalizados", CampoPersonalizado, "doc-config/campos")

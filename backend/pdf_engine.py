@@ -98,40 +98,6 @@ class MaintrixPDF(FPDF):
         except Exception:
             self.cor_r, self.cor_g, self.cor_b = 99, 102, 241
 
-    def header(self):
-        # Dark header bar
-        self.set_fill_color(15, 23, 42)
-        self.rect(0, 0, 210, 24, 'F')
-        x = 8
-        if self.logo_path:
-            try:
-                self.image(self.logo_path, 8, 2, 20, 20)
-                x = 30
-            except Exception:
-                pass
-        self.set_font('DejaVu', 'B', 14)
-        self.set_text_color(255, 255, 255)
-        self.set_xy(x, 4)
-        self.cell(100, 7, self.empresa)
-        self.set_font('DejaVu', '', 8)
-        self.set_xy(x, 12)
-        self.cell(100, 5, self.doc_title)
-        if self.qr_path:
-            try:
-                self.image(self.qr_path, 178, 1, 22, 22)
-            except Exception:
-                pass
-        # Color bar
-        self.set_fill_color(self.cor_r, self.cor_g, self.cor_b)
-        self.rect(0, 24, 210, 1.5, 'F')
-
-    def footer(self):
-        self.set_y(-12)
-        self.set_font('DejaVu', 'I', 7)
-        self.set_text_color(148, 163, 184)
-        code_str = f" | {self.doc_code}" if self.doc_code else ""
-        self.cell(0, 5, f'{self.empresa}{code_str} | {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")} UTC | Pagina {self.page_no()}/{{nb}}', align='C')
-
     def section_title(self, title, y=None):
         if y is None:
             y = self.get_y()
@@ -486,3 +452,228 @@ class MaintrixPDF(FPDF):
         buf.write(self.output())
         buf.seek(0)
         return buf
+
+    # ===== CUSTOM FIELDS SECTION =====
+    def custom_fields_section(self, campos_defs, campos_valores, manual=False):
+        """Render custom fields from layout snapshot."""
+        if not campos_defs:
+            return
+        y = self.section_title('Campos Personalizados')
+        for campo in campos_defs:
+            if self.get_y() > 268:
+                self.add_page()
+            ident = campo.get('identificador_tecnico', '')
+            nome = campo.get('nome', ident)
+            tipo = campo.get('tipo', 'texto_curto')
+            valor = (campos_valores or {}).get(ident, '')
+            unidade = campo.get('unidade_medida', '')
+
+            if manual and not valor:
+                self.field_pair(nome, None, 10, self.get_y())
+                self.set_y(self.get_y() + 12)
+            else:
+                display = str(valor) if valor else '-'
+                if unidade and valor:
+                    display = f"{valor} {unidade}"
+                if tipo == 'sim_nao' and valor:
+                    display = 'Sim' if str(valor).lower() in ('true', 'sim', '1', 'yes') else 'Não'
+                if tipo == 'checkbox' and valor:
+                    display = '☑' if str(valor).lower() in ('true', 'sim', '1', 'yes') else '☐'
+                self.field_pair(nome, display, 10, self.get_y())
+                self.set_y(self.get_y() + 10)
+        self.line_sep()
+
+    # ===== CUSTOM HEADER FROM LAYOUT =====
+    def custom_header_from_layout(self, cab_snapshot):
+        """Override header rendering with custom cabecalho from layout snapshot."""
+        if not cab_snapshot:
+            return
+        self._custom_cabecalho = cab_snapshot
+
+    def header(self):
+        cab = getattr(self, '_custom_cabecalho', None)
+        if cab:
+            self._render_custom_header(cab)
+        else:
+            self._render_default_header()
+
+    def _render_default_header(self):
+        self.set_fill_color(15, 23, 42)
+        self.rect(0, 0, 210, 24, 'F')
+        x = 8
+        if self.logo_path:
+            try:
+                self.image(self.logo_path, 8, 2, 20, 20)
+                x = 30
+            except Exception:
+                pass
+        self.set_font('DejaVu', 'B', 14)
+        self.set_text_color(255, 255, 255)
+        self.set_xy(x, 4)
+        self.cell(100, 7, self.empresa)
+        self.set_font('DejaVu', '', 8)
+        self.set_xy(x, 12)
+        self.cell(100, 5, self.doc_title)
+        if self.qr_path:
+            try:
+                self.image(self.qr_path, 178, 1, 22, 22)
+            except Exception:
+                pass
+        self.set_fill_color(self.cor_r, self.cor_g, self.cor_b)
+        self.rect(0, 24, 210, 1.5, 'F')
+
+    def _render_custom_header(self, cab):
+        self.set_fill_color(15, 23, 42)
+        self.rect(0, 0, 210, 28, 'F')
+        x = 8
+        if self.logo_path:
+            try:
+                self.image(self.logo_path, 8, 2, 22, 22)
+                x = 33
+            except Exception:
+                pass
+        # Company info
+        nome = cab.get('nome_fantasia') or cab.get('razao_social') or self.empresa
+        self.set_font('DejaVu', 'B', 13)
+        self.set_text_color(255, 255, 255)
+        self.set_xy(x, 3)
+        self.cell(120, 6, _safe(nome, 40))
+        # Sub-info line
+        sub_parts = []
+        if cab.get('cnpj'):
+            sub_parts.append(f"CNPJ: {cab['cnpj']}")
+        if cab.get('telefone'):
+            sub_parts.append(cab['telefone'])
+        if cab.get('email'):
+            sub_parts.append(cab['email'])
+        if sub_parts:
+            self.set_font('DejaVu', '', 7)
+            self.set_xy(x, 10)
+            self.cell(120, 4, _safe(' | '.join(sub_parts), 70))
+        # Address
+        if cab.get('endereco'):
+            self.set_font('DejaVu', '', 6.5)
+            self.set_xy(x, 15)
+            self.cell(120, 4, _safe(cab['endereco'], 60))
+        # Doc title
+        self.set_font('DejaVu', '', 8)
+        self.set_xy(x, 20)
+        self.cell(120, 5, self.doc_title)
+        # QR
+        if self.qr_path:
+            try:
+                self.image(self.qr_path, 178, 2, 24, 24)
+            except Exception:
+                pass
+        self.set_fill_color(self.cor_r, self.cor_g, self.cor_b)
+        self.rect(0, 28, 210, 1.5, 'F')
+
+    # ===== CUSTOM FOOTER FROM LAYOUT =====
+    def custom_footer_from_layout(self, rod_snapshot):
+        if not rod_snapshot:
+            return
+        self._custom_rodape = rod_snapshot
+
+    def footer(self):
+        rod = getattr(self, '_custom_rodape', None)
+        if rod:
+            self._render_custom_footer(rod)
+        else:
+            self._render_default_footer()
+
+    def _render_default_footer(self):
+        self.set_y(-12)
+        self.set_font('DejaVu', 'I', 7)
+        self.set_text_color(148, 163, 184)
+        code_str = f" | {self.doc_code}" if self.doc_code else ""
+        self.cell(0, 5, f'{self.empresa}{code_str} | {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")} UTC | Página {self.page_no()}/{{nb}}', align='C')
+
+    def _render_custom_footer(self, rod):
+        self.set_y(-14)
+        self.set_draw_color(200, 200, 200)
+        self.line(10, self.get_y(), 200, self.get_y())
+        self.set_y(-12)
+        parts = []
+        if rod.get('texto_personalizado'):
+            parts.append(rod['texto_personalizado'])
+        if rod.get('mostrar_identificacao_doc') and self.doc_code:
+            parts.append(self.doc_code)
+        if rod.get('mostrar_data_emissao'):
+            parts.append(datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M") + " UTC")
+        if rod.get('mostrar_paginacao'):
+            parts.append(f"Página {self.page_no()}/{{nb}}")
+        self.set_font('DejaVu', 'I', 6.5)
+        self.set_text_color(148, 163, 184)
+        self.cell(0, 5, ' | '.join(parts), align='C')
+
+    # ===== SIGNATURE BLOCKS =====
+    def custom_signature_blocks(self, assinaturas_dados=None, blocos_config=None):
+        """Render signature blocks from layout or OS data."""
+        data = assinaturas_dados or []
+        if not data and not blocos_config:
+            self.signature_block()
+            return
+        y = self.get_y()
+        if y > 240:
+            self.add_page()
+            y = 30
+        y = self.section_title('Assinaturas e Aprovações', y)
+        y += 2
+
+        entries = data if data else [{"nome": "-", "papel": b.get("papel", "Executor")} for b in (blocos_config or [])]
+        for entry in entries:
+            if y > 260:
+                self.add_page()
+                y = 30
+            papel = entry.get('papel', 'Executor').capitalize()
+            nome = entry.get('nome', '-')
+            cargo = entry.get('cargo', '')
+            matricula = entry.get('matricula', '')
+            status = entry.get('status', 'pendente')
+            img_url = entry.get('imagem_url', '')
+
+            self.set_font('DejaVu', 'B', 8)
+            self.set_text_color(self.cor_r, self.cor_g, self.cor_b)
+            self.set_xy(10, y)
+            self.cell(40, 5, papel)
+
+            status_color = {'assinado': (16, 185, 129), 'recusado': (239, 68, 68), 'pendente': (234, 179, 8)}.get(status, (148, 163, 184))
+            self.set_text_color(*status_color)
+            self.set_font('DejaVu', 'B', 7)
+            self.set_xy(50, y)
+            self.cell(30, 5, status.upper())
+
+            self.set_font('DejaVu', '', 8)
+            self.set_text_color(30, 41, 59)
+            y += 6
+            self.set_xy(10, y)
+            info_parts = [f"Nome: {nome}"]
+            if cargo:
+                info_parts.append(f"Cargo: {cargo}")
+            if matricula:
+                info_parts.append(f"Matrícula: {matricula}")
+            self.cell(190, 4, _safe(' | '.join(info_parts), 90))
+            y += 5
+
+            if entry.get('data'):
+                self.set_font('DejaVu', '', 7)
+                self.set_text_color(100, 116, 139)
+                self.set_xy(10, y)
+                self.cell(90, 4, f"Data: {str(entry['data'])[:19]}")
+                y += 5
+
+            # Signature image
+            if img_url and hasattr(self, '_sig_paths'):
+                sig_path = self._sig_paths.get(img_url)
+                if sig_path:
+                    try:
+                        self.image(sig_path, 10, y, 50, 15)
+                        y += 17
+                    except Exception:
+                        pass
+
+            # Signature line for manual
+            self.set_draw_color(100, 116, 139)
+            self.line(10, y + 2, 80, y + 2)
+            y += 6
+        self.set_y(y + 2)

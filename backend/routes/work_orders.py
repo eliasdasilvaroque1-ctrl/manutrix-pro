@@ -323,6 +323,9 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "horas_parada": data.horas_parada,
         "procedimento": data.procedimento,
         "seguranca": data.seguranca,
+        "campos_personalizados_valores": data.campos_personalizados_valores or {},
+        "layout_snapshot": None,
+        "assinaturas_dados": data.assinaturas_dados or [],
         "tempo_execucao_minutos": None, "observacoes": None, "servicos_realizados": None,
         "criado_por": user.get('id'),
         "planejado_por": None, "data_planejamento": None,
@@ -331,6 +334,41 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(), "deleted_at": None
     }
+
+    # Auto-snapshot: freeze active layout + custom fields for this org/type
+    try:
+        # Prioritize layouts matching the OS type specifically
+        layout = await db.layouts_documento.find_one(
+            {"organization_id": org_id, "deleted_at": None, "status": "ativo",
+             "tipo_documento": {"$in": [data.tipo, f"os_{data.tipo}"]}},
+            {"_id": 0}
+        )
+        if not layout:
+            layout = await db.layouts_documento.find_one(
+                {"organization_id": org_id, "deleted_at": None, "status": "ativo",
+                 "$or": [{"tipo_documento": None}, {"tipo_documento": ""}]},
+                {"_id": 0}
+            )
+        if layout:
+            os_doc["layout_snapshot"] = {k: v for k, v in layout.items() if k not in ("_id", "organization_id", "deleted_at", "deleted_by")}
+        # Freeze custom fields — filter by layout's list if available, else all applicable
+        campo_ids = (layout or {}).get("campos_personalizados_ids", []) if layout else []
+        if campo_ids:
+            campos = await db.campos_personalizados.find(
+                {"organization_id": org_id, "id": {"$in": campo_ids}, "status": "ativo", "deleted_at": None},
+                {"_id": 0}
+            ).sort("ordem", 1).to_list(100)
+        else:
+            campos = await db.campos_personalizados.find(
+                {"organization_id": org_id, "status": "ativo", "deleted_at": None, "aplicacao_modulos": "os"},
+                {"_id": 0}
+            ).sort("ordem", 1).to_list(100)
+        if campos:
+            applicable = [c for c in campos if not c.get("aplicacao_tipos") or data.tipo in c["aplicacao_tipos"]]
+            if applicable:
+                os_doc["campos_personalizados_definicoes"] = [{k: v for k, v in c.items() if k not in ("_id", "organization_id", "deleted_at", "deleted_by")} for c in applicable]
+    except Exception as e:
+        logger.warning(f"Auto-snapshot OS layout/campos: {e}")
 
     await db.ordens_servico.insert_one(os_doc)
     await audit_log("create", "ordens_servico", os_id, user, f"OS #{numero} criada — {data.tipo}/{data.disciplina}")

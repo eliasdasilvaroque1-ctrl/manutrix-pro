@@ -247,6 +247,10 @@ class OSCreate(BaseModel):
     procedimento: Optional[dict] = None   # {titulo, objetivo, pre_requisitos, etapas[], ferramentas[], materiais[], observacoes}
     # Segurança estruturada (snapshot salvo na OS)
     seguranca: Optional[dict] = None      # {riscos[], medidas_controle[], epis[], epcs[], loto, apr, pt, bloqueios[], observacoes}
+    # Sprint 3: Personalização (snapshots congelados na emissão)
+    campos_personalizados_valores: Optional[dict] = None  # {identificador_tecnico: valor, ...}
+    layout_snapshot: Optional[dict] = None
+    assinaturas_dados: Optional[list] = None  # [{bloco_id, nome, cargo, matricula, data, status, imagem_url}]
 
 class OSUpdate(BaseModel):
     tipo: Optional[str] = None
@@ -267,6 +271,9 @@ class OSUpdate(BaseModel):
     status: Optional[str] = None
     procedimento: Optional[dict] = None
     seguranca: Optional[dict] = None
+    campos_personalizados_valores: Optional[dict] = None
+    layout_snapshot: Optional[dict] = None
+    assinaturas_dados: Optional[list] = None
 
 class KanbanMoveBody(BaseModel):
     new_status: str

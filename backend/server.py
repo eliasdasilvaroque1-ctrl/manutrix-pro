@@ -3139,6 +3139,13 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     qr_path = make_qr(f"{os.environ.get('APP_URL', '')}/os/{os_id}")
 
     pdf = MaintrixPDF(empresa=empresa, doc_title=f"Ordem de Servico {numero}", logo_path=logo_path, qr_path=qr_path, cor_primaria=cor, modo_manual=is_manual)
+    # Apply custom layout from OS snapshot or org settings
+    layout_snap = os_doc.get('layout_snapshot')
+    if layout_snap:
+        if layout_snap.get('cabecalho_snapshot'):
+            pdf.custom_header_from_layout(layout_snap['cabecalho_snapshot'])
+        if layout_snap.get('rodape_snapshot'):
+            pdf.custom_footer_from_layout(layout_snap['rodape_snapshot'])
     pdf.alias_nb_pages()
     pdf.add_page()
 
@@ -3245,8 +3252,18 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     if attachments:
         pdf.photo_grid(attachments, doc_cfg.get('foto_config', {}))
 
-    # SIGNATURES
-    pdf.signature_block([('Executor', resp_nome or '-'), ('Supervisor', '-')])
+    # CUSTOM FIELDS
+    campos_defs = os_doc.get('campos_personalizados_definicoes', [])
+    campos_vals = os_doc.get('campos_personalizados_valores', {})
+    if campos_defs or (is_manual and campos_defs):
+        pdf.custom_fields_section(campos_defs, campos_vals, manual=is_manual)
+
+    # SIGNATURES (custom or default)
+    ass_dados = os_doc.get('assinaturas_dados', [])
+    if ass_dados:
+        pdf.custom_signature_blocks(assinaturas_dados=ass_dados)
+    else:
+        pdf.signature_block([('Executor', resp_nome or '-'), ('Supervisor', '-')])
 
     temp_files = [qr_path, logo_path] + [a.get('_local_path') for a in attachments if a.get('_local_path')]
     buf = pdf.output_bytes()

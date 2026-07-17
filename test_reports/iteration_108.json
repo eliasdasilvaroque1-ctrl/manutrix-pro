@@ -1,0 +1,51 @@
+{
+  "summary": "Sprint 3 INTEGRATION full validation (Dynamic Field Renderer, Custom PDF Layout, Snapshot Isolation, Signature Capture). Backend: 25/25 new integration tests PASS (test_sprint3_integration.py). Regression: 53/53 rc41 PASS — zero regressions. Sprint 3 base tests still 42/42 (verified last iter). PDF text extraction with pdfplumber confirmed: custom cabecalho (razao_social 'MAINTRIX INT LTDA' + CNPJ '12.345.678/0001-99') appears in PDF, custom rodape 'DOCUMENTO INT CONFIDENCIAL' appears in PDF, custom campo 'Pressao Trabalho' + value '12.75' bar appears in PDF, signature 'Jose Executor INT' + status 'ASSINADO' appears in PDF. SNAPSHOT ISOLATION VERIFIED: mutating source cabecalho after OS creation does NOT leak into OS PDF — original razao_social/CNPJ preserved. OS auto-snapshot on create is working — layout_snapshot + campos_personalizados_definicoes are frozen. POST /api/assinaturas/capturar persists to assinaturas_digitais collection AND pushes into the OS's assinaturas_dados array. Old OS without layout_snapshot still generates PDF successfully (default header/footer fallback). Frontend NOT tested via playwright this iteration: the new DynamicFieldRenderer + SignaturePad components exist in /app/frontend/src/components/DynamicFieldRenderer.js with all required data-testids ('dynamic-fields', 'field-{ident}', 'signature-pad', 'signature-canvas', 'signature-clear', 'signature-capture') — but they are NOT imported/used anywhere else in the frontend yet (grep confirms zero call sites). The OS create/edit forms do not yet render custom fields nor capture signatures on the UI side. Backend integration is production-ready; frontend UI wiring is missing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "OS creation with custom fields", "issue": "DynamicFieldRenderer component exists with data-testid='dynamic-fields' + per-field 'field-{identificador_tecnico}' but is NOT imported/rendered anywhere in the OS creation/edit page. Users cannot fill custom_field values through the UI — only the backend API accepts campos_personalizados_valores. Wire DynamicFieldRenderer into the OS form (and Inspecao form) using GET /api/doc-config/campos/por-modulo/os?tipo={tipo} to load the applicable field list, then submit values in campos_personalizados_valores on OS create/update.", "affected_selectors": ["[data-testid='dynamic-fields']", "[data-testid^='field-']"]},
+      {"flow": "OS signature capture", "issue": "SignaturePad component exists with data-testid='signature-pad'/'signature-canvas'/'signature-clear'/'signature-capture' but is NOT imported/rendered anywhere in the OS/Inspecao pages. Users cannot capture signatures through the UI — only the backend endpoint POST /api/assinaturas/capturar works. Integrate SignaturePad into the OS conclude/dossie page so 'executor' + 'supervisor' can sign digitally, then POST to /api/assinaturas/capturar with entity_type='os' and entity_id=os_id.", "affected_selectors": ["[data-testid='signature-pad']", "[data-testid='signature-capture']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint3_integration.py",
+    "/app/test_reports/pytest/sprint3_integration.xml",
+    "/app/test_reports/pytest/rc41_regression_iter108.xml"
+  ],
+  "action_items": [
+    "(P1 — Frontend integration) Import and render DynamicFieldRenderer inside the OS create/edit form. Fetch applicable fields via GET /api/doc-config/campos/por-modulo/os?tipo=<tipo> and bind values to the campos_personalizados_valores payload key.",
+    "(P1 — Frontend integration) Import and render SignaturePad inside the OS conclude/dossie flow. On capture, POST base64 PNG to /api/assinaturas/capturar with {entity_type:'os', entity_id, papel, nome, imagem_base64}.",
+    "(P2 — Nice-to-have) The MODULOS_APLICACAO enum only allows ['os','inspecao','ativo'] but campos filter by module 'os' works only if aplicacao_modulos contains 'os'. Consider auto-defaulting new campos to ['os'] if empty, since currently a campo with empty aplicacao_modulos is invisible to OS auto-snapshot. (Currently working correctly per spec, but low-friction improvement.)",
+    "(P2 — Prev-iter carryover) PERS_INDEXES from routes/personalizacao.py is not iterated in server.py startup — unique index (org_id, identificador_tecnico) only enforced by app-level 409 check. Add loop to startup_create_indexes to guard against race conditions."
+  ],
+  "critical_code_review_comments": [
+    "Sprint 3 INTEGRATION is architecturally clean: work_orders.py line 338-371 correctly freezes layout + campos_personalizados_definicoes on OS creation, filtering campos by aplicacao_tipos == data.tipo OR empty (matches any). No cross-tenant leakage: layout query is scoped by organization_id + deleted_at=None + status='ativo'.",
+    "pdf_engine.py:custom_header_from_layout / custom_footer_from_layout store snapshot dict on self._custom_cabecalho / self._custom_rodape which FPDF's header()/footer() callbacks pick up automatically per page — clean override pattern.",
+    "server.py:3143-3148 correctly reads layout_snapshot from OS doc BEFORE add_page() call so header/footer render with custom data from page 1. Confirmed via pdfplumber text extraction that CNPJ '12.345.678/0001-99', razao_social 'MAINTRIX INT LTDA', rodape 'DOCUMENTO INT CONFIDENCIAL' all appear in generated PDF.",
+    "assinaturas/capturar endpoint (personalizacao.py:361) correctly validates entity existence (404 if not found), scoped by organization_id — no cross-tenant signature capture possible. Also correctly pushes signature entry into the OS.assinaturas_dados array via $push, which is then read back by pdf_engine.custom_signature_blocks() — full end-to-end flow works.",
+    "SNAPSHOT ISOLATION CROWN JEWEL VERIFIED at PDF layer: after mutating cabecalho source doc (razao_social → 'NOVA RAZAO MUTADA'), regenerating the OS PDF still shows ORIGINAL 'MAINTRIX INT LTDA'. This is because OS holds its own layout_snapshot which includes cabecalho_snapshot (deep-frozen). Perfect design.",
+    "OLD OS COMPATIBILITY (line 3143 in server.py): the check `if layout_snap:` gracefully falls back to _render_default_header/_render_default_footer when layout_snapshot is missing or None. Verified with preventiva OS — PDF generated cleanly.",
+    "FRONTEND GAP: DynamicFieldRenderer.js is well-authored (17 field types, proper controlled inputs, all data-testids present, SignaturePad has canvas + touch/mouse events + hasContent state to disable Confirmar button) — but zero call sites in the app. This is the only remaining Sprint 3 gap. Backend is production-ready; frontend needs wiring in OS/Inspecao pages.",
+    "MODULOS_APLICACAO enum is ['os','inspecao','ativo'] but 'ativo' is not consumed by any auto-snapshot logic yet — reserved for future expansion. Acceptable.",
+    "custom_signature_blocks (pdf_engine.py:610) correctly renders papel + status uppercase + name + optional cargo/matricula + data. Status color-coded (assinado green, recusado red, pendente yellow) is a nice touch.",
+    "No MongoDB _id leakage detected in any of the tested endpoints (verified via pdfplumber text scans and JSON response inspection)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint3_integration.py (new — 25 integration tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (25/25 Sprint3 integration + 53/53 rc41 regression)",
+    "frontend": "N/A — UI not tested this iter; components exist but not wired into OS/Inspecao forms"
+  },
+  "test_credentials": "Used master@maintrix.com/master123 (org 9a232bf2-fc01-4253-813f-8df356be31c1), test.pcm@maintrix.com/pcm123, test.mec@maintrix.com/tec123 from /app/memory/test_credentials.md.",
+  "seed_data_creation": "Tests created 1 cabecalho (INT_CAB), 1 rodape (INT_ROD), 1 campo decimal (Pressao Trabalho), 1 layout (INT_LAY_CORRETIVA), 2 OSs (1 corretiva w/ layout+campo+signature, 1 preventiva old-style fallback), 1 digital signature. All prefixed 'INT_' or 'int_'. Not cleaned up (matches existing pattern). Cabecalho INT_CAB was mutated to 'INT_CAB_MUTATED' during isolation test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sprint 3 INTEGRATION backend is 100% working — layout auto-snapshot on OS create, campos freeze, signature capture push, PDF text with custom cabecalho/rodape/campos/signatures, and snapshot isolation are ALL verified. Test file: /app/backend/tests/test_sprint3_integration.py. PDF text extraction pattern: httpx.get /api/ordens-servico/{id}/pdf → pdfplumber.open(BytesIO) → extract_text per page. Signature endpoint: POST /api/assinaturas/capturar accepts {entity_type, entity_id, papel, nome, imagem_base64, status}. Tecnico can NOT create campos/layouts/cabecalhos (403) but CAN capture their own signature (200) — this is by design (signature is not editor-only). REMAINING WORK IS FRONTEND ONLY: DynamicFieldRenderer.js + SignaturePad component exist with all data-testids but must be imported into OS create/edit + conclude pages. Backend endpoints ready: GET /api/doc-config/campos/por-modulo/os?tipo={tipo} for field list, POST /api/ordens-servico with campos_personalizados_valores, POST /api/assinaturas/capturar for signatures.",
+  "rca_of_the_issue": "N/A — no bugs found. Sprint 3 integration backend is production-ready. Only outstanding item is frontend UI wiring: DynamicFieldRenderer + SignaturePad components exist but not consumed in any workflow page (OS create/edit/conclude, Inspecao). Grep confirmed: `grep -rn 'DynamicFieldRenderer|SignaturePad' /app/frontend/src` only matches the definition file itself; `grep 'campos_personalizados_valores|assinaturas_dados'` returns 0 hits across frontend."
+}
