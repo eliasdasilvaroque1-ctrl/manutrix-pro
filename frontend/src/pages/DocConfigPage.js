@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { FileText, Settings, Shield, Wrench, Camera, PenTool, Plus, Save, Trash2, ChevronRight, Eye, GripVertical, History, RotateCcw, ClipboardList, BookOpen, Cog } from "lucide-react";
+import { FileText, Settings, Shield, Wrench, Camera, PenTool, Plus, Save, Trash2, ChevronRight, Eye, GripVertical, History, RotateCcw, ClipboardList, BookOpen, Cog, FormInput as FormInputIcon, FileSignature, Layout, Type } from "lucide-react";
 import { api, useAuth } from "@/lib/api";
 import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "@/components/shared";
 import { toast } from "sonner";
@@ -20,19 +20,27 @@ const DocConfigPage = () => {
   const [editCL, setEditCL] = useState(null);
   const [editMI, setEditMI] = useState(null);
   const [editMO, setEditMO] = useState(null);
+  const [campos, setCampos] = useState([]);
+  const [cabecalhos, setCabecalhos] = useState([]);
+  const [assinaturas, setAssinaturas] = useState([]);
+  const [layouts, setLayouts] = useState([]);
 
   const canEdit = ['master', 'admin', 'pcm'].includes(user?.role);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [cfgRes, procRes, segRes, clRes, miRes, moRes] = await Promise.all([
+      const [cfgRes, procRes, segRes, clRes, miRes, moRes, cpRes, cbRes, asRes, lyRes] = await Promise.all([
         api.get('/doc-config'),
         api.get('/doc-config/procedimentos'),
         api.get('/doc-config/seguranca'),
         api.get('/doc-config/checklists'),
         api.get('/doc-config/modelos-inspecao'),
         api.get('/doc-config/modelos-os'),
+        api.get('/doc-config/campos'),
+        api.get('/doc-config/cabecalhos-rodapes'),
+        api.get('/doc-config/assinaturas'),
+        api.get('/doc-config/layouts'),
       ]);
       setConfig(cfgRes.data);
       setProcedimentos(procRes.data);
@@ -40,6 +48,10 @@ const DocConfigPage = () => {
       setChecklists(clRes.data);
       setModelosInsp(miRes.data);
       setModelosOS(moRes.data);
+      setCampos(cpRes.data);
+      setCabecalhos(cbRes.data);
+      setAssinaturas(asRes.data);
+      setLayouts(lyRes.data);
     } catch { toast.error('Erro ao carregar configuracoes'); }
     setLoading(false);
   }, []);
@@ -61,6 +73,10 @@ const DocConfigPage = () => {
     { id: 'checklists', label: 'Checklists', icon: ClipboardList },
     { id: 'modelos-inspecao', label: 'Modelos Inspeção', icon: BookOpen },
     { id: 'modelos-os', label: 'Modelos OS', icon: Cog },
+    { id: 'campos', label: 'Campos', icon: Type },
+    { id: 'cabecalhos', label: 'Cabeçalhos/Rodapés', icon: FileText },
+    { id: 'assinaturas', label: 'Assinaturas', icon: FileSignature },
+    { id: 'layouts', label: 'Layouts', icon: Layout },
     { id: 'fotos', label: 'Fotografias', icon: Camera },
     { id: 'preview', label: 'Pré-visualização', icon: Eye },
   ];
@@ -85,6 +101,10 @@ const DocConfigPage = () => {
       {tab === 'checklists' && <ChecklistsTab items={checklists} onRefresh={fetchAll} canEdit={canEdit} editItem={editCL} setEditItem={setEditCL} />}
       {tab === 'modelos-inspecao' && <ModelosInspecaoTab items={modelosInsp} procedimentos={procedimentos} segurancas={segurancas} checklists={checklists} onRefresh={fetchAll} canEdit={canEdit} editItem={editMI} setEditItem={setEditMI} />}
       {tab === 'modelos-os' && <ModelosOSTab items={modelosOS} procedimentos={procedimentos} segurancas={segurancas} checklists={checklists} onRefresh={fetchAll} canEdit={canEdit} editItem={editMO} setEditItem={setEditMO} />}
+      {tab === 'campos' && <CamposTab items={campos} onRefresh={fetchAll} canEdit={canEdit} />}
+      {tab === 'cabecalhos' && <CabecalhosTab items={cabecalhos} onRefresh={fetchAll} canEdit={canEdit} />}
+      {tab === 'assinaturas' && <AssinaturasTab items={assinaturas} onRefresh={fetchAll} canEdit={canEdit} />}
+      {tab === 'layouts' && <LayoutsTab items={layouts} cabecalhos={cabecalhos} campos={campos} assinaturas={assinaturas} onRefresh={fetchAll} canEdit={canEdit} />}
       {tab === 'fotos' && <FotosTab config={config} onSave={saveConfig} canEdit={canEdit} />}
       {tab === 'preview' && <PreviewTab />}
     </PageContainer>
@@ -680,6 +700,420 @@ const ModeloOSForm = ({ item, procedimentos, segurancas, checklists, onClose, on
       <div className="flex gap-3 mt-4">
         <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
         <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2" data-testid="save-mo"><Save size={16} /> {saving ? 'Salvando...' : 'Salvar'}</button>
+      </div>
+    </Modal>
+  );
+};
+
+// ===== CAMPOS PERSONALIZADOS TAB =====
+const TIPOS_CAMPO = ['texto_curto','texto_longo','numero','decimal','data','hora','data_hora','selecao_unica','multipla_selecao','checkbox','sim_nao','foto','assinatura','qr_code','url','email','telefone'];
+const TIPO_LABELS = {texto_curto:'Texto curto',texto_longo:'Texto longo',numero:'Número',decimal:'Decimal',data:'Data',hora:'Hora',data_hora:'Data/hora',selecao_unica:'Seleção única',multipla_selecao:'Múltipla seleção',checkbox:'Checkbox',sim_nao:'Sim/Não',foto:'Foto',assinatura:'Assinatura',qr_code:'QR Code',url:'URL',email:'E-mail',telefone:'Telefone'};
+
+const CamposTab = ({ items, onRefresh, canEdit }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [versionItem, setVersionItem] = useState(null);
+  const handleDelete = async (id) => {
+    if (!window.confirm('Excluir campo?')) return;
+    try { await api.delete(`/doc-config/campos/${id}`); toast.success('Excluído'); onRefresh(); } catch { toast.error('Erro'); }
+  };
+  return (
+    <div data-testid="campos-tab">
+      <div className="flex justify-between items-center mb-4">
+        <p className="text-xs text-slate-500">Campos personalizados por empresa. Aplicáveis a OS, Inspeções e Ativos.</p>
+        {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="new-campo"><Plus size={16} /> Novo Campo</button>}
+      </div>
+      {items.length === 0 ? <EmptyState title="Nenhum campo personalizado" /> : (
+        <div className="space-y-2">
+          {items.map(c => (
+            <div key={c.id} className="glass-card p-4 flex items-center justify-between" data-testid={`campo-${c.id}`}>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-primary">{c.nome}</span>
+                  <span className="text-xs bg-slate-700 px-2 py-0.5 rounded">{c.identificador_tecnico}</span>
+                  <span className="text-xs text-brand bg-brand/10 px-2 py-0.5 rounded">v{c.versao || 1}</span>
+                  <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">{TIPO_LABELS[c.tipo] || c.tipo}</span>
+                  {c.obrigatorio && <span className="text-xs text-red-400">*</span>}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Módulos: {(c.aplicacao_modulos || []).join(', ') || 'todos'} | {c.unidade_medida || ''}</p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <button onClick={() => setVersionItem(c)} className="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1"><History size={14} /></button>
+                {canEdit && <button onClick={() => { setEditItem(c); setShowForm(true); }} className="text-xs text-blue-400">Editar</button>}
+                {canEdit && <button onClick={() => handleDelete(c.id)} className="text-xs text-red-400"><Trash2 size={14} /></button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showForm && <CampoForm item={editItem} onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); onRefresh(); }} />}
+      {versionItem && <VersionHistoryModal itemType="campos" itemId={versionItem.id} itemName={versionItem.nome} onClose={() => setVersionItem(null)} onRestore={() => { setVersionItem(null); onRefresh(); }} />}
+    </div>
+  );
+};
+
+const CampoForm = ({ item, onClose, onSuccess }) => {
+  const [form, setForm] = useState(item || { nome:'',identificador_tecnico:'',tipo:'texto_curto',obrigatorio:false,valor_padrao:'',placeholder:'',texto_ajuda:'',ordem:0,status:'ativo',validacao_min:null,validacao_max:null,limite_caracteres:null,unidade_medida:'',casas_decimais:null,opcoes:[],aplicacao_modulos:[],aplicacao_tipos:[] });
+  const [saving, setSaving] = useState(false);
+  const needsOptions = ['selecao_unica','multipla_selecao'].includes(form.tipo);
+  const needsNumeric = ['numero','decimal'].includes(form.tipo);
+  const handleSave = async () => {
+    if (!form.nome || !form.identificador_tecnico || !form.tipo) { toast.error('Nome, identificador e tipo são obrigatórios'); return; }
+    setSaving(true);
+    try {
+      const payload = {...form, opcoes: (form.opcoes || []).map((o,i) => typeof o === 'string' ? {valor:o,label:o,ordem:i} : o)};
+      if (item?.id) await api.put(`/doc-config/campos/${item.id}`, payload);
+      else await api.post('/doc-config/campos', payload);
+      toast.success('Campo salvo'); onSuccess();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro ao salvar'); }
+    setSaving(false);
+  };
+  return (
+    <Modal isOpen onClose={onClose} title={item ? 'Editar Campo' : 'Novo Campo Personalizado'} size="xl">
+      <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="grid grid-cols-2 gap-3">
+          <FormInput label="Nome"><input value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-3" data-testid="campo-nome" /></FormInput>
+          <FormInput label="Identificador técnico (imutável)"><input value={form.identificador_tecnico} onChange={e => setForm({...form, identificador_tecnico: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,'')})} className="input-industrial w-full px-3" disabled={!!item?.id} placeholder="ex: temp_ambiente" data-testid="campo-ident" /></FormInput>
+          <FormInput label="Tipo">
+            <select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} className="input-industrial w-full px-3" data-testid="campo-tipo">
+              {TIPOS_CAMPO.map(t => <option key={t} value={t}>{TIPO_LABELS[t]}</option>)}
+            </select>
+          </FormInput>
+          <FormInput label="Ordem"><input type="number" value={form.ordem} onChange={e => setForm({...form, ordem: parseInt(e.target.value)||0})} className="input-industrial w-full px-3" /></FormInput>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <FormInput label="Placeholder"><input value={form.placeholder||''} onChange={e => setForm({...form, placeholder: e.target.value})} className="input-industrial w-full px-3" /></FormInput>
+          <FormInput label="Valor padrão"><input value={form.valor_padrao||''} onChange={e => setForm({...form, valor_padrao: e.target.value})} className="input-industrial w-full px-3" /></FormInput>
+        </div>
+        <FormInput label="Texto de ajuda"><input value={form.texto_ajuda||''} onChange={e => setForm({...form, texto_ajuda: e.target.value})} className="input-industrial w-full px-3" /></FormInput>
+        {needsNumeric && <div className="grid grid-cols-3 gap-3">
+          <FormInput label="Unidade"><input value={form.unidade_medida||''} onChange={e => setForm({...form, unidade_medida: e.target.value})} className="input-industrial w-full px-3" placeholder="°C, mm, kg" /></FormInput>
+          <FormInput label="Mín"><input type="number" value={form.validacao_min??''} onChange={e => setForm({...form, validacao_min: e.target.value?parseFloat(e.target.value):null})} className="input-industrial w-full px-3" /></FormInput>
+          <FormInput label="Máx"><input type="number" value={form.validacao_max??''} onChange={e => setForm({...form, validacao_max: e.target.value?parseFloat(e.target.value):null})} className="input-industrial w-full px-3" /></FormInput>
+        </div>}
+        {needsOptions && <FormInput label="Opções (uma por linha)">
+          <textarea value={(form.opcoes||[]).map(o => typeof o === 'string' ? o : o.label || o.valor).join('\n')} onChange={e => setForm({...form, opcoes: e.target.value.split('\n').filter(Boolean).map((l,i) => ({valor:l.trim().toLowerCase().replace(/\s+/g,'_'),label:l.trim(),ordem:i}))})} className="input-industrial w-full px-3 h-20" placeholder="Opção 1&#10;Opção 2&#10;Opção 3" />
+        </FormInput>}
+        <div className="flex flex-wrap gap-3">
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.obrigatorio} onChange={e => setForm({...form, obrigatorio: e.target.checked})} /> Obrigatório</label>
+          {['os','inspecao','ativo'].map(m => (
+            <label key={m} className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={(form.aplicacao_modulos||[]).includes(m)} onChange={e => { const mods = [...(form.aplicacao_modulos||[])]; e.target.checked ? mods.push(m) : mods.splice(mods.indexOf(m),1); setForm({...form, aplicacao_modulos: mods}); }} /> {m.toUpperCase()}</label>
+          ))}
+        </div>
+        {item?.id && <FormInput label="Motivo da alteração"><input value={form.motivo_alteracao||''} onChange={e => setForm({...form, motivo_alteracao: e.target.value})} className="input-industrial w-full px-3" /></FormInput>}
+      </div>
+      <div className="flex gap-3 mt-4">
+        <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
+        <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2" data-testid="save-campo"><Save size={16} /> {saving ? 'Salvando...' : 'Salvar'}</button>
+      </div>
+    </Modal>
+  );
+};
+
+// ===== CABEÇALHOS/RODAPÉS TAB =====
+const CabecalhosTab = ({ items, onRefresh, canEdit }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [versionItem, setVersionItem] = useState(null);
+  const handleDelete = async (id) => {
+    if (!window.confirm('Excluir?')) return;
+    try { await api.delete(`/doc-config/cabecalhos-rodapes/${id}`); toast.success('Excluído'); onRefresh(); } catch { toast.error('Erro'); }
+  };
+  return (
+    <div data-testid="cabecalhos-tab">
+      <div className="flex justify-between items-center mb-4">
+        <p className="text-xs text-slate-500">Cabeçalhos e rodapés para documentos PDF. Configuráveis por empresa.</p>
+        {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="new-cabecalho"><Plus size={16} /> Novo</button>}
+      </div>
+      {items.length === 0 ? <EmptyState title="Nenhum cabeçalho/rodapé" /> : (
+        <div className="space-y-2">
+          {items.map(c => (
+            <div key={c.id} className="glass-card p-4 flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-primary">{c.nome}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${c.tipo === 'cabecalho' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>{c.tipo === 'cabecalho' ? 'Cabeçalho' : 'Rodapé'}</span>
+                  <span className="text-xs text-brand bg-brand/10 px-2 py-0.5 rounded">v{c.versao || 1}</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">{c.razao_social || c.nome_fantasia || '-'} {c.cnpj ? `| ${c.cnpj}` : ''}</p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <button onClick={() => setVersionItem(c)} className="text-xs text-slate-400 hover:text-amber-400"><History size={14} /></button>
+                {canEdit && <button onClick={() => { setEditItem(c); setShowForm(true); }} className="text-xs text-blue-400">Editar</button>}
+                {canEdit && <button onClick={() => handleDelete(c.id)} className="text-xs text-red-400"><Trash2 size={14} /></button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showForm && <CabecalhoForm item={editItem} onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); onRefresh(); }} />}
+      {versionItem && <VersionHistoryModal itemType="cabecalhos-rodapes" itemId={versionItem.id} itemName={versionItem.nome} onClose={() => setVersionItem(null)} onRestore={() => { setVersionItem(null); onRefresh(); }} />}
+    </div>
+  );
+};
+
+const CabecalhoForm = ({ item, onClose, onSuccess }) => {
+  const [form, setForm] = useState(item || { nome:'',tipo:'cabecalho',razao_social:'',nome_fantasia:'',cnpj:'',endereco:'',telefone:'',email:'',texto_personalizado:'',mostrar_paginacao:true,mostrar_data_emissao:true,mostrar_identificacao_doc:true,mostrar_versao:false });
+  const [saving, setSaving] = useState(false);
+  const handleSave = async () => {
+    if (!form.nome) { toast.error('Nome obrigatório'); return; }
+    setSaving(true);
+    try {
+      if (item?.id) await api.put(`/doc-config/cabecalhos-rodapes/${item.id}`, form);
+      else await api.post('/doc-config/cabecalhos-rodapes', form);
+      toast.success('Salvo'); onSuccess();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    setSaving(false);
+  };
+  return (
+    <Modal isOpen onClose={onClose} title={item ? 'Editar' : 'Novo Cabeçalho/Rodapé'} size="xl">
+      <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="grid grid-cols-2 gap-3">
+          <FormInput label="Nome"><input value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-3" data-testid="cb-nome" /></FormInput>
+          <FormInput label="Tipo">
+            <select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} className="input-industrial w-full px-3">
+              <option value="cabecalho">Cabeçalho</option><option value="rodape">Rodapé</option>
+            </select>
+          </FormInput>
+          <FormInput label="Razão social"><input value={form.razao_social||''} onChange={e => setForm({...form, razao_social: e.target.value})} className="input-industrial w-full px-3" /></FormInput>
+          <FormInput label="Nome fantasia"><input value={form.nome_fantasia||''} onChange={e => setForm({...form, nome_fantasia: e.target.value})} className="input-industrial w-full px-3" /></FormInput>
+          <FormInput label="CNPJ"><input value={form.cnpj||''} onChange={e => setForm({...form, cnpj: e.target.value})} className="input-industrial w-full px-3" /></FormInput>
+          <FormInput label="Telefone"><input value={form.telefone||''} onChange={e => setForm({...form, telefone: e.target.value})} className="input-industrial w-full px-3" /></FormInput>
+          <FormInput label="E-mail"><input value={form.email||''} onChange={e => setForm({...form, email: e.target.value})} className="input-industrial w-full px-3" /></FormInput>
+          <FormInput label="Endereço"><input value={form.endereco||''} onChange={e => setForm({...form, endereco: e.target.value})} className="input-industrial w-full px-3" /></FormInput>
+        </div>
+        <FormInput label="Texto personalizado"><textarea value={form.texto_personalizado||''} onChange={e => setForm({...form, texto_personalizado: e.target.value})} className="input-industrial w-full px-3 h-12" /></FormInput>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.mostrar_paginacao} onChange={e => setForm({...form, mostrar_paginacao: e.target.checked})} /> Paginação</label>
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.mostrar_data_emissao} onChange={e => setForm({...form, mostrar_data_emissao: e.target.checked})} /> Data/hora</label>
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.mostrar_identificacao_doc} onChange={e => setForm({...form, mostrar_identificacao_doc: e.target.checked})} /> ID documento</label>
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.mostrar_versao} onChange={e => setForm({...form, mostrar_versao: e.target.checked})} /> Versão</label>
+        </div>
+        {item?.id && <FormInput label="Motivo da alteração"><input value={form.motivo_alteracao||''} onChange={e => setForm({...form, motivo_alteracao: e.target.value})} className="input-industrial w-full px-3" /></FormInput>}
+      </div>
+      <div className="flex gap-3 mt-4">
+        <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
+        <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2" data-testid="save-cb"><Save size={16} /> {saving ? 'Salvando...' : 'Salvar'}</button>
+      </div>
+    </Modal>
+  );
+};
+
+// ===== ASSINATURAS TAB =====
+const AssinaturasTab = ({ items, onRefresh, canEdit }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [versionItem, setVersionItem] = useState(null);
+  const handleDelete = async (id) => {
+    if (!window.confirm('Excluir?')) return;
+    try { await api.delete(`/doc-config/assinaturas/${id}`); toast.success('Excluído'); onRefresh(); } catch { toast.error('Erro'); }
+  };
+  return (
+    <div data-testid="assinaturas-tab">
+      <div className="flex justify-between items-center mb-4">
+        <p className="text-xs text-slate-500">Blocos de assinatura para documentos. Nome, cargo, matrícula, captura digital.</p>
+        {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="new-assinatura"><Plus size={16} /> Novo Bloco</button>}
+      </div>
+      {items.length === 0 ? <EmptyState title="Nenhum bloco de assinatura" /> : (
+        <div className="space-y-2">
+          {items.map(a => (
+            <div key={a.id} className="glass-card p-4 flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-primary">{a.nome}</span>
+                  <span className="text-xs bg-slate-700 px-2 py-0.5 rounded">{a.papel}</span>
+                  <span className="text-xs text-brand bg-brand/10 px-2 py-0.5 rounded">v{a.versao || 1}</span>
+                  {a.captura_digital && <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">Digital</span>}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">{(a.campos||[]).length} campos | {a.matricula_obrigatoria ? 'Matrícula obrig.' : ''}</p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <button onClick={() => setVersionItem(a)} className="text-xs text-slate-400 hover:text-amber-400"><History size={14} /></button>
+                {canEdit && <button onClick={() => { setEditItem(a); setShowForm(true); }} className="text-xs text-blue-400">Editar</button>}
+                {canEdit && <button onClick={() => handleDelete(a.id)} className="text-xs text-red-400"><Trash2 size={14} /></button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showForm && <AssinaturaForm item={editItem} onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); onRefresh(); }} />}
+      {versionItem && <VersionHistoryModal itemType="assinaturas" itemId={versionItem.id} itemName={versionItem.nome} onClose={() => setVersionItem(null)} onRestore={() => { setVersionItem(null); onRefresh(); }} />}
+    </div>
+  );
+};
+
+const AssinaturaForm = ({ item, onClose, onSuccess }) => {
+  const CAMPOS_ASS = ['nome','cargo','matricula','data','papel','assinatura_imagem'];
+  const [form, setForm] = useState(item || { nome:'',papel:'executor',campos:[{campo:'nome',obrigatorio:true,ordem:1},{campo:'cargo',obrigatorio:false,ordem:2},{campo:'data',obrigatorio:true,ordem:3}],matricula_obrigatoria:false,captura_digital:false,status:'ativo' });
+  const [saving, setSaving] = useState(false);
+  const toggleCampo = (campo) => {
+    const exists = (form.campos||[]).find(c => c.campo === campo);
+    if (exists) setForm({...form, campos: form.campos.filter(c => c.campo !== campo)});
+    else setForm({...form, campos: [...form.campos, {campo, obrigatorio: false, ordem: form.campos.length+1}]});
+  };
+  const handleSave = async () => {
+    if (!form.nome) { toast.error('Nome obrigatório'); return; }
+    setSaving(true);
+    try {
+      if (item?.id) await api.put(`/doc-config/assinaturas/${item.id}`, form);
+      else await api.post('/doc-config/assinaturas', form);
+      toast.success('Salvo'); onSuccess();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    setSaving(false);
+  };
+  return (
+    <Modal isOpen onClose={onClose} title={item ? 'Editar Assinatura' : 'Novo Bloco de Assinatura'} size="lg">
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <FormInput label="Nome"><input value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-3" data-testid="ass-nome" /></FormInput>
+          <FormInput label="Papel">
+            <select value={form.papel} onChange={e => setForm({...form, papel: e.target.value})} className="input-industrial w-full px-3">
+              {['executor','supervisor','inspetor','aprovador','testemunha','responsavel'].map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
+            </select>
+          </FormInput>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-400 mb-2 block">Campos do bloco</label>
+          <div className="flex flex-wrap gap-2">
+            {CAMPOS_ASS.map(c => (
+              <label key={c} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg cursor-pointer ${(form.campos||[]).find(x => x.campo===c) ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400'}`}>
+                <input type="checkbox" checked={!!(form.campos||[]).find(x => x.campo===c)} onChange={() => toggleCampo(c)} className="w-3 h-3" /> {c}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.matricula_obrigatoria} onChange={e => setForm({...form, matricula_obrigatoria: e.target.checked})} /> Matrícula obrigatória</label>
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.captura_digital} onChange={e => setForm({...form, captura_digital: e.target.checked})} /> Captura digital (toque)</label>
+        </div>
+        {item?.id && <FormInput label="Motivo da alteração"><input value={form.motivo_alteracao||''} onChange={e => setForm({...form, motivo_alteracao: e.target.value})} className="input-industrial w-full px-3" /></FormInput>}
+      </div>
+      <div className="flex gap-3 mt-4">
+        <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
+        <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2" data-testid="save-ass"><Save size={16} /> {saving ? 'Salvando...' : 'Salvar'}</button>
+      </div>
+    </Modal>
+  );
+};
+
+// ===== LAYOUTS TAB =====
+const LayoutsTab = ({ items, cabecalhos, campos, assinaturas, onRefresh, canEdit }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [versionItem, setVersionItem] = useState(null);
+  const handleDelete = async (id) => {
+    if (!window.confirm('Excluir?')) return;
+    try { await api.delete(`/doc-config/layouts/${id}`); toast.success('Excluído'); onRefresh(); } catch { toast.error('Erro'); }
+  };
+  return (
+    <div data-testid="layouts-tab">
+      <div className="flex justify-between items-center mb-4">
+        <p className="text-xs text-slate-500">Perfis de layout que controlam blocos visíveis, ordem, cabeçalho/rodapé e campos nos documentos.</p>
+        {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="new-layout"><Plus size={16} /> Novo Layout</button>}
+      </div>
+      {items.length === 0 ? <EmptyState title="Nenhum layout configurado" /> : (
+        <div className="space-y-2">
+          {items.map(l => (
+            <div key={l.id} className="glass-card p-4 flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-primary">{l.nome}</span>
+                  <span className="text-xs text-brand bg-brand/10 px-2 py-0.5 rounded">v{l.versao || 1}</span>
+                  {l.tipo_documento && <span className="text-xs bg-slate-700 px-2 py-0.5 rounded">{l.tipo_documento}</span>}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">{l.orientacao} | {(l.blocos_visiveis||[]).length} blocos | {(l.campos_personalizados_ids||[]).length} campos</p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <button onClick={() => setVersionItem(l)} className="text-xs text-slate-400 hover:text-amber-400"><History size={14} /></button>
+                {canEdit && <button onClick={() => { setEditItem(l); setShowForm(true); }} className="text-xs text-blue-400">Editar</button>}
+                {canEdit && <button onClick={() => handleDelete(l.id)} className="text-xs text-red-400"><Trash2 size={14} /></button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showForm && <LayoutForm item={editItem} cabecalhos={cabecalhos} campos={campos} assinaturas={assinaturas} onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); onRefresh(); }} />}
+      {versionItem && <VersionHistoryModal itemType="layouts" itemId={versionItem.id} itemName={versionItem.nome} onClose={() => setVersionItem(null)} onRestore={() => { setVersionItem(null); onRefresh(); }} />}
+    </div>
+  );
+};
+
+const BLOCOS = ['equipamento','informacoes','descricao','equipe','datas','procedimento','seguranca','materiais','observacoes','fotos','checklist','historico','assinaturas','campos_personalizados'];
+
+const LayoutForm = ({ item, cabecalhos, campos, assinaturas, onClose, onSuccess }) => {
+  const [form, setForm] = useState(item || { nome:'',tipo_documento:'',orientacao:'retrato',tamanho_pagina:'A4',cabecalho_id:'',rodape_id:'',blocos_visiveis:['equipamento','informacoes','descricao','procedimento','seguranca','fotos','assinaturas'],blocos_ocultos:[],campos_personalizados_ids:[],assinatura_ids:[],mostrar_fotos:true,mostrar_materiais:true,mostrar_historico:false,mostrar_checklist:true,mostrar_qr_code:true,colunas:1,status:'ativo' });
+  const [saving, setSaving] = useState(false);
+  const toggleBloco = (b) => {
+    const vis = [...(form.blocos_visiveis||[])];
+    if (vis.includes(b)) setForm({...form, blocos_visiveis: vis.filter(x => x !== b)});
+    else setForm({...form, blocos_visiveis: [...vis, b]});
+  };
+  const handleSave = async () => {
+    if (!form.nome) { toast.error('Nome obrigatório'); return; }
+    setSaving(true);
+    try {
+      const payload = {...form, cabecalho_snapshot: null, rodape_snapshot: null};
+      if (item?.id) await api.put(`/doc-config/layouts/${item.id}`, payload);
+      else await api.post('/doc-config/layouts', payload);
+      toast.success('Layout salvo'); onSuccess();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    setSaving(false);
+  };
+  const cabs = (cabecalhos||[]).filter(c => c.tipo === 'cabecalho');
+  const rods = (cabecalhos||[]).filter(c => c.tipo === 'rodape');
+  return (
+    <Modal isOpen onClose={onClose} title={item ? 'Editar Layout' : 'Novo Layout'} size="xl">
+      <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="grid grid-cols-2 gap-3">
+          <FormInput label="Nome"><input value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} className="input-industrial w-full px-3" data-testid="layout-nome" /></FormInput>
+          <FormInput label="Tipo de documento"><input value={form.tipo_documento||''} onChange={e => setForm({...form, tipo_documento: e.target.value})} className="input-industrial w-full px-3" placeholder="Ex: os_corretiva" /></FormInput>
+          <FormInput label="Orientação">
+            <select value={form.orientacao} onChange={e => setForm({...form, orientacao: e.target.value})} className="input-industrial w-full px-3">
+              <option value="retrato">Retrato</option><option value="paisagem">Paisagem</option>
+            </select>
+          </FormInput>
+          <FormInput label="Colunas">
+            <select value={form.colunas} onChange={e => setForm({...form, colunas: parseInt(e.target.value)})} className="input-industrial w-full px-3">
+              <option value={1}>1 coluna</option><option value={2}>2 colunas</option>
+            </select>
+          </FormInput>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <FormInput label="Cabeçalho">
+            <select value={form.cabecalho_id||''} onChange={e => setForm({...form, cabecalho_id: e.target.value, cabecalho_snapshot: null})} className="input-industrial w-full px-3">
+              <option value="">Padrão</option>
+              {cabs.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </FormInput>
+          <FormInput label="Rodapé">
+            <select value={form.rodape_id||''} onChange={e => setForm({...form, rodape_id: e.target.value, rodape_snapshot: null})} className="input-industrial w-full px-3">
+              <option value="">Padrão</option>
+              {rods.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
+            </select>
+          </FormInput>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-400 mb-2 block">Blocos visíveis</label>
+          <div className="flex flex-wrap gap-2">
+            {BLOCOS.map(b => (
+              <label key={b} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg cursor-pointer ${(form.blocos_visiveis||[]).includes(b) ? 'bg-brand/20 text-brand' : 'bg-slate-800 text-slate-400'}`}>
+                <input type="checkbox" checked={(form.blocos_visiveis||[]).includes(b)} onChange={() => toggleBloco(b)} className="w-3 h-3" /> {b}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.mostrar_fotos} onChange={e => setForm({...form, mostrar_fotos: e.target.checked})} /> Fotos</label>
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.mostrar_materiais} onChange={e => setForm({...form, mostrar_materiais: e.target.checked})} /> Materiais</label>
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.mostrar_checklist} onChange={e => setForm({...form, mostrar_checklist: e.target.checked})} /> Checklist</label>
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.mostrar_qr_code} onChange={e => setForm({...form, mostrar_qr_code: e.target.checked})} /> QR Code</label>
+          <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={form.mostrar_historico} onChange={e => setForm({...form, mostrar_historico: e.target.checked})} /> Histórico</label>
+        </div>
+        {item?.id && <FormInput label="Motivo da alteração"><input value={form.motivo_alteracao||''} onChange={e => setForm({...form, motivo_alteracao: e.target.value})} className="input-industrial w-full px-3" /></FormInput>}
+      </div>
+      <div className="flex gap-3 mt-4">
+        <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
+        <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2" data-testid="save-layout"><Save size={16} /> {saving ? 'Salvando...' : 'Salvar'}</button>
       </div>
     </Modal>
   );

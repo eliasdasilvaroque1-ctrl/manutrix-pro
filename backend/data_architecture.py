@@ -211,6 +211,19 @@ INDEXES = {
     "modelos_os": [
         {"keys": [("organization_id", 1), ("deleted_at", 1)], "name": "org_active"},
     ],
+    "campos_personalizados": [
+        {"keys": [("organization_id", 1), ("status", 1), ("deleted_at", 1)], "name": "org_status_active"},
+        {"keys": [("organization_id", 1), ("identificador_tecnico", 1)], "name": "org_ident"},
+    ],
+    "cabecalhos_rodapes": [
+        {"keys": [("organization_id", 1), ("tipo", 1), ("deleted_at", 1)], "name": "org_tipo_active"},
+    ],
+    "blocos_assinatura": [
+        {"keys": [("organization_id", 1), ("deleted_at", 1)], "name": "org_active"},
+    ],
+    "layouts_documento": [
+        {"keys": [("organization_id", 1), ("deleted_at", 1)], "name": "org_active"},
+    ],
 }
 
 

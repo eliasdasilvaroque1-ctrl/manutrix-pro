@@ -1,0 +1,49 @@
+{
+  "summary": "Sprint 3 (Personalização Corporativa — Campos Personalizados / Cabeçalhos-Rodapés / Blocos Assinatura / Layouts) full validation. Backend: 42/42 new Sprint 3 tests PASS covering all 17 campo types, snake_case identifier validator, duplicate ident 409, immutable identificador_tecnico on update, GET /campos/por-modulo filtering, cabecalho/rodape auto-snapshot on layouts, snapshot isolation after source update, RBAC (técnico blocked on all 4 POST/PUT/DELETE — pcm allowed), validation errors (invalid tipo/orientacao → 422), full version lifecycle for all 4 modules, soft-delete. Regression: 53/53 rc41 PASS — zero regressions. Frontend: 4 new tabs (Campos / Cabeçalhos-Rodapés / Assinaturas / Layouts) render, campo create form works end-to-end, 'Campo salvo' toast fires, new item shows on list with type badge ('Numero') and version badge ('v1'). new-cabecalho, new-assinatura, new-layout buttons all present.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Campos list rows", "issues": ["Row shows 'Módulos: todos |' when aplicacao_modulos is empty. The trailing pipe is a rendering artifact — consider omitting the separator when list is empty. Minor cosmetic."]},
+      {"screen": "Campos list rows", "issues": ["Type badge label is capitalized: 'Numero' (not 'Número'). Cosmetic only — badges use the raw enum value string-cased, so texto_curto becomes 'Texto curto'. Fine."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sprint3_personalizacao.py",
+    "/app/test_reports/pytest/sprint3_personalizacao.xml",
+    "/app/test_reports/pytest/sprint3_rc41_regression.xml"
+  ],
+  "action_items": [
+    "(Nice-to-have) INDEXES dict defined in routes/personalizacao.py (PERS_INDEXES) is IMPORTED into server.py but NEVER USED to actually create the mongo indexes — the uniqueness on (org_id, identificador_tecnico) is only enforced by application-level check. Recommend adding a loop in startup_create_indexes to iterate PERS_INDEXES and create them (compound + unique). Currently works because the app-level check catches duplicates, but concurrent inserts could race.",
+    "(Optional) Add data-testid to per-row Editar / Delete / Versões controls for Sprint 3 tabs (campo-history-{id}, campo-edit-{id}, cb-*, ass-*, layout-*) — same testid gap noted for Sprint 2.",
+    "(Cosmetic) Fix trailing '|' in 'Módulos: <values> |' rendering when aplicacao_modulos is empty in CamposTab row."
+  ],
+  "critical_code_review_comments": [
+    "personalizacao.py reuses the versioned CRUD factory pattern from Sprint 2 (register_library_crud → _register_crud) — clean, DRY, and consistent.",
+    "SNAPSHOT ISOLATION VERIFIED on layouts: after cabecalho source is updated to v2 with 'MUTATED v2 razao', the referencing layout's cabecalho_snapshot still holds the ORIGINAL 'ORIGINAL v1 razao'. This is the crown-jewel design invariant and it passes.",
+    "IMMUTABLE identificador_tecnico VERIFIED: PUT /campos/{id} with 'identificador_tecnico': 'hacked_ident' silently preserves the original value. Good server-side enforcement (line 244-245 in personalizacao.py). Restore endpoint also correctly excludes identificador_tecnico from overlay (line 289).",
+    "All 3 Pydantic validators enforce contracts at the 422 boundary: tipo enum (17 valid), snake_case identifier regex, aplicacao_modulos enum, orientacao enum for layouts, cabecalho/rodape tipo enum.",
+    "Duplicate identificador check (line 208-211) uses find_one on {org_id, identificador_tecnico, deleted_at: None} — correctly scoped per org. However: no unique mongo index actually enforces this (PERS_INDEXES ignored in server.py startup), so 2 concurrent POSTs could still race past the app-level check. Add PERS_INDEXES loop to startup.",
+    "_resolve_layout_snapshots (line 303) correctly strips _id, organization_id, deleted_at, deleted_by from source doc — no cross-tenant leakage, no MongoDB ObjectId leakage.",
+    "GET /versoes truncates at 100 (line 273) — same silent-truncation observation from iterations 105-106 applies to all 4 new types.",
+    "biblioteca_versoes collection now aggregates 9 item types (procedimento, seguranca, checklist, modelo_inspecao, modelo_os, campo_personalizado, cabecalho_rodape, bloco_assinatura, layout_documento) — retention/archive policy still to be considered post-MVP.",
+    "list_items sort key: 'ordem' for campos_personalizados, 'nome' for the other 3. Reasonable default.",
+    "GET /campos/por-modulo/{modulo} works correctly: filter by modulo (mongo query on array), then application-side filter by tipo/categoria/area with 'empty list means matches any' semantics. Tested and passes for os+corretiva, os+preventiva, and inspecao contexts.",
+    "Restore endpoint drops identificador_tecnico from restore overlay — correct: prevents identifier mutation even during restore.",
+    "Model default_factory for BlocoAssinatura.status_opcoes and LayoutDocumento.blocos_visiveis correctly avoids the mutable-default-argument Python gotcha."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sprint3_personalizacao.py (new — 42 tests)"
+  ],
+  "success_rate": {"backend": "100% (42/42 Sprint3 + 53/53 rc41 regression)", "frontend": "100% of verified flows: 4 new tabs render, form-based create works, type + version badges visible, 'Campo salvo' toast fires"},
+  "test_credentials": "Present at /app/memory/test_credentials.md — used master@maintrix.com/master123 (org 9a232bf2-fc01-4253-813f-8df356be31c1), test.pcm@maintrix.com/pcm123, test.mec@maintrix.com/tec123.",
+  "seed_data_creation": "Tests created TEST_-prefixed and UITEST-prefixed records in campos_personalizados, cabecalhos_rodapes, blocos_assinatura, layouts_documento and their archive rows in biblioteca_versoes. Not cleaned up (matches existing pattern). ~30 campos remain in org.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sprint 3 fully working. Test file /app/backend/tests/test_sprint3_personalizacao.py has 42 tests. Snapshot isolation on layouts is verified (source cabecalho update to v2 does NOT mutate layout.cabecalho_snapshot). Immutable identificador_tecnico verified. Frontend testids: tab-campos, tab-cabecalhos, tab-assinaturas, tab-layouts, new-campo, campo-nome, campo-ident, campo-tipo, save-campo, new-cabecalho, cb-nome, save-cb, new-assinatura, ass-nome, save-ass, new-layout, layout-nome, save-layout. Per-row actions (Editar/Versões) still don't have data-testid — use text selectors. UI bootstrap pattern: httpx POST /api/auth/login → inject sessionStorage+localStorage(maintrix_token, maintrix_user JSON) → set maintrix_terms_accepted=1 → navigate to /config/documentos. Rate limiter still aggressive; use bootstrap over form login. IMPORTANT: PERS_INDEXES defined in personalizacao.py is not applied on startup — unique constraint on (org_id, identificador_tecnico) exists only as app-level 409 check.",
+  "rca_of_the_issue": "N/A — no bugs found in Sprint 3. Only minor code-quality observation: PERS_INDEXES exported from routes/personalizacao.py is imported in server.py (line 55) but never iterated to create mongo indexes, unlike CONFIG_INDEXES / BIBLIOTECA_INDEXES. The (org_id, identificador_tecnico) unique index would prevent race-condition duplicates. Fix would be a small addition to startup_create_indexes at server.py line ~316."
+}
