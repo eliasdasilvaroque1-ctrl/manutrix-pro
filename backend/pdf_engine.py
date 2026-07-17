@@ -12,22 +12,34 @@ try:
 except ImportError:
     httpx_lib = None
 
+import logging
+logger = logging.getLogger(__name__)
+
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+
+
+def register_unicode_fonts(pdf):
+    """Register DejaVu Sans Unicode font family on any FPDF instance."""
+    pdf.add_font("DejaVu", "", os.path.join(FONT_DIR, "DejaVuSans.ttf"))
+    pdf.add_font("DejaVu", "B", os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf"))
+    pdf.add_font("DejaVu", "I", os.path.join(FONT_DIR, "DejaVuSans-Oblique.ttf"))
+    pdf.add_font("DejaVu", "BI", os.path.join(FONT_DIR, "DejaVuSans-BoldOblique.ttf"))
+
 
 APP_URL = os.environ.get("APP_URL", "") or os.environ.get("REACT_APP_BACKEND_URL", "")
 
 
 def _safe(text, max_len=60):
-    """Sanitize text for FPDF latin-1: remove unsupported chars."""
+    """Truncate text for PDF cells. Unicode handled natively by DejaVu font."""
     if not text:
         return '-'
-    t = str(text)[:max_len]
-    return t.encode('latin-1', 'replace').decode('latin-1')
+    return str(text)[:max_len]
 
 
 def _safe_long(text, max_len=500):
     if not text:
         return ''
-    return str(text)[:max_len].encode('latin-1', 'replace').decode('latin-1')
+    return str(text)[:max_len]
 
 
 def make_qr(data_str, size=4):
@@ -70,6 +82,7 @@ class MaintrixPDF(FPDF):
 
     def __init__(self, empresa='MAINTRIX', doc_title='', doc_code='', logo_path=None, qr_path=None, cor_primaria='#6366f1', modo_manual=False):
         super().__init__('P', 'mm', 'A4')
+        register_unicode_fonts(self)
         self.set_auto_page_break(auto=True, margin=22)
         self.empresa = _safe(empresa, 40)
         self.doc_title = _safe(doc_title, 60)
@@ -96,11 +109,11 @@ class MaintrixPDF(FPDF):
                 x = 30
             except Exception:
                 pass
-        self.set_font('Helvetica', 'B', 14)
+        self.set_font('DejaVu', 'B', 14)
         self.set_text_color(255, 255, 255)
         self.set_xy(x, 4)
         self.cell(100, 7, self.empresa)
-        self.set_font('Helvetica', '', 8)
+        self.set_font('DejaVu', '', 8)
         self.set_xy(x, 12)
         self.cell(100, 5, self.doc_title)
         if self.qr_path:
@@ -114,7 +127,7 @@ class MaintrixPDF(FPDF):
 
     def footer(self):
         self.set_y(-12)
-        self.set_font('Helvetica', 'I', 7)
+        self.set_font('DejaVu', 'I', 7)
         self.set_text_color(148, 163, 184)
         code_str = f" | {self.doc_code}" if self.doc_code else ""
         self.cell(0, 5, f'{self.empresa}{code_str} | {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")} UTC | Pagina {self.page_no()}/{{nb}}', align='C')
@@ -129,7 +142,7 @@ class MaintrixPDF(FPDF):
         self.rect(8, y, 194, 7, 'F')
         self.set_fill_color(self.cor_r, self.cor_g, self.cor_b)
         self.rect(8, y, 2, 7, 'F')
-        self.set_font('Helvetica', 'B', 8)
+        self.set_font('DejaVu', 'B', 8)
         self.set_text_color(30, 41, 59)
         self.set_xy(12, y + 1.5)
         self.cell(0, 4, _safe(title.upper(), 80))
@@ -137,7 +150,7 @@ class MaintrixPDF(FPDF):
         return y + 9
 
     def field_pair(self, label, value, x, y, w=88):
-        self.set_font('Helvetica', '', 6.5)
+        self.set_font('DejaVu', '', 6.5)
         self.set_text_color(100, 116, 139)
         self.set_xy(x, y)
         self.cell(w, 3.5, _safe(label, 30))
@@ -146,7 +159,7 @@ class MaintrixPDF(FPDF):
             self.set_draw_color(180, 180, 180)
             self.line(x, y + 8, x + w - 2, y + 8)
         else:
-            self.set_font('Helvetica', 'B', 8.5)
+            self.set_font('DejaVu', 'B', 8.5)
             self.set_text_color(15, 23, 42)
             self.set_xy(x, y + 3.5)
             self.cell(w, 5, _safe(value, 55))
@@ -165,7 +178,7 @@ class MaintrixPDF(FPDF):
         if y > 270:
             self.add_page()
             y = 30
-        self.set_font('Helvetica', '', 8.5)
+        self.set_font('DejaVu', '', 8.5)
         self.set_text_color(30, 41, 59)
         self.set_xy(10, y)
         self.multi_cell(190, 4.5, _safe_long(text, 800))
@@ -179,7 +192,7 @@ class MaintrixPDF(FPDF):
             self.add_page()
             y = 30
         if label:
-            self.set_font('Helvetica', 'I', 7)
+            self.set_font('DejaVu', 'I', 7)
             self.set_text_color(140, 140, 140)
             self.set_xy(10, y)
             self.cell(190, 4, _safe(label, 60))
@@ -208,7 +221,7 @@ class MaintrixPDF(FPDF):
             x = 15 + i * col_w
             self.set_draw_color(100, 116, 139)
             self.line(x, y, x + col_w - 10, y)
-            self.set_font('Helvetica', '', 7.5)
+            self.set_font('DejaVu', '', 7.5)
             self.set_text_color(100, 116, 139)
             self.set_xy(x, y + 1)
             self.cell(col_w - 10, 4, _safe(role_label, 25))
@@ -249,14 +262,14 @@ class MaintrixPDF(FPDF):
                 except Exception:
                     self.set_draw_color(200, 200, 200)
                     self.rect(x, y, img_w, img_h)
-                    self.set_font('Helvetica', 'I', 8)
+                    self.set_font('DejaVu', 'I', 8)
                     self.set_text_color(150, 150, 150)
                     self.set_xy(x + 5, y + img_h / 2 - 3)
                     self.cell(img_w - 10, 6, '[Imagem indisponivel]')
             else:
                 self.set_draw_color(200, 200, 200)
                 self.rect(x, y, img_w, img_h)
-                self.set_font('Helvetica', 'I', 8)
+                self.set_font('DejaVu', 'I', 8)
                 self.set_text_color(150, 150, 150)
                 self.set_xy(x + 5, y + img_h / 2 - 3)
                 self.cell(img_w - 10, 6, '[Imagem indisponivel]')
@@ -267,7 +280,7 @@ class MaintrixPDF(FPDF):
                 legend = legend.capitalize()
             else:
                 legend = f"Foto {count + 1:02d}"
-            self.set_font('Helvetica', '', 7)
+            self.set_font('DejaVu', '', 7)
             self.set_text_color(80, 80, 80)
             self.set_xy(x, y + img_h + 1)
             date_str = ''
@@ -297,11 +310,11 @@ class MaintrixPDF(FPDF):
         # Objective
         obj = proc.get('objetivo', '')
         if obj:
-            self.set_font('Helvetica', 'B', 7.5)
+            self.set_font('DejaVu', 'B', 7.5)
             self.set_text_color(80, 80, 80)
             self.set_xy(10, self.get_y())
             self.cell(20, 4, 'Objetivo:')
-            self.set_font('Helvetica', '', 8)
+            self.set_font('DejaVu', '', 8)
             self.set_text_color(30, 41, 59)
             self.set_xy(30, self.get_y())
             self.cell(170, 4, _safe(obj, 80))
@@ -309,7 +322,7 @@ class MaintrixPDF(FPDF):
         # Pre-requisites
         pre = proc.get('pre_requisitos', '')
         if pre:
-            self.set_font('Helvetica', 'I', 7.5)
+            self.set_font('DejaVu', 'I', 7.5)
             self.set_text_color(100, 100, 100)
             self.set_xy(10, self.get_y())
             self.cell(190, 4, _safe(f"Pre-requisitos: {pre}", 100))
@@ -317,7 +330,7 @@ class MaintrixPDF(FPDF):
         # Steps table
         etapas = proc.get('etapas', [])
         if etapas:
-            self.set_font('Helvetica', 'B', 7)
+            self.set_font('DejaVu', 'B', 7)
             self.set_text_color(100, 116, 139)
             cy = self.get_y()
             self.set_xy(10, cy); self.cell(8, 4, '#')
@@ -332,10 +345,10 @@ class MaintrixPDF(FPDF):
                     self.add_page(); cy = 30
                 num = et.get('numero', '')
                 desc = et.get('descricao', '')
-                self.set_font('Helvetica', 'B', 8)
+                self.set_font('DejaVu', 'B', 8)
                 self.set_text_color(self.cor_r, self.cor_g, self.cor_b)
                 self.set_xy(10, cy); self.cell(8, 5, _safe(str(num), 3))
-                self.set_font('Helvetica', '', 8)
+                self.set_font('DejaVu', '', 8)
                 self.set_text_color(30, 41, 59)
                 self.set_xy(18, cy); self.cell(120, 5, _safe(desc, 65))
                 if manual:
@@ -350,17 +363,17 @@ class MaintrixPDF(FPDF):
         if tools or mats:
             cy = self.get_y()
             if tools:
-                self.set_font('Helvetica', 'B', 7)
+                self.set_font('DejaVu', 'B', 7)
                 self.set_text_color(100, 100, 100)
                 self.set_xy(10, cy); self.cell(30, 4, 'Ferramentas:')
-                self.set_font('Helvetica', '', 7.5)
+                self.set_font('DejaVu', '', 7.5)
                 self.set_text_color(30, 41, 59)
                 self.set_xy(35, cy); self.cell(70, 4, _safe(', '.join(tools), 70))
             if mats:
-                self.set_font('Helvetica', 'B', 7)
+                self.set_font('DejaVu', 'B', 7)
                 self.set_text_color(100, 100, 100)
                 self.set_xy(110, cy); self.cell(25, 4, 'Materiais:')
-                self.set_font('Helvetica', '', 7.5)
+                self.set_font('DejaVu', '', 7.5)
                 self.set_text_color(30, 41, 59)
                 self.set_xy(135, cy); self.cell(65, 4, _safe(', '.join(mats), 65))
             self.set_y(cy + 6)
@@ -385,14 +398,14 @@ class MaintrixPDF(FPDF):
         # Risks
         riscos = seg.get('riscos', [])
         if riscos:
-            self.set_font('Helvetica', 'B', 7.5)
+            self.set_font('DejaVu', 'B', 7.5)
             self.set_text_color(239, 68, 68)
             self.set_xy(10, cy); self.cell(30, 4, 'RISCOS:')
             cy += 5
             for r in riscos[:10]:
                 if cy > 270: self.add_page(); cy = 30
                 desc = r if isinstance(r, str) else r.get('descricao', '')
-                self.set_font('Helvetica', '', 8)
+                self.set_font('DejaVu', '', 8)
                 self.set_text_color(30, 41, 59)
                 self.set_xy(12, cy); self.cell(186, 4, _safe(f"- {desc}", 90))
                 cy += 4.5
@@ -401,12 +414,12 @@ class MaintrixPDF(FPDF):
         medidas = seg.get('medidas_controle', [])
         if medidas:
             cy = self.get_y()
-            self.set_font('Helvetica', 'B', 7.5)
+            self.set_font('DejaVu', 'B', 7.5)
             self.set_text_color(16, 185, 129)
             self.set_xy(10, cy); self.cell(40, 4, 'MEDIDAS DE CONTROLE:')
             cy += 5
             for m in medidas[:10]:
-                self.set_font('Helvetica', '', 8)
+                self.set_font('DejaVu', '', 8)
                 self.set_text_color(30, 41, 59)
                 self.set_xy(12, cy); self.cell(186, 4, _safe(f"- {m}", 90))
                 cy += 4.5
@@ -417,17 +430,17 @@ class MaintrixPDF(FPDF):
         if epis or epcs:
             cy = self.get_y()
             if epis:
-                self.set_font('Helvetica', 'B', 7.5)
+                self.set_font('DejaVu', 'B', 7.5)
                 self.set_text_color(99, 102, 241)
                 self.set_xy(10, cy); self.cell(20, 4, 'EPIs:')
-                self.set_font('Helvetica', '', 7.5)
+                self.set_font('DejaVu', '', 7.5)
                 self.set_text_color(30, 41, 59)
                 self.set_xy(10, cy + 4); self.cell(90, 4, _safe(', '.join(epis), 80))
             if epcs:
-                self.set_font('Helvetica', 'B', 7.5)
+                self.set_font('DejaVu', 'B', 7.5)
                 self.set_text_color(99, 102, 241)
                 self.set_xy(105, cy); self.cell(20, 4, 'EPCs:')
-                self.set_font('Helvetica', '', 7.5)
+                self.set_font('DejaVu', '', 7.5)
                 self.set_text_color(30, 41, 59)
                 self.set_xy(105, cy + 4); self.cell(90, 4, _safe(', '.join(epcs), 80))
             self.set_y(cy + 10)
@@ -441,7 +454,7 @@ class MaintrixPDF(FPDF):
         if pt.get('necessaria'): flags.append(f"PT ({pt.get('tipo', '')})")
         if flags:
             cy = self.get_y()
-            self.set_font('Helvetica', 'B', 8)
+            self.set_font('DejaVu', 'B', 8)
             self.set_text_color(239, 68, 68)
             self.set_xy(10, cy); self.cell(190, 5, _safe('REQUER: ' + ' | '.join(flags), 90))
             self.set_y(cy + 6)
@@ -449,13 +462,13 @@ class MaintrixPDF(FPDF):
         bloqueios = seg.get('bloqueios', [])
         if bloqueios:
             cy = self.get_y()
-            self.set_font('Helvetica', 'B', 7.5)
+            self.set_font('DejaVu', 'B', 7.5)
             self.set_text_color(100, 100, 100)
             self.set_xy(10, cy); self.cell(40, 4, 'BLOQUEIOS:')
             cy += 5
             for b in bloqueios[:8]:
                 desc = b if isinstance(b, str) else f"{b.get('tipo','')}: {b.get('descricao','')}"
-                self.set_font('Helvetica', '', 7.5)
+                self.set_font('DejaVu', '', 7.5)
                 self.set_text_color(30, 41, 59)
                 self.set_xy(12, cy); self.cell(186, 4, _safe(f"- {desc}", 90))
                 cy += 4.5

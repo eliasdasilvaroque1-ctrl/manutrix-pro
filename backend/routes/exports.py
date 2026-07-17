@@ -70,11 +70,11 @@ def build_pdf_header(pdf, empresa, slogan, subtitle, qr_path=None, logo_path=Non
             logo_x = 35
         except Exception:
             pass
-    pdf.set_font('Helvetica', 'B', 18)
+    pdf.set_font('DejaVu', 'B', 18)
     pdf.set_text_color(255, 255, 255)
     pdf.set_xy(logo_x, 5)
     pdf.cell(120, 10, empresa[:40])
-    pdf.set_font('Helvetica', '', 9)
+    pdf.set_font('DejaVu', '', 9)
     pdf.set_xy(logo_x, 15)
     pdf.cell(120, 6, slogan or subtitle)
     if qr_path:
@@ -86,7 +86,7 @@ def build_pdf_header(pdf, empresa, slogan, subtitle, qr_path=None, logo_path=Non
     # Subtitle bar
     pdf.set_fill_color(99, 102, 241)
     pdf.rect(0, 28, 210, 10, 'F')
-    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_font('DejaVu', 'B', 12)
     pdf.set_text_color(255, 255, 255)
     pdf.set_xy(10, 29)
     pdf.cell(190, 8, subtitle, align='C')
@@ -95,7 +95,7 @@ def build_pdf_header(pdf, empresa, slogan, subtitle, qr_path=None, logo_path=Non
 
 def build_pdf_footer(pdf, empresa, doc_ref):
     pdf.set_y(-15)
-    pdf.set_font('Helvetica', 'I', 7)
+    pdf.set_font('DejaVu', 'I', 7)
     pdf.set_text_color(148, 163, 184)
     pdf.cell(0, 5, f'{empresa} | {doc_ref} | Impresso em {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")} UTC | Pag {pdf.page_no()}', align='C')
 
@@ -103,7 +103,7 @@ def build_pdf_footer(pdf, empresa, doc_ref):
 def section_title(pdf, title, y):
     pdf.set_fill_color(241, 245, 249)
     pdf.rect(10, y, 190, 7, 'F')
-    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_font('DejaVu', 'B', 9)
     pdf.set_text_color(30, 41, 59)
     pdf.set_xy(12, y + 1)
     pdf.cell(0, 5, title.upper())
@@ -111,11 +111,11 @@ def section_title(pdf, title, y):
 
 
 def field_pair(pdf, label, value, x, y, w=85):
-    pdf.set_font('Helvetica', '', 7)
+    pdf.set_font('DejaVu', '', 7)
     pdf.set_text_color(100, 116, 139)
     pdf.set_xy(x, y)
     pdf.cell(w, 4, label)
-    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_font('DejaVu', 'B', 9)
     pdf.set_text_color(15, 23, 42)
     pdf.set_xy(x, y + 4)
     pdf.cell(w, 5, str(value or '-')[:60])
@@ -135,7 +135,7 @@ def build_signature_block(pdf, y, nome_executor='-'):
     y += 20
     pdf.set_draw_color(100, 116, 139)
     pdf.line(15, y, 95, y)
-    pdf.set_font('Helvetica', '', 8)
+    pdf.set_font('DejaVu', '', 8)
     pdf.set_text_color(100, 116, 139)
     pdf.set_xy(15, y + 1); pdf.cell(80, 5, 'Executor')
     pdf.set_xy(15, y + 5); pdf.cell(80, 5, f'Nome: {nome_executor}')
@@ -224,7 +224,7 @@ async def print_inspecao_pdf(insp_id: str, modo: str = "digital", user=Depends(g
         if checklist:
             # Header
             cy = pdf.get_y()
-            pdf.set_font('Helvetica', 'B', 7)
+            pdf.set_font('DejaVu', 'B', 7)
             pdf.set_text_color(100, 116, 139)
             pdf.set_xy(10, cy); pdf.cell(8, 4, '#')
             pdf.set_xy(18, cy); pdf.cell(90, 4, 'Item')
@@ -249,12 +249,12 @@ async def print_inspecao_pdf(insp_id: str, modo: str = "digital", user=Depends(g
                 unidade = item.get('unidade', '')
 
                 # Item number
-                pdf.set_font('Helvetica', 'B', 7.5)
+                pdf.set_font('DejaVu', 'B', 7.5)
                 pdf.set_text_color(pdf.cor_r, pdf.cor_g, pdf.cor_b)
                 pdf.set_xy(10, cy); pdf.cell(8, 5, str(idx + 1))
 
                 # Description
-                pdf.set_font('Helvetica', '', 8)
+                pdf.set_font('DejaVu', '', 8)
                 pdf.set_text_color(30, 41, 59)
                 pdf.set_xy(18, cy); pdf.cell(90, 5, _safe(desc, 48))
 
@@ -280,11 +280,11 @@ async def print_inspecao_pdf(insp_id: str, modo: str = "digital", user=Depends(g
                     else:
                         pdf.set_text_color(100, 116, 139)
                         st = '-'
-                    pdf.set_font('Helvetica', 'B', 7.5)
+                    pdf.set_font('DejaVu', 'B', 7.5)
                     pdf.set_xy(110, cy); pdf.cell(25, 5, st)
 
                     # Measurement
-                    pdf.set_font('Helvetica', '', 7)
+                    pdf.set_font('DejaVu', '', 7)
                     pdf.set_text_color(30, 41, 59)
                     med_str = ''
                     if valor is not None:
@@ -311,12 +311,12 @@ async def print_inspecao_pdf(insp_id: str, modo: str = "digital", user=Depends(g
         for nc in nao_conformes:
             cy = pdf.get_y()
             if cy > 268: pdf.add_page()
-            pdf.set_font('Helvetica', '', 8)
+            pdf.set_font('DejaVu', '', 8)
             pdf.set_text_color(239, 68, 68)
             pdf.set_xy(10, cy)
             pdf.cell(190, 5, _safe(f"- {nc.get('descricao', '-')}", 90))
             if nc.get('observacao'):
-                pdf.set_font('Helvetica', 'I', 7)
+                pdf.set_font('DejaVu', 'I', 7)
                 pdf.set_text_color(100, 100, 100)
                 pdf.set_xy(14, cy + 5)
                 pdf.cell(186, 4, _safe(f"Obs: {nc['observacao']}", 80))
@@ -354,6 +354,7 @@ async def batch_os_pdf(ids: str = Query(..., description="Comma-separated OS IDs
     """Generate a single PDF with multiple work orders for batch printing."""
     from fpdf import FPDF
     from fastapi.responses import StreamingResponse
+    from pdf_engine import register_unicode_fonts
 
     role = user.get('role', '')
     if role not in ('master', 'admin', 'pcm'):
@@ -368,6 +369,7 @@ async def batch_os_pdf(ids: str = Query(..., description="Comma-separated OS IDs
     app_url = APP_URL or f"https://{os.environ.get('HOSTNAME', 'app')}"
 
     pdf = FPDF('P', 'mm', 'A4')
+    register_unicode_fonts(pdf)
     pdf.set_auto_page_break(auto=True, margin=20)
 
     for idx, os_id in enumerate(os_ids):
@@ -415,7 +417,7 @@ async def batch_os_pdf(ids: str = Query(..., description="Comma-separated OS IDs
 
         # Description
         y = section_title(pdf, 'Descricao', y)
-        pdf.set_font('Helvetica', '', 9)
+        pdf.set_font('DejaVu', '', 9)
         pdf.set_text_color(30, 41, 59)
         pdf.set_xy(12, y)
         pdf.multi_cell(186, 5, (os_doc.get('descricao') or os_doc.get('titulo') or '-')[:500])
@@ -477,6 +479,7 @@ async def batch_inspecoes_pdf(ids: str = Query(..., description="Comma-separated
     """Generate a single PDF with multiple inspections for batch printing."""
     from fpdf import FPDF
     from fastapi.responses import StreamingResponse
+    from pdf_engine import register_unicode_fonts
 
     role = user.get('role', '')
     if role not in ('master', 'admin', 'pcm'):
@@ -491,6 +494,7 @@ async def batch_inspecoes_pdf(ids: str = Query(..., description="Comma-separated
     app_url = APP_URL or f"https://{os.environ.get('HOSTNAME', 'app')}"
 
     pdf = FPDF('P', 'mm', 'A4')
+    register_unicode_fonts(pdf)
     pdf.set_auto_page_break(auto=True, margin=20)
 
     for idx, insp_id in enumerate(insp_ids):
@@ -538,7 +542,7 @@ async def batch_inspecoes_pdf(ids: str = Query(..., description="Comma-separated
                     y = 15
                 desc = item.get('descricao', f'Item {ci+1}')
                 resp = item.get('resposta', '')
-                pdf.set_font('Helvetica', '', 8)
+                pdf.set_font('DejaVu', '', 8)
                 pdf.set_text_color(30, 41, 59)
                 pdf.set_xy(12, y)
                 pdf.cell(130, 5, f"{ci+1}. {desc[:70]}")
@@ -551,7 +555,7 @@ async def batch_inspecoes_pdf(ids: str = Query(..., description="Comma-separated
                 else:
                     pdf.set_text_color(100, 116, 139)
                     st = str(resp or '[ ]')[:15]
-                pdf.set_font('Helvetica', 'B', 8)
+                pdf.set_font('DejaVu', 'B', 8)
                 pdf.set_xy(160, y)
                 pdf.cell(38, 5, st, align='R')
                 y += 6
@@ -562,7 +566,7 @@ async def batch_inspecoes_pdf(ids: str = Query(..., description="Comma-separated
         y = section_title(pdf, 'Observacoes', y)
         obs = insp.get('observacoes') or insp.get('observacao_geral', '')
         if obs:
-            pdf.set_font('Helvetica', '', 9)
+            pdf.set_font('DejaVu', '', 9)
             pdf.set_text_color(30, 41, 59)
             pdf.set_xy(12, y)
             pdf.multi_cell(186, 5, obs[:300])

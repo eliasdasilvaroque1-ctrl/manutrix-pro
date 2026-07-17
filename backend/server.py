@@ -3137,7 +3137,7 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
 
     # DESCRIPTION
     pdf.section_title('Descricao')
-    pdf.set_font('Helvetica', 'B', 9); pdf.set_text_color(15, 23, 42)
+    pdf.set_font('DejaVu', 'B', 9); pdf.set_text_color(15, 23, 42)
     pdf.set_xy(10, pdf.get_y()); pdf.cell(190, 5, _safe(os_doc.get('titulo',''), 80))
     pdf.set_y(pdf.get_y() + 6)
     desc = os_doc.get('descricao', '')
@@ -3181,14 +3181,14 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
         pdf.section_title('Materiais e Pecas')
         if all_mat:
             cy = pdf.get_y()
-            pdf.set_font('Helvetica', 'B', 7); pdf.set_text_color(100, 116, 139)
+            pdf.set_font('DejaVu', 'B', 7); pdf.set_text_color(100, 116, 139)
             pdf.set_xy(10, cy); pdf.cell(75, 4, 'Material')
             pdf.set_xy(85, cy); pdf.cell(20, 4, 'Codigo')
             pdf.set_xy(110, cy); pdf.cell(15, 4, 'Qtd')
             cy += 5
             for m in all_mat[:15]:
                 if cy > 270: pdf.add_page(); cy = 30
-                pdf.set_font('Helvetica', '', 7.5); pdf.set_text_color(30, 41, 59)
+                pdf.set_font('DejaVu', '', 7.5); pdf.set_text_color(30, 41, 59)
                 pdf.set_xy(10, cy); pdf.cell(75, 4, _safe(m.get('nome', m.get('item_nome', '')), 38))
                 pdf.set_xy(85, cy); pdf.cell(20, 4, _safe(m.get('codigo', ''), 12))
                 pdf.set_xy(110, cy); pdf.cell(15, 4, _safe(str(m.get('quantidade', '')), 6))
