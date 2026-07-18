@@ -1,16 +1,18 @@
-"""MAINTRIX — RC5.0 Missão 1: Biblioteca Corporativa de Documentos
-Evolui o módulo 'Documentos e Formulários' com CRUD completo, versionamento,
-pesquisa, filtros, paginação, RBAC, multiempresa e auditoria.
+"""MAINTRIX — RC5.0: Biblioteca Corporativa de Documentos
+Missão 1: CRUD, versionamento, auditoria, RBAC, multiempresa.
+Missão 2: Upload, vínculo automático com OS, snapshot, confirmação de leitura.
 Collection: documentos_corporativos
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime, timezone
 from math import ceil
+from pathlib import Path
 import uuid
 import re
 import logging
+import hashlib
 
 from deps import db, get_current_user
 from routes.doc_config import archive_version
@@ -471,3 +473,294 @@ async def duplicar_documento(doc_id: str, user=Depends(get_current_user)):
     await _audit_log(org_id, user_id, "duplicate", new_id, {"source_id": doc_id, "source_title": source.get("title")})
 
     return {"id": new_id, "title": new_doc["title"], "code": new_code, "status": "created"}
+
+
+# ============== MISSÃO 2: UPLOAD ==============
+
+UPLOAD_ALLOWED_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.png', '.jpg', '.jpeg'}
+UPLOAD_ALLOWED_MIMES = {
+    'application/pdf', 'image/png', 'image/jpeg',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+}
+UPLOAD_MAX_SIZE = 25 * 1024 * 1024  # 25MB
+
+
+def _safe_filename(name: str) -> str:
+    """Sanitize filename: remove path traversal, special chars."""
+    name = Path(name).name  # strip path
+    name = re.sub(r'[^\w.\-]', '_', name)
+    return name[:100]
+
+
+@router.post("/documentos-corporativos/{doc_id}/upload")
+async def upload_document_file(doc_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):
+    """Upload or replace file for a corporate document. Keeps version history."""
+    org_id, user_id = _require_editor(user)
+
+    doc = await db.documentos_corporativos.find_one({"id": doc_id, "organization_id": org_id, "deleted_at": None})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    # Validate extension
+    ext = Path(file.filename).suffix.lower()
+    if ext not in UPLOAD_ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Extensão não permitida: {ext}. Permitidas: {', '.join(UPLOAD_ALLOWED_EXTENSIONS)}")
+
+    # Read and validate size
+    content = await file.read()
+    if len(content) > UPLOAD_MAX_SIZE:
+        raise HTTPException(status_code=400, detail=f"Arquivo excede {UPLOAD_MAX_SIZE // (1024*1024)}MB")
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Arquivo vazio")
+
+    # Validate MIME
+    mime = file.content_type or ''
+    if mime and mime not in UPLOAD_ALLOWED_MIMES and ext not in ('.jpg', '.jpeg', '.png'):
+        raise HTTPException(status_code=400, detail=f"Tipo MIME não permitido: {mime}")
+
+    safe_name = _safe_filename(file.filename)
+    file_hash = hashlib.sha256(content).hexdigest()[:16]
+
+    # Try object storage first, fallback to local
+    try:
+        from server import objstore, UPLOAD_DIR
+        if objstore.is_available():
+            storage_path = objstore.upload_file("docs", org_id, f"{doc_id}_{safe_name}", content, mime or "application/octet-stream")
+            file_url = f"/api/storage/{storage_path}"
+        else:
+            filename = f"doc_{doc_id}_{uuid.uuid4().hex[:8]}{ext}"
+            filepath = UPLOAD_DIR / filename
+            with open(filepath, 'wb') as f:
+                f.write(content)
+            file_url = f"/api/uploads/{filename}"
+    except Exception as e:
+        logger.warning(f"Upload storage error: {e}")
+        filename = f"doc_{doc_id}_{uuid.uuid4().hex[:8]}{ext}"
+        import aiofiles
+        upload_dir = Path("/app/backend/uploads")
+        upload_dir.mkdir(exist_ok=True)
+        async with aiofiles.open(upload_dir / filename, 'wb') as f:
+            await f.write(content)
+        file_url = f"/api/uploads/{filename}"
+
+    # Archive old file info before updating
+    old_file = {k: doc.get(k) for k in ('file_url', 'file_name', 'file_type', 'file_size') if doc.get(k)}
+    if old_file:
+        await db.documentos_file_history.insert_one({
+            "id": str(uuid.uuid4()), "document_id": doc_id, "organization_id": org_id,
+            **old_file, "replaced_at": datetime.now(timezone.utc).isoformat(), "replaced_by": user_id,
+        })
+
+    # Update document with new file
+    await db.documentos_corporativos.update_one(
+        {"id": doc_id, "organization_id": org_id},
+        {"$set": {
+            "file_url": file_url, "file_name": safe_name, "file_type": mime or ext,
+            "file_size": len(content), "file_hash": file_hash,
+            "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user_id,
+        }}
+    )
+    await _audit_log(org_id, user_id, "upload", doc_id, {"file_name": safe_name, "file_size": len(content), "file_hash": file_hash})
+
+    return {"file_url": file_url, "file_name": safe_name, "file_size": len(content), "status": "uploaded"}
+
+
+# ============== MISSÃO 2: VÍNCULO AUTOMÁTICO ==============
+
+@router.get("/documentos-corporativos/vinculo-automatico/{os_id}")
+async def get_documentos_vinculados(os_id: str, user=Depends(get_current_user)):
+    """Get all published documents applicable to a specific OS, matched by area/ativo/tipo/disciplina."""
+    org_id = user.get('organization_id', '')
+
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "organization_id": org_id}, {"_id": 0})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+
+    tipo_os = os_doc.get("tipo", "")
+    disciplina = os_doc.get("disciplina", "")
+    ativo_id = os_doc.get("ativo_id", "")
+
+    # Get asset info for matching
+    ativo = await db.ativos.find_one({"id": ativo_id}, {"_id": 0, "tipo": 1, "area": 1, "setor": 1, "tag": 1}) if ativo_id else {}
+    ativo_tipo = (ativo or {}).get("tipo", "")
+    ativo_area = (ativo or {}).get("area", "") or (ativo or {}).get("setor", "")
+
+    # Query: published docs in this org that match any applicable criteria
+    query = {
+        "organization_id": org_id,
+        "status": "publicado",
+        "deleted_at": None,
+        "is_active": True,
+    }
+
+    all_docs = await db.documentos_corporativos.find(query, {"_id": 0}).sort("title", 1).to_list(200)
+
+    # Filter by applicability
+    matched = []
+    for doc in all_docs:
+        score = 0
+        app_types = doc.get("applicable_work_order_types", [])
+        app_assets = doc.get("applicable_asset_types", [])
+        app_asset_ids = doc.get("applicable_asset_ids", [])
+        app_areas = doc.get("applicable_areas", [])
+        app_discipline = doc.get("discipline", "")
+
+        # Universal docs (no restrictions) always match
+        if not app_types and not app_assets and not app_asset_ids and not app_areas:
+            score = 1
+        else:
+            if app_types and tipo_os in app_types:
+                score += 10
+            if app_assets and ativo_tipo and ativo_tipo in app_assets:
+                score += 10
+            if app_asset_ids and ativo_id in app_asset_ids:
+                score += 20
+            if app_areas and ativo_area and ativo_area in app_areas:
+                score += 5
+
+        # Discipline match
+        if app_discipline and disciplina and app_discipline == disciplina:
+            score += 5
+
+        if score > 0:
+            doc["_match_score"] = score
+            matched.append(doc)
+
+    # Sort by score descending, then safety docs first
+    matched.sort(key=lambda d: (-d.get("_match_score", 0), -int(d.get("safety_document", False)), d.get("title", "")))
+
+    # Clean score from response
+    for doc in matched:
+        doc.pop("_match_score", None)
+
+    await _audit_log(org_id, user.get('id', ''), "vinculo_automatico", os_id, {"matched_count": len(matched), "tipo_os": tipo_os, "ativo_id": ativo_id})
+
+    return {"os_id": os_id, "documentos": matched, "total": len(matched)}
+
+
+# ============== MISSÃO 2: CONFIRMAÇÃO DE LEITURA ==============
+
+class ConfirmacaoLeitura(BaseModel):
+    documento_id: str
+    versao_lida: int = 1
+
+
+@router.post("/documentos-corporativos/confirmar-leitura/{os_id}")
+async def confirmar_leitura(os_id: str, body: ConfirmacaoLeitura, user=Depends(get_current_user)):
+    """Register acknowledgement that user has read a document for an OS."""
+    org_id = user.get('organization_id', '')
+    user_id = user.get('id', '')
+
+    # Validate OS exists
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "organization_id": org_id})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+
+    # Validate document exists
+    doc = await db.documentos_corporativos.find_one({"id": body.documento_id, "organization_id": org_id, "deleted_at": None}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    # Check if already confirmed
+    existing = await db.confirmacoes_leitura.find_one({
+        "os_id": os_id, "documento_id": body.documento_id, "user_id": user_id, "organization_id": org_id
+    })
+    if existing:
+        return {"status": "already_confirmed", "confirmed_at": existing.get("confirmed_at")}
+
+    confirmation = {
+        "id": str(uuid.uuid4()),
+        "organization_id": org_id,
+        "os_id": os_id,
+        "documento_id": body.documento_id,
+        "documento_code": doc.get("code"),
+        "documento_title": doc.get("title"),
+        "versao_lida": body.versao_lida or doc.get("version", 1),
+        "user_id": user_id,
+        "confirmed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.confirmacoes_leitura.insert_one(confirmation)
+    await _audit_log(org_id, user_id, "confirmacao_leitura", body.documento_id, {
+        "os_id": os_id, "versao": body.versao_lida or doc.get("version", 1),
+    })
+
+    return {"status": "confirmed", "confirmed_at": confirmation["confirmed_at"]}
+
+
+@router.get("/documentos-corporativos/confirmacoes/{os_id}")
+async def get_confirmacoes(os_id: str, user=Depends(get_current_user)):
+    """Get all reading confirmations for an OS."""
+    org_id = user.get('organization_id', '')
+    confirmations = await db.confirmacoes_leitura.find(
+        {"os_id": os_id, "organization_id": org_id}, {"_id": 0}
+    ).to_list(200)
+    return confirmations
+
+
+@router.get("/documentos-corporativos/pendentes-confirmacao/{os_id}")
+async def get_pendentes_confirmacao(os_id: str, user=Depends(get_current_user)):
+    """Check if all required documents have been acknowledged before OS can start."""
+    org_id = user.get('organization_id', '')
+    user_id = user.get('id', '')
+
+    # Get matched documents that require acknowledgement
+    vinculo = await get_documentos_vinculados(os_id, user)
+    required = [d for d in vinculo["documentos"] if d.get("requires_acknowledgement")]
+
+    if not required:
+        return {"all_confirmed": True, "pending": [], "total_required": 0}
+
+    confirmed_ids = set()
+    confirmations = await db.confirmacoes_leitura.find(
+        {"os_id": os_id, "user_id": user_id, "organization_id": org_id}, {"_id": 0}
+    ).to_list(100)
+    for c in confirmations:
+        confirmed_ids.add(c.get("documento_id"))
+
+    pending = [{"id": d["id"], "title": d["title"], "code": d.get("code")} for d in required if d["id"] not in confirmed_ids]
+
+    return {"all_confirmed": len(pending) == 0, "pending": pending, "total_required": len(required), "confirmed": len(required) - len(pending)}
+
+
+# ============== MISSÃO 2: SNAPSHOT NA OS ==============
+
+@router.post("/documentos-corporativos/snapshot/{os_id}")
+async def create_snapshot(os_id: str, user=Depends(get_current_user)):
+    """Freeze applicable documents into the OS at execution start."""
+    org_id = user.get('organization_id', '')
+    user_id = user.get('id', '')
+
+    os_doc = await db.ordens_servico.find_one({"id": os_id, "organization_id": org_id})
+    if not os_doc:
+        raise HTTPException(status_code=404, detail="OS não encontrada")
+
+    # Get matched documents
+    vinculo = await get_documentos_vinculados(os_id, user)
+    docs = vinculo.get("documentos", [])
+
+    snapshots = []
+    for doc in docs:
+        snap = {
+            "documento_id": doc["id"],
+            "code": doc.get("code"),
+            "title": doc.get("title"),
+            "version": doc.get("version", 1),
+            "document_type": doc.get("document_type"),
+            "safety_document": doc.get("safety_document", False),
+            "content_preview": (doc.get("content") or "")[:500],
+            "file_url": doc.get("file_url"),
+            "snapshot_at": datetime.now(timezone.utc).isoformat(),
+        }
+        snapshots.append(snap)
+
+    await db.ordens_servico.update_one(
+        {"id": os_id, "organization_id": org_id},
+        {"$set": {
+            "documentos_snapshot": snapshots,
+            "documentos_snapshot_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+    await _audit_log(org_id, user_id, "snapshot_documentos", os_id, {"count": len(snapshots)})
+
+    return {"status": "snapshot_created", "documents_frozen": len(snapshots)}

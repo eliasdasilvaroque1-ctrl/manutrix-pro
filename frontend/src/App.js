@@ -2961,6 +2961,8 @@ const OSDetailPage = () => {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [plantas, setPlantas] = useState([]);
+  const [docsVinculados, setDocsVinculados] = useState([]);
+  const [confirmacoes, setConfirmacoes] = useState([]);
   const navigate = useNavigate();
   const { user } = useAuth();
   
@@ -3005,6 +3007,13 @@ const OSDetailPage = () => {
   
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchOS(); }, [id]);
+
+  // Fetch linked documents when OS loads
+  useEffect(() => {
+    if (!id) return;
+    api.get(`/documentos-corporativos/vinculo-automatico/${id}`).then(r => setDocsVinculados(r.data.documentos || [])).catch(() => {});
+    api.get(`/documentos-corporativos/confirmacoes/${id}`).then(r => setConfirmacoes(r.data || [])).catch(() => {});
+  }, [id]);
   
   useEffect(() => {
     api.get('/estoque').then(r => setEstoqueItems(r.data)).catch(() => {});
@@ -3458,6 +3467,47 @@ const OSDetailPage = () => {
           </div>
         </div>
       </Modal>
+
+      {/* ============ PROCEDIMENTOS APLICÁVEIS ============ */}
+      {docsVinculados.length > 0 && (
+        <div className="glass-card p-4" data-testid="docs-vinculados-section">
+          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
+            <FileText size={16} /> Procedimentos Aplicáveis ({docsVinculados.length})
+          </h3>
+          <div className="space-y-2">
+            {docsVinculados.map(doc => {
+              const isConfirmed = confirmacoes.some(c => c.documento_id === doc.id);
+              return (
+                <div key={doc.id} className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg" data-testid={`doc-vinc-${doc.id}`}>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    {doc.safety_document && <Shield size={14} className="text-amber-400 shrink-0" />}
+                    <span className="text-sm text-primary truncate">{doc.title}</span>
+                    {doc.code && <span className="text-xs bg-slate-700 px-1.5 py-0.5 rounded shrink-0">{doc.code}</span>}
+                    <span className="text-xs text-brand shrink-0">v{doc.version || 1}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {doc.requires_acknowledgement && (
+                      isConfirmed
+                        ? <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">Ciente</span>
+                        : <button onClick={async () => {
+                            try {
+                              await api.post(`/documentos-corporativos/confirmar-leitura/${id}`, { documento_id: doc.id, versao_lida: doc.version || 1 });
+                              toast.success('Leitura confirmada');
+                              const r = await api.get(`/documentos-corporativos/confirmacoes/${id}`);
+                              setConfirmacoes(r.data);
+                            } catch { toast.error('Erro'); }
+                          }} className="text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded hover:bg-amber-400/20" data-testid={`confirm-${doc.id}`}>
+                            Li e estou ciente
+                          </button>
+                    )}
+                    <button onClick={() => window.open(`/biblioteca?view=${doc.id}`, '_blank', 'noopener')} className="text-xs text-blue-400 hover:text-blue-300">Visualizar</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ============ TIMELINE DE EVENTOS ============ */}
       {osEventos.length > 0 && (
