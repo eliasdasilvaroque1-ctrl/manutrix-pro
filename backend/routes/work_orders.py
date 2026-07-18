@@ -823,7 +823,7 @@ async def dossie_os(os_id: str, user: Dict = Depends(get_current_user)):
     # Materiais consumidos
     materiais = await db.os_materiais.find({"os_id": os_id, "deleted_at": None}, {"_id": 0}).to_list(100)
     for m in materiais:
-        item = await db.estoque.find_one({"id": m.get('item_estoque_id')}, {"_id": 0, "nome": 1, "codigo": 1})
+        item = await db.itens_estoque.find_one({"id": m.get('item_estoque_id')}, {"_id": 0, "nome": 1, "codigo": 1})
         m['item_nome'] = item.get('nome') if item else ''
         m['item_codigo'] = item.get('codigo') if item else ''
     os_doc['materiais'] = materiais

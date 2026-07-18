@@ -189,12 +189,12 @@ async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)
     check_pcm_or_admin(user)
     org_id = user.get('organization_id', '')
 
-    sector = await db.sectors.find_one({"id": data.sector_id, "deleted_at": None})
+    sector = await db.sectors.find_one({"id": data.sector_id, "organization_id": org_id, "deleted_at": None})
     if not sector:
         raise HTTPException(status_code=404, detail="Área não encontrada")
 
     tag = data.tag.upper() if data.tag else generate_tag()
-    existing = await db.ativos.find_one({"tag": tag, "sector_id": data.sector_id, "deleted_at": None})
+    existing = await db.ativos.find_one({"tag": tag, "sector_id": data.sector_id, "organization_id": org_id, "deleted_at": None})
     if existing:
         raise HTTPException(status_code=400, detail="TAG já existe nesta área")
 
@@ -237,6 +237,7 @@ async def delete_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
     existing = await db.ativos.find_one({"id": ativo_id, "deleted_at": None})
     if not existing:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, existing, "Ativo")
     await db.ativos.update_one({"id": ativo_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
     await audit_log("delete", "ativos", ativo_id, user, f"Ativo {existing.get('tag','')} excluído")
     return {"success": True}
@@ -250,6 +251,7 @@ async def duplicate_ativo(ativo_id: str, body: dict, user: Dict = Depends(get_cu
     original = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
     if not original:
         raise HTTPException(status_code=404, detail="Ativo original não encontrado")
+    verify_org_access(user, original, "Ativo")
 
     new_sector_id = body.get('sector_id', original.get('sector_id'))
     new_tag = (body.get('tag', '') or '').upper()
@@ -258,11 +260,11 @@ async def duplicate_ativo(ativo_id: str, body: dict, user: Dict = Depends(get_cu
     if not new_tag:
         raise HTTPException(status_code=400, detail="TAG é obrigatória")
 
-    sector = await db.sectors.find_one({"id": new_sector_id, "deleted_at": None})
+    sector = await db.sectors.find_one({"id": new_sector_id, "organization_id": org_id, "deleted_at": None})
     if not sector:
         raise HTTPException(status_code=404, detail="Área não encontrada")
 
-    existing = await db.ativos.find_one({"tag": new_tag, "sector_id": new_sector_id, "deleted_at": None})
+    existing = await db.ativos.find_one({"tag": new_tag, "sector_id": new_sector_id, "organization_id": org_id, "deleted_at": None})
     if existing:
         raise HTTPException(status_code=400, detail="TAG já existe nesta área")
 
@@ -325,6 +327,7 @@ async def add_ativo_material(ativo_id: str, data: AtivoMaterialCreate, user: Dic
     ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
     mat_id = str(uuid.uuid4())
     doc = {
         "id": mat_id, "ativo_id": ativo_id,

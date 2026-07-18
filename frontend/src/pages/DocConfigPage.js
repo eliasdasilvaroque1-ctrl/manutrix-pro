@@ -1242,7 +1242,6 @@ const FotosTab = ({ config, onSave, canEdit }) => {
 
 // ===== PREVIEW TAB =====
 const PreviewTab = () => {
-  const { openAuthenticatedPdf } = require('../lib/api');
   const [osId, setOsId] = useState('');
   const [osList, setOsList] = useState([]);
 
@@ -1256,7 +1255,7 @@ const PreviewTab = () => {
 
   const preview = (modo) => {
     if (!osId) { toast.error('Selecione uma OS'); return; }
-    openAuthenticatedPdf(`/ordens-servico/${osId}/pdf?modo=${modo}`, (msg) => toast.error(msg));
+    import('../lib/api').then(m => m.openAuthenticatedPdf(`/ordens-servico/${osId}/pdf?modo=${modo}`, (msg) => toast.error(msg)));
   };
 
   return (

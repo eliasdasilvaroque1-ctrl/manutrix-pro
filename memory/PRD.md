@@ -93,6 +93,23 @@
 - Corrigido: `db.audit_log` → `db.audit_logs` em documentos_corporativos.py (2 ocorrencias)
 - Novos registros de auditoria da Biblioteca Corporativa agora visiveis na tela de Auditoria geral
 
+## RC5.0.2 — HARDENING P1 (CONCLUIDA 18/07/2026)
+
+### P1.1 — Collection Estoque
+- Corrigido: `db.estoque` → `db.itens_estoque` em work_orders.py L826 (dossie OS)
+
+### P1.2 — IDOR em Assets
+- Adicionado `verify_org_access()` em: delete_ativo, duplicate_ativo, add_ativo_material
+- Isolamento multi-tenant completo em operacoes destrutivas e de escrita
+
+### P1.3 — Sector Lookup
+- Adicionado `organization_id` em sector lookups de create_ativo (L192) e duplicate_ativo (L263)
+- Adicionado `organization_id` em tag uniqueness checks
+- Previne referencia a areas de outra organizacao
+
+### P1.4 — Require Sincrono
+- Substituido `require('../lib/api')` por `import('../lib/api')` dinamico em DocConfigPage.js PreviewTab
+
 ---
 
 ## Backlog
