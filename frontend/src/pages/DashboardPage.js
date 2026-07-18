@@ -99,8 +99,10 @@ const DashboardPage = () => {
       const cd = res.headers?.['content-disposition'] || '';
       const match = cd.match(/filename=([^;]+)/);
       a.download = match ? match[1].replace(/^"|"$/g, '').trim() : `${entity}_export.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => { window.URL.revokeObjectURL(url); }, 10000);
       toast.success(`${entity} exportado com sucesso`);
     } catch { toast.error('Erro ao exportar'); }
   };

@@ -511,7 +511,8 @@ const QRLabelModal = ({ ativo, onClose }) => {
   const handlePrint = () => {
     const el = labelRef.current;
     if (!el) return;
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '_blank', 'noopener');
+    if (!printWindow) { toast.error('Pop-up bloqueado'); return; }
     printWindow.document.write(`<!DOCTYPE html><html><head><style>
       @media print { body { margin: 0; } .label { page-break-after: always; } }
       body { font-family: 'Inter', Arial, sans-serif; margin: 0; padding: 20px; }

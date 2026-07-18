@@ -78,7 +78,7 @@ const SobressalentesPage = () => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => { window.URL.revokeObjectURL(url); }, 10000);
       toast.success('Exportado com sucesso!');
     } catch { toast.error('Erro ao exportar'); }
   };

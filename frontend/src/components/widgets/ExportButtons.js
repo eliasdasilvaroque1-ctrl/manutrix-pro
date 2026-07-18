@@ -10,16 +10,29 @@ const ExportButtons = ({ entity }) => {
   const handleExport = async (format) => {
     try {
       const res = await api.get(`/export/${entity}?format=${format}`, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const contentType = res.headers?.['content-type'] || res.data?.type || '';
+      if (contentType.includes('application/json') || contentType.includes('text/html')) {
+        const text = await res.data.text();
+        try { const err = JSON.parse(text); toast.error(err.detail || 'Erro na exportação'); } catch { toast.error('Erro na exportação'); }
+        return;
+      }
+      const blob = new Blob([res.data]);
+      if (blob.size === 0) { toast.error('Arquivo vazio'); return; }
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       const cd = res.headers?.['content-disposition'] || '';
       const match = cd.match(/filename=([^;]+)/);
       link.download = match ? match[1].replace(/^"|"$/g, '').trim() : `${entity}_export.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      document.body.appendChild(link);
       link.click();
-      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      setTimeout(() => { window.URL.revokeObjectURL(url); }, 10000);
       toast.success(`Exportado em ${format.toUpperCase()}`);
-    } catch (e) { toast.error('Erro ao exportar'); }
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e?.message || 'Erro ao exportar';
+      toast.error(typeof msg === 'string' ? msg : 'Erro ao exportar');
+    }
   };
 
   return (
@@ -43,7 +56,7 @@ const BatchPrintBar = ({ selectedIds, entity, onClear, entityLabel = "itens" }) 
   if (!['master', 'admin', 'pcm'].includes(user?.role)) return null;
 
   const handleBatchPrint = async () => {
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
 
     if (!printWindow) {
       toast.error('O navegador bloqueou a janela de impressão. Autorize pop-ups para o MAINTRIX.');

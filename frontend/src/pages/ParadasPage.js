@@ -1023,7 +1023,7 @@ const AuditoriaPage = () => {
       link.href = url;
       link.setAttribute('download', `auditoria_export.${fmt === 'excel' ? 'xlsx' : 'pdf'}`);
       document.body.appendChild(link); link.click(); link.remove();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => { window.URL.revokeObjectURL(url); }, 10000);
       toast.success('Exportado!');
     } catch { toast.error('Erro ao exportar'); }
   };
