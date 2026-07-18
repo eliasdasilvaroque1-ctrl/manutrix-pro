@@ -161,38 +161,30 @@ async def list_os(
 async def os_estatisticas(user: Dict = Depends(get_current_user)):
     query = await build_dashboard_visibility(user)
 
-    # Status counts (all known statuses)
-    all_statuses = ["solicitada", "em_analise", "aguardando_aprovacao", "aguardando_material",
-                    "programada", "disponivel", "em_execucao", "pausada",
-                    "concluida", "encerrada", "cancelada",
-                    "aberta", "planejada"]
-    status_counts = {}
-    for s in all_statuses:
-        c = await db.ordens_servico.count_documents({**query, "status": s})
-        if c > 0:
-            status_counts[s] = c
-
-    # Type counts (dynamic from data)
-    pipeline = [{"$match": query}, {"$group": {"_id": "$tipo", "count": {"$sum": 1}}}]
-    tipo_results = await db.ordens_servico.aggregate(pipeline).to_list(50)
-    tipo_counts = {r['_id']: r['count'] for r in tipo_results if r['_id']}
-
-    # Disciplina counts (dynamic)
-    pipeline_d = [{"$match": query}, {"$group": {"_id": "$disciplina", "count": {"$sum": 1}}}]
-    disc_results = await db.ordens_servico.aggregate(pipeline_d).to_list(20)
-    disciplina_counts = {r['_id']: r['count'] for r in disc_results if r['_id']}
-
-    # Origem counts (new)
-    pipeline_o = [{"$match": query}, {"$group": {"_id": "$origem", "count": {"$sum": 1}}}]
-    origem_results = await db.ordens_servico.aggregate(pipeline_o).to_list(20)
-    origem_counts = {r['_id']: r['count'] for r in origem_results if r['_id']}
-
     now = datetime.now(timezone.utc).isoformat()
-    atrasadas = await db.ordens_servico.count_documents({**query, "status": {"$nin": ["concluida", "encerrada", "cancelada"]}, "data_planejada": {"$lt": now, "$ne": None}})
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0).isoformat()
+
+    # SINGLE aggregation: status + tipo + disciplina + origem counts in one pipeline
+    facet_pipeline = [
+        {"$match": query},
+        {"$facet": {
+            "por_status": [{"$group": {"_id": "$status", "count": {"$sum": 1}}}],
+            "por_tipo": [{"$group": {"_id": "$tipo", "count": {"$sum": 1}}}],
+            "por_disciplina": [{"$group": {"_id": "$disciplina", "count": {"$sum": 1}}}],
+            "por_origem": [{"$group": {"_id": "$origem", "count": {"$sum": 1}}}],
+        }}
+    ]
+    facet_result = await db.ordens_servico.aggregate(facet_pipeline).to_list(1)
+    facet = facet_result[0] if facet_result else {}
+
+    status_counts = {r['_id']: r['count'] for r in facet.get('por_status', []) if r['_id']}
+    tipo_counts = {r['_id']: r['count'] for r in facet.get('por_tipo', []) if r['_id']}
+    disciplina_counts = {r['_id']: r['count'] for r in facet.get('por_disciplina', []) if r['_id']}
+    origem_counts = {r['_id']: r['count'] for r in facet.get('por_origem', []) if r['_id']}
+
+    # 2 additional counts (atrasadas + concluidas_mes)
+    atrasadas = await db.ordens_servico.count_documents({**query, "status": {"$nin": ["concluida", "encerrada", "cancelada"]}, "data_planejada": {"$lt": now, "$ne": None}})
     concluidas_mes = await db.ordens_servico.count_documents({**query, "status": {"$in": ["concluida", "encerrada"]}, "data_conclusao": {"$gte": month_start}})
-    aguardando_aprovacao = status_counts.get("aguardando_aprovacao", 0)
-    aguardando_material = status_counts.get("aguardando_material", 0)
 
     active_statuses = ["solicitada", "em_analise", "aguardando_aprovacao", "aguardando_material",
                        "programada", "disponivel", "em_execucao", "pausada", "aberta", "planejada"]
@@ -201,8 +193,8 @@ async def os_estatisticas(user: Dict = Depends(get_current_user)):
         "por_status": status_counts, "por_tipo": tipo_counts,
         "por_disciplina": disciplina_counts, "por_origem": origem_counts,
         "atrasadas": atrasadas, "concluidas_mes": concluidas_mes,
-        "aguardando_aprovacao": aguardando_aprovacao,
-        "aguardando_material": aguardando_material,
+        "aguardando_aprovacao": status_counts.get("aguardando_aprovacao", 0),
+        "aguardando_material": status_counts.get("aguardando_material", 0),
         "total_abertas": sum(status_counts.get(s, 0) for s in active_statuses)
     }
 

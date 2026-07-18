@@ -4,60 +4,49 @@
 
 ---
 
-## Concluido anteriormente
-- RC Documentos Fase 1 (Unicode PDF com DejaVu Sans)
-- Sprint 1-3 Biblioteca Corporativa (CRUD, Versionamento, Checklists, Personalizacao, Campos Dinamicos, Snapshot Isolation)
-- RC Construtor Visual Onda 1 (Drag-and-Drop com @dnd-kit)
-- HOTFIX P0: MasterCleanupPage e ExportButtons (Batch Print fix)
+## RC5.0 Missao 1 — Biblioteca Corporativa (CONCLUIDA)
+## RC5.0 Missao 2 — Vinculo Automatico + Upload (CONCLUIDA)
+## RC5.0.1 — HOTFIX P0: Build + Auditoria (CONCLUIDA)
+## RC5.0.2 — HARDENING P1: IDOR + Estoque + Sector (CONCLUIDA)
 
 ---
 
-## RC5.0 Missao 1 — Biblioteca Corporativa de Documentos (CONCLUIDA)
+## RC5.1 — PERFORMANCE E ESTABILIZACAO (CONCLUIDA 18/07/2026)
 
-### Entregas
-- Collection `documentos_corporativos` com 30+ campos
-- CRUD completo com 11 tipos, 6 status, full-text search, paginacao
-- Versionamento, auditoria, RBAC, multi-tenant
-- Frontend: BibliotecaCorporativaPage com lista, filtros, form 7-step, viewer
+### N+1 Queries Corrigidos
+1. `/ordens-servico/estatisticas`: 13+ count_documents → 1 $facet + 2 counts (77% mais rapido)
+2. `/dashboard/stats`: 15 count_documents → 3 $facet pipelines (ativos, OS, inspecoes)
+3. `/dashboard/os-por-disciplina`: N loops count → 1 aggregation $group
+4. `/dashboard/executivo`: N loops count por setor → 1 aggregation $group por sector_id
+5. `/migration/report`: N find_one por sector → 1 aggregation $group
 
----
+### Frontend Split
+- App.js: 4124 → 3715 linhas (-409)
+- Extraidos: MainLayout.js (243 linhas), AppProviders.js (107 linhas)
+- Componentes extraidos: Sidebar, BottomNav, NetworkStatus, AppLayout, AuthProvider, BrandingLoader, ConsentGate, AppProviders
 
-## RC5.0 Missao 2 — Vinculo Automatico com OS + Upload Corporativo (CONCLUIDA)
+### Lazy Loading
+- 19 chunks lazy criados via React.lazy + Suspense
+- Bundle principal: 389KB → 189KB gzip (-51%)
+- Paginas lazy: DashboardPage, EstoquePage, SobressalentesPage, ParadasPage, InspecoesPages, BibliotecaPage, EquipePage, WhiteLabelDesignerPage, DocConfigPage, LayoutBuilderPage, BibliotecaCorporativaPage, ConsultaPages, PortalPages, MasterCleanupPage, OrgConfigPage, FieldOpsPage, AssetDossierPage
 
-### Entregas
-- Upload corporativo (PDF, DOCX, XLSX, PNG, JPG) com validacao
-- Vinculo automatico por scoring multi-criterio
-- Confirmacao de leitura obrigatoria, snapshot imutavel
-- Frontend: secao "Procedimentos Aplicaveis" na OSDetailPage
+### Metricas
+| Endpoint | Antes | Depois | Ganho |
+|----------|-------|--------|-------|
+| Dashboard stats | 2.848s | 0.664s | -77% |
+| OS list | 0.851s | 0.790s | -7% |
+| Ativos | 0.577s | 0.534s | -7% |
+| Inspecoes | 0.384s | 0.365s | -5% |
+| Bundle JS | 389KB | 189KB | -51% |
+| App.js | 4124 lin | 3715 lin | -10% |
+| Chunks | 2 | 19 | +17 |
 
----
-
-## RC5.0.1 — HOTFIX P0 (CONCLUIDA 18/07/2026)
-
-### P0.1 — Build de Producao
-- Todos imports `@/` convertidos para paths relativos em 50+ arquivos
-- `DISABLE_ESLINT_PLUGIN=true` no .env
-- Imports faltantes corrigidos (QRLabelModal, useRef, QRCodeSVG, axios, loadOS, AppLayout)
-
-### P0.2 — Auditoria Unificada
-- `db.audit_log` → `db.audit_logs` em documentos_corporativos.py
-
----
-
-## RC5.0.2 — HARDENING P1 (CONCLUIDA 18/07/2026)
-
-### P1.1 — Collection Estoque
-- `db.estoque` → `db.itens_estoque` em work_orders.py dossie
-
-### P1.2 — IDOR em Assets
-- `verify_org_access()` adicionado em delete_ativo, duplicate_ativo, add_ativo_material
-
-### P1.3 — Sector Lookup
-- `organization_id` adicionado em sector lookups (create_ativo, duplicate_ativo)
-- `organization_id` adicionado em tag uniqueness checks
-
-### P1.4 — Require Sincrono
-- `require('../lib/api')` → `import('../lib/api')` dinamico em DocConfigPage.js
+### Arquivos alterados
+- backend/routes/dashboard.py (N+1 fixes)
+- backend/routes/work_orders.py (estatisticas $facet)
+- frontend/src/App.js (split + lazy imports)
+- frontend/src/app/MainLayout.js (novo)
+- frontend/src/app/AppProviders.js (novo)
 
 ---
 
@@ -68,12 +57,12 @@
 - QR Code MVP (Fase 2 Piloto)
 
 ### P2
-- N+1 queries (~25 locais)
-- App.js split (4124 linhas)
-- Lazy loading de paginas
+- N+1 restantes (dossie OS, dossie ativo, ativo detail)
+- Inline pages split (LoginPage, OSDetailPage, AtivosPage, etc.)
 - Integracoes ERP/SAP
 - Dataset permanente de homologacao
 
 ### P3
 - IA Assistente
 - Browserslist update
+- Virtualizacao de listas grandes

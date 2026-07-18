@@ -103,28 +103,59 @@ async def get_dashboard_stats(sector_id: Optional[str] = None, user: Dict = Depe
             os_query['ativo_id'] = {"$in": asset_ids}
             insp_query['ativo_id'] = {"$in": asset_ids}
 
+    ativos = {}
+    ativo_pipeline = [
+        {"$match": asset_query},
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    ativo_results = await db.ativos.aggregate(ativo_pipeline).to_list(20)
+    ativo_by_status = {r['_id']: r['count'] for r in ativo_results if r['_id']}
     ativos = {
-        "total": await db.ativos.count_documents(asset_query),
-        "operacionais": await db.ativos.count_documents({**asset_query, "status": "operacional"}),
-        "parados": await db.ativos.count_documents({**asset_query, "status": "parado"}),
-        "manutencao": await db.ativos.count_documents({**asset_query, "status": "manutencao"}),
-        "desativados": await db.ativos.count_documents({**asset_query, "status": "desativado"})
+        "total": sum(ativo_by_status.values()),
+        "operacionais": ativo_by_status.get("operacional", 0),
+        "parados": ativo_by_status.get("parado", 0),
+        "manutencao": ativo_by_status.get("manutencao", 0),
+        "desativados": ativo_by_status.get("desativado", 0)
     }
 
+    # OS stats via $facet (1 query instead of 6)
+    os_facet = [
+        {"$match": os_query},
+        {"$facet": {
+            "por_status": [{"$group": {"_id": "$status", "count": {"$sum": 1}}}],
+            "atrasadas": [{"$match": {"status": {"$nin": ["concluida", "cancelada", "solicitada"]}, "data_planejada": {"$lt": now.isoformat()}}}, {"$count": "total"}],
+            "concluidas_hoje": [{"$match": {"status": "concluida", "data_conclusao": {"$gte": today_start}}}, {"$count": "total"}],
+        }}
+    ]
+    os_facet_result = (await db.ordens_servico.aggregate(os_facet).to_list(1))
+    os_f = os_facet_result[0] if os_facet_result else {}
+    os_by_status = {r['_id']: r['count'] for r in os_f.get('por_status', []) if r['_id']}
     os_stats = {
-        "abertas": await db.ordens_servico.count_documents({**os_query, "status": "aberta"}),
-        "planejadas": await db.ordens_servico.count_documents({**os_query, "status": "planejada"}),
-        "em_execucao": await db.ordens_servico.count_documents({**os_query, "status": "em_execucao"}),
-        "pausadas": await db.ordens_servico.count_documents({**os_query, "status": "pausada"}),
-        "concluidas_hoje": await db.ordens_servico.count_documents({**os_query, "status": "concluida", "data_conclusao": {"$gte": today_start}}),
-        "atrasadas": await db.ordens_servico.count_documents({**os_query, "status": {"$nin": ["concluida", "cancelada", "solicitada"]}, "data_planejada": {"$lt": now.isoformat()}}),
+        "abertas": os_by_status.get("aberta", 0),
+        "planejadas": os_by_status.get("planejada", 0),
+        "em_execucao": os_by_status.get("em_execucao", 0),
+        "pausadas": os_by_status.get("pausada", 0),
+        "concluidas_hoje": (os_f.get('concluidas_hoje', [{}])[0].get('total', 0)) if os_f.get('concluidas_hoje') else 0,
+        "atrasadas": (os_f.get('atrasadas', [{}])[0].get('total', 0)) if os_f.get('atrasadas') else 0,
     }
 
+    # Inspecoes via $facet (1 query instead of 4)
+    insp_facet = [
+        {"$match": insp_query},
+        {"$facet": {
+            "por_status": [{"$group": {"_id": "$status", "count": {"$sum": 1}}}],
+            "nao_conformes": [{"$match": {"resultado": "nao_conforme"}}, {"$count": "total"}],
+            "concluidas_hoje": [{"$match": {"status": "concluida", "data_conclusao": {"$gte": today_start}}}, {"$count": "total"}],
+        }}
+    ]
+    insp_facet_result = (await db.inspecoes.aggregate(insp_facet).to_list(1))
+    insp_f = insp_facet_result[0] if insp_facet_result else {}
+    insp_by_status = {r['_id']: r['count'] for r in insp_f.get('por_status', []) if r['_id']}
     inspecoes = {
-        "pendentes": await db.inspecoes.count_documents({**insp_query, "status": "pendente"}),
-        "em_andamento": await db.inspecoes.count_documents({**insp_query, "status": "em_andamento"}),
-        "concluidas_hoje": await db.inspecoes.count_documents({**insp_query, "status": "concluida", "data_conclusao": {"$gte": today_start}}),
-        "nao_conformes_mes": await db.inspecoes.count_documents({**insp_query, "resultado": "nao_conforme"})
+        "pendentes": insp_by_status.get("pendente", 0),
+        "em_andamento": insp_by_status.get("em_andamento", 0),
+        "concluidas_hoje": (insp_f.get('concluidas_hoje', [{}])[0].get('total', 0)) if insp_f.get('concluidas_hoje') else 0,
+        "nao_conformes_mes": (insp_f.get('nao_conformes', [{}])[0].get('total', 0)) if insp_f.get('nao_conformes') else 0,
     }
 
     estoque_base = {"deleted_at": None}
@@ -193,24 +224,26 @@ async def dashboard_os_por_setor(user: Dict = Depends(get_current_user)):
 
 @router.get("/dashboard/os-por-disciplina")
 async def dashboard_os_por_disciplina(user: Dict = Depends(get_current_user)):
-    """OS count by discipline for dashboard chart"""
+    """OS count by discipline — single aggregation instead of N count queries."""
     q = await build_dashboard_visibility(user)
     q['status'] = {"$nin": ["concluida", "cancelada", "solicitada"]}
 
-    result = []
     labels = {"mecanica": "Mecânica", "eletrica": "Elétrica", "instrumentacao": "Instrumentação", "civil": "Civil", "producao": "Produção"}
     colors = {"mecanica": "#3b82f6", "eletrica": "#f59e0b", "instrumentacao": "#8b5cf6", "civil": "#ef4444", "producao": "#10b981"}
 
-    # Determine which disciplines to show
+    pipeline = [{"$match": q}, {"$group": {"_id": "$disciplina", "count": {"$sum": 1}}}]
+    disc_results = await db.ordens_servico.aggregate(pipeline).to_list(20)
+    disc_map = {r['_id']: r['count'] for r in disc_results if r['_id']}
+
     role = user.get('role', '')
     if role == 'operador':
         disc_list = [d for d in Disciplina if d.value not in ('mecanica', 'eletrica', 'instrumentacao')]
     else:
         disc_list = list(Disciplina)
 
+    result = []
     for d in disc_list:
-        count = await db.ordens_servico.count_documents({**q, "disciplina": d.value})
-        result.append({"disciplina": labels.get(d.value, d.value), "key": d.value, "cor": colors.get(d.value, '#64748b'), "count": count})
+        result.append({"disciplina": labels.get(d.value, d.value), "key": d.value, "cor": colors.get(d.value, '#64748b'), "count": disc_map.get(d.value, 0)})
     return result
 
 
@@ -355,9 +388,15 @@ async def migration_report(user: Dict = Depends(get_current_user)):
     ativos_orphan = total_ativos - ativos_with_sector
 
     sector_details = []
-    for s in sectors:
-        ac = await db.ativos.count_documents({"sector_id": s['id'], "deleted_at": None})
-        sector_details.append({"id": s['id'], "codigo": s.get('codigo', ''), "nome": s['nome'], "assets": ac})
+    if sectors:
+        sid_list = [s['id'] for s in sectors]
+        sector_counts = await db.ativos.aggregate([
+            {"$match": {"sector_id": {"$in": sid_list}, "deleted_at": None}},
+            {"$group": {"_id": "$sector_id", "count": {"$sum": 1}}}
+        ]).to_list(500)
+        sc_map = {r['_id']: r['count'] for r in sector_counts}
+        for s in sectors:
+            sector_details.append({"id": s['id'], "codigo": s.get('codigo', ''), "nome": s['nome'], "assets": sc_map.get(s['id'], 0)})
 
     return {
         "status": "complete" if ativos_orphan == 0 else "partial",
@@ -464,12 +503,29 @@ async def dashboard_executivo(user: Dict = Depends(get_current_user)):
     else:
         top_custo_enriched = []
 
-    # --- Availability by area ---
+    # --- Availability by area (batch query instead of N+1) ---
     sectors = await db.sectors.find({"organization_id": org_id, "deleted_at": None}, {"_id": 0, "id": 1, "nome": 1}).to_list(50)
+    sector_ids = [s['id'] for s in sectors]
+    # Single aggregation for all sectors
+    ativo_by_sector = {}
+    if sector_ids:
+        sector_agg = await db.ativos.aggregate([
+            {"$match": {"sector_id": {"$in": sector_ids}, "deleted_at": None}},
+            {"$group": {"_id": {"sector_id": "$sector_id", "parado": {"$in": ["$status", ["parado", "manutencao"]]}}, "count": {"$sum": 1}}}
+        ]).to_list(200)
+        for r in sector_agg:
+            sid = r['_id']['sector_id']
+            is_parado = r['_id']['parado']
+            ativo_by_sector.setdefault(sid, {"total": 0, "parados": 0})
+            if is_parado:
+                ativo_by_sector[sid]["parados"] += r['count']
+            ativo_by_sector[sid]["total"] += r['count']
+
     disp_por_area = []
     for s in sectors:
-        at_total = await db.ativos.count_documents({"sector_id": s['id'], "deleted_at": None})
-        at_parado = await db.ativos.count_documents({"sector_id": s['id'], "deleted_at": None, "status": {"$in": ["parado", "manutencao"]}})
+        info = ativo_by_sector.get(s['id'], {"total": 0, "parados": 0})
+        at_total = info["total"]
+        at_parado = info["parados"]
         disp = round((at_total - at_parado) / max(at_total, 1) * 100, 1)
         disp_por_area.append({"area": s['nome'], "disponibilidade": disp, "ativos": at_total, "parados": at_parado})
 

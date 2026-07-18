@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, memo, useCallback, useMemo, lazy, Suspense } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
@@ -18,12 +18,11 @@ import {
   ZoomIn, Maximize2, ImagePlus, Printer
 } from "lucide-react";
 import { BACKEND_URL, API, AuthContext, useAuth, api } from "./lib/api";
-import { BrandingProvider, useBranding } from "./lib/branding";
+import { useBranding } from "./lib/branding";
 import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData, queuePhoto } from "./lib/offlineQueue";
 import axios from "axios";
 import { DynamicFieldRenderer, SignaturePad } from "./components/DynamicFieldRenderer";
 
-// ============== SHARED COMPONENTS (extracted to /components/shared/) ==============
 import {
   StatusBadge, PriorityBadge, Modal, ConfirmDialog, Loading, EmptyState,
   DataTable, DataRow, PageContainer, PageHeader, PageToolbar, FormInput, Select,
@@ -33,26 +32,47 @@ import {
   FIELD_LABEL_MAP, ROLE_LABELS, ROLES_EXCEPT_VIEWER, PRIO_COLORS, PRIO_LABELS,
   CENTRAL_TITLES, normalizeError, compressImage
 } from "./lib/constants";
-import DashboardPage from "./pages/DashboardPage";
 import { MaterialThumbnail, MaterialImageModal, MaterialImageUploader } from "./components/widgets/MaterialComponents";
 import ExportButtons, { BatchPrintBar, BatchCheckbox } from "./components/widgets/ExportButtons";
-import EstoquePage from "./pages/EstoquePage";
-import SobressalentesPage, { SolicitacaoServicoPage, AssistentePage } from "./pages/SobressalentesPage";
-import ParadasPage, { AdminTemplatesPage, AuditoriaPage, AdminUsuariosPage, ProtectedRoute, CatchAllRedirect, SetoresPage, UnidadesPage } from "./pages/ParadasPage";
-import { InspecoesPage, InspecaoDetailPage, RondaPage, ScannerPage, PhotoUploader } from "./pages/InspecoesPages";
-import BibliotecaPage from "./pages/BibliotecaPage";
-import EquipePage from "./pages/EquipePage";
-import WhiteLabelDesignerPage, { QRLabelModal } from "./pages/WhiteLabelDesignerPage";
-import DocConfigPage from "./pages/DocConfigPage";
-import LayoutBuilderPage from "./pages/LayoutBuilderPage";
-import BibliotecaCorporativaPage from "./pages/BibliotecaCorporativaPage";
-import { ConsultaEquipamentosPage, DossiePesquisaPage } from "./pages/ConsultaPages";
-import { PortalPublicoPage, PortalTecnicoPage } from "./pages/PortalPages";
-import MasterCleanupPage from "./pages/MasterCleanupPage";
-import OrgConfigPage from "./pages/OrgConfigPage";
-import ErrorBoundary from "./components/ErrorBoundary";
-import FieldOpsPage from "./pages/FieldOpsPage";
-import AssetDossierPage from "./pages/AssetDossierPage";
+import { ProtectedRoute, CatchAllRedirect } from "./pages/ParadasPage";
+import { PhotoUploader } from "./pages/InspecoesPages";
+import { QRLabelModal } from "./pages/WhiteLabelDesignerPage";
+import { AppProviders, BrandingLoader, ConsentGate } from "./app/AppProviders";
+import MainLayout from "./app/MainLayout";
+
+// Lazy-loaded pages (heavy, less frequently accessed)
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const EstoquePage = lazy(() => import("./pages/EstoquePage"));
+const SobressalentesPage = lazy(() => import("./pages/SobressalentesPage").then(m => ({ default: m.default })));
+const SolicitacaoServicoPage = lazy(() => import("./pages/SobressalentesPage").then(m => ({ default: m.SolicitacaoServicoPage })));
+const AssistentePage = lazy(() => import("./pages/SobressalentesPage").then(m => ({ default: m.AssistentePage })));
+const ParadasPage = lazy(() => import("./pages/ParadasPage").then(m => ({ default: m.default })));
+const AdminTemplatesPage = lazy(() => import("./pages/ParadasPage").then(m => ({ default: m.AdminTemplatesPage })));
+const AuditoriaPage = lazy(() => import("./pages/ParadasPage").then(m => ({ default: m.AuditoriaPage })));
+const AdminUsuariosPage = lazy(() => import("./pages/ParadasPage").then(m => ({ default: m.AdminUsuariosPage })));
+const SetoresPage = lazy(() => import("./pages/ParadasPage").then(m => ({ default: m.SetoresPage })));
+const UnidadesPage = lazy(() => import("./pages/ParadasPage").then(m => ({ default: m.UnidadesPage })));
+const InspecoesPage = lazy(() => import("./pages/InspecoesPages").then(m => ({ default: m.InspecoesPage })));
+const InspecaoDetailPage = lazy(() => import("./pages/InspecoesPages").then(m => ({ default: m.InspecaoDetailPage })));
+const RondaPage = lazy(() => import("./pages/InspecoesPages").then(m => ({ default: m.RondaPage })));
+const ScannerPage = lazy(() => import("./pages/InspecoesPages").then(m => ({ default: m.ScannerPage })));
+const BibliotecaPage = lazy(() => import("./pages/BibliotecaPage"));
+const EquipePage = lazy(() => import("./pages/EquipePage"));
+const WhiteLabelDesignerPage = lazy(() => import("./pages/WhiteLabelDesignerPage"));
+const DocConfigPage = lazy(() => import("./pages/DocConfigPage"));
+const LayoutBuilderPage = lazy(() => import("./pages/LayoutBuilderPage"));
+const BibliotecaCorporativaPage = lazy(() => import("./pages/BibliotecaCorporativaPage"));
+const ConsultaEquipamentosPage = lazy(() => import("./pages/ConsultaPages").then(m => ({ default: m.ConsultaEquipamentosPage })));
+const DossiePesquisaPage = lazy(() => import("./pages/ConsultaPages").then(m => ({ default: m.DossiePesquisaPage })));
+const PortalPublicoPage = lazy(() => import("./pages/PortalPages").then(m => ({ default: m.PortalPublicoPage })));
+const PortalTecnicoPage = lazy(() => import("./pages/PortalPages").then(m => ({ default: m.PortalTecnicoPage })));
+const MasterCleanupPage = lazy(() => import("./pages/MasterCleanupPage"));
+const OrgConfigPage = lazy(() => import("./pages/OrgConfigPage"));
+const FieldOpsPage = lazy(() => import("./pages/FieldOpsPage"));
+const AssetDossierPage = lazy(() => import("./pages/AssetDossierPage"));
+
+// Suspense fallback
+const LazyFallback = () => <div className="flex items-center justify-center min-h-[50vh]"><Loading rows={3} /></div>;
 
 // Register PWA Service Worker
 registerServiceWorker();
@@ -86,59 +106,9 @@ registerServiceWorker();
 
 
 // ============== NETWORK STATUS + SYNC ==============
-const NetworkStatus = () => {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [syncing, setSyncing] = useState(false);
-
-  useEffect(() => {
-    const updateOnline = () => setIsOnline(true);
-    const updateOffline = () => setIsOnline(false);
-    window.addEventListener('online', updateOnline);
-    window.addEventListener('offline', updateOffline);
-    return () => { window.removeEventListener('online', updateOnline); window.removeEventListener('offline', updateOffline); };
-  }, []);
-
-  useEffect(() => {
-    const checkPending = async () => {
-      try { const c = await getPendingCount(); setPendingCount(c); } catch {}
-    };
-    checkPending();
-    const interval = setInterval(checkPending, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Auto-sync when coming back online
-  useEffect(() => {
-    if (isOnline && pendingCount > 0) {
-      const doSync = async () => {
-        setSyncing(true);
-        try {
-          const result = await syncPendingOperations(api);
-          const total = result.synced + result.photos;
-          if (total > 0) toast.success(`${total} item(ns) sincronizado(s)${result.photos ? ` (${result.photos} foto(s))` : ''}`);
-          if (result.failed > 0) toast.error(`${result.failed} operação(ões) falharam — nova tentativa em breve`);
-          const c = await getPendingCount();
-          setPendingCount(c);
-        } catch {}
-        setSyncing(false);
-      };
-      // Small delay to ensure stable connection
-      const timer = setTimeout(doSync, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isOnline, pendingCount]);
-
-  if (isOnline && pendingCount === 0) return null;
-
-  return (
-    <div className={`fixed top-0 left-0 right-0 z-[60] px-4 py-1.5 text-center text-xs font-medium ${isOnline ? 'bg-amber-500/90 text-black' : 'bg-red-600/90 text-white'}`} data-testid="network-status">
-      {!isOnline && <><WifiOff size={12} className="inline mr-1" /> Offline — operações serão sincronizadas ao reconectar</>}
-      {isOnline && syncing && <><RefreshCw size={12} className="inline mr-1 animate-spin" /> Sincronizando {pendingCount} operação(ões)...</>}
-      {isOnline && !syncing && pendingCount > 0 && <><Clock size={12} className="inline mr-1" /> {pendingCount} operação(ões) pendente(s)</>}
-    </div>
-  );
-};
+// NetworkStatus, Sidebar, BottomNav, AppLayout → extracted to /app/MainLayout.js
+// Alias for backward compatibility within this file
+const AppLayout = MainLayout;
 
 // ============== CAMERA CAPTURE ==============
 // CameraCapture → moved to /pages/InspecoesPages.js
@@ -741,240 +711,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
 
 // ModalNovaInspecao → moved to /pages/InspecoesPages.js
 
-// ============== SIDEBAR ==============
-
-const Sidebar = ({ collapsed, setCollapsed }) => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  const { branding } = useBranding() || {};
-  const b = branding || {};
-  
-  const role = user?.role || 'visualizador';
-  const isAdmin = role === 'admin' || role === 'master';
-  const isMaster = role === 'master';
-  const isExecucao = ['tec_mecanico', 'tec_eletrico', 'instrumentista', 'lubrificador', 'tecnico', 'inspetor'].includes(role);
-  const isOperacional = isExecucao || role === 'operador';
-  const isPCM = role === 'pcm';
-  const isSupervisor = role === 'supervisor';
-  const isGerente = role === 'gerente';
-  const isVisualizador = role === 'visualizador' || role === 'viewer';
-  
-  const menuGroups = isVisualizador ? [
-    {
-      label: 'CONSULTA',
-      items: [
-        { icon: Search, label: 'Portal de Equipamentos', path: '/consulta' },
-      ]
-    },
-  ] : isGerente ? [
-    {
-      label: 'GESTÃO',
-      items: [
-        { icon: LayoutDashboard, label: 'Central de Trabalho', path: '/' },
-        { icon: BarChart3, label: 'Dashboard', path: '/dashboard' },
-        { icon: Wrench, label: 'Ordens de Serviço', path: '/os' },
-        { icon: Box, label: 'Ativos', path: '/ativos' },
-        { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
-      ]
-    },
-  ] : [
-    {
-      label: 'PRINCIPAL',
-      items: [
-        { icon: LayoutDashboard, label: isOperacional ? 'Minha Jornada' : 'Central de Trabalho', path: '/' },
-        ...(isOperacional ? [{ icon: Target, label: 'Minha Área', path: '/minha-area' }] : []),
-        ...(!isOperacional ? [{ icon: BarChart3, label: 'Dashboard', path: '/dashboard' }] : []),
-        ...(!isOperacional ? [{ icon: Users, label: 'Equipe', path: '/equipe' }] : []),
-      ]
-    },
-    {
-      label: 'OPERAÇÃO',
-      items: [
-        { icon: Box, label: 'Ativos', path: '/ativos' },
-        ...(isOperacional ? [{ icon: Wrench, label: 'Minhas OS', path: '/os' }] : []),
-        ...(!isOperacional ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
-        { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
-        ...(isOperacional ? [{ icon: AlertTriangle, label: 'Solicitar Serviço', path: '/solicitar' }] : []),
-        ...(isOperacional ? [{ icon: QrCode, label: 'Scanner', path: '/scanner' }] : []),
-        ...(isOperacional ? [{ icon: Target, label: 'Ronda', path: '/ronda' }] : []),
-      ]
-    },
-    ...(!isOperacional ? [{
-      label: 'INFRAESTRUTURA',
-      items: [
-        ...(isAdmin ? [{ icon: Factory, label: 'Unidades', path: '/unidades' }] : []),
-        { icon: Layers, label: 'Áreas', path: '/setores' },
-      ]
-    }] : []),
-    {
-      label: 'MATERIAIS',
-      items: [
-        { icon: Package, label: 'Estoque', path: '/estoque' },
-        ...(!isOperacional ? [{ icon: Cog, label: 'Sobressalentes', path: '/sobressalentes' }] : []),
-        ...(!isOperacional ? [{ icon: Calendar, label: 'Paradas', path: '/paradas' }] : []),
-      ]
-    },
-    ...(['admin','master','pcm','supervisor'].includes(role) ? [{
-      label: 'PCM',
-      items: [
-        ...(['admin','master','pcm'].includes(role) ? [{ icon: BookOpen, label: 'Biblioteca Corporativa', path: '/biblioteca' }] : []),
-        { icon: FileText, label: 'Dossiê / Pesquisa', path: '/dossie' },
-      ]
-    }] : []),
-    ...(isAdmin || isPCM || isSupervisor ? [{
-      label: 'ADMIN',
-      items: [
-        ...(isAdmin ? [{ icon: Users, label: 'Usuários', path: '/admin/usuarios' }] : []),
-        ...(isAdmin || isPCM ? [{ icon: ClipboardCheck, label: 'Planos de Inspeção', path: '/admin/templates' }] : []),
-        ...(isAdmin || isPCM ? [{ icon: FileText, label: 'Documentos e Formulários', path: '/config/documentos' }] : []),
-        ...(isAdmin || isPCM ? [{ icon: Layers, label: 'Construtor Visual', path: '/config/construtor' }] : []),
-        { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
-        ...(isAdmin ? [{ icon: Cog, label: 'Configurações', path: '/admin/config' }] : []),
-        ...(isMaster ? [{ icon: Palette, label: 'White Label', path: '/master/white-label' }] : []),
-        ...(isMaster ? [{ icon: Trash2, label: 'Limpeza', path: '/master/cleanup' }] : []),
-      ]
-    }] : []),
-  ];
-  
-  return (
-    <aside className={`hidden md:flex flex-col backdrop-blur-sm border-r border-slate-800 h-screen sticky top-0 transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'}`}
-      style={{ backgroundColor: b.cor_menu || 'var(--brand-menu)' }} data-testid="sidebar">
-      <div className={`p-4 border-b border-slate-800 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
-        {!collapsed && (
-          <div className="flex items-center gap-3 min-w-0">
-            {b.logo_branca_url || b.logo_url ? (
-              <img src={b.logo_branca_url || b.logo_url} alt={b.nome_empresa} className="h-8 w-auto object-contain flex-shrink-0" data-testid="sidebar-logo" />
-            ) : null}
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold tracking-wider truncate" style={{ color: b.cor_primaria || 'var(--brand-primary)' }} data-testid="sidebar-brand-name">{b.nome_empresa || 'CMMS'}</h1>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider truncate">{b.subtitulo || 'Sistema de Gestão'}</p>
-            </div>
-          </div>
-        )}
-        <button onClick={() => setCollapsed(!collapsed)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors flex-shrink-0">
-          {collapsed ? <ChevronRight size={18} className="text-slate-400" /> : <ChevronLeft size={18} className="text-slate-400" />}
-        </button>
-      </div>
-      
-      <nav className="flex-1 py-4 overflow-y-auto custom-scrollbar">
-        {menuGroups.map((group, idx) => (
-          <div key={idx} className="mb-4">
-            {!collapsed && (
-              <p className="px-4 mb-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{group.label}</p>
-            )}
-            {group.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
-              
-              return (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all ${collapsed ? 'justify-center' : ''}`}
-                  style={isActive ? {
-                    backgroundColor: `${b.cor_primaria || 'var(--brand-primary)'}15`,
-                    color: b.cor_primaria || 'var(--brand-primary)',
-                    borderLeft: `2px solid ${b.cor_primaria || 'var(--brand-primary)'}`,
-                  } : {
-                    color: '#94a3b8',
-                    borderLeft: '2px solid transparent',
-                  }}
-                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.backgroundColor = 'rgba(30,41,59,0.5)'; e.currentTarget.style.color = '#e2e8f0'; }}}
-                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <Icon size={20} />
-                  {!collapsed && <span className="text-sm">{item.label}</span>}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-      
-      <div className={`p-4 border-t border-slate-800 ${collapsed ? 'items-center' : ''}`}>
-        {!collapsed && (
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${b.cor_primaria || 'var(--brand-primary)'}20` }}>
-              <User size={18} style={{ color: b.cor_primaria || 'var(--brand-primary)' }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-slate-200 truncate">{user?.nome}</p>
-              <p className="text-xs text-slate-500">{ROLE_LABELS[user?.role] || user?.role}</p>
-            </div>
-          </div>
-        )}
-        <button 
-          onClick={() => navigate('/sobre')}
-          className={`w-full flex items-center gap-2 px-3 py-2 text-slate-400 hover:bg-surface-hover rounded-lg transition-colors ${collapsed ? 'justify-center' : ''}`}
-          title={collapsed ? 'Sobre' : undefined}
-          data-testid="sidebar-about"
-        >
-          <AlertCircle size={18} />
-          {!collapsed && <span className="text-sm">Sobre</span>}
-        </button>
-        <button 
-          onClick={() => { logout(); navigate('/login'); }}
-          className={`w-full flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors ${collapsed ? 'justify-center' : ''}`}
-          title={collapsed ? 'Sair' : undefined}
-        >
-          <LogOut size={18} />
-          {!collapsed && <span className="text-sm">Sair</span>}
-        </button>
-      </div>
-    </aside>
-  );
-};
-
-// Mobile Bottom Nav
-const BottomNav = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { branding } = useBranding() || {};
-  const b = branding || {};
-  
-  const items = [
-    { icon: Home, label: 'Central', path: '/' },
-    { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
-    { icon: QrCode, label: 'Scan', path: '/scanner', special: true },
-    { icon: Box, label: 'Ativos', path: '/ativos' },
-    { icon: Wrench, label: 'OS', path: '/os' },
-  ];
-  
-  return (
-    <nav className="fixed bottom-0 left-0 right-0 backdrop-blur-sm border-t border-slate-800 z-40 pb-safe md:hidden"
-      style={{ backgroundColor: `${b.cor_menu || 'var(--brand-menu)'}f2` }} data-testid="bottom-nav">
-      <div className="flex items-center justify-around h-16">
-        {items.map((item, idx) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
-          
-          if (item.special) {
-            return (
-              <button key={idx} onClick={() => navigate(item.path)} className="scan-button pulse-glow"
-                style={{ backgroundColor: b.cor_primaria || 'var(--brand-primary)' }}>
-                <Icon size={26} />
-              </button>
-            );
-          }
-          
-          return (
-            <button
-              key={idx}
-              onClick={() => navigate(item.path)}
-              className="nav-item"
-              style={isActive ? { color: b.cor_primaria || 'var(--brand-primary)' } : {}}
-            >
-              <Icon size={20} />
-              <span className="text-[10px] mt-1">{item.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
-  );
-};
+// Sidebar, BottomNav → extracted to /app/MainLayout.js
 
 // ============== PAGES ==============
 
@@ -3854,120 +3591,7 @@ const OSDetailPage = () => {
 // DossiePesquisaPage, PortalPublicoPage, PortalTecnicoPage, MasterCleanupPage, OrgConfigPage
 // → /pages/*.js
 
-const AppLayout = ({ children }) => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { branding } = useBranding() || {};
-  const b = branding || {};
-  
-  return (
-    <div className="min-h-screen flex" style={{ backgroundColor: b.cor_fundo || 'var(--brand-bg)' }}>
-      <NetworkStatus />
-      <Sidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
-      <div className="flex-1 flex flex-col min-h-screen">
-        <main className="flex-1 pb-20 md:pb-4 px-4 pt-4 max-w-6xl mx-auto w-full">
-          {children}
-        </main>
-        <footer className="hidden md:flex items-center justify-center gap-4 py-2 text-[10px] text-slate-600 border-t border-surface/30" data-testid="app-footer">
-          <a href="/termos" className="hover:text-slate-400 transition-colors">Termos de Uso</a>
-          <span>|</span>
-          <a href="/privacidade" className="hover:text-slate-400 transition-colors">Privacidade</a>
-          <span>|</span>
-          <a href="/sobre" className="hover:text-slate-400 transition-colors">Sobre</a>
-          <span>|</span>
-          <span>v5.2.0-RC1</span>
-        </footer>
-        <BottomNav />
-      </div>
-    </div>
-  );
-};
-
-// ============== COMPLIANCE — CONSENT GATE ==============
-const ConsentGate = ({ children }) => {
-  const { user } = useAuth();
-  const [status, setStatus] = useState(null); // null=loading, true=accepted, false=needs acceptance
-  const [accepting, setAccepting] = useState(false);
-  const [termsChecked, setTermsChecked] = useState(false);
-  const [privacyChecked, setPrivacyChecked] = useState(false);
-  const [viewDoc, setViewDoc] = useState(null); // 'terms' | 'privacy'
-  const [docContent, setDocContent] = useState('');
-
-  useEffect(() => {
-    if (!user) { setStatus(true); return; }
-    api.get('/compliance/status').then(r => {
-      setStatus(r.data.accepted);
-    }).catch(() => setStatus(true));
-  }, [user]);
-
-  const handleAccept = async () => {
-    if (!termsChecked || !privacyChecked) {
-      toast.error('Você precisa aceitar ambos os documentos');
-      return;
-    }
-    setAccepting(true);
-    try {
-      await api.post('/compliance/accept');
-      setStatus(true);
-      toast.success('Termos aceitos com sucesso');
-    } catch {
-      toast.error('Erro ao registrar aceite');
-    } finally {
-      setAccepting(false);
-    }
-  };
-
-  const loadDoc = async (type) => {
-    try {
-      const res = await api.get(`/compliance/${type === 'terms' ? 'terms' : 'privacy'}`);
-      setDocContent(res.data.content || '');
-      setViewDoc(type);
-    } catch {
-      toast.error('Erro ao carregar documento');
-    }
-  };
-
-  if (status === null) return <Loading rows={3} />;
-  if (status === true) return children;
-
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--brand-bg, #0f172a)' }}>
-      <div className="glass-card max-w-lg w-full p-8 space-y-6" data-testid="consent-gate">
-        <div className="text-center">
-          <Shield size={40} className="mx-auto text-brand mb-3" />
-          <h2 className="text-xl font-bold text-primary">Termos e Privacidade</h2>
-          <p className="text-sm text-secondary mt-2">Para continuar utilizando o MAINTRIX, leia e aceite os documentos abaixo.</p>
-        </div>
-        <div className="space-y-3">
-          <label className="flex items-start gap-3 p-3 rounded-lg border border-surface hover:border-slate-600 cursor-pointer transition-colors" data-testid="terms-checkbox">
-            <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="mt-1 accent-emerald-500" />
-            <div>
-              <p className="text-sm text-primary font-medium">Termos de Uso</p>
-              <button type="button" onClick={() => loadDoc('terms')} className="text-xs text-brand hover:underline">Ler Termos de Uso v1.0</button>
-            </div>
-          </label>
-          <label className="flex items-start gap-3 p-3 rounded-lg border border-surface hover:border-slate-600 cursor-pointer transition-colors" data-testid="privacy-checkbox">
-            <input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="mt-1 accent-emerald-500" />
-            <div>
-              <p className="text-sm text-primary font-medium">Política de Privacidade</p>
-              <button type="button" onClick={() => loadDoc('privacy')} className="text-xs text-brand hover:underline">Ler Política de Privacidade v1.0</button>
-            </div>
-          </label>
-        </div>
-        <button onClick={handleAccept} disabled={!termsChecked || !privacyChecked || accepting} className="btn-primary w-full flex items-center justify-center gap-2" data-testid="accept-compliance-btn">
-          {accepting ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-          {accepting ? 'Registrando...' : 'Aceitar e Continuar'}
-        </button>
-      </div>
-      {viewDoc && (
-        <Modal isOpen={true} onClose={() => setViewDoc(null)} title={viewDoc === 'terms' ? 'Termos de Uso' : 'Politica de Privacidade'} size="lg">
-          <div className="prose prose-invert prose-sm max-h-[60vh] overflow-y-auto custom-scrollbar whitespace-pre-wrap text-sm text-slate-300 leading-relaxed">
-            {docContent}
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-};
+// AppLayout, ConsentGate → extracted to /app/MainLayout.js and /app/AppProviders.js
 
 // ============== SOBRE O MAINTRIX ==============
 const SobrePage = () => {
@@ -4027,96 +3651,63 @@ const LegalDocPage = ({ type }) => {
 };
 
 // Auth Provider
-const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    const storedUser = sessionStorage.getItem('maintrix_user');
-    if (storedUser) setUser(JSON.parse(storedUser));
-    setLoading(false);
-  }, []);
-  
-  const login = (data) => {
-    sessionStorage.setItem('maintrix_token', data.access_token);
-    sessionStorage.setItem('maintrix_user', JSON.stringify(data.user));
-    setUser(data.user);
-  };
-  
-  const logout = () => {
-    sessionStorage.removeItem('maintrix_token');
-    sessionStorage.removeItem('maintrix_user');
-    setUser(null);
-  };
-  
-  return <AuthContext.Provider value={{ user, login, logout, loading }}>{children}</AuthContext.Provider>;
-};
-
-// Branding loader — runs after auth to apply org theme
-const BrandingLoader = ({ children }) => {
-  const { user } = useAuth();
-  const { loadFromUser } = useBranding();
-  useEffect(() => { if (user) loadFromUser(user); }, [user, loadFromUser]);
-  return children;
-};
+// AuthProvider, BrandingLoader → extracted to /app/AppProviders.js
 
 // App
 function App() {
   return (
-    <ErrorBoundary>
-    <BrandingProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <BrandingLoader>
-            <ConsentGate>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/termos" element={<ProtectedRoute><AppLayout><LegalDocPage type="terms" /></AppLayout></ProtectedRoute>} />
-              <Route path="/privacidade" element={<ProtectedRoute><AppLayout><LegalDocPage type="privacy" /></AppLayout></ProtectedRoute>} />
-              <Route path="/sobre" element={<ProtectedRoute><AppLayout><SobrePage /></AppLayout></ProtectedRoute>} />
-              <Route path="/" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><CentralTrabalhoPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/ativos" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><AtivosPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/ativos/:id" element={<ProtectedRoute><AppLayout><AssetDossierPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/os" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><OSPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/os/:id" element={<ProtectedRoute><AppLayout><OSDetailPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/estoque" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><EstoquePage /></AppLayout></ProtectedRoute>} />
-              <Route path="/inspecoes" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><InspecoesPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/inspecoes/:id" element={<ProtectedRoute><AppLayout><InspecaoDetailPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/ronda" element={<ProtectedRoute><AppLayout><RondaPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/scanner" element={<ProtectedRoute><AppLayout><ScannerPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/sobressalentes" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/paradas" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/solicitar" element={<ProtectedRoute allow={['master','admin','pcm','supervisor','tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor','operador']}><AppLayout><SolicitacaoServicoPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/minha-area" element={<ProtectedRoute><AppLayout><FieldOpsPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/usuarios" element={<ProtectedRoute allow={['master','admin']}><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/templates" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/config/documentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><DocConfigPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/config/construtor" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><LayoutBuilderPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaCorporativaPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/auditoria" element={<ProtectedRoute allow={['master','admin','gerente','supervisor']}><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/unidades" element={<ProtectedRoute allow={['master','admin']}><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/config" element={<ProtectedRoute allow={['master','admin']}><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/equipe" element={<ProtectedRoute allow={['master','admin','pcm','supervisor']}><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
-              <Route path="/biblioteca/equipamentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/dossie" element={<ProtectedRoute allow={['master','admin','pcm','supervisor','gerente']}><AppLayout><DossiePesquisaPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/master/white-label" element={<ProtectedRoute allow={['master']}><AppLayout><WhiteLabelDesignerPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/master/cleanup" element={<ProtectedRoute allow={['master']}><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/consulta" element={<ProtectedRoute><AppLayout><ConsultaEquipamentosPage /></AppLayout></ProtectedRoute>} />
-              <Route path="/portal/equipamento/:id" element={<PortalPublicoPage />} />
-              <Route path="/portal/tecnico/:id" element={<ProtectedRoute><AppLayout><PortalTecnicoPage /></AppLayout></ProtectedRoute>} />
-              <Route path="*" element={<CatchAllRedirect />} />
-            </Routes>
-            </ConsentGate>
-          </BrandingLoader>
-          <Toaster position="top-center" richColors />
-        </BrowserRouter>
-      </AuthProvider>
-    </BrandingProvider>
-    </ErrorBoundary>
+    <AppProviders>
+      <BrowserRouter>
+        <BrandingLoader>
+          <ConsentGate>
+          <Suspense fallback={<LazyFallback />}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/termos" element={<ProtectedRoute><AppLayout><LegalDocPage type="terms" /></AppLayout></ProtectedRoute>} />
+            <Route path="/privacidade" element={<ProtectedRoute><AppLayout><LegalDocPage type="privacy" /></AppLayout></ProtectedRoute>} />
+            <Route path="/sobre" element={<ProtectedRoute><AppLayout><SobrePage /></AppLayout></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><CentralTrabalhoPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/ativos" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><AtivosPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/ativos/:id" element={<ProtectedRoute><AppLayout><AssetDossierPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/os" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><OSPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/os/:id" element={<ProtectedRoute><AppLayout><OSDetailPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/estoque" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><EstoquePage /></AppLayout></ProtectedRoute>} />
+            <Route path="/inspecoes" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><InspecoesPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/inspecoes/:id" element={<ProtectedRoute><AppLayout><InspecaoDetailPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/ronda" element={<ProtectedRoute><AppLayout><RondaPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/scanner" element={<ProtectedRoute><AppLayout><ScannerPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/sobressalentes" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><SobressalentesPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/paradas" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><ParadasPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/solicitar" element={<ProtectedRoute allow={['master','admin','pcm','supervisor','tec_mecanico','tec_eletrico','instrumentista','lubrificador','tecnico','inspetor','operador']}><AppLayout><SolicitacaoServicoPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/minha-area" element={<ProtectedRoute><AppLayout><FieldOpsPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/assistente" element={<ProtectedRoute><AppLayout><AssistentePage /></AppLayout></ProtectedRoute>} />
+            <Route path="/admin/usuarios" element={<ProtectedRoute allow={['master','admin']}><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/admin/templates" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/config/documentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><DocConfigPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/config/construtor" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><LayoutBuilderPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaCorporativaPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/admin/auditoria" element={<ProtectedRoute allow={['master','admin','gerente','supervisor']}><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/unidades" element={<ProtectedRoute allow={['master','admin']}><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/admin/config" element={<ProtectedRoute allow={['master','admin']}><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/equipe" element={<ProtectedRoute allow={['master','admin','pcm','supervisor']}><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
+            <Route path="/biblioteca/equipamentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/dossie" element={<ProtectedRoute allow={['master','admin','pcm','supervisor','gerente']}><AppLayout><DossiePesquisaPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/master/white-label" element={<ProtectedRoute allow={['master']}><AppLayout><WhiteLabelDesignerPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/master/cleanup" element={<ProtectedRoute allow={['master']}><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/consulta" element={<ProtectedRoute><AppLayout><ConsultaEquipamentosPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/portal/equipamento/:id" element={<PortalPublicoPage />} />
+            <Route path="/portal/tecnico/:id" element={<ProtectedRoute><AppLayout><PortalTecnicoPage /></AppLayout></ProtectedRoute>} />
+            <Route path="*" element={<CatchAllRedirect />} />
+          </Routes>
+          </Suspense>
+          </ConsentGate>
+        </BrandingLoader>
+        <Toaster position="top-center" richColors />
+      </BrowserRouter>
+    </AppProviders>
   );
 }
 
