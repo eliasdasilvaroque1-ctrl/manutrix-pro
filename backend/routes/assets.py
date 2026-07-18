@@ -154,18 +154,20 @@ async def get_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     verify_org_access(user, ativo, "Ativo")
 
+    org_id = user.get('organization_id', '')
+
     ativo['sector'] = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0})
-    ativo['ordens_servico'] = await db.ordens_servico.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+    ativo['ordens_servico'] = await db.ordens_servico.find({"ativo_id": ativo_id, "organization_id": org_id, "deleted_at": None}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
     ativo['inspecoes'] = await db.inspecoes.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
     ativo['materiais'] = await db.ativo_materiais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(100)
 
     # Auto-calculated KPIs from OS history
     os_corretivas = await db.ordens_servico.find(
-        {"ativo_id": ativo_id, "tipo": "corretiva", "status": "concluida", "deleted_at": None},
+        {"ativo_id": ativo_id, "organization_id": org_id, "tipo": "corretiva", "status": "concluida", "deleted_at": None},
         {"_id": 0, "tempo_execucao_minutos": 1, "data_abertura": 1, "data_conclusao": 1}
     ).to_list(500)
 
-    total_os = await db.ordens_servico.count_documents({"ativo_id": ativo_id, "deleted_at": None})
+    total_os = await db.ordens_servico.count_documents({"ativo_id": ativo_id, "organization_id": org_id, "deleted_at": None})
     num_falhas = len(os_corretivas)
     tempos = [o['tempo_execucao_minutos'] for o in os_corretivas if o.get('tempo_execucao_minutos')]
 
@@ -318,6 +320,10 @@ async def duplicate_ativo(ativo_id: str, body: dict, user: Dict = Depends(get_cu
 @router.get("/ativos/{ativo_id}/materiais")
 async def list_ativo_materiais(ativo_id: str, user: Dict = Depends(get_current_user)):
     """List materials linked to an asset"""
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
     return await db.ativo_materiais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(100)
 
 @router.post("/ativos/{ativo_id}/materiais")
@@ -381,6 +387,7 @@ async def get_ativo_historico(
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     verify_org_access(user, ativo, "Ativo")
 
+    org_id = user.get('organization_id', '')
     eventos = []
 
     # Helper to resolve user name
@@ -395,7 +402,7 @@ async def get_ativo_historico(
 
     # OS
     if not tipo or tipo == 'os':
-        os_query = {"ativo_id": ativo_id, "deleted_at": None}
+        os_query = {"ativo_id": ativo_id, "organization_id": org_id, "deleted_at": None}
         if status:
             os_query['status'] = status
         oss = await db.ordens_servico.find(
@@ -545,6 +552,8 @@ async def get_ativo_saude(ativo_id: str, user: Dict = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     verify_org_access(user, ativo, "Ativo")
 
+    org_id = user.get('organization_id', '')
+
     # Last and next for each type
     async def get_last(collection, query, date_field="data_conclusao"):
         doc = await collection.find_one(
@@ -568,22 +577,22 @@ async def get_ativo_saude(ativo_id: str, user: Dict = Depends(get_current_user))
             user_cache[uid] = u.get('nome') if u else None
         return user_cache[uid]
 
-    # Inspections
+    # Inspections (no org_id in collection — protected by ativo verify_org_access)
     last_insp = await get_last(db.inspecoes, {"ativo_id": ativo_id, "tipo": {"$nin": ["lubrificacao"]}})
     next_insp = await get_next_pending(db.inspecoes, {"ativo_id": ativo_id, "tipo": {"$nin": ["lubrificacao"]}})
 
-    # Preventivas (OS tipo=preventiva)
-    last_prev = await get_last(db.ordens_servico, {"ativo_id": ativo_id, "tipo": "preventiva"}, "data_conclusao")
-    next_prev_q = {"ativo_id": ativo_id, "tipo": "preventiva", "deleted_at": None, "status": {"$in": ["aberta", "planejada"]}}
+    # Preventivas (OS — has org_id)
+    last_prev = await get_last(db.ordens_servico, {"ativo_id": ativo_id, "organization_id": org_id, "tipo": "preventiva"}, "data_conclusao")
+    next_prev_q = {"ativo_id": ativo_id, "organization_id": org_id, "tipo": "preventiva", "deleted_at": None, "status": {"$in": ["aberta", "planejada"]}}
     next_prev = await db.ordens_servico.find_one(next_prev_q, {"_id": 0}, sort=[("data_planejada", 1)])
 
-    # Lubrificação
+    # Lubrificação (no org_id — protected by ativo)
     last_lub = await get_last(db.inspecoes, {"ativo_id": ativo_id, "tipo": "lubrificacao"})
 
-    # Last OS (any)
-    last_os = await get_last(db.ordens_servico, {"ativo_id": ativo_id})
+    # Last OS (has org_id)
+    last_os = await get_last(db.ordens_servico, {"ativo_id": ativo_id, "organization_id": org_id})
 
-    # Last anomalia
+    # Last anomalia (no org_id — protected by ativo)
     last_anom = await db.anomalias.find_one(
         {"ativo_id": ativo_id, "deleted_at": None},
         {"_id": 0}, sort=[("created_at", -1)]
@@ -627,9 +636,9 @@ async def get_ativo_dossie(ativo_id: str, user: Dict = Depends(get_current_user)
     # Parallel data fetch
     sector = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0}) or {}
 
-    # OS (all, most recent first)
+    # OS (all, most recent first) — org_id enforced
     os_all = await db.ordens_servico.find(
-        {"ativo_id": ativo_id, "deleted_at": None},
+        {"ativo_id": ativo_id, "organization_id": org_id, "deleted_at": None},
         {"_id": 0, "id": 1, "numero": 1, "titulo": 1, "tipo": 1, "disciplina": 1,
          "prioridade": 1, "status": 1, "responsavel_id": 1, "data_abertura": 1,
          "data_inicio": 1, "data_conclusao": 1, "tempo_execucao_minutos": 1,
@@ -658,10 +667,10 @@ async def get_ativo_dossie(ativo_id: str, user: Dict = Depends(get_current_user)
         {"_id": 0}
     ).sort("created_at", -1).to_list(200)
 
-    # Documents (manuals + attachments)
+    # Documents (manuals + attachments) — attachments has org_id
     manuais = await db.manuais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(50)
     attachments = await db.attachments.find(
-        {"entity_type": "ativo", "entity_id": ativo_id, "deleted_at": None},
+        {"entity_type": "ativo", "entity_id": ativo_id, "organization_id": org_id, "deleted_at": None},
         {"_id": 0}
     ).to_list(100)
 
