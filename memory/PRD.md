@@ -1,66 +1,57 @@
-# MAINTRIX ENTERPRISE — Product Requirements Document
+# MAINTRIX ENTERPRISE — PRD
 
 ## Visão: CMMS/EAM SaaS multi-tenant | Stack: React PWA + FastAPI + MongoDB Atlas | Piloto: ASTEC
 
 ---
 
-## ✅ RC Construtor Visual de Documentos — Onda 1 (17 Jul 2026)
+## ✅ RC5.0 Missão 1 — Biblioteca Corporativa de Documentos (18 Jul 2026)
 
-### Arquitetura
-- **Camada visual sobre a Biblioteca Corporativa** — não duplica lógica
-- **Schema JSON estruturado** (schema_version: 1) com blocos tipados e validados
-- **@dnd-kit/core** + @dnd-kit/sortable para DnD (mouse + touch + teclado)
-- **3-panel layout**: Paleta (esquerda) → Canvas (centro) → Propriedades (direita)
-- **Workflow**: Rascunho → Publicado → Inativo (1 publicado por tipo_documento por org)
+### Entregas
+- Collection `documentos_corporativos` com 30+ campos
+- CRUD completo: Criar, Visualizar, Editar, Excluir (lógico), Restaurar
+- 11 tipos de documento, 6 status, pesquisa full-text, filtros combinados, paginação
+- Versionamento via `biblioteca_versoes` (edição em publicado incrementa versão)
+- Auditoria em `audit_log` (create, update, status_change, delete, restore)
+- RBAC: Admin/PCM full, Técnico read-only publicados
+- Multi-tenant: org_id isolado em todas as queries
+- Frontend: BibliotecaCorporativaPage com lista, filtros, form 7-step, viewer, versões
+- Formulário organizado em seções: Identificação, Classificação, Aplicabilidade, Conteúdo, Segurança, Vigência, Versionamento
 
-### Schema de Blocos
-```json
-{ "schema_version": 1, "blocks": [
-  {"id": "uuid", "type": "header", "order": 0, "visible": true, "settings": {}, "library_ref_id": null}
-]}
-```
-15 tipos de bloco: header, footer, equipment, info, description, team, dates, procedure, safety, checklist, signature, qr_code, photos, materials, indicators, history, custom_fields, free_text, separator, page_break, observations
+### Endpoints
+- GET/POST `/api/documentos-corporativos` (list+create)
+- GET/PUT/DELETE `/api/documentos-corporativos/{id}` (read+update+delete)
+- PATCH `/api/documentos-corporativos/{id}/status` (change status)
+- POST `/api/documentos-corporativos/{id}/restaurar` (undelete)
+- GET `/api/documentos-corporativos/{id}/versoes` (history)
+- POST `/api/documentos-corporativos/{id}/restaurar-versao/{v}` (restore version)
+- GET `/api/documentos-corporativos/{id}/audit` (audit log)
 
-### Validações Backend (Pydantic)
-- Tipos de bloco: whitelist BLOCK_TYPES
-- IDs duplicados → 422
-- Max 1 header/footer → 422
-- Referências cross-tenant → 400 na publicação
-- HTML/scripts rejeitados
-
-### Endpoints novos
-- POST `/api/doc-config/layouts/{id}/publicar`
-- POST `/api/doc-config/layouts/{id}/duplicar`
-- GET `/api/doc-config/layouts/publicado/{tipo_documento}`
-- GET `/api/doc-config/layouts/{id}/preview-data`
-
-### Testes Wave 1: 24/24 PASS
-### Regressão: 53/53 PASS
-### Total acumulado: ~235+ testes
+### Validação
+- CRUD: ✅ Create, Read, Update, Delete, Restore
+- Search/Filters: ✅ Texto, tipo, disciplina, status, segurança
+- Versioning: ✅ 3 versões registradas em fluxo create→update→publish
+- Audit: ✅ 3 entries (create, update, status_change)
+- RBAC: ✅ Técnico→403 (create), 200 (read)
+- Duplicate code: ✅ HTTP 409
+- Backward compat: ✅ Todos endpoints existentes retornando 200
+- Regressão: Limitada por rate-limiter (endpoints verificados individualmente)
 
 ---
 
-## Concluído
-- Auth multi-tenant RBAC | Dashboard | CRUD Ativos | OS máquina de estados | Inspeções | Estoque
-- Exportações Excel/PDF | PDF Unicode (DejaVu Sans) | Download Blob | Performance
-- Sprint 1: Versionamento | Sprint 2: Checklists/Modelos | Sprint 3: Personalização completa
-- **Construtor Visual Onda 1**: DnD, validação, publicação, snapshot isolation
-
----
+## Concluído anteriormente
+- RC Documentos Fase 1 (Unicode PDF)
+- Sprint 1-3 Biblioteca Corporativa (Versionamento, Checklists, Personalização)
+- RC Construtor Visual Onda 1
 
 ## Backlog
-
-### P1 (Onda 2/3 Construtor)
-- Config por bloco (fontes, margens, cores)
-- WYSIWYG preview em tempo real
-- Texto livre avançado
+### P1
+- RC5.0 Missão 2: Vínculo automático com OS
+- Upload de arquivos para documentos
+- Snapshot de documentos na OS
 
 ### P1
-- QR Code MVP (Fase 2 Piloto)
+- QR Code MVP
+- Construtor Visual Ondas 2-3
 
 ### P2
 - ERP/SAP
-- Dataset homologação
-
-### P3
-- IA Assistente

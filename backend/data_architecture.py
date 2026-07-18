@@ -224,6 +224,16 @@ INDEXES = {
     "layouts_documento": [
         {"keys": [("organization_id", 1), ("deleted_at", 1)], "name": "org_active"},
     ],
+    "documentos_corporativos": [
+        {"keys": [("organization_id", 1), ("deleted_at", 1), ("status", 1)], "name": "org_active_status"},
+        {"keys": [("organization_id", 1), ("code", 1)], "name": "org_code"},
+        {"keys": [("organization_id", 1), ("document_type", 1)], "name": "org_type"},
+        {"keys": [("title", "text"), ("code", "text"), ("description", "text"), ("tags", "text")], "name": "text_search"},
+    ],
+    "audit_log": [
+        {"keys": [("entity_type", 1), ("entity_id", 1), ("created_at", -1)], "name": "entity_log"},
+        {"keys": [("organization_id", 1), ("created_at", -1)], "name": "org_log"},
+    ],
 }
 
 

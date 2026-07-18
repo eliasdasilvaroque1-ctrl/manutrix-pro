@@ -45,6 +45,7 @@ import EquipePage from "./pages/EquipePage";
 import WhiteLabelDesignerPage from "./pages/WhiteLabelDesignerPage";
 import DocConfigPage from "./pages/DocConfigPage";
 import LayoutBuilderPage from "./pages/LayoutBuilderPage";
+import BibliotecaCorporativaPage from "./pages/BibliotecaCorporativaPage";
 import { ConsultaEquipamentosPage, DossiePesquisaPage } from "./pages/ConsultaPages";
 import { PortalPublicoPage, PortalTecnicoPage } from "./pages/PortalPages";
 import MasterCleanupPage from "./pages/MasterCleanupPage";
@@ -817,7 +818,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     ...(['admin','master','pcm','supervisor'].includes(role) ? [{
       label: 'PCM',
       items: [
-        ...(['admin','master','pcm'].includes(role) ? [{ icon: BookOpen, label: 'Biblioteca', path: '/biblioteca' }] : []),
+        ...(['admin','master','pcm'].includes(role) ? [{ icon: BookOpen, label: 'Biblioteca Corporativa', path: '/biblioteca' }] : []),
         { icon: FileText, label: 'Dossiê / Pesquisa', path: '/dossie' },
       ]
     }] : []),
@@ -4043,13 +4044,14 @@ function App() {
               <Route path="/admin/templates" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
               <Route path="/config/documentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><DocConfigPage /></AppLayout></ProtectedRoute>} />
               <Route path="/config/construtor" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><LayoutBuilderPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaCorporativaPage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/auditoria" element={<ProtectedRoute allow={['master','admin','gerente','supervisor']}><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
               <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
               <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
               <Route path="/unidades" element={<ProtectedRoute allow={['master','admin']}><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
               <Route path="/admin/config" element={<ProtectedRoute allow={['master','admin']}><AppLayout><OrgConfigPage /></AppLayout></ProtectedRoute>} />
               <Route path="/equipe" element={<ProtectedRoute allow={['master','admin','pcm','supervisor']}><AppLayout><EquipePage /></AppLayout></ProtectedRoute>} />
-              <Route path="/biblioteca" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/biblioteca/equipamentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><BibliotecaPage /></AppLayout></ProtectedRoute>} />
               <Route path="/dossie" element={<ProtectedRoute allow={['master','admin','pcm','supervisor','gerente']}><AppLayout><DossiePesquisaPage /></AppLayout></ProtectedRoute>} />
               <Route path="/master/white-label" element={<ProtectedRoute allow={['master']}><AppLayout><WhiteLabelDesignerPage /></AppLayout></ProtectedRoute>} />
               <Route path="/master/cleanup" element={<ProtectedRoute allow={['master']}><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
