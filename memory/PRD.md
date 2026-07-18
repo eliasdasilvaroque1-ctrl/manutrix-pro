@@ -17,85 +17,46 @@
 - RC5.1 Fase 3: JWT Fail-Fast + Isolamento Dossie + Indices MongoDB — APROVADA
 - RC5.2: Procedimento Operacional integrado a OS — CONCLUIDA
 - RC5.2.1: Hardening Final do Procedimento Operacional — CONCLUIDA
+- RC5.9: Pilot Readiness Review (Auditoria Final) — CONCLUIDA
 
 ---
 
-## RC5.2 — PROCEDIMENTO OPERACIONAL NA OS (CONCLUIDA)
+## RC5.9 — PILOT READINESS REVIEW (CONCLUIDA 18/07/2026)
 
-### Objetivo
-Permitir que OS possua procedimento operacional com etapas executaveis pelo tecnico.
+### Achados
+- P0: procedimento_id nao salvo via formulario OS (OSCreate/OSUpdate model)
+- P1: Master login com senha desatualizada
+- P1: /api/central ~2.3s latencia
+- P2: Ativos sem paginacao server-side
+- P2: Validacao Pydantic antes de RBAC check
 
-### Entregas
-- CRUD de Procedimentos (codigo, nome, descricao, revisao, versao, status, etapas)
-- Etapas com ordem, titulo, descricao, obrigatoriedade
-- Vinculacao procedimento <-> OS (opcional, campo procedimento_id)
-- Execucao na OS: checkbox por etapa, observacao, executor, timestamp
-- PDF atualizado com secao "Procedimento Executado"
-- Menu "Procedimentos" no sidebar (Admin/PCM)
-- Select de procedimentos aprovados no formulario da OS
-- Auditoria completa (create, update, delete, vincular, etapa_concluida)
-- RBAC: Admin/PCM criam, Supervisor visualiza, Tecnico executa etapas
-- Multi-tenant: organization_id em todas as queries
-
-### Endpoints
-- GET/POST /api/procedimentos
-- GET/PUT/DELETE /api/procedimentos/{id}
-- GET /api/procedimentos-select (aprovados, light)
-- PATCH /api/ordens-servico/{id}/procedimento (vincular/desvincular)
-- GET /api/ordens-servico/{id}/procedimento-execucao
-- POST /api/ordens-servico/{id}/procedimento-execucao/etapa
-
-### Collections
-- procedimentos: {id, org_id, codigo, nome, descricao, revisao, versao, status, etapas[], ...}
-- procedimento_execucoes: {id, os_id, proc_id, org_id, etapas_executadas: {etapa_id: {concluida, obs, por, em}}}
-- ordens_servico: +campo procedimento_id (opcional)
-
-### Arquivos
-- backend/routes/procedimentos.py (novo)
-- backend/server.py (import + include_router + PDF)
-- frontend/src/pages/ProcedimentosPage.js (novo)
-- frontend/src/App.js (rota + lazy import + OS form + OS detail section)
-- frontend/src/app/MainLayout.js (menu item)
-
-### Testes: 13/13
-- Criar, Editar, Listar, Select, Vincular, Execucao, Estado, PDF, Auditoria, RBAC, Multi-empresa, Compatibilidade
-
----
-
-## RC5.2.1 — HARDENING FINAL DO PROCEDIMENTO OPERACIONAL (CONCLUIDA)
-
-### Objetivo
-Refinar UI/UX, PDF e validacoes backend do modulo Procedimentos antes do piloto ASTEC.
-
-### Entregas
-- Barra de progresso visual na execucao de etapas
-- Cabecalho do procedimento com informacoes contextuais
-- Destaque visual da etapa ativa (highlight)
-- PDF aprimorado com layout otimizado para procedimentos
-- Ordenacao protegida de etapas (backend)
-- Validacoes backend: nome vazio, codigo duplicado
-- Performance mantida, zero regressoes
-
-### Arquivos Modificados
-- backend/routes/procedimentos.py (validacoes)
-- backend/server.py (PDF layout)
-- frontend/src/App.js (UI: barra de progresso, highlight etapa, cabecalho)
-
-### Testes: 13/13 (100% pass rate, zero regressoes)
+### Validacao
+- Build: OK
+- Multi-tenant: OK
+- RBAC: OK (exceto P2 ordering)
+- PDF: OK
+- Seguranca: OK
+- 0 regressoes
 
 ---
 
 ## Backlog
 
+### P0 (Blocker para piloto)
+- procedimento_id em OSCreate/OSUpdate (15-30min)
+
 ### P1
+- Corrigir senha master ou atualizar test_credentials
+- Otimizar /api/central (cache/aggregation)
 - Construtor Visual Ondas 2-3
-- QR Code MVP (Fase 2 do Piloto)
+- QR Code MVP (Fase 2)
 
 ### P2
+- Paginacao /api/ativos
+- RBAC ordering (Depends antes Pydantic)
 - N+1: Dossie OS, Dossie Ativo
 - server.py monolitico (4400+ linhas)
-- Inline pages split (extracao OSDetailPage)
-- /api/ativos sem paginacao
+- Extracao OSDetailPage
 - ERP/SAP
 
 ### P3
