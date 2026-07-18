@@ -280,6 +280,9 @@ async def update_documento(doc_id: str, body: DocumentoCorporativo, user=Depends
         new_version += 1
 
     update["version"] = new_version
+    # Preserve status if body sends default "rascunho" and existing was different
+    if update.get("status") == "rascunho" and existing.get("status") not in (None, "rascunho"):
+        update["status"] = existing.get("status")
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     update["updated_by"] = user_id
 
@@ -421,3 +424,50 @@ async def get_audit_log(doc_id: str, user=Depends(get_current_user)):
         {"_id": 0}
     ).sort("created_at", -1).to_list(200)
     return logs
+
+
+@router.get("/documentos-corporativos-stats")
+async def get_stats(user=Depends(get_current_user)):
+    """Get document counts by status for KPI indicators."""
+    org_id = user.get('organization_id', '')
+    base = {"organization_id": org_id, "deleted_at": None}
+    total = await db.documentos_corporativos.count_documents(base)
+    publicados = await db.documentos_corporativos.count_documents({**base, "status": "publicado"})
+    em_revisao = await db.documentos_corporativos.count_documents({**base, "status": "em_revisao"})
+    obsoletos = await db.documentos_corporativos.count_documents({**base, "status": "obsoleto"})
+    arquivados = await db.documentos_corporativos.count_documents({**base, "status": "arquivado"})
+    rascunhos = await db.documentos_corporativos.count_documents({**base, "status": "rascunho"})
+    seguranca = await db.documentos_corporativos.count_documents({**base, "safety_document": True})
+    return {"total": total, "publicados": publicados, "em_revisao": em_revisao, "obsoletos": obsoletos, "arquivados": arquivados, "rascunhos": rascunhos, "seguranca": seguranca}
+
+
+@router.post("/documentos-corporativos/{doc_id}/duplicar")
+async def duplicar_documento(doc_id: str, user=Depends(get_current_user)):
+    """Duplicate a document as a new draft with auto-generated code."""
+    org_id, user_id = _require_editor(user)
+    source = await db.documentos_corporativos.find_one({"id": doc_id, "organization_id": org_id, "deleted_at": None}, {"_id": 0})
+    if not source:
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    new_id = str(uuid.uuid4())
+    new_code = f"{source.get('code', 'DOC')}-COPY-{new_id[:4].upper()}" if source.get('code') else None
+    new_doc = {k: v for k, v in source.items() if k not in ("_id", "id", "version", "created_at", "created_by", "updated_at", "updated_by")}
+    new_doc.update({
+        "id": new_id,
+        "title": f"{source['title']} (Cópia)",
+        "code": new_code,
+        "version": 1,
+        "status": "rascunho",
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user_id,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": user_id,
+        "deleted_at": None,
+        "deleted_by": None,
+    })
+    await db.documentos_corporativos.insert_one(new_doc)
+    await archive_version("documento_corporativo", new_doc, user_id, f"Duplicado de {source.get('title')}")
+    await _audit_log(org_id, user_id, "duplicate", new_id, {"source_id": doc_id, "source_title": source.get("title")})
+
+    return {"id": new_id, "title": new_doc["title"], "code": new_code, "status": "created"}

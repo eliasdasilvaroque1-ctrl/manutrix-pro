@@ -43,6 +43,7 @@ const BibliotecaCorporativaPage = () => {
   const [editItem, setEditItem] = useState(null);
   const [viewItem, setViewItem] = useState(null);
   const [versionItem, setVersionItem] = useState(null);
+  const [stats, setStats] = useState(null);
   const canEdit = ['master', 'admin', 'pcm'].includes(user?.role);
 
   const fetchDocs = useCallback(async () => {
@@ -54,10 +55,14 @@ const BibliotecaCorporativaPage = () => {
       if (filters.discipline) params.set('discipline', filters.discipline);
       if (filters.status) params.set('status', filters.status);
       if (filters.safety_document) params.set('safety_document', filters.safety_document);
-      const r = await api.get(`/documentos-corporativos?${params}`);
+      const [r, s] = await Promise.all([
+        api.get(`/documentos-corporativos?${params}`),
+        api.get('/documentos-corporativos-stats'),
+      ]);
       setItems(r.data.items);
       setTotal(r.data.total);
       setTotalPages(r.data.total_pages);
+      setStats(s.data);
     } catch { toast.error('Erro ao carregar documentos'); }
     setLoading(false);
   }, [page, search, filters]);
@@ -77,34 +82,55 @@ const BibliotecaCorporativaPage = () => {
     } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
   };
 
+  const handleDuplicate = async (id) => {
+    try {
+      const r = await api.post(`/documentos-corporativos/${id}/duplicar`);
+      toast.success(`Documento duplicado: ${r.data.title}`);
+      fetchDocs();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Erro ao duplicar'); }
+  };
+
   return (
     <PageContainer>
-      <PageHeader title="Biblioteca Corporativa" subtitle={`${total} documentos`} testId="biblioteca-title" />
+      <PageHeader title="Biblioteca Corporativa" subtitle="Procedimentos, normas e documentos técnicos" testId="biblioteca-title" />
+
+      {/* KPI Indicators */}
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-4" data-testid="kpi-indicators">
+          <KpiCard label="Total" value={stats.total} icon="📄" />
+          <KpiCard label="Publicados" value={stats.publicados} icon="🟢" />
+          <KpiCard label="Rascunhos" value={stats.rascunhos} icon="📝" />
+          <KpiCard label="Em Revisão" value={stats.em_revisao} icon="🟡" />
+          <KpiCard label="Obsoletos" value={stats.obsoletos} icon="🔴" />
+          <KpiCard label="Arquivados" value={stats.arquivados} icon="📁" />
+          <KpiCard label="Segurança" value={stats.seguranca} icon="🛡" />
+        </div>
+      )}
 
       {/* Search & Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-wrap gap-2 mb-4">
+        <div className="relative flex-1 min-w-[180px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Pesquisar por título, código ou tag..."
-            className="input-industrial w-full pl-9 pr-3" data-testid="search-docs" />
+          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Pesquisar título, código, tag..."
+            className="input-industrial w-full pl-9 pr-3 text-sm" data-testid="search-docs" />
         </div>
-        <select value={filters.document_type} onChange={e => { setFilters(f => ({ ...f, document_type: e.target.value })); setPage(1); }} className="input-industrial px-3 w-48" data-testid="filter-type">
-          <option value="">Todos os tipos</option>
+        <select value={filters.document_type} onChange={e => { setFilters(f => ({ ...f, document_type: e.target.value })); setPage(1); }} className="input-industrial px-2 text-sm w-auto min-w-[120px]" data-testid="filter-type">
+          <option value="">Tipo</option>
           {DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
-        <select value={filters.discipline} onChange={e => { setFilters(f => ({ ...f, discipline: e.target.value })); setPage(1); }} className="input-industrial px-3 w-40">
+        <select value={filters.discipline} onChange={e => { setFilters(f => ({ ...f, discipline: e.target.value })); setPage(1); }} className="input-industrial px-2 text-sm w-auto min-w-[100px]">
           <option value="">Disciplina</option>
           {DISCIPLINES.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
         </select>
-        <select value={filters.status} onChange={e => { setFilters(f => ({ ...f, status: e.target.value })); setPage(1); }} className="input-industrial px-3 w-36">
+        <select value={filters.status} onChange={e => { setFilters(f => ({ ...f, status: e.target.value })); setPage(1); }} className="input-industrial px-2 text-sm w-auto min-w-[100px]">
           <option value="">Status</option>
           {Object.entries(STATUS_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-        <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-          <input type="checkbox" checked={filters.safety_document === 'true'} onChange={e => { setFilters(f => ({ ...f, safety_document: e.target.checked ? 'true' : '' })); setPage(1); }} />
-          <Shield size={14} /> Segurança
+        <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer shrink-0">
+          <input type="checkbox" checked={filters.safety_document === 'true'} onChange={e => { setFilters(f => ({ ...f, safety_document: e.target.checked ? 'true' : '' })); setPage(1); }} className="w-3.5 h-3.5" />
+          <Shield size={14} /> Seg.
         </label>
-        {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="new-doc-btn"><Plus size={16} /> Novo Documento</button>}
+        {canEdit && <button onClick={() => { setEditItem(null); setShowForm(true); }} className="btn-primary flex items-center gap-2 shrink-0 text-sm" data-testid="new-doc-btn"><Plus size={16} /> Novo</button>}
       </div>
 
       {/* List */}
@@ -114,23 +140,25 @@ const BibliotecaCorporativaPage = () => {
             const st = STATUS_MAP[doc.status] || STATUS_MAP.rascunho;
             const typeLabel = DOC_TYPES.find(t => t.value === doc.document_type)?.label || doc.document_type;
             return (
-              <div key={doc.id} className="glass-card p-4 flex items-start justify-between gap-3 hover:border-slate-600 transition-all" data-testid={`doc-${doc.id}`}>
+              <div key={doc.id} className="glass-card p-3 sm:p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-2" data-testid={`doc-${doc.id}`}>
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewItem(doc)}>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-primary truncate">{doc.title}</span>
-                    {doc.code && <span className="text-xs bg-slate-700 px-2 py-0.5 rounded shrink-0">{doc.code}</span>}
-                    <span className={`text-xs px-2 py-0.5 rounded shrink-0 ${st.color}`}>{st.label}</span>
-                    <span className="text-xs text-brand bg-brand/10 px-2 py-0.5 rounded shrink-0">v{doc.version || 1}</span>
-                    {doc.safety_document && <Shield size={14} className="text-amber-400 shrink-0" />}
+                    <span className="text-sm font-semibold text-primary truncate max-w-[200px] sm:max-w-none">{doc.title}</span>
+                    {doc.code && <span className="text-xs bg-slate-700 px-1.5 py-0.5 rounded shrink-0">{doc.code}</span>}
+                    <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${st.color}`}>{st.label}</span>
+                    <span className="text-xs text-brand bg-brand/10 px-1.5 py-0.5 rounded shrink-0">v{doc.version || 1}</span>
+                    {doc.safety_document && <Shield size={12} className="text-amber-400 shrink-0" />}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1 truncate">{typeLabel} | {doc.discipline || '-'} | {doc.category || '-'} | {(doc.tags || []).join(', ')}</p>
+                  <p className="text-xs text-slate-500 mt-1 truncate">{typeLabel} | {doc.discipline || '-'} | {(doc.tags || []).slice(0, 3).join(', ')}</p>
                 </div>
-                <div className="flex gap-1.5 items-center shrink-0">
-                  <button onClick={() => setVersionItem(doc)} className="p-1 text-slate-500 hover:text-amber-400" title="Versões"><History size={14} /></button>
-                  {canEdit && doc.status === 'rascunho' && <button onClick={() => handleStatusChange(doc.id, 'publicado', 'Publicação direta')} className="p-1 text-slate-500 hover:text-emerald-400" title="Publicar"><Send size={14} /></button>}
-                  {canEdit && doc.status === 'publicado' && <button onClick={() => handleStatusChange(doc.id, 'arquivado', 'Arquivamento')} className="p-1 text-slate-500 hover:text-blue-400" title="Arquivar"><Archive size={14} /></button>}
-                  {canEdit && <button onClick={() => { setEditItem(doc); setShowForm(true); }} className="p-1 text-slate-500 hover:text-blue-400" title="Editar"><Edit size={14} /></button>}
-                  {canEdit && <button onClick={() => handleDelete(doc.id, doc.title)} className="p-1 text-slate-500 hover:text-red-400" title="Excluir"><Trash2 size={14} /></button>}
+                <div className="flex gap-1 items-center shrink-0 self-end sm:self-center">
+                  <button onClick={() => setViewItem(doc)} className="p-1.5 text-slate-500 hover:text-white" title="Visualizar" data-testid={`view-${doc.id}`}><Eye size={14} /></button>
+                  <button onClick={() => setVersionItem(doc)} className="p-1.5 text-slate-500 hover:text-amber-400" title="Versões"><History size={14} /></button>
+                  {canEdit && <button onClick={() => handleDuplicate(doc.id)} className="p-1.5 text-slate-500 hover:text-cyan-400" title="Duplicar" data-testid={`dup-${doc.id}`}><FileText size={14} /></button>}
+                  {canEdit && doc.status === 'rascunho' && <button onClick={() => handleStatusChange(doc.id, 'publicado', 'Publicação')} className="p-1.5 text-slate-500 hover:text-emerald-400" title="Publicar"><Send size={14} /></button>}
+                  {canEdit && doc.status === 'publicado' && <button onClick={() => handleStatusChange(doc.id, 'arquivado', 'Arquivamento')} className="p-1.5 text-slate-500 hover:text-blue-400" title="Arquivar"><Archive size={14} /></button>}
+                  {canEdit && <button onClick={() => { setEditItem(doc); setShowForm(true); }} className="p-1.5 text-slate-500 hover:text-blue-400" title="Editar"><Edit size={14} /></button>}
+                  {canEdit && <button onClick={() => handleDelete(doc.id, doc.title)} className="p-1.5 text-slate-500 hover:text-red-400" title="Excluir"><Trash2 size={14} /></button>}
                 </div>
               </div>
             );
@@ -154,6 +182,15 @@ const BibliotecaCorporativaPage = () => {
     </PageContainer>
   );
 };
+
+// ===== KPI CARD =====
+const KpiCard = ({ label, value, icon }) => (
+  <div className="glass-card p-2.5 text-center" data-testid={`kpi-${label.toLowerCase()}`}>
+    <span className="text-lg">{icon}</span>
+    <p className="text-lg font-bold text-primary">{value}</p>
+    <p className="text-xs text-slate-500">{label}</p>
+  </div>
+);
 
 // ===== DOCUMENT FORM =====
 const DocForm = ({ item, onClose, onSuccess }) => {
@@ -253,7 +290,10 @@ const DocForm = ({ item, onClose, onSuccess }) => {
           <FormInput label="Conteúdo do documento">
             <textarea value={form.content} onChange={e => setF('content', e.target.value)} className="input-industrial w-full px-3 h-40 font-mono text-xs" placeholder="Conteúdo do procedimento, instrução ou norma..." />
           </FormInput>
-          <p className="text-xs text-slate-600">Upload de arquivos será implementado na próxima etapa.</p>
+          <div className="flex items-center gap-2 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+            <FileText size={16} className="text-slate-500" />
+            <span className="text-xs text-slate-500">Upload de arquivos — disponível na Missão 2</span>
+          </div>
         </div>}
 
         {/* Step 4: Segurança */}

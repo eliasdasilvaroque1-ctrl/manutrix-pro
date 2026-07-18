@@ -67,7 +67,7 @@ async def archive_version(item_type: str, item_doc: dict, user_id: str, motivo: 
         "item_type": item_type,
         "item_id": item_doc["id"],
         "organization_id": item_doc.get("organization_id", ""),
-        "versao": item_doc.get("versao", 1),
+        "versao": item_doc.get("versao") or item_doc.get("version", 1),
         "snapshot": snapshot,
         "motivo": motivo,
         "created_at": datetime.now(timezone.utc).isoformat(),
