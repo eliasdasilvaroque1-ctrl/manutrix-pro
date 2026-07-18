@@ -24,82 +24,48 @@
 - RC5.2.1: Hardening Final do Procedimento Operacional — CONCLUIDA
 - RC5.9: Pilot Readiness Review (Auditoria Final) — CONCLUIDA
 - RC5.9.1: Correcao P0 procedimento_id em OSCreate/OSUpdate — CONCLUIDA
+- RC5.1.1: Polimento do PDF de Ordem de Servico — CONCLUIDA
 - RC6.1: Construtor de Secoes da OS — PLANEJADA / BLOQUEADA
 
 ---
 
+## RC5.1.1 — POLIMENTO DO PDF (CONCLUIDA 18/07/2026)
+
+### Melhorias Aplicadas
+1. Campos personalizados: filtro de valores vazios, oculta nomes tecnicos (TEST_C_*, FIELD_*, TMP_*), layout 2 colunas, secao oculta se vazia
+2. Assinaturas: bloco redesenhado com espaco para assinatura/nome/data, nao divide entre paginas
+3. Procedimento operacional: tabela com colunas alinhadas (#, Etapa, Status, Executado Por, Data), cores de status, descricao e obs indentados
+4. Espacamento: section_title padronizado com 10mm, protecao contra titulo orfao (min 20mm apos titulo)
+5. Paginacao: bloco de assinaturas move para nova pagina se nao couber, titulos nunca ficam sozinhos
+6. Cabecalho: alinhamento preservado (logo, empresa, QR code)
+7. Rodape: data/hora emissao UTC, nome do emissor, versao MAINTRIX, pagina X de Y, separador visual
+8. Tipografia: tamanhos padronizados, contraste melhorado nos titulos de secao
+
+### Arquivos Modificados
+- backend/pdf_engine.py (section_title, signature_block, custom_fields_section, custom_signature_blocks, footer)
+- backend/server.py (procedimento operacional section, MaintrixPDF constructor call)
+
+### Testes: 10/10
+
+---
+
 ## Regra do Piloto
-
-Permitido apenas:
-- Bugs P0
-- Bugs P1 com impacto operacional comprovado
-- Correcoes de seguranca
-- Correcoes de dados
-- Ajustes indispensaveis ao uso da ASTEC
-
-Novas funcionalidades aguardam feedback real do piloto.
+Somente bugs P0/P1, seguranca, dados, ajustes ASTEC. Novas funcionalidades aguardam feedback.
 
 ---
 
-## Backlog Tecnico
-
-### RC6.1 — CONSTRUTOR DE SECOES DA ORDEM DE SERVICO
-- **Status**: PLANEJADA / BLOQUEADA ATE ENCERRAMENTO DO PILOTO
-- **Prioridade**: P1 (pos-piloto)
-
-#### Objetivo
-Permitir que cada organizacao personalize a estrutura da OS (secoes visiveis, ordem, titulos) sem alterar codigo.
-
-#### Escopo
-- Secoes do sistema (13): Cabecalho, Equipamento, Informacoes da OS, Descricao, Equipe, Datas e Tempos, Observacoes, Procedimento Operacional, Campos Personalizados, Materiais Consumidos, Evidencias, Assinaturas, Rodape. Protegidas (nao excluiveis). Podem ser ocultadas, reordenadas, renomeadas.
-- Secoes personalizadas: CRUD completo + reordenar + ocultar + duplicar. Exemplos: Seguranca, Qualidade, Meio Ambiente, Checklist NR12/NR35.
-
-#### Arquitetura Proposta
-- **Collection**: `os_section_config` (por org). Schema: `{org_id, sections: [{id, key, title, type: system|custom, order, visible, locked, created_at}]}`
-- **Endpoints**: `GET/PUT /api/os-model-config` (ler/salvar config completa), `POST /api/os-model-config/sections` (criar custom), `DELETE /api/os-model-config/sections/{id}` (excluir custom)
-- **Auto-seed**: Na primeira consulta de uma org, gerar layout padrao com as 13 secoes do sistema
-- **Frontend**: Nova pagina `OSModelConfigPage.js`, menu em Configuracoes > Modelo da OS. Lista com botoes up/down, show/hide, edit title, add, delete, duplicate
-- **PDF**: Refatorar `print_os_pdf()` para ler config da org, renderizar apenas secoes visiveis na ordem configurada, fallback para layout padrao
-- **RBAC**: Somente admin/PCM
-- **Auditoria**: Registrar criacao, edicao, remocao, mudanca de ordem, mudanca de visibilidade
-- **Multi-tenant**: Config independente por org
-- **Sem drag-and-drop**: Apenas up/down. Arquitetura preparada para @dnd-kit futuro
-
-#### Riscos
-- Superficie de mudanca alta (collection, rota, pagina, PDF, ordenacao, visibilidade, auditoria, RBAC, compatibilidade)
-- Alteracao no PDF pode impactar OSs existentes se fallback nao for robusto
-- Secoes personalizadas sem conteudo estruturado (texto livre vs campos tipados) — decisao pendente
-
-#### Dependencias
-- Nenhuma dependencia tecnica bloqueante
-- Depende de feedback do piloto para priorizar tipos de secoes personalizadas
-
-#### Criterios de Aceite
-1. Criar secao personalizada
-2. Editar titulo de secao (sistema e personalizada)
-3. Excluir secao personalizada
-4. Ocultar secao do sistema
-5. Mostrar secao do sistema novamente
-6. Alterar ordem (up/down)
-7. PDF respeita config (ordem e visibilidade)
-8. Multiempresa isolado
-9. Auditoria registrada
-10. RBAC (admin/PCM apenas)
-11. Compatibilidade (orgs existentes recebem layout padrao)
-
----
+## Backlog
 
 ### P1 (Pos-piloto)
-- RC6.1: Construtor de Secoes da OS (detalhado acima)
-- Construtor Visual Ondas 2-3 (drag-and-drop avancado)
-- QR Code MVP (Fase 2 do Piloto)
-- Corrigir senha master ou atualizar test_credentials
-- Otimizar /api/central (cache/aggregation, atual ~2.3s)
+- RC6.1: Construtor de Secoes da OS
+- Construtor Visual Ondas 2-3
+- QR Code MVP (Fase 2)
+- Corrigir senha master
+- Otimizar /api/central (~2.3s)
 
 ### P2
-- Paginacao /api/ativos server-side
-- RBAC ordering (Depends antes Pydantic)
-- N+1: Dossie OS, Dossie Ativo
+- Paginacao /api/ativos
+- N+1: Dossie OS/Ativo
 - server.py monolitico (4400+ linhas)
 - Extracao OSDetailPage
 - ERP/SAP

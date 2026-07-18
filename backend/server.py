@@ -3142,7 +3142,7 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     numero = os_doc.get('numero', os_id[:12])
     qr_path = make_qr(f"{os.environ.get('APP_URL', '')}/os/{os_id}")
 
-    pdf = MaintrixPDF(empresa=empresa, doc_title=f"Ordem de Servico {numero}", logo_path=logo_path, qr_path=qr_path, cor_primaria=cor, modo_manual=is_manual)
+    pdf = MaintrixPDF(empresa=empresa, doc_title=f"Ordem de Servico {numero}", logo_path=logo_path, qr_path=qr_path, cor_primaria=cor, modo_manual=is_manual, emissor_nome=user.get('nome', ''), versao='v5.2.0')
     # Apply custom layout from OS snapshot or org settings
     layout_snap = os_doc.get('layout_snapshot')
     if layout_snap:
@@ -3255,15 +3255,16 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
             )
             etapas_exec = (execucao or {}).get('etapas_executadas', {})
 
-            pdf.section_title(f'Procedimento Executado')
-            pdf.set_font("DejaVu", "B", 8)
-            pdf.cell(0, 4, _safe(f'{proc.get("codigo","")} - {proc.get("nome","")}', 100), ln=True)
-            pdf.set_font("DejaVu", "", 7)
+            pdf.section_title(f'Procedimento Operacional')
+
+            # Header: code + name
+            pdf.set_font("DejaVu", "B", 8.5)
+            pdf.set_text_color(15, 23, 42)
+            pdf.cell(0, 5, _safe(f'{proc.get("codigo","")} - {proc.get("nome","")}', 100), ln=True)
 
             sorted_etapas = sorted(proc.get('etapas', []), key=lambda e: e.get('ordem', 0))
             total_e = len(sorted_etapas)
             done_e = sum(1 for e in sorted_etapas if etapas_exec.get(e.get('id',''), {}).get('concluida'))
-            # Find executor name from first concluded step
             executor_name = ''
             exec_date = ''
             for e in sorted_etapas:
@@ -3272,6 +3273,9 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
                     executor_name = ex['executado_por_nome']
                     exec_date = (ex.get('executado_em',''))[:10]
 
+            # Info line
+            pdf.set_font("DejaVu", "", 7)
+            pdf.set_text_color(100, 116, 139)
             info_parts = [f'Revisao: {proc.get("revisao","01")}', f'Versao: {proc.get("versao",1)}']
             if proc.get('tempo_estimado_minutos'):
                 info_parts.append(f'Tempo est.: {proc["tempo_estimado_minutos"]} min')
@@ -3280,34 +3284,90 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
             if exec_date:
                 info_parts.append(f'Data: {exec_date}')
             pdf.cell(0, 4, ' | '.join(info_parts), ln=True)
-            pdf.set_font("DejaVu", "B", 7)
+
+            # Progress
+            pdf.set_font("DejaVu", "B", 7.5)
+            if done_e == total_e:
+                pdf.set_text_color(16, 185, 129)
+            else:
+                pdf.set_text_color(30, 41, 59)
             pdf.cell(0, 4, f'Etapas concluidas: {done_e} de {total_e}', ln=True)
-            pdf.ln(2)
+            pdf.ln(3)
+
+            # Table header
+            cy = pdf.get_y()
+            pdf.set_font("DejaVu", "B", 6.5)
+            pdf.set_text_color(100, 116, 139)
+            pdf.set_xy(10, cy); pdf.cell(10, 4, '#')
+            pdf.set_xy(20, cy); pdf.cell(75, 4, 'ETAPA')
+            pdf.set_xy(95, cy); pdf.cell(25, 4, 'STATUS')
+            pdf.set_xy(120, cy); pdf.cell(40, 4, 'EXECUTADO POR')
+            pdf.set_xy(160, cy); pdf.cell(40, 4, 'DATA')
+            pdf.set_draw_color(226, 232, 240)
+            cy += 5
+            pdf.line(10, cy, 200, cy)
+            cy += 1.5
 
             for etapa in sorted_etapas:
                 eid = etapa.get('id', '')
                 ex = etapas_exec.get(eid, {})
-                status_txt = 'CONCLUIDA' if ex.get('concluida') else 'PENDENTE'
+                concluida = ex.get('concluida', False)
+                status_txt = 'CONCLUIDA' if concluida else 'PENDENTE'
                 obrig = ' *' if etapa.get('obrigatoria') else ''
 
-                pdf.set_font("DejaVu", "B", 7)
-                pdf.cell(8, 4, f'{etapa.get("ordem", "")}.')
-                pdf.cell(80, 4, _safe(etapa.get('titulo', ''), 60))
-                pdf.set_font("DejaVu", "", 7)
-                pdf.cell(25, 4, f'[{status_txt}]{obrig}')
-                if ex.get('executado_por_nome'):
-                    pdf.cell(0, 4, f'{ex["executado_por_nome"]} - {(ex.get("executado_em",""))[:16]}', ln=True)
+                if cy > 265:
+                    pdf.add_page(); cy = 30
+
+                # Step number (highlighted)
+                pdf.set_font("DejaVu", "B", 8)
+                pdf.set_text_color(pdf.cor_r, pdf.cor_g, pdf.cor_b)
+                pdf.set_xy(10, cy); pdf.cell(10, 5, f'{etapa.get("ordem", "")}.')
+
+                # Step title
+                pdf.set_font("DejaVu", "B" if not concluida else "", 7.5)
+                pdf.set_text_color(15, 23, 42)
+                pdf.set_xy(20, cy); pdf.cell(75, 5, _safe(etapa.get('titulo', ''), 50))
+
+                # Status
+                if concluida:
+                    pdf.set_text_color(16, 185, 129)
                 else:
-                    pdf.ln()
+                    pdf.set_text_color(234, 179, 8)
+                pdf.set_font("DejaVu", "B", 6.5)
+                pdf.set_xy(95, cy); pdf.cell(25, 5, f'{status_txt}{obrig}')
+
+                # Executor
+                pdf.set_font("DejaVu", "", 7)
+                pdf.set_text_color(30, 41, 59)
+                pdf.set_xy(120, cy); pdf.cell(40, 5, _safe(ex.get('executado_por_nome', '-'), 25))
+
+                # Date
+                pdf.set_xy(160, cy)
+                pdf.cell(40, 5, _safe((ex.get('executado_em', '') or '')[:16].replace('T', ' '), 20))
+
+                cy += 6
+
+                # Description (indented)
                 if etapa.get('descricao'):
+                    if cy > 268: pdf.add_page(); cy = 30
                     pdf.set_font("DejaVu", "", 6.5)
-                    pdf.set_x(18)
-                    pdf.multi_cell(0, 3, _safe(etapa['descricao'], 200))
+                    pdf.set_text_color(100, 116, 139)
+                    pdf.set_xy(20, cy)
+                    pdf.multi_cell(175, 3.5, _safe(etapa['descricao'], 200))
+                    cy = pdf.get_y() + 1
+
+                # Observation (indented, italic)
                 if ex.get('observacao'):
+                    if cy > 268: pdf.add_page(); cy = 30
                     pdf.set_font("DejaVu", "I", 6.5)
-                    pdf.set_x(18)
-                    pdf.multi_cell(0, 3, f'Obs: {_safe(ex["observacao"], 200)}')
-                pdf.ln(1)
+                    pdf.set_text_color(100, 116, 139)
+                    pdf.set_xy(20, cy)
+                    pdf.multi_cell(175, 3.5, f'Obs: {_safe(ex["observacao"], 200)}')
+                    cy = pdf.get_y() + 1
+
+                cy += 1  # spacing between steps
+
+            pdf.set_y(cy + 1)
             pdf.line_sep()
 
     # OBSERVATIONS

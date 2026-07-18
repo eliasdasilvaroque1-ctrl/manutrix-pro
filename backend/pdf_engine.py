@@ -80,7 +80,7 @@ def cleanup_files(*paths):
 class MaintrixPDF(FPDF):
     """Extended FPDF with MAINTRIX document helpers."""
 
-    def __init__(self, empresa='MAINTRIX', doc_title='', doc_code='', logo_path=None, qr_path=None, cor_primaria='#6366f1', modo_manual=False):
+    def __init__(self, empresa='MAINTRIX', doc_title='', doc_code='', logo_path=None, qr_path=None, cor_primaria='#6366f1', modo_manual=False, emissor_nome='', versao='v5.2.0'):
         super().__init__('P', 'mm', 'A4')
         register_unicode_fonts(self)
         self.set_auto_page_break(auto=True, margin=22)
@@ -90,6 +90,8 @@ class MaintrixPDF(FPDF):
         self.logo_path = logo_path
         self.qr_path = qr_path
         self.modo_manual = modo_manual
+        self.emissor_nome = emissor_nome
+        self.versao = versao
         self._temp_files = []
         # Parse cor
         try:
@@ -101,7 +103,8 @@ class MaintrixPDF(FPDF):
     def section_title(self, title, y=None):
         if y is None:
             y = self.get_y()
-        if y > 268:
+        # Ensure at least 20mm of space after title (avoid orphan titles)
+        if y > 258:
             self.add_page()
             y = 30
         self.set_fill_color(241, 245, 249)
@@ -112,8 +115,8 @@ class MaintrixPDF(FPDF):
         self.set_text_color(30, 41, 59)
         self.set_xy(12, y + 1.5)
         self.cell(0, 4, _safe(title.upper(), 80))
-        self.set_y(y + 9)
-        return y + 9
+        self.set_y(y + 10)
+        return y + 10
 
     def field_pair(self, label, value, x, y, w=88):
         self.set_font('DejaVu', '', 6.5)
@@ -176,26 +179,40 @@ class MaintrixPDF(FPDF):
 
     def signature_block(self, names=None):
         y = self.get_y()
-        if y > 245:
+        # Signature block needs ~50mm; move to new page if not enough
+        if y > 230:
             self.add_page()
             y = 30
         y = self.section_title('Assinaturas e Aprovacoes', y)
-        y += 18
+
         cols = names or [('Executor', '-'), ('Supervisor', '-')]
         col_w = 180 / len(cols)
+        sig_top = y + 16  # Space above signature line
+
         for i, (role_label, name) in enumerate(cols):
             x = 15 + i * col_w
-            self.set_draw_color(100, 116, 139)
-            self.line(x, y, x + col_w - 10, y)
+
+            # Signature line
+            self.set_draw_color(80, 90, 100)
+            self.line(x, sig_top, x + col_w - 12, sig_top)
+
+            # Role label (bold, primary color)
+            self.set_font('DejaVu', 'B', 8)
+            self.set_text_color(self.cor_r, self.cor_g, self.cor_b)
+            self.set_xy(x, sig_top + 1.5)
+            self.cell(col_w - 12, 4, _safe(role_label, 25))
+
+            # Name
             self.set_font('DejaVu', '', 7.5)
-            self.set_text_color(100, 116, 139)
-            self.set_xy(x, y + 1)
-            self.cell(col_w - 10, 4, _safe(role_label, 25))
-            self.set_xy(x, y + 5)
-            self.cell(col_w - 10, 4, f'Nome: {_safe(name, 25)}')
-            self.set_xy(x, y + 10)
-            self.cell(col_w - 10, 4, 'Data: ____/____/________')
-        self.set_y(y + 18)
+            self.set_text_color(30, 41, 59)
+            self.set_xy(x, sig_top + 6)
+            self.cell(col_w - 12, 4, f'Nome: {_safe(name, 30)}')
+
+            # Date line
+            self.set_xy(x, sig_top + 11)
+            self.cell(col_w - 12, 4, 'Data: ____/____/________')
+
+        self.set_y(sig_top + 20)
 
     # ===== PHOTO GRID (professional, no filenames) =====
     def photo_grid(self, attachments, foto_config=None):
@@ -455,32 +472,68 @@ class MaintrixPDF(FPDF):
 
     # ===== CUSTOM FIELDS SECTION =====
     def custom_fields_section(self, campos_defs, campos_valores, manual=False):
-        """Render custom fields from layout snapshot."""
+        """Render custom fields from layout snapshot.
+        - Hides empty fields (unless manual mode)
+        - Hides technical names (TEST_C_*, FIELD_*, TMP_*)
+        - Hides entire section if nothing to show
+        """
         if not campos_defs:
             return
-        y = self.section_title('Campos Personalizados')
+
+        TECHNICAL_PREFIXES = ('TEST_C_', 'FIELD_', 'TMP_', 'test_c_', 'field_', 'tmp_')
+
+        # Filter: only fields with values (or all in manual mode)
+        visible_campos = []
         for campo in campos_defs:
-            if self.get_y() > 268:
-                self.add_page()
             ident = campo.get('identificador_tecnico', '')
-            nome = campo.get('nome', ident)
-            tipo = campo.get('tipo', 'texto_curto')
+            nome = campo.get('nome', '')
+            # Skip fields with technical names and no friendly name
+            if not nome or nome.startswith(TECHNICAL_PREFIXES):
+                if ident.startswith(TECHNICAL_PREFIXES):
+                    continue
+                nome = ident  # fallback to ident if nome is empty
             valor = (campos_valores or {}).get(ident, '')
+            if manual or (valor is not None and str(valor).strip() != ''):
+                visible_campos.append((campo, nome, valor))
+
+        if not visible_campos:
+            return
+
+        y = self.section_title('Campos Personalizados')
+        col1_x, col2_x = 10, 105
+        row_h = 10
+        col_idx = 0
+
+        for campo, nome, valor in visible_campos:
+            cy = self.get_y()
+            if cy > 268:
+                self.add_page()
+                cy = 30
+                col_idx = 0
+
+            x = col1_x if col_idx == 0 else col2_x
+            tipo = campo.get('tipo', 'texto_curto')
             unidade = campo.get('unidade_medida', '')
 
             if manual and not valor:
-                self.field_pair(nome, None, 10, self.get_y())
-                self.set_y(self.get_y() + 12)
+                self.field_pair(nome, None, x, cy)
             else:
                 display = str(valor) if valor else '-'
                 if unidade and valor:
                     display = f"{valor} {unidade}"
                 if tipo == 'sim_nao' and valor:
-                    display = 'Sim' if str(valor).lower() in ('true', 'sim', '1', 'yes') else 'Não'
+                    display = 'Sim' if str(valor).lower() in ('true', 'sim', '1', 'yes') else 'Nao'
                 if tipo == 'checkbox' and valor:
-                    display = '☑' if str(valor).lower() in ('true', 'sim', '1', 'yes') else '☐'
-                self.field_pair(nome, display, 10, self.get_y())
-                self.set_y(self.get_y() + 10)
+                    display = 'Sim' if str(valor).lower() in ('true', 'sim', '1', 'yes') else 'Nao'
+                self.field_pair(nome, display, x, cy)
+
+            col_idx += 1
+            if col_idx >= 2:
+                col_idx = 0
+                self.set_y(cy + row_h)
+
+        if col_idx == 1:
+            self.set_y(self.get_y() + row_h)
         self.line_sep()
 
     # ===== CUSTOM HEADER FROM LAYOUT =====
@@ -582,11 +635,21 @@ class MaintrixPDF(FPDF):
             self._render_default_footer()
 
     def _render_default_footer(self):
+        self.set_y(-15)
+        self.set_draw_color(226, 232, 240)
+        self.line(8, self.get_y(), 202, self.get_y())
         self.set_y(-12)
-        self.set_font('DejaVu', 'I', 7)
+        self.set_font('DejaVu', '', 6.5)
         self.set_text_color(148, 163, 184)
-        code_str = f" | {self.doc_code}" if self.doc_code else ""
-        self.cell(0, 5, f'{self.empresa}{code_str} | {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")} UTC | Página {self.page_no()}/{{nb}}', align='C')
+        parts = [self.empresa]
+        if self.doc_code:
+            parts.append(self.doc_code)
+        parts.append(datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M") + " UTC")
+        if self.emissor_nome:
+            parts.append(f"Emitido por: {self.emissor_nome}")
+        parts.append(self.versao)
+        parts.append(f"Pagina {self.page_no()}/{{nb}}")
+        self.cell(0, 4, ' | '.join(parts), align='C')
 
     def _render_custom_footer(self, rod):
         self.set_y(-14)
@@ -614,15 +677,17 @@ class MaintrixPDF(FPDF):
             self.signature_block()
             return
         y = self.get_y()
-        if y > 240:
+        # Estimate total height needed: ~22mm per signature entry
+        entries = data if data else [{"nome": "-", "papel": b.get("papel", "Executor")} for b in (blocos_config or [])]
+        needed_h = 12 + len(entries) * 22
+        if y + needed_h > 270:
             self.add_page()
             y = 30
-        y = self.section_title('Assinaturas e Aprovações', y)
+        y = self.section_title('Assinaturas e Aprovacoes', y)
         y += 2
 
-        entries = data if data else [{"nome": "-", "papel": b.get("papel", "Executor")} for b in (blocos_config or [])]
         for entry in entries:
-            if y > 260:
+            if y > 250:
                 self.add_page()
                 y = 30
             papel = entry.get('papel', 'Executor').capitalize()
@@ -651,7 +716,7 @@ class MaintrixPDF(FPDF):
             if cargo:
                 info_parts.append(f"Cargo: {cargo}")
             if matricula:
-                info_parts.append(f"Matrícula: {matricula}")
+                info_parts.append(f"Matricula: {matricula}")
             self.cell(190, 4, _safe(' | '.join(info_parts), 90))
             y += 5
 
@@ -673,7 +738,7 @@ class MaintrixPDF(FPDF):
                         pass
 
             # Signature line for manual
-            self.set_draw_color(100, 116, 139)
+            self.set_draw_color(80, 90, 100)
             self.line(10, y + 2, 80, y + 2)
-            y += 6
+            y += 8
         self.set_y(y + 2)
