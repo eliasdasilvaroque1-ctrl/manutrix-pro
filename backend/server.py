@@ -54,6 +54,7 @@ from routes.doc_config import router as doc_config_router
 from routes.biblioteca_corporativa import router as bib_corp_router, INDEXES as BIB_CORP_INDEXES
 from routes.personalizacao import router as personalizacao_router, INDEXES as PERS_INDEXES
 from routes.documentos_corporativos import router as docs_corp_router
+from routes.procedimentos import router as procedimentos_router
 
 app = FastAPI(title="MAINTRIX API", version="1.0.0")
 api_router = APIRouter(prefix="/api")
@@ -380,6 +381,7 @@ app.include_router(doc_config_router, prefix="/api")
 app.include_router(bib_corp_router, prefix="/api")
 app.include_router(personalizacao_router, prefix="/api")
 app.include_router(docs_corp_router, prefix="/api")
+app.include_router(procedimentos_router, prefix="/api")
 app.include_router(work_orders_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(org_router, prefix="/api")
@@ -3242,6 +3244,50 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
         elif is_manual:
             pdf.manual_box('Listar materiais utilizados:', 18)
         pdf.line_sep()
+
+    # PROCEDIMENTO OPERACIONAL
+    proc_id = os_doc.get('procedimento_id')
+    if proc_id:
+        proc = await db.procedimentos.find_one({"id": proc_id, "deleted_at": None}, {"_id": 0})
+        if proc:
+            execucao = await db.procedimento_execucoes.find_one(
+                {"os_id": os_id, "procedimento_id": proc_id}, {"_id": 0}
+            )
+            etapas_exec = (execucao or {}).get('etapas_executadas', {})
+
+            pdf.section_title(f'Procedimento: {proc.get("codigo","")} - {proc.get("nome","")}')
+            pdf.set_font("DejaVu", "", 7)
+            pdf.cell(0, 4, f'Revisao: {proc.get("revisao","01")} | Versao: {proc.get("versao",1)}', ln=True)
+            if proc.get('descricao'):
+                pdf.set_font("DejaVu", "", 7)
+                pdf.multi_cell(0, 3.5, _safe(proc['descricao'], 300))
+                pdf.ln(2)
+
+            for etapa in proc.get('etapas', []):
+                eid = etapa.get('id', '')
+                ex = etapas_exec.get(eid, {})
+                status_txt = 'CONCLUIDA' if ex.get('concluida') else 'PENDENTE'
+                obrig = ' *' if etapa.get('obrigatoria') else ''
+
+                pdf.set_font("DejaVu", "B", 7)
+                pdf.cell(8, 4, f'{etapa.get("ordem", "")}.')
+                pdf.cell(80, 4, _safe(etapa.get('titulo', ''), 60))
+                pdf.set_font("DejaVu", "", 7)
+                pdf.cell(25, 4, f'[{status_txt}]{obrig}')
+                if ex.get('executado_por_nome'):
+                    pdf.cell(0, 4, f'{ex["executado_por_nome"]} - {(ex.get("executado_em",""))[:16]}', ln=True)
+                else:
+                    pdf.ln()
+                if etapa.get('descricao'):
+                    pdf.set_font("DejaVu", "", 6.5)
+                    pdf.set_x(18)
+                    pdf.multi_cell(0, 3, _safe(etapa['descricao'], 200))
+                if ex.get('observacao'):
+                    pdf.set_font("DejaVu", "I", 6.5)
+                    pdf.set_x(18)
+                    pdf.multi_cell(0, 3, f'Obs: {_safe(ex["observacao"], 200)}')
+                pdf.ln(1)
+            pdf.line_sep()
 
     # OBSERVATIONS
     pdf.section_title('Observacoes')

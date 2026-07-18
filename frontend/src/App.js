@@ -67,6 +67,7 @@ const DossiePesquisaPage = lazy(() => import("./pages/ConsultaPages").then(m => 
 const PortalPublicoPage = lazy(() => import("./pages/PortalPages").then(m => ({ default: m.PortalPublicoPage })));
 const PortalTecnicoPage = lazy(() => import("./pages/PortalPages").then(m => ({ default: m.PortalTecnicoPage })));
 const MasterCleanupPage = lazy(() => import("./pages/MasterCleanupPage"));
+const ProcedimentosPage = lazy(() => import("./pages/ProcedimentosPage"));
 const OrgConfigPage = lazy(() => import("./pages/OrgConfigPage"));
 const FieldOpsPage = lazy(() => import("./pages/FieldOpsPage"));
 const AssetDossierPage = lazy(() => import("./pages/AssetDossierPage"));
@@ -394,12 +395,14 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
   const [loading, setLoading] = useState(false);
   const [camposConfig, setCamposConfig] = useState([]);
   const [camposValores, setCamposValores] = useState({});
+  const [procedimentosSelect, setProcedimentosSelect] = useState([]);
   const { user } = useAuth();
   const [form, setForm] = useState({
     ativo_id: '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
     titulo: '', descricao: '', responsavel_id: '',
     data_planejada: '', custo_pecas: 0, custo_mao_obra: 0,
-    causa_falha: '', equipamento_parado: false, horas_parada: null
+    causa_falha: '', equipamento_parado: false, horas_parada: null,
+    procedimento_id: ''
   });
   
   useEffect(() => {
@@ -417,7 +420,8 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
         custo_mao_obra: editData.custo_mao_obra || 0,
         causa_falha: editData.causa_falha || '',
         equipamento_parado: editData.equipamento_parado || false,
-        horas_parada: editData.horas_parada || null
+        horas_parada: editData.horas_parada || null,
+        procedimento_id: editData.procedimento_id || ''
       });
       setCamposValores(editData.campos_personalizados_valores || {});
     } else {
@@ -425,12 +429,19 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
         ativo_id: preSelectedAtivoId || '', tipo: 'corretiva', disciplina: 'mecanica', prioridade: 'media',
         titulo: '', descricao: '', responsavel_id: '', equipe: [],
         data_planejada: '', custo_pecas: 0, custo_mao_obra: 0,
-        causa_falha: '', equipamento_parado: false, horas_parada: null
+        causa_falha: '', equipamento_parado: false, horas_parada: null,
+        procedimento_id: ''
       });
       setCamposValores({});
     }
   }, [editData, isOpen, preSelectedAtivoId]);
   
+  // Load approved procedures for select
+  useEffect(() => {
+    if (!isOpen) return;
+    api.get('/procedimentos-select').then(r => setProcedimentosSelect(r.data || [])).catch(() => {});
+  }, [isOpen]);
+
   // Load custom fields for the OS type
   useEffect(() => {
     if (!isOpen || !form.tipo) return;
@@ -574,6 +585,14 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
             />
           </FormInput>
           
+          {/* Procedimento Operacional */}
+          <FormInput label="Procedimento Operacional">
+            <select value={form.procedimento_id || ''} onChange={e => setForm({...form, procedimento_id: e.target.value || null})} className="input-industrial w-full px-4" data-testid="os-procedimento-select">
+              <option value="">Nenhum (opcional)</option>
+              {procedimentosSelect.map(p => <option key={p.id} value={p.id}>{p.codigo} — {p.nome} (Rev. {p.revisao})</option>)}
+            </select>
+          </FormInput>
+
           {/* Campos de Falha */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormInput label={`Causa da Falha${form.tipo === 'corretiva' ? ' *' : ''}`}>
@@ -2700,6 +2719,8 @@ const OSDetailPage = () => {
   const [plantas, setPlantas] = useState([]);
   const [docsVinculados, setDocsVinculados] = useState([]);
   const [confirmacoes, setConfirmacoes] = useState([]);
+  const [procExecucao, setProcExecucao] = useState({ procedimento: null, execucao: null });
+  const [procLoading, setProcLoading] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
   
@@ -2750,6 +2771,7 @@ const OSDetailPage = () => {
     if (!id) return;
     api.get(`/documentos-corporativos/vinculo-automatico/${id}`).then(r => setDocsVinculados(r.data.documentos || [])).catch(() => {});
     api.get(`/documentos-corporativos/confirmacoes/${id}`).then(r => setConfirmacoes(r.data || [])).catch(() => {});
+    api.get(`/ordens-servico/${id}/procedimento-execucao`).then(r => setProcExecucao(r.data || { procedimento: null, execucao: null })).catch(() => {});
   }, [id]);
   
   useEffect(() => {
@@ -3204,6 +3226,67 @@ const OSDetailPage = () => {
           </div>
         </div>
       </Modal>
+
+      {/* ============ PROCEDIMENTO OPERACIONAL ============ */}
+      {procExecucao.procedimento && (() => {
+        const proc = procExecucao.procedimento;
+        const exec = procExecucao.execucao || {};
+        const etapasExec = exec.etapas_executadas || {};
+        const totalEtapas = (proc.etapas || []).length;
+        const concluidas = (proc.etapas || []).filter(e => etapasExec[e.id]?.concluida).length;
+
+        const handleEtapa = async (etapaId, concluida, obs) => {
+          try {
+            await api.post(`/ordens-servico/${id}/procedimento-execucao/etapa`, { etapa_id: etapaId, concluida, observacao: obs || '' });
+            const r = await api.get(`/ordens-servico/${id}/procedimento-execucao`);
+            setProcExecucao(r.data);
+            toast.success(concluida ? 'Etapa concluída' : 'Etapa reaberta');
+          } catch (e) { toast.error(normalizeError(e)); }
+        };
+
+        return (
+          <div className="glass-card p-4" data-testid="procedimento-operacional-section">
+            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-1 flex items-center gap-2">
+              <ClipboardCheck size={16} /> Procedimento Operacional
+            </h3>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono bg-slate-700/50 px-2 py-0.5 rounded">{proc.codigo}</span>
+              <span className="text-sm text-slate-200 font-medium">{proc.nome}</span>
+              <span className="text-xs text-slate-400">Rev. {proc.revisao}</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">{concluidas}/{totalEtapas} etapas</span>
+            </div>
+            {proc.descricao && <p className="text-xs text-slate-400 mb-3">{proc.descricao}</p>}
+            <div className="space-y-2">
+              {(proc.etapas || []).map(etapa => {
+                const ex = etapasExec[etapa.id] || {};
+                const done = ex.concluida;
+                return (
+                  <div key={etapa.id} className={`p-3 rounded-lg border ${done ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-slate-700/50 bg-slate-800/30'}`} data-testid={`proc-etapa-exec-${etapa.id}`}>
+                    <div className="flex items-start gap-3">
+                      <button onClick={() => handleEtapa(etapa.id, !done, ex.observacao)} className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-500 hover:border-emerald-400'}`} data-testid={`proc-etapa-check-${etapa.id}`}>
+                        {done && <CheckCircle size={12} />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-500">{etapa.ordem}.</span>
+                          <span className={`text-sm ${done ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{etapa.titulo}</span>
+                          {etapa.obrigatoria && <span className="text-red-400 text-xs">*</span>}
+                        </div>
+                        {etapa.descricao && <p className="text-xs text-slate-400 mt-1">{etapa.descricao}</p>}
+                        {done && ex.executado_por_nome && <p className="text-xs text-emerald-400/70 mt-1">{ex.executado_por_nome} — {(ex.executado_em || '').slice(0,16).replace('T',' ')}</p>}
+                        {!done && (
+                          <input placeholder="Observação (opcional)" className="input-field text-xs mt-2 w-full" onBlur={e => { if (e.target.value) handleEtapa(etapa.id, false, e.target.value); }} data-testid={`proc-etapa-obs-${etapa.id}`} />
+                        )}
+                        {ex.observacao && <p className="text-xs text-slate-400 mt-1 italic">Obs: {ex.observacao}</p>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ============ PROCEDIMENTOS APLICÁVEIS ============ */}
       {docsVinculados.length > 0 && (
@@ -3687,6 +3770,7 @@ function App() {
             <Route path="/config/documentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><DocConfigPage /></AppLayout></ProtectedRoute>} />
             <Route path="/config/construtor" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><LayoutBuilderPage /></AppLayout></ProtectedRoute>} />
             <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaCorporativaPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/procedimentos" element={<ProtectedRoute allow={['master','admin','pcm','supervisor']}><AppLayout><ProcedimentosPage /></AppLayout></ProtectedRoute>} />
             <Route path="/admin/auditoria" element={<ProtectedRoute allow={['master','admin','gerente','supervisor']}><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
             <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
             <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />

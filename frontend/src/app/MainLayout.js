@@ -113,6 +113,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     ] },
     ...(['admin','master','pcm','supervisor'].includes(role) ? [{ label: 'PCM', items: [
       ...(['admin','master','pcm'].includes(role) ? [{ icon: BookOpen, label: 'Biblioteca Corporativa', path: '/biblioteca' }] : []),
+      ...(['admin','master','pcm'].includes(role) ? [{ icon: FileText, label: 'Procedimentos', path: '/procedimentos' }] : []),
       { icon: FileText, label: 'Dossiê / Pesquisa', path: '/dossie' },
     ] }] : []),
     ...(isAdmin || isPCM || isSupervisor ? [{ label: 'ADMIN', items: [

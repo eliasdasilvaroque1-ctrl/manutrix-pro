@@ -14,57 +14,65 @@
 - RC5.0.1: HOTFIX P0 Build + Auditoria — CONCLUIDA
 - RC5.0.2: HARDENING P1 IDOR + Estoque + Sector — CONCLUIDA
 - RC5.1: Performance e Estabilizacao — APROVADA E ENCERRADA
+- RC5.2 P0: JWT Fail-Fast + Isolamento Dossie + Indices MongoDB — APROVADA
 
 ---
 
-## RC5.2 — HOTFIX P0 (EM HOMOLOGACAO 18/07/2026)
+## RC5.2 — PROCEDIMENTO OPERACIONAL NA OS (EM HOMOLOGACAO 18/07/2026)
 
-### FASE 1 — P0.2 JWT_SECRET Fail-Fast
-- Removido fallback `secrets.token_hex(32)` de deps.py
-- Backend falha com RuntimeError se JWT_SECRET ausente
-- Testes: 8/8 (login, RBAC, token invalido, sessao, logs limpos)
+### Objetivo
+Permitir que OS possua procedimento operacional com etapas executaveis pelo tecnico.
 
-### FASE 2 — P0.3 Isolamento Multiempresa Dossie
-- Adicionado organization_id em 10 queries de ordens_servico e attachments
-- Adicionado verify_org_access em list_ativo_materiais (endpoint desprotegido)
-- Testes: 22/22 (6 positivos, 6 cross-tenant, 10 regressao)
+### Entregas
+- CRUD de Procedimentos (codigo, nome, descricao, revisao, versao, status, etapas)
+- Etapas com ordem, titulo, descricao, obrigatoriedade
+- Vinculacao procedimento <-> OS (opcional, campo procedimento_id)
+- Execucao na OS: checkbox por etapa, observacao, executor, timestamp
+- PDF atualizado com secao "Procedimento Executado"
+- Menu "Procedimentos" no sidebar (Admin/PCM)
+- Select de procedimentos aprovados no formulario da OS
+- Auditoria completa (create, update, delete, vincular, etapa_concluida)
+- RBAC: Admin/PCM criam, Supervisor visualiza, Tecnico executa etapas
+- Multi-tenant: organization_id em todas as queries
 
-### FASE 3 — P0.1 Indices MongoDB
-- Corrigido expires_at_1: normal → TTL (expireAfterSeconds: 0)
-- Corrigido os_user: unique sem partial → unique com partialFilterExpression
-- Corrigido org_ident: sem unique → unique: true
-- Alinhado data_architecture.py org_ident com unique: true
-- Alinhado server.py expires_at com background: true
-- Script: backend/scripts/fix_indexes.py (--dry-run, --apply, --rollback)
-- Validado: TTL funcional, unique rejeita dups, partial permite soft-delete
-- 2 restarts sem warnings
+### Endpoints
+- GET/POST /api/procedimentos
+- GET/PUT/DELETE /api/procedimentos/{id}
+- GET /api/procedimentos-select (aprovados, light)
+- PATCH /api/ordens-servico/{id}/procedimento (vincular/desvincular)
+- GET /api/ordens-servico/{id}/procedimento-execucao
+- POST /api/ordens-servico/{id}/procedimento-execucao/etapa
 
-### Arquivos alterados
-- backend/deps.py (JWT fail-fast)
-- backend/routes/assets.py (org_id em queries + verify_org_access)
-- backend/data_architecture.py (org_ident unique: true)
-- backend/server.py (expires_at background: true)
-- backend/scripts/fix_indexes.py (novo — migration script)
-- memory/PRD.md
+### Collections
+- procedimentos: {id, org_id, codigo, nome, descricao, revisao, versao, status, etapas[], ...}
+- procedimento_execucoes: {id, os_id, proc_id, org_id, etapas_executadas: {etapa_id: {concluida, obs, por, em}}}
+- ordens_servico: +campo procedimento_id (opcional)
+
+### Arquivos
+- backend/routes/procedimentos.py (novo)
+- backend/server.py (import + include_router + PDF)
+- frontend/src/pages/ProcedimentosPage.js (novo)
+- frontend/src/App.js (rota + lazy import + OS form + OS detail section)
+- frontend/src/app/MainLayout.js (menu item)
+
+### Testes: 13/13
+- Criar, Editar, Listar, Select, Vincular, Execucao, Estado, PDF, Auditoria, RBAC, Multi-empresa, Compatibilidade
 
 ---
 
-## Backlog Formal
+## Backlog
 
 ### P1
 - Construtor Visual Ondas 2-3
-- QR Code MVP (Fase 2 Piloto)
+- QR Code MVP
 
 ### P2
-- N+1: Dossie OS, Dossie Ativo, Ativo detail
-- server.py monolitico (4425 linhas, 134 endpoints)
-- Inline pages: OSDetailPage (~918 lin), LoginPage, AtivosPage
+- N+1: Dossie OS, Dossie Ativo
+- server.py monolitico (4400+ linhas)
+- Inline pages split
 - /api/ativos sem paginacao
-- Refs Supabase obsoletas
-- Testes legados (96 arquivos)
-- Integracoes ERP/SAP
+- ERP/SAP
 
 ### P3
 - IA Assistente
-- Virtualizacao de listas
 - Testes de carga
