@@ -43,19 +43,47 @@ const BatchPrintBar = ({ selectedIds, entity, onClear, entityLabel = "itens" }) 
   if (!['master', 'admin', 'pcm'].includes(user?.role)) return null;
 
   const handleBatchPrint = async () => {
+    const printWindow = window.open('', '_blank');
+
+    if (!printWindow) {
+      toast.error('O navegador bloqueou a janela de impressão. Autorize pop-ups para o MAINTRIX.');
+      return;
+    }
+
+    printWindow.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Gerando impressão...</title></head><body style="font-family:Arial,sans-serif;background:#0f172a;color:white;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><p>Gerando PDF, aguarde...</p></body></html>`);
+    printWindow.document.close();
+
     setLoading(true);
+
     try {
       const ids = selectedIds.join(',');
-      const endpoint = entity === 'ordens-servico' 
-        ? `/ordens-servico/batch-pdf?ids=${ids}`
-        : `/inspecoes/batch-pdf?ids=${ids}`;
-      
+      const endpoint = entity === 'ordens-servico'
+        ? `/ordens-servico/batch-pdf?ids=${encodeURIComponent(ids)}`
+        : `/inspecoes/batch-pdf?ids=${encodeURIComponent(ids)}`;
+
       const res = await api.get(endpoint, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      window.open(url, '_blank');
-      toast.success(`${selectedIds.length} ${entityLabel} enviados para impressão`);
-    } catch (e) {
-      toast.error('Erro ao gerar PDF em lote');
+
+      const contentType = res.headers?.['content-type'] || res.data?.type || '';
+      if (!contentType.includes('application/pdf')) {
+        throw new Error(`Resposta inválida: ${contentType || 'sem content-type'}`);
+      }
+
+      const pdfBlob = new Blob([res.data], { type: 'application/pdf' });
+      if (pdfBlob.size === 0) {
+        throw new Error('PDF vazio');
+      }
+
+      const pdfUrl = window.URL.createObjectURL(pdfBlob);
+      printWindow.location.replace(pdfUrl);
+      setTimeout(() => { window.URL.revokeObjectURL(pdfUrl); }, 60000);
+
+      toast.success(`${selectedIds.length} ${entityLabel} preparados para impressão`);
+    } catch (error) {
+      console.error('Erro na impressão em lote:', error);
+      if (!printWindow.closed) { printWindow.close(); }
+      toast.error(error?.response?.status
+        ? `Erro ${error.response.status} ao gerar o PDF`
+        : 'Não foi possível gerar o PDF para impressão');
     } finally {
       setLoading(false);
     }
