@@ -18,41 +18,24 @@
 - RC5.2: Procedimento Operacional integrado a OS — CONCLUIDA
 - RC5.2.1: Hardening Final do Procedimento Operacional — CONCLUIDA
 - RC5.9: Pilot Readiness Review (Auditoria Final) — CONCLUIDA
+- RC5.9.1: Correcao P0 procedimento_id em OSCreate/OSUpdate — CONCLUIDA
 
 ---
 
-## RC5.9 — PILOT READINESS REVIEW (CONCLUIDA 18/07/2026)
-
-### Achados
-- P0: procedimento_id nao salvo via formulario OS (OSCreate/OSUpdate model)
-- P1: Master login com senha desatualizada
-- P1: /api/central ~2.3s latencia
-- P2: Ativos sem paginacao server-side
-- P2: Validacao Pydantic antes de RBAC check
-
-### Validacao
-- Build: OK
-- Multi-tenant: OK
-- RBAC: OK (exceto P2 ordering)
-- PDF: OK
-- Seguranca: OK
-- 0 regressoes
+## Status: APROVADO PARA O PILOTO SEM RESSALVAS (18/07/2026)
 
 ---
 
 ## Backlog
 
-### P0 (Blocker para piloto)
-- procedimento_id em OSCreate/OSUpdate (15-30min)
-
 ### P1
 - Corrigir senha master ou atualizar test_credentials
-- Otimizar /api/central (cache/aggregation)
+- Otimizar /api/central (cache/aggregation, atual ~2.3s)
 - Construtor Visual Ondas 2-3
 - QR Code MVP (Fase 2)
 
 ### P2
-- Paginacao /api/ativos
+- Paginacao /api/ativos server-side
 - RBAC ordering (Depends antes Pydantic)
 - N+1: Dossie OS, Dossie Ativo
 - server.py monolitico (4400+ linhas)

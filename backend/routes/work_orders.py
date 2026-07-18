@@ -260,6 +260,15 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
 
     org_id = ativo.get('organization_id', user.get('organization_id', ''))
+
+    # Validate procedimento_id if provided
+    if data.procedimento_id:
+        proc = await db.procedimentos.find_one({"id": data.procedimento_id, "deleted_at": None}, {"_id": 0, "organization_id": 1})
+        if not proc:
+            raise HTTPException(status_code=404, detail="Procedimento não encontrado")
+        if proc.get('organization_id') != org_id:
+            raise HTTPException(status_code=404, detail="Procedimento não encontrado")
+
     numero = await generate_os_numero(org_id)
 
     role = user.get('role', '')
@@ -313,6 +322,7 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
         "causa_falha": data.causa_falha,
         "equipamento_parado": data.equipamento_parado,
         "horas_parada": data.horas_parada,
+        "procedimento_id": data.procedimento_id or None,
         "procedimento": data.procedimento,
         "seguranca": data.seguranca,
         "campos_personalizados_valores": data.campos_personalizados_valores or {},
@@ -386,6 +396,20 @@ async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current
     verify_org_access(user, existing, "OS")
 
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+
+    # Allow procedimento_id removal (explicit null or empty string)
+    raw_dump = data.model_dump()
+    if 'procedimento_id' in raw_dump and raw_dump['procedimento_id'] in (None, ''):
+        update_data['procedimento_id'] = None
+
+    # Validate procedimento_id if being changed to a non-null value
+    if update_data.get('procedimento_id'):
+        pid = update_data['procedimento_id']
+        org_id = existing.get('organization_id', user.get('organization_id', ''))
+        proc = await db.procedimentos.find_one({"id": pid, "deleted_at": None}, {"_id": 0, "organization_id": 1})
+        if not proc or proc.get('organization_id') != org_id:
+            raise HTTPException(status_code=404, detail="Procedimento não encontrado")
+
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     update_data['alterado_por'] = user.get('id')
 

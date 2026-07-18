@@ -243,6 +243,8 @@ class OSCreate(BaseModel):
     causa_falha: Optional[str] = None
     equipamento_parado: bool = False
     horas_parada: Optional[float] = None
+    # Vinculo com procedimento operacional (RC5.2)
+    procedimento_id: Optional[str] = None
     # Procedimento estruturado (snapshot salvo na OS)
     procedimento: Optional[dict] = None   # {titulo, objetivo, pre_requisitos, etapas[], ferramentas[], materiais[], observacoes}
     # Segurança estruturada (snapshot salvo na OS)
@@ -269,6 +271,7 @@ class OSUpdate(BaseModel):
     equipamento_parado: Optional[bool] = None
     horas_parada: Optional[float] = None
     status: Optional[str] = None
+    procedimento_id: Optional[str] = None
     procedimento: Optional[dict] = None
     seguranca: Optional[dict] = None
     campos_personalizados_valores: Optional[dict] = None
