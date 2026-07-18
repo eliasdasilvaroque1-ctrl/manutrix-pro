@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Save, Trash2, Search, Filter, History, Eye, Shield, FileText, ChevronLeft, ChevronRight, RotateCcw, Archive, Send, Edit } from "lucide-react";
-import { api, useAuth } from "@/lib/api";
-import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "@/components/shared";
+import { api, useAuth } from "../lib/api";
+import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "../components/shared";
 import { toast } from "sonner";
 
 const DOC_TYPES = [

@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Edit, Trash2, Package, Tag, AlertTriangle, Download, Upload, ArrowLeft, Box, ChevronRight, Cog, Edit3, FileText, RefreshCw, Send, Wrench, Zap } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth } from "@/lib/api";
-import { normalizeError } from "@/lib/constants";
-import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "@/components/shared";
-import ExportButtons from "@/components/widgets/ExportButtons";
-import { MaterialThumbnail, MaterialImageModal, MaterialImageUploader } from "@/components/widgets/MaterialComponents";
+import { api, useAuth } from "../lib/api";
+import { normalizeError } from "../lib/constants";
+import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "../components/shared";
+import ExportButtons from "../components/widgets/ExportButtons";
+import { MaterialThumbnail, MaterialImageModal, MaterialImageUploader } from "../components/widgets/MaterialComponents";
 
 const CONDICAO_CONFIG = {
   novo: { label: 'Novo', class: 'text-emerald-400 bg-brand-10' },

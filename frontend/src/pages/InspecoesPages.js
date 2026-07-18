@@ -7,11 +7,11 @@ import {
   AlertCircle, CheckCircle2, Printer
 } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth, BACKEND_URL } from "@/lib/api";
-import { normalizeError } from "@/lib/constants";
-import { queueOperation, queuePhoto } from "@/lib/offlineQueue";
-import { StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "@/components/shared";
-import ExportButtons, { BatchPrintBar, BatchCheckbox } from "@/components/widgets/ExportButtons";
+import { api, useAuth, BACKEND_URL } from "../lib/api";
+import { normalizeError } from "../lib/constants";
+import { queueOperation, queuePhoto } from "../lib/offlineQueue";
+import { StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "../components/shared";
+import ExportButtons, { BatchPrintBar, BatchCheckbox } from "../components/widgets/ExportButtons";
 
 const InspecoesPage = () => {
   const [inspecoes, setInspecoes] = useState([]);
@@ -628,7 +628,7 @@ const InspecaoDetailPage = () => {
 
       {/* Print Inspection PDF */}
       <button
-        onClick={() => { import('@/lib/api').then(m => m.openAuthenticatedPdf(`/inspecoes/${id}/pdf`, (msg) => toast.error(msg))); }}
+        onClick={() => { import('../lib/api').then(m => m.openAuthenticatedPdf(`/inspecoes/${id}/pdf`, (msg) => toast.error(msg))); }}
         className="btn-secondary w-full flex items-center justify-center gap-2"
         data-testid="inspecao-print-btn"
       >

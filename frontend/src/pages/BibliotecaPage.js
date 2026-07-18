@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BookOpen, Plus, FileText, ArrowLeft, Upload, Trash2, Download, Edit, Eye, Search, Factory, Layers, List } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth } from "@/lib/api";
-import { normalizeError } from "@/lib/constants";
-import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, ConfirmDialog } from "@/components/shared";
+import { api, useAuth } from "../lib/api";
+import { normalizeError } from "../lib/constants";
+import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, ConfirmDialog } from "../components/shared";
 
 const BibliotecaPage = () => {
   const [tab, setTab] = useState('categorias');

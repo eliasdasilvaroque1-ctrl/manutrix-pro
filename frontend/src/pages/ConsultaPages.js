@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { QrCode, Camera, Search, Box, ArrowLeft, Eye, FileText, Activity, Calendar, Wrench, Clock, AlertTriangle, CheckCircle, MapPin, Hash, Building2, ChevronLeft, ChevronRight, ClipboardCheck, Cog } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth, BACKEND_URL } from "@/lib/api";
-import { normalizeError, ROLE_LABELS } from "@/lib/constants";
-import { StatusBadge, PriorityBadge, Loading, PageContainer, PageHeader, SearchInput, EmptyState } from "@/components/shared";
+import { api, useAuth, BACKEND_URL } from "../lib/api";
+import { normalizeError, ROLE_LABELS } from "../lib/constants";
+import { StatusBadge, PriorityBadge, Loading, PageContainer, PageHeader, SearchInput, EmptyState } from "../components/shared";
 
 const ConsultaEquipamentosPage = () => {
   const [busca, setBusca] = useState('');
@@ -29,7 +29,7 @@ const ConsultaEquipamentosPage = () => {
     setSelected(ativo);
     setLoadingPortal(true);
     try {
-      const res = await axios.get(`${API}/public/ativo/${ativo.id}`);
+      const res = await api.get(`/public/ativo/${ativo.id}`);
       setPortalData(res.data);
     } catch { toast.error('Erro ao carregar dados do equipamento'); }
     finally { setLoadingPortal(false); }
@@ -203,7 +203,10 @@ const DossiePesquisaPage = () => {
     return (
       <div data-testid="dossie-pesquisa-detail">
         <button onClick={() => { setDossie(null); setDossieType(null); }} className="flex items-center gap-1 text-sm text-slate-400 hover:text-brand mb-3"><ChevronLeft size={16} /> Voltar à pesquisa</button>
-        <DossieTab ativoId={dossie.ativo_id || dossie.ativo?.id} plantas={plantas} user={user} />
+        <div className="glass-card p-6 text-center">
+          <p className="text-sm text-slate-400 mb-3">Prontuário do Ativo</p>
+          <button onClick={() => window.open(`/ativos/${dossie.ativo_id || dossie.ativo?.id}`, '_blank')} className="btn-primary text-sm">Abrir Prontuário Completo</button>
+        </div>
       </div>
     );
   }

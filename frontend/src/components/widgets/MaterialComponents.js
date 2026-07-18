@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, memo } from "react";
 import { Cog, Filter, Activity, Zap, Droplet, Wrench, Shield, Package, ZoomIn, Maximize2, X, Upload, Camera, ImagePlus, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { api, BACKEND_URL } from "@/lib/api";
-import { useBranding } from "@/lib/branding";
-import { compressImage } from "@/lib/constants";
+import { api, BACKEND_URL } from "../../lib/api";
+import { useBranding } from "../../lib/branding";
+import { compressImage } from "../../lib/constants";
 
 const MaterialThumbnail = memo(({ images, nome, categoria, size = 'md', onClick }) => {
   const { config } = useBranding();

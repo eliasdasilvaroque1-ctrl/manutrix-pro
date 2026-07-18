@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FileText, Printer, Download, X, CheckSquare, Square } from "lucide-react";
 import { toast } from "sonner";
-import { api, BACKEND_URL, useAuth } from "@/lib/api";
+import { api, BACKEND_URL, useAuth } from "../../lib/api";
 
 const ExportButtons = ({ entity }) => {
   const { user } = useAuth();

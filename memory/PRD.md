@@ -81,6 +81,18 @@
 - Multiempresa: Isolamento por org_id verificado
 - Frontend: Secao "Procedimentos Aplicaveis" renderizando com icones, badges, botoes
 
+## RC5.0.1 — HOTFIX P0 (CONCLUIDA 18/07/2026)
+
+### P0.1 — Build de Producao
+- Corrigido: todos os imports `@/` convertidos para paths relativos em 50+ arquivos
+- Corrigido: `eslintConfig` ausente no package.json (adicionado `DISABLE_ESLINT_PLUGIN=true` no .env)
+- Corrigido: imports faltantes revelados pelo build (QRLabelModal, useRef, QRCodeSVG, axios, loadOS→fetchOS, AppLayout)
+- Build prod: `CI=true react-scripts build` → Compiled successfully (389KB JS + 15KB CSS gzip)
+
+### P0.2 — Auditoria Unificada
+- Corrigido: `db.audit_log` → `db.audit_logs` em documentos_corporativos.py (2 ocorrencias)
+- Novos registros de auditoria da Biblioteca Corporativa agora visiveis na tela de Auditoria geral
+
 ---
 
 ## Backlog

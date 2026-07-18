@@ -5,8 +5,8 @@ import {
   ChevronRight, Plus, Edit, Download, RefreshCw, Eye, Calendar, Target, Shield, Zap,
   Activity, TrendingUp, MapPin, Package, QrCode, Printer
 } from "lucide-react";
-import { api, useAuth, BACKEND_URL } from "@/lib/api";
-import { StatusBadge, PriorityBadge, EmptyState, Loading, PageContainer, Modal, FormInput, Select } from "@/components/shared";
+import { api, useAuth, BACKEND_URL } from "../lib/api";
+import { StatusBadge, PriorityBadge, EmptyState, Loading, PageContainer, Modal, FormInput, Select } from "../components/shared";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 

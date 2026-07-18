@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { Plus, Clock, Calendar, Wrench, AlertTriangle, Filter, CheckCircle, XCircle, Activity, Edit, Trash2, Play, Pause, Target, ArrowLeft, Box, Building, ChevronRight, ClipboardCheck, Cog, Copy, Download, Edit3, Factory, FileText, Layers, List, Lock, MapPin, RefreshCw, Save, Search, Shield, Sparkles, Upload, User, X } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth } from "@/lib/api";
-import { normalizeError, ROLE_LABELS } from "@/lib/constants";
-import { StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "@/components/shared";
-import ExportButtons from "@/components/widgets/ExportButtons";
+import { api, useAuth } from "../lib/api";
+import { normalizeError, ROLE_LABELS } from "../lib/constants";
+import { StatusBadge, PriorityBadge, EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "../components/shared";
+import ExportButtons from "../components/widgets/ExportButtons";
 
 const PARADA_TIPOS = [
   { value: 'preventiva', label: 'Preventiva' },
@@ -1260,7 +1260,7 @@ const ProtectedRoute = ({ children, allow }) => {
   if (!user) return <Navigate to="/login" replace />;
   if (allow && !allow.includes(user.role)) {
     return (
-      <AppLayout>
+      <div>
         <div className="flex items-center justify-center min-h-[60vh]" data-testid="access-restricted">
           <div className="glass-card p-8 text-center max-w-md">
             <Shield size={48} className="text-red-400 mx-auto mb-4" />
@@ -1269,7 +1269,7 @@ const ProtectedRoute = ({ children, allow }) => {
             <button onClick={() => window.history.back()} className="btn-primary text-sm">Voltar</button>
           </div>
         </div>
-      </AppLayout>
+      </div>
     );
   }
   return children;

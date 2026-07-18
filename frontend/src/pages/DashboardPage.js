@@ -2,9 +2,9 @@ import { useState, useEffect, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Download, FileText, Filter, Layers, Wrench, X } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/lib/api";
-import { api } from "@/lib/api";
-import { StatusBadge, PriorityBadge, Loading, Modal } from "@/components/shared";
+import { useAuth } from "../lib/api";
+import { api } from "../lib/api";
+import { StatusBadge, PriorityBadge, Loading, Modal } from "../components/shared";
 
 const DashboardPage = () => {
   const [kpis, setKpis] = useState(null);

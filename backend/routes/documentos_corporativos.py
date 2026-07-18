@@ -123,7 +123,7 @@ def _require_editor(user):
 
 async def _audit_log(org_id: str, user_id: str, action: str, document_id: str, details: dict = None):
     """Record audit entry for document operations."""
-    await db.audit_log.insert_one({
+    await db.audit_logs.insert_one({
         "id": str(uuid.uuid4()),
         "organization_id": org_id,
         "user_id": user_id,
@@ -421,7 +421,7 @@ async def get_audit_log(doc_id: str, user=Depends(get_current_user)):
     role = user.get('role', '')
     if role not in ('master', 'admin', 'pcm'):
         raise HTTPException(status_code=403, detail="Sem permissão")
-    logs = await db.audit_log.find(
+    logs = await db.audit_logs.find(
         {"entity_type": "documento_corporativo", "entity_id": doc_id, "organization_id": org_id},
         {"_id": 0}
     ).sort("created_at", -1).to_list(200)

@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, AlertTriangle, ChevronDown, ChevronUp, Edit3, Trash2, MapPin, Package, DollarSign, Tag, Zap, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth } from "@/lib/api";
-import { normalizeError } from "@/lib/constants";
-import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "@/components/shared";
-import { MaterialThumbnail, MaterialImageModal, MaterialImageUploader } from "@/components/widgets/MaterialComponents";
-import ExportButtons from "@/components/widgets/ExportButtons";
+import { api, useAuth } from "../lib/api";
+import { normalizeError } from "../lib/constants";
+import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "../components/shared";
+import { MaterialThumbnail, MaterialImageModal, MaterialImageUploader } from "../components/widgets/MaterialComponents";
+import ExportButtons from "../components/widgets/ExportButtons";
 
 const EstoquePage = () => {
   const [items, setItems] = useState([]);

@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Box, Activity, FileText, Calendar, Wrench, Clock, AlertTriangle, CheckCircle, XCircle, MapPin, ArrowLeft, Eye, Search, Filter, Hash, Building2, AlertCircle, Camera, ClipboardCheck, Cog, Download } from "lucide-react";
 import { toast } from "sonner";
-import { api, BACKEND_URL } from "@/lib/api";
-import { useBranding } from "@/lib/branding";
-import { StatusBadge, PriorityBadge, Loading, PageContainer, PageHeader, SearchInput, EmptyState } from "@/components/shared";
+import { api, useAuth, BACKEND_URL } from "../lib/api";
+import { useBranding } from "../lib/branding";
+import { StatusBadge, PriorityBadge, Loading, PageContainer, PageHeader, SearchInput, EmptyState } from "../components/shared";
+import axios from "axios";
 
 const PortalPublicoPage = () => {
   const { id } = useParams();
@@ -16,7 +17,7 @@ const PortalPublicoPage = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await axios.get(`${API}/public/ativo/${id}`);
+        const res = await axios.get(`${BACKEND_URL}/api/public/ativo/${id}`);
         setData(res.data);
       } catch (err) {
         setError(err.response?.status === 404 ? 'Equipamento não encontrado' : 'Erro ao carregar dados');

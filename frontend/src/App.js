@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, memo, useCallback, useMemo } from "react";
-import "@/App.css";
+import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { 
@@ -17,11 +17,11 @@ import {
   Building2, Palette, BookOpen, CheckCircle2, Sparkles, Send,
   ZoomIn, Maximize2, ImagePlus, Printer
 } from "lucide-react";
-import { BACKEND_URL, API, AuthContext, useAuth, api } from "@/lib/api";
-import { BrandingProvider, useBranding } from "@/lib/branding";
-import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData, queuePhoto } from "@/lib/offlineQueue";
+import { BACKEND_URL, API, AuthContext, useAuth, api } from "./lib/api";
+import { BrandingProvider, useBranding } from "./lib/branding";
+import { queueOperation, getPendingCount, syncPendingOperations, registerServiceWorker, cacheData, getCachedData, queuePhoto } from "./lib/offlineQueue";
 import axios from "axios";
-import { DynamicFieldRenderer, SignaturePad } from "@/components/DynamicFieldRenderer";
+import { DynamicFieldRenderer, SignaturePad } from "./components/DynamicFieldRenderer";
 
 // ============== SHARED COMPONENTS (extracted to /components/shared/) ==============
 import {
@@ -42,7 +42,7 @@ import ParadasPage, { AdminTemplatesPage, AuditoriaPage, AdminUsuariosPage, Prot
 import { InspecoesPage, InspecaoDetailPage, RondaPage, ScannerPage, PhotoUploader } from "./pages/InspecoesPages";
 import BibliotecaPage from "./pages/BibliotecaPage";
 import EquipePage from "./pages/EquipePage";
-import WhiteLabelDesignerPage from "./pages/WhiteLabelDesignerPage";
+import WhiteLabelDesignerPage, { QRLabelModal } from "./pages/WhiteLabelDesignerPage";
 import DocConfigPage from "./pages/DocConfigPage";
 import LayoutBuilderPage from "./pages/LayoutBuilderPage";
 import BibliotecaCorporativaPage from "./pages/BibliotecaCorporativaPage";
@@ -349,7 +349,7 @@ const ModalNovoAtivo = ({ isOpen, onClose, onSuccess, areas = [], editData = nul
                     <span className="text-sm text-slate-300">{m.filename}</span>
                     <span className="text-xs text-slate-600">{(m.size_bytes / 1024).toFixed(0)}KB</span>
                   </div>
-                  <button type="button" onClick={() => { import('@/lib/api').then(mod => mod.openAuthenticatedPdf(m.url, (msg) => toast.error(msg))); }} className="text-xs text-blue-400 hover:text-blue-300">Abrir</button>
+                  <button type="button" onClick={() => { import('./lib/api').then(mod => mod.openAuthenticatedPdf(m.url, (msg) => toast.error(msg))); }} className="text-xs text-blue-400 hover:text-blue-300">Abrir</button>
                 </div>
               ))}
             </div>
@@ -3261,9 +3261,9 @@ const OSDetailPage = () => {
             {/* Gerente action buttons */}
             {user?.role === 'gerente' && os.aprovacao.status === 'pendente' && os.status === 'aguardando_aprovacao' && (
               <div className="flex gap-2 mt-3" data-testid="os-aprovar-btns">
-                <button onClick={async () => { try { await api.post(`/ordens-servico/${os.id}/aprovar`, { decisao: 'aprovada', observacao: '' }); toast.success('OS Aprovada!'); loadOS(); } catch(e) { toast.error(normalizeError(e)); }}} className="flex-1 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg text-sm font-semibold hover:bg-emerald-500/30 transition-all" data-testid="os-btn-aprovar"><CheckCircle size={14} className="inline mr-1" /> Aprovar</button>
-                <button onClick={async () => { const obs = prompt('Motivo da rejeição:'); if (obs !== null) { try { await api.post(`/ordens-servico/${os.id}/aprovar`, { decisao: 'rejeitada', observacao: obs }); toast.success('OS Rejeitada'); loadOS(); } catch(e) { toast.error(normalizeError(e)); }}}} className="flex-1 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm font-semibold hover:bg-red-500/30 transition-all" data-testid="os-btn-rejeitar"><XCircle size={14} className="inline mr-1" /> Rejeitar</button>
-                <button onClick={async () => { const obs = prompt('Observação para revisão:'); if (obs !== null) { try { await api.post(`/ordens-servico/${os.id}/aprovar`, { decisao: 'revisao', observacao: obs }); toast.success('Enviada para revisão'); loadOS(); } catch(e) { toast.error(normalizeError(e)); }}}} className="flex-1 py-2 bg-amber-500/20 text-amber-400 rounded-lg text-sm font-semibold hover:bg-amber-500/30 transition-all"><Edit3 size={14} className="inline mr-1" /> Revisão</button>
+                <button onClick={async () => { try { await api.post(`/ordens-servico/${os.id}/aprovar`, { decisao: 'aprovada', observacao: '' }); toast.success('OS Aprovada!'); fetchOS(); } catch(e) { toast.error(normalizeError(e)); }}} className="flex-1 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg text-sm font-semibold hover:bg-emerald-500/30 transition-all" data-testid="os-btn-aprovar"><CheckCircle size={14} className="inline mr-1" /> Aprovar</button>
+                <button onClick={async () => { const obs = prompt('Motivo da rejeição:'); if (obs !== null) { try { await api.post(`/ordens-servico/${os.id}/aprovar`, { decisao: 'rejeitada', observacao: obs }); toast.success('OS Rejeitada'); fetchOS(); } catch(e) { toast.error(normalizeError(e)); }}}} className="flex-1 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm font-semibold hover:bg-red-500/30 transition-all" data-testid="os-btn-rejeitar"><XCircle size={14} className="inline mr-1" /> Rejeitar</button>
+                <button onClick={async () => { const obs = prompt('Observação para revisão:'); if (obs !== null) { try { await api.post(`/ordens-servico/${os.id}/aprovar`, { decisao: 'revisao', observacao: obs }); toast.success('Enviada para revisão'); fetchOS(); } catch(e) { toast.error(normalizeError(e)); }}}} className="flex-1 py-2 bg-amber-500/20 text-amber-400 rounded-lg text-sm font-semibold hover:bg-amber-500/30 transition-all"><Edit3 size={14} className="inline mr-1" /> Revisão</button>
               </div>
             )}
           </div>
@@ -3719,7 +3719,7 @@ const OSDetailPage = () => {
 
       {/* Print OS Button — always visible */}
       <button
-        onClick={() => { import('@/lib/api').then(m => m.openAuthenticatedPdf(`/ordens-servico/${id}/pdf`, (msg) => toast.error(msg))); }}
+        onClick={() => { import('./lib/api').then(m => m.openAuthenticatedPdf(`/ordens-servico/${id}/pdf`, (msg) => toast.error(msg))); }}
         className="btn-secondary w-full flex items-center justify-center gap-2 mt-2"
         data-testid="os-print-btn"
       >

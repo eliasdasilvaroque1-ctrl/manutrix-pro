@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { FileText, Settings, Shield, Wrench, Camera, PenTool, Plus, Save, Trash2, ChevronRight, Eye, GripVertical, History, RotateCcw, ClipboardList, BookOpen, Cog, FormInput as FormInputIcon, FileSignature, Layout, Type } from "lucide-react";
-import { api, useAuth } from "@/lib/api";
-import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "@/components/shared";
+import { api, useAuth } from "../lib/api";
+import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "../components/shared";
 import { toast } from "sonner";
 
 // ===== MAIN PAGE =====
@@ -1242,7 +1242,7 @@ const FotosTab = ({ config, onSave, canEdit }) => {
 
 // ===== PREVIEW TAB =====
 const PreviewTab = () => {
-  const { openAuthenticatedPdf } = require('@/lib/api');
+  const { openAuthenticatedPdf } = require('../lib/api');
   const [osId, setOsId] = useState('');
   const [osList, setOsList] = useState([]);
 

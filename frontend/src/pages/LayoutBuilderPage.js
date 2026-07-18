@@ -3,7 +3,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, 
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Save, FileText, Copy, Send, ArrowLeft, Settings, Printer, RotateCcw } from "lucide-react";
-import { api, useAuth } from "@/lib/api";
+import { api, useAuth } from "../lib/api";
 import { toast } from "sonner";
 
 const BLOCK_CATALOG = [

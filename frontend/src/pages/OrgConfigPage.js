@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Settings, Building, Palette, BookOpen, Hash, Cog, Save, Building2, FileText, Search, X } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth } from "@/lib/api";
-import { normalizeError } from "@/lib/constants";
-import { Loading, PageContainer, PageHeader, FormInput, Select } from "@/components/shared";
+import { api, useAuth } from "../lib/api";
+import { normalizeError } from "../lib/constants";
+import { Loading, PageContainer, PageHeader, FormInput, Select } from "../components/shared";
 
 const OrgConfigPage = () => {
   const [config, setConfig] = useState(null);

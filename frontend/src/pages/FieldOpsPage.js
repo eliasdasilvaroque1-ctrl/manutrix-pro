@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ClipboardCheck, Wrench, AlertTriangle, Plus, Target, Box, ChevronRight, RefreshCw, Clock, Play, Zap, Calendar } from "lucide-react";
-import { api, useAuth, BACKEND_URL } from "@/lib/api";
-import { StatusBadge, PriorityBadge, EmptyState, Loading, PageContainer, PageHeader, Modal, FormInput, Select } from "@/components/shared";
+import { api, useAuth, BACKEND_URL } from "../lib/api";
+import { StatusBadge, PriorityBadge, EmptyState, Loading, PageContainer, PageHeader, Modal, FormInput, Select } from "../components/shared";
 import { toast } from "sonner";
 
 const FieldOpsPage = () => {

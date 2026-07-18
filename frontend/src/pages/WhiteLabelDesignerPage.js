@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { Palette, Eye, Upload, CheckCircle, RefreshCw, Sparkles, Lock, Building2, Menu, Home, Box, BarChart3, Layers, Settings, LogOut, ArrowLeft, Cog, Download, Image, MapPin, Plus, Save, X } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth, BACKEND_URL } from "@/lib/api";
-import { normalizeError, ROLE_LABELS } from "@/lib/constants";
-import { useBranding } from "@/lib/branding";
-import { Loading, PageContainer, PageHeader, FormInput } from "@/components/shared";
+import { api, useAuth, BACKEND_URL } from "../lib/api";
+import { normalizeError, ROLE_LABELS } from "../lib/constants";
+import { useBranding } from "../lib/branding";
+import { Loading, PageContainer, PageHeader, FormInput } from "../components/shared";
 
 const PRESET_THEMES = [
   { id: 'industrial_dark', name: 'Industrial Dark', colors: { cor_primaria: '#10b981', cor_secundaria: '#3b82f6', cor_fundo: '#020617', cor_texto: '#e2e8f0', cor_destaque: '#f59e0b', cor_menu: '#0f172a', cor_login: '#020617', cor_header: '#0f172a' } },
@@ -499,7 +500,7 @@ const QR_LABEL_SIZES = [
   { id: 'a4', name: 'A4 (Prontuário)', w: 595, h: 842, qrSize: 200, fontSize: 12, tagSize: 18 },
 ];
 
-const QRLabelModal = ({ ativo, onClose }) => {
+export const QRLabelModal = ({ ativo, onClose }) => {
   const { branding } = useBranding() || {};
   const b = branding || {};
   const [selectedSize, setSelectedSize] = useState('80x50');

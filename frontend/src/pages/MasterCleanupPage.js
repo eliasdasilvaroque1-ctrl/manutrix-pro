@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Trash2, RefreshCw, AlertTriangle, CheckCircle, Bell, Calendar, CheckSquare, ClipboardCheck, FileText, Image, Package, Shield, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth } from "@/lib/api";
-import { normalizeError } from "@/lib/constants";
-import { Loading, PageContainer, PageHeader, ConfirmDialog, Modal, FormInput } from "@/components/shared";
+import { api, useAuth } from "../lib/api";
+import { normalizeError } from "../lib/constants";
+import { Loading, PageContainer, PageHeader, ConfirmDialog, Modal, FormInput } from "../components/shared";
 
 const MasterCleanupPage = () => {
   const [results, setResults] = useState(null);
