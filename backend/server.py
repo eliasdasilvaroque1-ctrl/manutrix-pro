@@ -3255,15 +3255,36 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
             )
             etapas_exec = (execucao or {}).get('etapas_executadas', {})
 
-            pdf.section_title(f'Procedimento: {proc.get("codigo","")} - {proc.get("nome","")}')
+            pdf.section_title(f'Procedimento Executado')
+            pdf.set_font("DejaVu", "B", 8)
+            pdf.cell(0, 4, _safe(f'{proc.get("codigo","")} - {proc.get("nome","")}', 100), ln=True)
             pdf.set_font("DejaVu", "", 7)
-            pdf.cell(0, 4, f'Revisao: {proc.get("revisao","01")} | Versao: {proc.get("versao",1)}', ln=True)
-            if proc.get('descricao'):
-                pdf.set_font("DejaVu", "", 7)
-                pdf.multi_cell(0, 3.5, _safe(proc['descricao'], 300))
-                pdf.ln(2)
 
-            for etapa in proc.get('etapas', []):
+            sorted_etapas = sorted(proc.get('etapas', []), key=lambda e: e.get('ordem', 0))
+            total_e = len(sorted_etapas)
+            done_e = sum(1 for e in sorted_etapas if etapas_exec.get(e.get('id',''), {}).get('concluida'))
+            # Find executor name from first concluded step
+            executor_name = ''
+            exec_date = ''
+            for e in sorted_etapas:
+                ex = etapas_exec.get(e.get('id',''), {})
+                if ex.get('executado_por_nome') and not executor_name:
+                    executor_name = ex['executado_por_nome']
+                    exec_date = (ex.get('executado_em',''))[:10]
+
+            info_parts = [f'Revisao: {proc.get("revisao","01")}', f'Versao: {proc.get("versao",1)}']
+            if proc.get('tempo_estimado_minutos'):
+                info_parts.append(f'Tempo est.: {proc["tempo_estimado_minutos"]} min')
+            if executor_name:
+                info_parts.append(f'Executor: {executor_name}')
+            if exec_date:
+                info_parts.append(f'Data: {exec_date}')
+            pdf.cell(0, 4, ' | '.join(info_parts), ln=True)
+            pdf.set_font("DejaVu", "B", 7)
+            pdf.cell(0, 4, f'Etapas concluidas: {done_e} de {total_e}', ln=True)
+            pdf.ln(2)
+
+            for etapa in sorted_etapas:
                 eid = etapa.get('id', '')
                 ex = etapas_exec.get(eid, {})
                 status_txt = 'CONCLUIDA' if ex.get('concluida') else 'PENDENTE'

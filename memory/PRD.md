@@ -14,11 +14,13 @@
 - RC5.0.1: HOTFIX P0 Build + Auditoria — CONCLUIDA
 - RC5.0.2: HARDENING P1 IDOR + Estoque + Sector — CONCLUIDA
 - RC5.1: Performance e Estabilizacao — APROVADA E ENCERRADA
-- RC5.2 P0: JWT Fail-Fast + Isolamento Dossie + Indices MongoDB — APROVADA
+- RC5.1 Fase 3: JWT Fail-Fast + Isolamento Dossie + Indices MongoDB — APROVADA
+- RC5.2: Procedimento Operacional integrado a OS — CONCLUIDA
+- RC5.2.1: Hardening Final do Procedimento Operacional — CONCLUIDA
 
 ---
 
-## RC5.2 — PROCEDIMENTO OPERACIONAL NA OS (EM HOMOLOGACAO 18/07/2026)
+## RC5.2 — PROCEDIMENTO OPERACIONAL NA OS (CONCLUIDA)
 
 ### Objetivo
 Permitir que OS possua procedimento operacional com etapas executaveis pelo tecnico.
@@ -60,16 +62,39 @@ Permitir que OS possua procedimento operacional com etapas executaveis pelo tecn
 
 ---
 
+## RC5.2.1 — HARDENING FINAL DO PROCEDIMENTO OPERACIONAL (CONCLUIDA)
+
+### Objetivo
+Refinar UI/UX, PDF e validacoes backend do modulo Procedimentos antes do piloto ASTEC.
+
+### Entregas
+- Barra de progresso visual na execucao de etapas
+- Cabecalho do procedimento com informacoes contextuais
+- Destaque visual da etapa ativa (highlight)
+- PDF aprimorado com layout otimizado para procedimentos
+- Ordenacao protegida de etapas (backend)
+- Validacoes backend: nome vazio, codigo duplicado
+- Performance mantida, zero regressoes
+
+### Arquivos Modificados
+- backend/routes/procedimentos.py (validacoes)
+- backend/server.py (PDF layout)
+- frontend/src/App.js (UI: barra de progresso, highlight etapa, cabecalho)
+
+### Testes: 13/13 (100% pass rate, zero regressoes)
+
+---
+
 ## Backlog
 
 ### P1
 - Construtor Visual Ondas 2-3
-- QR Code MVP
+- QR Code MVP (Fase 2 do Piloto)
 
 ### P2
 - N+1: Dossie OS, Dossie Ativo
 - server.py monolitico (4400+ linhas)
-- Inline pages split
+- Inline pages split (extracao OSDetailPage)
 - /api/ativos sem paginacao
 - ERP/SAP
 

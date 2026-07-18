@@ -41,19 +41,36 @@ async def create_procedimento(data: dict, user: Dict = Depends(get_current_user)
     if not data.get('nome'):
         raise HTTPException(status_code=400, detail="Nome é obrigatório")
 
+    etapas_raw = data.get('etapas', [])
+    if len(etapas_raw) == 0:
+        raise HTTPException(status_code=400, detail="Procedimento precisa ter pelo menos uma etapa")
+
     # Auto-generate code if not provided
     code = data.get('codigo', '').strip()
     if not code:
         count = await db.procedimentos.count_documents({"organization_id": org_id})
         code = f"PROC-{count + 1:04d}"
 
-    # Validate steps
+    # Check duplicate code
+    existing_code = await db.procedimentos.find_one({"organization_id": org_id, "codigo": code, "deleted_at": None})
+    if existing_code:
+        raise HTTPException(status_code=400, detail=f"Código '{code}' já existe")
+
+    # Validate steps — enforce unique order, require title
     etapas = []
-    for i, step in enumerate(data.get('etapas', [])):
+    seen_ordens = set()
+    for i, step in enumerate(etapas_raw):
+        titulo = step.get('titulo', '').strip()
+        if not titulo:
+            raise HTTPException(status_code=400, detail=f"Etapa {i+1}: título é obrigatório")
+        ordem = i + 1
+        if ordem in seen_ordens:
+            raise HTTPException(status_code=400, detail=f"Etapa com ordem {ordem} duplicada")
+        seen_ordens.add(ordem)
         etapas.append({
             "id": str(uuid.uuid4()),
-            "ordem": i + 1,
-            "titulo": step.get('titulo', '').strip(),
+            "ordem": ordem,
+            "titulo": titulo,
             "descricao": step.get('descricao', '').strip(),
             "obrigatoria": step.get('obrigatoria', True),
         })
@@ -110,11 +127,17 @@ async def update_procedimento(proc_id: str, data: dict, user: Dict = Depends(get
     verify_org_access(user, doc, "Procedimento")
 
     etapas = []
-    for i, step in enumerate(data.get('etapas', doc.get('etapas', []))):
+    etapas_raw = data.get('etapas', doc.get('etapas', []))
+    if len(etapas_raw) == 0:
+        raise HTTPException(status_code=400, detail="Procedimento precisa ter pelo menos uma etapa")
+    for i, step in enumerate(etapas_raw):
+        titulo = step.get('titulo', '').strip()
+        if not titulo:
+            raise HTTPException(status_code=400, detail=f"Etapa {i+1}: título é obrigatório")
         etapas.append({
             "id": step.get('id', str(uuid.uuid4())),
             "ordem": i + 1,
-            "titulo": step.get('titulo', '').strip(),
+            "titulo": titulo,
             "descricao": step.get('descricao', '').strip(),
             "obrigatoria": step.get('obrigatoria', True),
         })
@@ -132,7 +155,12 @@ async def update_procedimento(proc_id: str, data: dict, user: Dict = Depends(get
         "updated_by": user.get('id', ''),
     }
     if data.get('codigo'):
-        updates["codigo"] = data['codigo'].strip()
+        new_code = data['codigo'].strip()
+        if new_code != doc.get('codigo'):
+            existing = await db.procedimentos.find_one({"organization_id": user.get('organization_id',''), "codigo": new_code, "deleted_at": None, "id": {"$ne": proc_id}})
+            if existing:
+                raise HTTPException(status_code=400, detail=f"Código '{new_code}' já existe")
+        updates["codigo"] = new_code
 
     await db.procedimentos.update_one({"id": proc_id}, {"$set": updates})
 

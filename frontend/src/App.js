@@ -3232,8 +3232,11 @@ const OSDetailPage = () => {
         const proc = procExecucao.procedimento;
         const exec = procExecucao.execucao || {};
         const etapasExec = exec.etapas_executadas || {};
-        const totalEtapas = (proc.etapas || []).length;
-        const concluidas = (proc.etapas || []).filter(e => etapasExec[e.id]?.concluida).length;
+        const sortedEtapas = [...(proc.etapas || [])].sort((a, b) => a.ordem - b.ordem);
+        const totalEtapas = sortedEtapas.length;
+        const concluidas = sortedEtapas.filter(e => etapasExec[e.id]?.concluida).length;
+        const pct = totalEtapas > 0 ? Math.round((concluidas / totalEtapas) * 100) : 0;
+        const nextPendingId = sortedEtapas.find(e => !etapasExec[e.id]?.concluida)?.id;
 
         const handleEtapa = async (etapaId, concluida, obs) => {
           try {
@@ -3246,24 +3249,47 @@ const OSDetailPage = () => {
 
         return (
           <div className="glass-card p-4" data-testid="procedimento-operacional-section">
-            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-1 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
               <ClipboardCheck size={16} /> Procedimento Operacional
             </h3>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-mono bg-slate-700/50 px-2 py-0.5 rounded">{proc.codigo}</span>
-              <span className="text-sm text-slate-200 font-medium">{proc.nome}</span>
-              <span className="text-xs text-slate-400">Rev. {proc.revisao}</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">{concluidas}/{totalEtapas} etapas</span>
+
+            {/* Cabeçalho profissional */}
+            <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700/50 mb-4" data-testid="proc-header">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2">
+                <span className="text-xs font-mono bg-slate-700/60 px-2 py-0.5 rounded" data-testid="proc-header-code">{proc.codigo}</span>
+                <span className="text-sm text-slate-100 font-semibold">{proc.nome}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
+                <span>Rev. {proc.revisao}</span>
+                <span>Versão {proc.versao || 1}</span>
+                {proc.tempo_estimado_minutos && <span className="flex items-center gap-1"><Clock size={11} />{proc.tempo_estimado_minutos} min</span>}
+                <span className={`px-2 py-0.5 rounded-full ${proc.status === 'aprovado' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>{proc.status === 'aprovado' ? 'Aprovado' : proc.status}</span>
+              </div>
+              {proc.descricao && <p className="text-xs text-slate-400 mt-2">{proc.descricao}</p>}
             </div>
-            {proc.descricao && <p className="text-xs text-slate-400 mb-3">{proc.descricao}</p>}
+
+            {/* Barra de progresso */}
+            <div className="mb-4" data-testid="proc-progress">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-slate-400">Etapas concluídas</span>
+                <span className="text-xs font-semibold" style={{ color: pct === 100 ? '#34d399' : '#94a3b8' }}>{concluidas} / {totalEtapas}</span>
+              </div>
+              <div className="w-full h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#34d399' : pct > 0 ? '#3b82f6' : 'transparent' }} />
+              </div>
+            </div>
+
+            {/* Etapas */}
             <div className="space-y-2">
-              {(proc.etapas || []).map(etapa => {
+              {sortedEtapas.map(etapa => {
                 const ex = etapasExec[etapa.id] || {};
                 const done = ex.concluida;
+                const isNext = etapa.id === nextPendingId;
+                const borderClass = done ? 'border-emerald-500/30 bg-emerald-500/5' : isNext ? 'border-blue-500/40 bg-blue-500/5 ring-1 ring-blue-500/20' : 'border-slate-700/50 bg-slate-800/30';
                 return (
-                  <div key={etapa.id} className={`p-3 rounded-lg border ${done ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-slate-700/50 bg-slate-800/30'}`} data-testid={`proc-etapa-exec-${etapa.id}`}>
+                  <div key={etapa.id} className={`p-3 rounded-lg border ${borderClass}`} data-testid={`proc-etapa-exec-${etapa.id}`}>
                     <div className="flex items-start gap-3">
-                      <button onClick={() => handleEtapa(etapa.id, !done, ex.observacao)} className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-500 hover:border-emerald-400'}`} data-testid={`proc-etapa-check-${etapa.id}`}>
+                      <button onClick={() => handleEtapa(etapa.id, !done, ex.observacao)} className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${done ? 'border-emerald-500 bg-emerald-500 text-white' : isNext ? 'border-blue-400 hover:border-blue-300' : 'border-slate-500 hover:border-emerald-400'}`} data-testid={`proc-etapa-check-${etapa.id}`}>
                         {done && <CheckCircle size={12} />}
                       </button>
                       <div className="flex-1 min-w-0">
@@ -3271,11 +3297,12 @@ const OSDetailPage = () => {
                           <span className="text-xs font-bold text-slate-500">{etapa.ordem}.</span>
                           <span className={`text-sm ${done ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{etapa.titulo}</span>
                           {etapa.obrigatoria && <span className="text-red-400 text-xs">*</span>}
+                          {isNext && !done && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-medium">Próxima</span>}
                         </div>
                         {etapa.descricao && <p className="text-xs text-slate-400 mt-1">{etapa.descricao}</p>}
                         {done && ex.executado_por_nome && <p className="text-xs text-emerald-400/70 mt-1">{ex.executado_por_nome} — {(ex.executado_em || '').slice(0,16).replace('T',' ')}</p>}
                         {!done && (
-                          <input placeholder="Observação (opcional)" className="input-field text-xs mt-2 w-full" onBlur={e => { if (e.target.value) handleEtapa(etapa.id, false, e.target.value); }} data-testid={`proc-etapa-obs-${etapa.id}`} />
+                          <input placeholder="Observação (opcional)" className="input-field text-xs mt-2 w-full" onBlur={e => { if (e.target.value.trim()) handleEtapa(etapa.id, false, e.target.value.trim()); }} data-testid={`proc-etapa-obs-${etapa.id}`} />
                         )}
                         {ex.observacao && <p className="text-xs text-slate-400 mt-1 italic">Obs: {ex.observacao}</p>}
                       </div>
