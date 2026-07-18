@@ -213,7 +213,7 @@ INDEXES = {
     ],
     "campos_personalizados": [
         {"keys": [("organization_id", 1), ("status", 1), ("deleted_at", 1)], "name": "org_status_active"},
-        {"keys": [("organization_id", 1), ("identificador_tecnico", 1)], "name": "org_ident"},
+        {"keys": [("organization_id", 1), ("identificador_tecnico", 1)], "name": "org_ident", "unique": True},
     ],
     "cabecalhos_rodapes": [
         {"keys": [("organization_id", 1), ("tipo", 1), ("deleted_at", 1)], "name": "org_tipo_active"},

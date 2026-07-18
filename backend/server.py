@@ -4315,7 +4315,7 @@ async def run_migrations():
     """Run all startup migrations"""
     try:
         # Create indexes (compound org+email is created in startup_create_indexes)
-        await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+        await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0, background=True)
         await db.password_reset_tokens.create_index("token")
         await db.sectors.create_index("organization_id")
         await db.ativos.create_index("sector_id")

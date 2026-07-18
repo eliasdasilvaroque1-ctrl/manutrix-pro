@@ -13,27 +13,39 @@
 - RC5.0 Missao 2: Vinculo Automatico + Upload — CONCLUIDA
 - RC5.0.1: HOTFIX P0 Build + Auditoria — CONCLUIDA
 - RC5.0.2: HARDENING P1 IDOR + Estoque + Sector — CONCLUIDA
-- RC5.1: Performance e Estabilizacao — APROVADA E ENCERRADA (18/07/2026)
+- RC5.1: Performance e Estabilizacao — APROVADA E ENCERRADA
 
 ---
 
-## RC5.1 — Detalhes (APROVADA E ENCERRADA)
+## RC5.2 — HOTFIX P0 (EM HOMOLOGACAO 18/07/2026)
 
-### N+1 Eliminados (5)
-1. work_orders.py os_estatisticas: 13+ count → 1 $facet + 2 count
-2. dashboard.py dashboard_stats: 15 count → 3 $facet
-3. dashboard.py os_por_disciplina: N count loop → 1 $group
-4. dashboard.py executivo: N count loop setor → 1 $group
-5. dashboard.py migration_report: N find_one loop → 1 $group
+### FASE 1 — P0.2 JWT_SECRET Fail-Fast
+- Removido fallback `secrets.token_hex(32)` de deps.py
+- Backend falha com RuntimeError se JWT_SECRET ausente
+- Testes: 8/8 (login, RBAC, token invalido, sessao, logs limpos)
 
-### Frontend
-- App.js: 4124 → 3715 linhas (-10%)
-- Extraidos: MainLayout.js (243 lin), AppProviders.js (107 lin)
-- Lazy loading: 17 chunks, bundle 389KB → 189KB gzip (-51%)
+### FASE 2 — P0.3 Isolamento Multiempresa Dossie
+- Adicionado organization_id em 10 queries de ordens_servico e attachments
+- Adicionado verify_org_access em list_ativo_materiais (endpoint desprotegido)
+- Testes: 22/22 (6 positivos, 6 cross-tenant, 10 regressao)
 
-### Metricas (media 3 exec)
-- Dashboard stats: 2.848s → 0.703s (-75%)
-- Bundle JS: 389KB → 189KB gzip (-51%)
+### FASE 3 — P0.1 Indices MongoDB
+- Corrigido expires_at_1: normal → TTL (expireAfterSeconds: 0)
+- Corrigido os_user: unique sem partial → unique com partialFilterExpression
+- Corrigido org_ident: sem unique → unique: true
+- Alinhado data_architecture.py org_ident com unique: true
+- Alinhado server.py expires_at com background: true
+- Script: backend/scripts/fix_indexes.py (--dry-run, --apply, --rollback)
+- Validado: TTL funcional, unique rejeita dups, partial permite soft-delete
+- 2 restarts sem warnings
+
+### Arquivos alterados
+- backend/deps.py (JWT fail-fast)
+- backend/routes/assets.py (org_id em queries + verify_org_access)
+- backend/data_architecture.py (org_ident unique: true)
+- backend/server.py (expires_at background: true)
+- backend/scripts/fix_indexes.py (novo — migration script)
+- memory/PRD.md
 
 ---
 
@@ -45,13 +57,14 @@
 
 ### P2
 - N+1: Dossie OS, Dossie Ativo, Ativo detail
+- server.py monolitico (4425 linhas, 134 endpoints)
 - Inline pages: OSDetailPage (~918 lin), LoginPage, AtivosPage
-- Reducao adicional App.js (3715 lin)
-- Testes de carga com dataset grande
+- /api/ativos sem paginacao
+- Refs Supabase obsoletas
+- Testes legados (96 arquivos)
 - Integracoes ERP/SAP
-- Dataset de homologacao
 
 ### P3
 - IA Assistente
 - Virtualizacao de listas
-- Browserslist update
+- Testes de carga
