@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth, api } from "../lib/api";
 import { normalizeError } from "../lib/constants";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ const ProcedimentosPage = () => {
 
   const canWrite = ['admin', 'pcm', 'master'].includes(user?.role);
 
-  const fetchProcs = async () => {
+  const fetchProcs = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
@@ -30,9 +30,9 @@ const ProcedimentosPage = () => {
       setProcs(res.data);
     } catch (e) { toast.error(normalizeError(e)); }
     finally { setLoading(false); }
-  };
+  }, [search, statusFilter]);
 
-  useEffect(() => { fetchProcs(); }, [search, statusFilter]);
+  useEffect(() => { fetchProcs(); }, [fetchProcs]);
 
   const handleDelete = async () => {
     try {
