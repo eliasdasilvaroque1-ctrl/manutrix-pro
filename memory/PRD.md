@@ -4,8 +4,19 @@
 
 ---
 
-## Status: APROVADO PARA O PILOTO SEM RESSALVAS (18/07/2026)
-## Fase: CONGELAMENTO FUNCIONAL — Piloto ASTEC Cedro em andamento
+## PILOT FREEZE — Ativo desde 19/07/2026
+
+### Baseline do Piloto
+- Commit Base: 2d67eb0
+- Branch: main
+- Versao: v5.2.0
+- Deployment: READY (Production, Vercel)
+- Data: 19/07/2026
+- Ambiente: Production (Vercel + Railway)
+
+### Regras do Congelamento
+PERMITIDO: P0, P1, seguranca, perda de dados, bloqueio operacional
+PROIBIDO: funcionalidades, refatoracoes, visuais, arquitetura, banco, APIs sem aprovacao
 
 ---
 
@@ -18,47 +29,37 @@
 - RC5.0 Missao 2: Vinculo Automatico + Upload — CONCLUIDA
 - RC5.0.1: HOTFIX P0 Build + Auditoria — CONCLUIDA
 - RC5.0.2: HARDENING P1 IDOR + Estoque + Sector — CONCLUIDA
-- RC5.1: Performance e Estabilizacao — APROVADA E ENCERRADA
-- RC5.1 Fase 3: JWT Fail-Fast + Isolamento Dossie + Indices MongoDB — APROVADA
+- RC5.1: Performance e Estabilizacao — CONCLUIDA
+- RC5.1 Fase 3: JWT Fail-Fast + Isolamento Dossie + Indices MongoDB — CONCLUIDA
+- RC5.1.1: Polimento do PDF de Ordem de Servico — CONCLUIDA
 - RC5.2: Procedimento Operacional integrado a OS — CONCLUIDA
 - RC5.2.1: Hardening Final do Procedimento Operacional — CONCLUIDA
 - RC5.9: Pilot Readiness Review (Auditoria Final) — CONCLUIDA
 - RC5.9.1: Correcao P0 procedimento_id em OSCreate/OSUpdate — CONCLUIDA
-- RC5.1.1: Polimento do PDF de Ordem de Servico — CONCLUIDA
-- HOTFIX P1: Corrigir deploy Vercel bloqueado por ESLint — CONCLUIDA (APROVADO LOCALMENTE)
-- RC6.1: Construtor de Secoes da OS — PLANEJADA / BLOQUEADA
+- HOTFIX P1: Deploy Vercel bloqueado por ESLint — CONCLUIDA
 
 ---
 
-## HOTFIX P1 — Deploy Vercel (18/07/2026)
-- Causa: react-hooks/exhaustive-deps em ProcedimentosPage.js (fetchProcs fora do useEffect)
-- Correcao: useCallback wrapper com [search, statusFilter]
-- Build CI=true: PASSED
-- Testes: 11/11
+## POST-PILOTO BACKLOG
 
----
+### P1 — Evolucoes Aprovadas
+1. RC6.1: Construtor de Secoes da Ordem de Servico
+2. Biblioteca Tecnica Inteligente
+3. Procedimentos Inteligentes
+4. Templates por Equipamento
+5. QR Code MVP (Fase 2 do Piloto)
+6. Otimizacao do Central (/api/central ~2.3s)
+7. Correcao senha master
 
-## Regra do Piloto
-Somente bugs P0/P1, seguranca, dados, ajustes ASTEC. Novas funcionalidades aguardam feedback.
+### P2 — Divida Tecnica
+8. Paginacao /api/ativos server-side
+9. RBAC ordering (Depends antes Pydantic)
+10. N+1: Dossie OS, Dossie Ativo
+11. server.py monolitico (4400+ linhas)
+12. Extracao OSDetailPage do App.js
+13. Integracoes ERP/SAP
 
----
-
-## Backlog
-
-### P1 (Pos-piloto)
-- RC6.1: Construtor de Secoes da OS
-- Construtor Visual Ondas 2-3
-- QR Code MVP (Fase 2)
-- Corrigir senha master
-- Otimizar /api/central (~2.3s)
-
-### P2
-- Paginacao /api/ativos
-- N+1: Dossie OS/Ativo
-- server.py monolitico (4400+ linhas)
-- Extracao OSDetailPage
-- ERP/SAP
-
-### P3
-- IA Assistente
-- Testes de carga
+### P3 — Futuro
+14. IA Assistente
+15. Testes de carga
+16. Construtor Visual Ondas 2-3 (drag-and-drop avancado)
