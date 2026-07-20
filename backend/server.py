@@ -133,7 +133,7 @@ def _check_rate_limit(ip: str, path: str) -> bool:
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
-    if request.method == "POST" or path.startswith("/api/public/") or path.startswith("/api/storage/"):
+    if request.method == "POST" or path.startswith("/api/public/"):
         ip = _get_client_ip(request)
         if not _check_rate_limit(ip, path):
             logger.warning(f"RATE_LIMIT: {ip} blocked on {path}")
@@ -629,6 +629,64 @@ def _validate_file(content: bytes, filename: str, allowed_exts: list):
         if not matched and ext != '.webp':
             logger.warning(f"UPLOAD_SUSPECT: file '{filename}' ext={ext} but magic bytes don't match")
 
+
+# ============== FILE SECURITY LAYER ==============
+BRANDING_PATTERNS = ('logo_', 'logo_branca_', 'wallpaper_', 'favicon_', 'icon_')
+
+async def register_file(url: str, org_id: str, uploaded_by: str, is_public: bool = False):
+    """Register file in the file_registry for access control."""
+    await db.file_registry.update_one(
+        {"url": url},
+        {"$set": {"url": url, "organization_id": org_id, "uploaded_by": uploaded_by, "is_public": is_public, "registered_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+
+def _is_branding_file(filename: str) -> bool:
+    """Check if filename matches a public branding pattern."""
+    basename = filename.split('/')[-1] if '/' in filename else filename
+    return any(basename.startswith(p) for p in BRANDING_PATTERNS)
+
+async def _authorize_file(url_key: str, request: Request):
+    """Authorize file access. Returns user dict or raises HTTPException."""
+    # Public branding files (login page logos, wallpapers)
+    if _is_branding_file(url_key):
+        return None  # Allow without auth
+
+    # Extract token
+    auth_header = request.headers.get("authorization", "")
+    token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else request.query_params.get("token", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="Autenticação necessária para acessar este arquivo")
+
+    # Decode JWT
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub") or payload.get("user_id")
+        user = await db.users.find_one({"id": user_id, "deleted_at": None}, {"_id": 0, "id": 1, "role": 1, "organization_id": 1, "email": 1})
+        if not user:
+            raise HTTPException(status_code=401, detail="Sessão inválida")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Sessão expirada")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    # Master can access anything
+    if user.get('role') == 'master':
+        return user
+
+    # Check file registry for org ownership
+    record = await db.file_registry.find_one({"url": {"$regex": f".*{url_key}$"}}, {"_id": 0, "organization_id": 1, "is_public": 1})
+    if record:
+        if record.get('is_public'):
+            return user
+        if record.get('organization_id') != user.get('organization_id'):
+            raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    # No registry entry: allow if authenticated (backward compat for pre-existing files)
+    # Log for audit trail
+    logger.info(f"FILE_ACCESS: unregistered file '{url_key}' accessed by {user.get('email')} org={user.get('organization_id')}")
+    return user
+
+
 @api_router.post("/upload")
 async def upload_file(file: UploadFile = File(...), user: Dict = Depends(get_current_user)):
     content = await file.read()
@@ -638,21 +696,29 @@ async def upload_file(file: UploadFile = File(...), user: Dict = Depends(get_cur
     size_kb = len(content) / 1024
     logger.info(f"UPLOAD: {user.get('email')} file={file.filename} size={size_kb:.0f}KB")
     
+    org_id = user.get('organization_id', '')
+    is_public = _is_branding_file(file.filename)
+
     # Upload to object storage
     if objstore.is_available():
         storage_path = objstore.upload_file("general", user.get('id', 'anon'), file.filename, content, file.content_type or "application/octet-stream")
-        return {"url": f"/api/storage/{storage_path}", "filename": file.filename, "storage": "cloud"}
+        file_url = f"/api/storage/{storage_path}"
+        await register_file(file_url, org_id, user.get('id', ''), is_public)
+        return {"url": file_url, "filename": file.filename, "storage": "cloud"}
     
     # Fallback to local disk
     filename = f"{uuid.uuid4()}{ext}"
     filepath = UPLOAD_DIR / filename
     async with aiofiles.open(filepath, 'wb') as f:
         await f.write(content)
-    return {"url": f"/api/uploads/{filename}", "filename": filename, "storage": "local"}
+    file_url = f"/api/uploads/{filename}"
+    await register_file(file_url, org_id, user.get('id', ''), is_public)
+    return {"url": file_url, "filename": filename, "storage": "local"}
 
 @api_router.get("/uploads/{filename}")
 async def get_upload(filename: str, request: Request):
-    """Public file access — UUID-based security (122-bit entropy)."""
+    """Tenant-scoped file access with JWT auth. Branding files are public."""
+    await _authorize_file(filename, request)
     filepath = UPLOAD_DIR / filename
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
@@ -660,7 +726,8 @@ async def get_upload(filename: str, request: Request):
 
 @api_router.get("/uploads/manuals/{filename}")
 async def get_manual_file(filename: str, request: Request):
-    """Public manual access — UUID-based security."""
+    """Tenant-scoped manual access with JWT auth."""
+    await _authorize_file(f"manuals/{filename}", request)
     filepath = MANUALS_DIR / filename
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
@@ -668,12 +735,13 @@ async def get_manual_file(filename: str, request: Request):
 
 @api_router.get("/storage/{path:path}")
 async def serve_storage_file(path: str, request: Request):
-    """Public file access from object storage — UUID-based security."""
+    """Tenant-scoped cloud storage access with JWT auth. Branding files are public."""
+    await _authorize_file(path, request)
     try:
         data, content_type = objstore.get_file(path)
         return Response(content=data, media_type=content_type)
     except Exception as e:
-        logger.warning(f"Storage file not found: {path} — {e}")
+        logger.warning(f"Storage file not found: {path}")
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 
 # ============== ESTOQUE - CRUD COMPLETO ==============
@@ -4502,40 +4570,45 @@ async def run_migrations():
                 logger.warning(f"BOOTSTRAP: {bootstrap_email} NOT found, but {admin_count} other admin(s) exist: {emails}")
             
             # Always create master@maintrix.com if it doesn't exist
-            master_id = str(uuid.uuid4())
-            # Use existing org_id if any org exists, otherwise create new
-            existing_org = await db.org_config.find_one({}, {"_id": 0, "organization_id": 1})
-            org_id = existing_org['organization_id'] if existing_org else str(uuid.uuid4())
-            
-            master_doc = {
-                "id": master_id,
-                "email": bootstrap_email,
-                "nome": "Master MAINTRIX",
-                "role": "master",
-                "organization_id": org_id,
-                "password_hash": hash_password("master123"),
-                "disciplina_principal": None,
-                "disciplinas_secundarias": [],
-                "area_ids": [],
-                "unidade_ids": [],
-                "turno": "ADM",
-                "telefone": None,
-                "force_password_change": True,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "deleted_at": None,
-            }
-            await db.users.insert_one(master_doc)
-            
-            # Create org_config if none exists
-            if not existing_org:
-                await db.org_config.insert_one({
+            # SECURITY: Password comes from env var only — no default
+            bootstrap_pwd = os.environ.get("MASTER_BOOTSTRAP_PASSWORD", "")
+            if not bootstrap_pwd:
+                logger.warning("BOOTSTRAP: MASTER_BOOTSTRAP_PASSWORD not set — skipping master creation. Set this env var to create the initial master account.")
+            else:
+                master_id = str(uuid.uuid4())
+                # Use existing org_id if any org exists, otherwise create new
+                existing_org = await db.org_config.find_one({}, {"_id": 0, "organization_id": 1})
+                org_id = existing_org['organization_id'] if existing_org else str(uuid.uuid4())
+                
+                master_doc = {
+                    "id": master_id,
+                    "email": bootstrap_email,
+                    "nome": "Master MAINTRIX",
+                    "role": "master",
                     "organization_id": org_id,
-                    "white_label": {"company_name": "MAINTRIX", "primary_color": "#10b981"},
-                    "terminologia": {},
-                    "numeracao": {"prefixo": "OS", "proximo": 1},
+                    "password_hash": hash_password(bootstrap_pwd),
+                    "disciplina_principal": None,
+                    "disciplinas_secundarias": [],
+                    "area_ids": [],
+                    "unidade_ids": [],
+                    "turno": "ADM",
+                    "telefone": None,
+                    "force_password_change": True,
                     "created_at": datetime.now(timezone.utc).isoformat(),
-                })
-            logger.info(f"BOOTSTRAP: Master user created ({bootstrap_email} / master123) org={org_id}")
+                    "deleted_at": None,
+                }
+                await db.users.insert_one(master_doc)
+                
+                # Create org_config if none exists
+                if not existing_org:
+                    await db.org_config.insert_one({
+                        "organization_id": org_id,
+                        "white_label": {"company_name": "MAINTRIX", "primary_color": "#10b981"},
+                        "terminologia": {},
+                        "numeracao": {"prefixo": "OS", "proximo": 1},
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                logger.info(f"BOOTSTRAP: Master user created ({bootstrap_email}) org={org_id} — password change required on first login")
         else:
             logger.info(f"Bootstrap: {bootstrap_email} exists — no action needed")
         

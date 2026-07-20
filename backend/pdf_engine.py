@@ -50,10 +50,40 @@ def make_qr(data_str, size=4):
 
 
 async def fetch_file(url, prefix="dl"):
-    """Download a file to temp. Returns path or None."""
-    if not url or not httpx_lib:
+    """Download a file to temp. Returns path or None. Uses direct storage access for internal URLs."""
+    if not url:
         return None
     try:
+        # Direct local file access (no HTTP needed)
+        if url.startswith('/api/uploads/manuals/'):
+            fname = url.split('/api/uploads/manuals/')[-1]
+            local = os.path.join(os.path.dirname(__file__), 'uploads', 'manuals', fname)
+            if os.path.exists(local):
+                return local
+        elif url.startswith('/api/uploads/'):
+            fname = url.split('/api/uploads/')[-1]
+            local = os.path.join(os.path.dirname(__file__), 'uploads', fname)
+            if os.path.exists(local):
+                return local
+        # Direct cloud storage access (no HTTP needed)
+        if url.startswith('/api/storage/'):
+            spath = url.replace('/api/storage/', '', 1)
+            try:
+                from object_storage import ObjectStorageClient
+                store = ObjectStorageClient()
+                if store.is_available():
+                    data, _ = store.get_file(spath)
+                    if data and len(data) > 100:
+                        ext = '.png' if '.png' in spath else '.jpg'
+                        path = os.path.join(tempfile.gettempdir(), f"{prefix}_{uuid.uuid4().hex[:8]}{ext}")
+                        with open(path, 'wb') as f:
+                            f.write(data)
+                        return path
+            except Exception:
+                pass
+        # Fallback to HTTP for external URLs only
+        if not httpx_lib:
+            return None
         full_url = f"{APP_URL}{url}" if url.startswith('/') else url
         async with httpx_lib.AsyncClient() as hc:
             r = await hc.get(full_url, timeout=8, follow_redirects=True)
@@ -65,6 +95,7 @@ async def fetch_file(url, prefix="dl"):
                 return path
     except Exception:
         pass
+    return None
     return None
 
 
