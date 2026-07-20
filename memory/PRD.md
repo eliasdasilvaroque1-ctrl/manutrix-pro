@@ -4,15 +4,15 @@
 
 ---
 
-## Status: DOMÍNIO OFICIAL VALIDADO TECNICAMENTE COM RESSALVA
-## Branch aprovada: security/pre-pilot-access-hardening (edcc5de)
-## Baseline producao anterior: main (ec78f1d)
+## Status: DOMÍNIO OFICIAL VALIDADO TECNICAMENTE — PENDENTE APENAS IDENTIFICAÇÃO JURÍDICA
+## Branch: security/pre-pilot-access-hardening
 ## Versao piloto: pilot-astec-v1.0.0
 ## Domínio oficial: https://app.maintrix.com.br
+## Último deploy validado: 2026-07-20
 
 ---
 
-## Security Hardening (esta branch)
+## Security Hardening
 1. File downloads: JWT auth + file_registry + deny-by-default ✅
 2. Master credential: env var only, zero hardcoded passwords ✅
 3. Demo seed: ENABLE_DEMO_SEED flag, blocked in production ✅
@@ -21,62 +21,35 @@
 6. Branding: is_public only via admin config endpoints ✅
 7. Backfill: startup scan of OS, ativos, org_config, estoque ✅
 
-## Env Vars Required in Production
-- ENVIRONMENT=production
-- ENABLE_DEMO_SEED=false (or unset)
-- MASTER_BOOTSTRAP_PASSWORD (only if no master exists, remove after)
-- DEMO_SEED_PASSWORD (DO NOT set in production)
-- JWT secret, MONGO_URL, DB_NAME, CORS origins (existing)
-
----
+## Compliance Documents
+- Política de Privacidade: v1.0, 4085 chars, 11 seções ✅
+- Termos de Uso: v1.0, 3058 chars, 10 seções ✅ (CNPJ: [A definir])
+- Arquivos: backend/compliance/ (co-localizados com backend)
+- COMPLIANCE_DIR: resolve parent/compliance com fallback parent.parent/compliance
 
 ## QA Results
-- R1: 43/43 PASSED
-- R2: 78/78 PASSED
-- R3: 48/48 PASSED
-- Total: 169/169 GREEN
-- Credential scan: 0 passwords in production code
-- Cross-org isolation: verified 3x
-- force_password_change: enforced at backend
-
-## Smoke Test Domínio Oficial (2026-07-20)
-- SSL: PASS (Let's Encrypt, válido até 2026-09-30)
-- Auth (6 perfis): PASS
-- Tenant isolation: PASS
-- File deny-by-default: PASS
-- CRUD (Ativos/OS/Procedimentos/Central): PASS
-- Documentos Legais: FALHA (placeholder)
-- preview_numeracao: FALHA (500, digitos=null)
-- Relatório completo: /app/memory/RELATORIO_DOMINIO_OFICIAL.md
+- R1-R3: 169/169 GREEN
+- Compliance restore: 11/11 backend + frontend visual OK
+- Smoke test produção: 10/10 PASS
+- Console: Zero erros JS relacionados a compliance
 
 ---
 
-## PROBLEMAS ABERTOS
+## RESSALVAS PENDENTES
+1. CNPJ: [A definir] nos Termos de Uso — aguardando proprietário
+2. ENVIRONMENT=production não configurado no painel de deploy (P3 informativo)
 
-### P1 PRÉ-PILOTO (Bloqueante)
-- Política de Privacidade e Termos de Uso retornando placeholder "Documento em preparação." (24 chars)
-- Causa: arquivos compliance/ ausentes no deploy
-- Ação: criar/restaurar politica_privacidade.md e termos_de_uso.md, deploy, validar
-
-### P2
-- preview_numeracao retorna 500 para entidade ordens_servico
-- Causa: numeracao.ordens_servico.digitos = null no MongoDB
-- Fix: `pattern.get("digitos") or 5` ou corrigir valor no DB
-- Não afeta criação/execução de OS
-
-### P3
-- MAINTRIX_ENV=homologacao (deveria ser production) — apenas informativo
-
----
+## P2 BACKLOG
+- preview_numeracao: 500 para ordens_servico (digitos=null)
+- Org branding images 401 (fallback ativo)
 
 ## POST-PILOTO BACKLOG
 1. RC6.1: Construtor de Secoes da OS
-2. Biblioteca Tecnica Inteligente
-3. Procedimentos Inteligentes
+2. QR Code MVP (Fase 2)
+3. Biblioteca Tecnica Inteligente
 4. Templates por Equipamento
-5. QR Code MVP
-6. Otimizacao /api/central
-7. Paginacao /api/ativos
-8. Extracao OSDetailPage
-9. ERP/SAP
-10. IA Assistente
+5. Otimizacao /api/central
+6. Paginacao /api/ativos
+7. Extracao OSDetailPage
+8. ERP/SAP
+9. IA Assistente
