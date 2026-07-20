@@ -1,9 +1,10 @@
 """Asset routes: Áreas (sectors), Ativos CRUD, Materiais por Equipamento"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional, Dict
 from datetime import datetime, timezone
 from enum import Enum
 import uuid
+import json as json_lib
 
 from deps import (
     db, get_current_user, check_admin_only, check_pcm_or_admin, check_write_permission,
@@ -187,8 +188,13 @@ async def get_ativo(ativo_id: str, user: Dict = Depends(get_current_user)):
     return ativo
 
 @router.post("/ativos")
-async def create_ativo(data: AtivoCreate, user: Dict = Depends(get_current_user)):
+async def create_ativo(request: Request, user: Dict = Depends(get_current_user)):
     check_pcm_or_admin(user)
+    try:
+        body = await request.json()
+        data = AtivoCreate.model_validate(body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
     org_id = user.get('organization_id', '')
 
     sector = await db.sectors.find_one({"id": data.sector_id, "organization_id": org_id, "deleted_at": None})
