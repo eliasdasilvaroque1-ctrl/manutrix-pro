@@ -165,7 +165,7 @@ async def upload_logo(file: UploadFile = File(...), user: Dict = Depends(get_cur
         {"$set": {"identidade.logo_url": url, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     # Register branding file as public
-    await db.file_registry.update_one({"url": url}, {"$set": {"url": url, "organization_id": org_id, "uploaded_by": user.get('id',''), "is_public": True, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    await db.file_registry.update_one({"url": url}, {"$set": {"url": url, "organization_id": org_id, "uploaded_by": user.get('id',''), "is_public": True, "category": "branding", "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
     return {"url": url}
 
 @router.post("/org/config/favicon")
@@ -192,7 +192,7 @@ async def upload_favicon(file: UploadFile = File(...), user: Dict = Depends(get_
         {"organization_id": org_id},
         {"$set": {"identidade.favicon_url": url, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
-    await db.file_registry.update_one({"url": url}, {"$set": {"url": url, "organization_id": org_id, "uploaded_by": user.get('id',''), "is_public": True, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    await db.file_registry.update_one({"url": url}, {"$set": {"url": url, "organization_id": org_id, "uploaded_by": user.get('id',''), "is_public": True, "category": "branding", "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
     return {"url": url}
 
 
@@ -622,4 +622,5 @@ async def master_upload_asset(
         {"$set": {field_map[asset_type]: url, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     await audit_log("upload", "org_config", org_id, user, f"Upload {asset_type}")
+    await db.file_registry.update_one({"url": url}, {"$set": {"url": url, "organization_id": org_id, "uploaded_by": user.get('id',''), "is_public": True, "category": "branding", "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
     return {"url": url, "type": asset_type}

@@ -648,9 +648,18 @@ def _is_branding_file(filename: str) -> bool:
 
 async def _authorize_file(url_key: str, request: Request):
     """Authorize file access. Returns user dict or raises HTTPException."""
-    # Public branding files (login page logos, wallpapers)
+    # Public branding files (login page logos, wallpapers) — by filename pattern
     if _is_branding_file(url_key):
         return None  # Allow without auth
+
+    # Public branding files — by file_registry (hash-named files)
+    url_variants = [url_key, f"/api/uploads/{url_key}", f"/api/storage/{url_key}", f"/api/uploads/manuals/{url_key}"]
+    public_record = await db.file_registry.find_one(
+        {"url": {"$in": url_variants}, "is_public": True, "category": "branding"},
+        {"_id": 0}
+    )
+    if public_record:
+        return None  # Allow without auth — registered public branding
 
     # Extract token
     auth_header = request.headers.get("authorization", "")
@@ -4665,7 +4674,7 @@ async def run_migrations():
             for key in ["logo_url", "logo_branca_url", "wallpaper_url", "favicon_url"]:
                 url = ident.get(key)
                 if url:
-                    await db.file_registry.update_one({"url": url}, {"$setOnInsert": {"url": url, "organization_id": org, "uploaded_by": "backfill", "is_public": True, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+                    await db.file_registry.update_one({"url": url}, {"$setOnInsert": {"url": url, "organization_id": org, "uploaded_by": "backfill", "is_public": True, "category": "branding", "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
                     backfill_count += 1
         # Backfill from itens_estoque
         async for doc in db.itens_estoque.find({"foto_url": {"$ne": None}, "deleted_at": None}, {"_id": 0, "id": 1, "organization_id": 1, "foto_url": 1}):
