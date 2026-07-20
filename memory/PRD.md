@@ -4,35 +4,39 @@
 
 ---
 
-## Status: HOMOLOGAÇÃO E2E CONCLUÍDA — 169/169 testes
-## Fase: PILOT FREEZE + QA Completo
-## Branch QA: fix/pre-pilot-privacy-branding (commit 833423f)
-## Baseline Piloto: commit 2d67eb0 (main)
+## Status: APROVADO PARA MERGE E DEPLOY — Piloto ASTEC
+## Branch aprovada: security/pre-pilot-access-hardening (edcc5de)
+## Baseline producao anterior: main (ec78f1d)
+## Versao piloto: pilot-astec-v1.0.0
 
 ---
 
-## Historico de RCs
-- RC5.0-5.2.1: Todas CONCLUÍDAS
-- RC5.9/5.9.1: Auditoria + P0 fix — CONCLUÍDAS
-- RC5.1.1: PDF Polimento — CONCLUÍDA
-- HOTFIX P1: ESLint/Vercel — CONCLUÍDA (deploy READY)
-- QA R1 (iter110): 43/43 PASSED
-- QA R2 (iter111): 78/78 PASSED
-- QA R3 (iter112): 48/48 PASSED
-- Fixes: P1 LegalDocPage, P2 Logo fallback, P1 Master password, P2 RBAC ordering, P2 Asset refs cleanup
+## Security Hardening (esta branch)
+1. File downloads: JWT auth + file_registry + deny-by-default
+2. Master credential: env var only, zero hardcoded passwords
+3. Demo seed: ENABLE_DEMO_SEED flag, blocked in production
+4. force_password_change: backend enforcement
+5. CLI recovery: manage_master.py
+6. Branding: is_public only via admin config endpoints
+7. Backfill: startup scan of OS, ativos, org_config, estoque
+
+## Env Vars Required in Production
+- ENVIRONMENT=production
+- ENABLE_DEMO_SEED=false (or unset)
+- MASTER_BOOTSTRAP_PASSWORD (only if no master exists, remove after)
+- DEMO_SEED_PASSWORD (DO NOT set in production)
+- JWT secret, MONGO_URL, DB_NAME, CORS origins (existing)
 
 ---
 
-## Bugs Corrigidos nesta Branch
-1. P1: LegalDocPage catch silencioso → estados loading/error/retry (App.js)
-2. P2: Logo 404 → SidebarLogo fallback com Cog icon (MainLayout.js)
-3. P1: Master password hash corrompido → reset bcrypt (DB)
-4. P2: RBAC antes de Pydantic em POST /ativos (assets.py)
-5. P2: Logo/wallpaper refs 404 limpas do org_config (DB)
-
-## Bugs Abertos (Nenhum P0/P1)
-- P3: POST /ativos/{id}/documentos e /ordens-servico/{id}/anexos não existem (usa /upload genérico)
-- P3: GET /planos-inspecao/{id} retorna 405 (não usado pelo frontend)
+## QA Results
+- R1: 43/43 PASSED
+- R2: 78/78 PASSED
+- R3: 48/48 PASSED
+- Total: 169/169 GREEN
+- Credential scan: 0 passwords in production code
+- Cross-org isolation: verified 3x
+- force_password_change: enforced at backend
 
 ---
 
