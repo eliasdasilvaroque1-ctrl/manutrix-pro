@@ -3744,15 +3744,51 @@ const SobrePage = () => {
 // ============== LEGAL DOCUMENT PAGES ==============
 const LegalDocPage = ({ type }) => {
   const [doc, setDoc] = useState(null);
-  useEffect(() => {
-    api.get(`/compliance/${type}`).then(r => setDoc(r.data)).catch(() => {});
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDoc = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    api.get(`/compliance/${type}`)
+      .then(r => {
+        if (!r.data || !r.data.content) {
+          setError('Documento sem conteúdo disponível.');
+        } else {
+          setDoc(r.data);
+        }
+      })
+      .catch(err => {
+        const msg = err?.response?.status === 401 ? 'Sessão expirada. Faça login novamente.'
+          : err?.response?.status === 404 ? 'Documento não encontrado.'
+          : err?.response?.status >= 500 ? 'Erro no servidor. Tente novamente.'
+          : err?.message === 'Network Error' ? 'Sem conexão com o servidor.'
+          : 'Erro ao carregar documento.';
+        setError(msg);
+        console.error(`[LegalDocPage] Falha ao carregar /compliance/${type}:`, err?.response?.status || err?.message);
+      })
+      .finally(() => setLoading(false));
   }, [type]);
-  if (!doc) return <Loading rows={4} />;
+
+  useEffect(() => { fetchDoc(); }, [fetchDoc]);
+
+  if (loading) return <Loading rows={4} />;
+
+  if (error) return (
+    <PageContainer>
+      <div className="glass-card p-8 max-w-lg mx-auto mt-12 text-center" data-testid="legal-doc-error">
+        <AlertCircle size={40} className="mx-auto mb-4 text-red-400" />
+        <p className="text-sm text-slate-300 mb-4">{error}</p>
+        <button onClick={fetchDoc} className="btn-primary text-sm" data-testid="legal-doc-retry">Tentar novamente</button>
+      </div>
+    </PageContainer>
+  );
+
   return (
     <PageContainer>
       <PageHeader title={type === 'terms' ? 'Termos de Uso' : 'Política de Privacidade'} subtitle={`Versão ${doc.version}`} />
       <div className="glass-card p-6 max-w-3xl mx-auto">
-        <div className="prose prose-invert prose-sm whitespace-pre-wrap text-sm text-slate-300 leading-relaxed">
+        <div className="prose prose-invert prose-sm whitespace-pre-wrap text-sm text-slate-300 leading-relaxed" data-testid="legal-doc-content">
           {doc.content}
         </div>
       </div>

@@ -135,7 +135,13 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         {!collapsed && (
           <div className="flex items-center gap-3 min-w-0">
             {b.logo_branca_url || b.logo_url ? (
-              <img src={b.logo_branca_url || b.logo_url} alt={b.nome_empresa} className="h-8 w-auto object-contain flex-shrink-0" data-testid="sidebar-logo" />
+              <img
+                src={b.logo_branca_url || b.logo_url}
+                alt={b.nome_empresa}
+                className="h-8 w-auto object-contain flex-shrink-0"
+                data-testid="sidebar-logo"
+                onError={e => { e.currentTarget.style.display = 'none'; console.warn('[Sidebar] Logo não encontrada:', e.currentTarget.src); }}
+              />
             ) : null}
             <div className="min-w-0">
               <h1 className="text-xl font-bold tracking-wider truncate" style={{ color: b.cor_primaria || 'var(--brand-primary)' }} data-testid="sidebar-brand-name">{b.nome_empresa || 'CMMS'}</h1>
