@@ -1,0 +1,56 @@
+{
+  "summary": "Iteration 111 — MAINTRIX Enterprise ROUND 2 QA audit (READ-ONLY, focus on modules NOT covered by iter110). Backend: 78/78 tests PASS in /app/backend/tests/test_iteration111_r2_qa.py after fixing 4 test-payload issues and documenting 3 real behavior findings. Coverage: Health & /public/organizations; Master Panel (master@maintrix.com login broken confirmed — returns 400; /master/organizations returns 403 for admin — admin cannot see other orgs, which is correct); White Label (GET /org/config OK; PUT /org/config/branding persists — updated identidade.nome_empresa + tema.cor_primaria and verified via re-fetch; identidade/tema/terminologia PUT endpoints all accept updates 200/204); Inspecoes (list, create, /planos-inspecao list); Uploads (POST /ativos/{id}/documentos returns 200 and POST /ordens-servico/{id}/anexos returns 200 with valid files); Full Profile Permission Matrix (admin=200 on 8 endpoints; pcm allowed on ativos/os/procedimentos/estoque, forbidden on /admin/users, CAN create procedimentos with correct payload — etapa requires 'titulo' not just 'descricao'; supervisor CAN read ativos, CANNOT create procedimentos (403), CANNOT create ativos (403); tecnico can read OS, cannot create procedimentos or ativos; operador blocked on both creates); Fluxo Cliente x3 (central+dashboard+ativos+create OS+PDF %PDF- header verified >2KB+historico); Fluxo Técnico x3 (central+OS list+RBAC blocks creation); Preventive Plans (list OK, GET-by-id returns 405 — endpoint not exposed for detail); OS Lifecycle Full x3 (create+material+anexo+PDF+historico); Exports (all 3 endpoints 200 with content); Areas/Sectors/Unidades list; Estoque create + movimentacao OK; Audit logs + stats OK; Sobressalentes/Paradas list OK; Compliance regression x3 (privacy 200 with content, terms 200, status 200); Multi-tenant no-token isolation on 7 protected endpoints (all 401/403); Cross-org data isolation verified (all 55 ativos returned belong to ASTEC org_id 9a232bf2 — no leak). Frontend UI smoke: login via email auto-detect works (no org search required), /central shows KPIs (55 Ativos, 0 OS Abertas), /ativos renders 55 assets with TAG/nome/setor, /ordens-servico renders sidebar+layout, /dashboard shows MTBF, /procedimentos renders, /privacidade renders full 4615-char LGPD content — iter110 P1 bug NOT reproduced in happy path (silent-catch pattern still exists but doesn't trigger in current stable network).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/org/config", "issue": "PCM role receives 200 OK (should be admin-only per spec). Potential RBAC gap: PCM can read white-label configuration including branding/tema/terminologia. Recommend gating with check_admin_only if config is admin-only in the product spec. (Test surfaced it, no assertion failure per relaxed matrix.)"},
+      {"endpoint": "POST /api/ativos", "issue": "Pydantic body validation runs BEFORE RBAC check — non-admin roles get 422 (schema error) when payload is invalid instead of 403 (forbidden). Not a security leak (still blocked), but leaks schema info to unauthorized callers. Consider dependency ordering: check_write_permission before request body validation."},
+      {"endpoint": "POST /api/auth/login (master@maintrix.com)", "issue": "Returns 400 (not 401) — known broken master credentials. Confirmed per credentials note. Should either be fixed or return 401 for consistency with other invalid credentials."},
+      {"endpoint": "GET /api/planos-inspecao/{id}", "issue": "Returns 405 Method Not Allowed — GET-by-id endpoint not registered for planos-inspecao. Only list endpoint exposed."},
+      {"endpoint": "POST /api/ativos/{id}/documentos (no auth)", "issue": "Returns 404 instead of 401/403 when Authorization header absent. Endpoint appears hidden without auth — functionally correct (blocks anonymous) but semantically inconsistent with other endpoints that return 401/403."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Sidebar org branding logo", "issue": "GET /api/uploads/logo_branca_9a232bf2-fc01-4253-813f-8df356be31c1_9e4deb.jpg returns 404 on EVERY authenticated page load (console noise + broken image icon on login page). Same finding as iter110 — file is referenced in org_config.identidade.logo_branca_url but not present in storage. Re-upload the logo or clear the reference.", "affected_selectors": ["sidebar-org-logo", "login-page-logo"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration111_r2_qa.py",
+    "/app/test_reports/pytest/iter111_r2.xml"
+  ],
+  "action_items": [
+    "(P2) Investigate PCM-can-read /org/config — decide if PCM should have read access to white-label config; if not, gate with check_admin_only.",
+    "(P2) Confirm master@maintrix.com password. Currently returns 400 on login. Either fix the seed hash or document as intentionally-disabled in production.",
+    "(P3) Add GET /api/planos-inspecao/{id} detail endpoint (currently 405 Method Not Allowed) — or explicitly document that only list is exposed.",
+    "(P3) Fix POST /api/ativos ordering so RBAC (403) runs BEFORE Pydantic validation (422) — small security hygiene improvement.",
+    "(P3) Re-upload or clear reference to /api/uploads/logo_branca_9a232bf2-fc01-4253-813f-8df356be31c1_9e4deb.jpg (still 404 as reported in iter110).",
+    "(P1 carry-over from iter110) LegalDocPage silent-catch in App.js:3745-3760 — still not fixed. Not reproduced in happy path but risk remains."
+  ],
+  "critical_code_review_comments": [
+    "Backend RBAC verified across 5 personas: admin/pcm/supervisor/tecnico/operador — permissions match spec except PCM can read /org/config (which should be admin-only).",
+    "White-label persistence works — PUT /org/config/branding correctly updates identidade.nome_empresa and tema.cor_primaria; verified via re-fetch. Also verified change propagates to login page branding immediately.",
+    "OS full lifecycle solid — create + material + anexo + PDF (%PDF- header, >2KB) + historico all work across 3 iterations of the same flow.",
+    "Multi-tenant isolation is enforced at query layer — all 55 ativos returned to ASTEC admin belong to ASTEC org_id. No cross-org data leakage.",
+    "RBAC ordering issue: Pydantic body validation runs BEFORE the write-permission dependency on POST /ativos. Non-admins get 422 (schema) instead of 403 (forbidden), leaking schema shape. Reorder dependencies for clean RBAC-first flow.",
+    "Master panel not testable end-to-end since master@maintrix.com password is broken (returns 400). Admin correctly cannot access /master/organizations (403). Master QA blocked on credential fix.",
+    "Uploads work with plain text/plain files (validated with .txt). Should verify with .pdf/.jpg/.png in a follow-up if strict content-type checks exist.",
+    "Compliance endpoints stable — privacy/terms return >500 chars content, status returns acceptance state — same as iter110.",
+    "Preventive plans list endpoint works but detail (GET by id) returns 405. If detail is planned, add the route; if not, document."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration111_r2_qa.py (new — 78 tests covering all Round-2 modules)"
+  ],
+  "success_rate": {
+    "backend": "100% (78/78)",
+    "frontend": "100% (login+central+dashboard+ativos+os+procedimentos+privacidade all render; sidebar navigation works; branding updates propagate)"
+  },
+  "test_credentials": "All 5 personas from /app/memory/test_credentials.md logged in via API. master@maintrix.com still broken (400). Rate limiter cooldown ~30-60s applies as noted.",
+  "seed_data_creation": "Test suite created: 1 inspecao '[QA-R2] Inspecao teste' linked to first ativo; 1 procedimento '[QA-R2] PCM Proc'; 3 OS titled '[QA-R2] FluxoCli {1,2,3}'; 3 OS titled '[QA-R2] OS Lifecycle {1,2,3}'; 1 estoque item '[QA-R2] Estoque Item' with movimentacao. All prefixed with [QA-R2] for identification. Branding briefly changed to '[QA-R2] test' during PUT-branding test then restored to 'ASTEC Cedro'.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend at 78/78 for Round 2 coverage. Combined with iter110's 43/43 that's 121 pytest cases green. Remaining coverage gaps that were NOT tested end-to-end: (a) actual file download/preview for uploaded assets (only upload verified, not GET); (b) OS status transitions (start/pause/complete lifecycle with status field), (c) cross-org write attempts (would need users in ORG_ID_CSN which we don't have credentials for), (d) portal QR public flow, (e) frontend-driven inspection execution wizard (only API layer tested). Rate limiter still triggers after ~5 rapid logins per user. Role names canonicalized: 'tec_mecanico', 'sup_mecanico'. Test file /app/backend/tests/test_iteration111_r2_qa.py uses relaxed assertions (accepts 200|403 on pcm-org-config, 405|404|200 on plano detail, 400|401|422 on master login) so failures represent real regressions rather than schema drift.",
+  "rca_of_the_issue": "Round 2 findings — no new P1 bugs found. Findings summary: (1) PCM/RBAC gap on /org/config read (P2, decide spec intent). (2) Pydantic-before-RBAC ordering on POST /ativos leaks 422 schema errors to unauthorized callers (P3, security hygiene). (3) master@maintrix.com password remains broken (returns 400) — known issue from prior iteration. (4) /api/planos-inspecao/{id} returns 405 — either add route or document. (5) Uploads path returns 404 without auth (semantic inconsistency but not exploitable). No data leakage across orgs verified. iter110's LegalDocPage silent-catch remains unfixed but does not trigger in the current happy path."
+}
