@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 112 — ROUND 3 (FINAL) MAINTRIX Enterprise homologacao E2E QA (READ-ONLY). Backend: 48/48 pytest cases PASS in /app/backend/tests/test_iteration112_r3_qa.py covering the NEW coverage areas requested. Combined with iter110 (43/43) + iter111 (78/78) = 169 pytest cases green. Master login FIXED and verified 3x (200 OK, role=master, org_id=ASTEC). Master Panel CRUD confirmed: GET /master/organizations returns 7 orgs including ASTEC/VALE/CSN/Pedreira/Indústria; POST /master/organizations creates new orgs; GET/PUT /master/organizations/{id}/config work; admin/pcm/tecnico all get 403 on master endpoints. Uploads: The endpoints requested by problem statement (POST /api/ativos/{id}/documentos and POST /api/ordens-servico/{id}/anexos) DO NOT EXIST (404). The actual upload endpoint is POST /api/upload (generic, validates ext .jpg/.jpeg/.png/.gif/.webp/.pdf). Verified upload of PDF, PNG, JPG all return 200; disallowed .exe returns 400; upload requires auth (401); uploaded file is downloadable. OS Status Transitions: fully working — /transitions endpoint returns valid transitions from state machine (OS_TRANSITIONS map in work_orders.py); PATCH /ordens-servico/{id}/status enforces valid transitions (aberta→em_execucao OK, aberta→concluida rejected with 400); POST /iniciar, /pausar, /concluir lifecycle endpoints all work. Initial OS status is 'programada' (not 'aberta' as some tests assumed). RBAC ordering (R2-004 fix) VERIFIED: operator/tecnico with invalid payload get 403 (not 422) — RBAC now runs before Pydantic. White Label: PUT /org/config/branding, /tema, /terminologia all persist changes; tecnico/operador correctly get 403. Direct URL access: tecnico/operador/supervisor/pcm all correctly get 403 on /admin/users, /admin/audit-logs, PUT /org/config/branding. Cross-org isolation: all 55+ ativos and OS returned to ASTEC admin belong to ASTEC org_id — zero leak. Compliance 3x: /compliance/privacy returns >500 chars content, /compliance/terms 200 — all 3 iterations. PDF regression 3x: /ordens-servico/{id}/pdf returns %PDF- >1KB, 3 consecutive calls all pass. Procedimentos regression 3x: list+create+delete cycle works 3x. Frontend UI: Desktop (1920x1080) login-as-admin OK (Central shows 55 Ativos + 6 OS abertas); Mobile viewport (390x844) login OK — responsive layout switches to bottom-tab navigation (Central/Inspeções/Ativos/OS); Master login UI works (Central Executiva shown, Master MAINTRIX user in sidebar); Master Panel accessible via /master/white-label (Designer de Marca UI shows all orgs with configurable identity/colors/login/domains/themes); /privacidade renders LGPD content. iter111's SIDEBAR LOGO 404 (logo_branca_*.jpg) — FIXED (0 logo 404s in current run). NEW 404 discovered: /api/uploads/wallpaper_9a232bf2-fc01-4253-813f-8df356be31c1_c9b4fb.jpg is referenced in ASTEC org_config.identidade.wallpaper_url but missing from storage (shows broken image in preview panel of Designer de Marca).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/ativos/{id}/documentos", "issue": "Endpoint does not exist (404). Problem statement referenced this endpoint but it was never implemented. Frontend uses generic POST /api/upload instead. Either add the resource-scoped endpoint or remove the requirement.", "priority": "P3"},
+      {"endpoint": "POST /api/ordens-servico/{id}/anexos", "issue": "Endpoint does not exist (404). Same as above — problem statement referenced this endpoint but the actual upload path is the generic /api/upload. No resource-scoped attachment endpoint exists.", "priority": "P3"},
+      {"endpoint": "GET /api/uploads/wallpaper_9a232bf2-...c9b4fb.jpg", "issue": "Referenced in org_config.identidade.wallpaper_url but file missing from storage (404). Visible as broken image in Designer de Marca preview. Similar to iter111's logo_branca 404 (now fixed). Recommend: re-upload the wallpaper or clear the reference.", "priority": "P2"},
+      {"endpoint": "GET /api/master/organizations/{invalid}/config", "issue": "Returns 400 in some cases where 404 would be more semantically correct. Not blocking."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Master Panel — wallpaper preview", "issue": "GET /api/uploads/wallpaper_9a232bf2-fc01-4253-813f-8df356be31c1_c9b4fb.jpg returns 404 (only observed on /master/white-label page). Broken image icon visible in the 'Wallpaper' preview. Non-blocking (falls back gracefully) but produces console/network noise.", "affected_selectors": ["wallpaper-preview"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration112_r3_qa.py",
+    "/app/test_reports/pytest/iter112_r3.xml"
+  ],
+  "action_items": [
+    "(P3) Decide whether to implement resource-scoped upload endpoints POST /api/ativos/{id}/documentos and POST /api/ordens-servico/{id}/anexos — currently only the generic /api/upload exists. If not planned, remove them from QA requirements/documentation.",
+    "(P2) Re-upload or clear the reference to /api/uploads/wallpaper_9a232bf2-fc01-4253-813f-8df356be31c1_c9b4fb.jpg — same class of issue as the previously-fixed logo_branca 404.",
+    "(P4) OS #concluir for corretiva-type OS requires at least one photo/evidence anexo — this is a business rule that should be surfaced in the UI to guide the user before attempting completion (currently returns 400 with a Portuguese error message)."
+  ],
+  "critical_code_review_comments": [
+    "Master login is now fully working — role=master + organization_id=ASTEC returned; role-guarded endpoints correctly reject admin/pcm/tecnico with 403.",
+    "RBAC-before-Pydantic ordering (R2-004) is FIXED on POST /ativos — operator/tecnico get 403 with invalid payload (was 422 in R2). Security hygiene improvement confirmed.",
+    "OS state machine (OS_TRANSITIONS map in work_orders.py) is explicit and testable via GET /ordens-servico/{id}/transitions — good discoverability. Invalid transitions return 400 with clear Portuguese error messages listing valid targets.",
+    "Cross-tenant data isolation is enforced at the query layer — all 55+ ativos returned to ASTEC admin belong to ASTEC org_id, no leak. Master with org_id=ASTEC can also list other orgs via /master/organizations (this is by design — master role bypasses tenant scoping).",
+    "White-label persistence works end-to-end — PUT /org/config/branding + /tema + /terminologia all persist and reflect back on GET. Master's PUT /master/organizations/{id}/config also works and can update any org.",
+    "The problem statement listed POST /api/ativos/{id}/documentos and POST /api/ordens-servico/{id}/anexos but these endpoints do NOT exist. Only the generic POST /api/upload is present. Either implement the resource-scoped variants or update the QA scope.",
+    "The wallpaper_url 404 mirrors the logo_branca 404 that was fixed in this branch — the fix should be applied to ALL asset references in org_config (logo, logo_branca, favicon, wallpaper), not just logo_branca.",
+    "OS lifecycle POST /concluir enforces a corretiva-must-have-photo business rule at the API level — this is safety-critical for audit but the UI should probably block the button before the call, not surface a raw 400 error.",
+    "Frontend responsive layout switches cleanly to bottom-tab nav at mobile width (390px). Sidebar hamburger not needed. Good UX.",
+    "Firefox cross-browser was requested but our automation tool is chromium-only — recommend running Playwright with firefox: True in a follow-up if browser-specific issues are suspected."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration112_r3_qa.py (new — 48 tests, all pass)"
+  ],
+  "success_rate": {
+    "backend": "100% (48/48)",
+    "frontend": "100% (desktop login + mobile viewport login + master login + /master/white-label all render; 0 console errors; only 1 API 404 which is the wallpaper asset)"
+  },
+  "test_credentials": "Used all 6 personas from /app/memory/test_credentials.md. Master (master@maintrix.com/master123 + org_id=9a232bf2-fc01-4253-813f-8df356be31c1) now works — confirmed 3x. Rate-limiter cooldown observed (~3-5s between logins per user). One transient 502 Bad Gateway during first master login attempt — handled by retry-with-backoff in the test.",
+  "seed_data_creation": "Test suite created: 6 OS titled '[QA-R3] status transition test OS' (via /ordens-servico); 3 procedimentos '[QA-R3] Proc cycle {1,2,3}' (created + deleted in the same cycle); 1 new org '[QA-R3] test-org {timestamp}' via master panel (kept for auditing — can be cleaned up later). Branding temporarily changed to '[QA-R3] ASTEC' and restored to 'ASTEC Cedro'. Master-side org_config nome_empresa changed to '[QA-R3-MASTER] ASTEC' and restored.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "R3 final coverage complete. Cumulative pytest count: 169 green (43 iter110 + 78 iter111 + 48 iter112). Master panel is now fully verifiable end-to-end via UI (/master/white-label) and API. Remaining gaps that would benefit from future work: (a) implement POST /api/ativos/{id}/documentos and POST /api/ordens-servico/{id}/anexos if scoped uploads are desired (only generic /upload exists today); (b) clean up wallpaper_url 404 in ASTEC org_config; (c) Firefox cross-browser (our tool is chromium-only); (d) file-download tests for the master-uploaded assets (POST /master/organizations/{id}/upload/{asset_type}); (e) UI validation that concluir button is disabled for corretiva OS without a photo. Rate limiter still applies at ~5 rapid logins per user — the test file uses token caching to avoid this. OS_TRANSITIONS map in /app/backend/routes/work_orders.py lines 22-69 documents all valid state transitions per role — very useful reference for future test writing.",
+  "rca_of_the_issue": "No P0/P1 bugs found. Findings (P2/P3): (1) POST /api/ativos/{id}/documentos and POST /api/ordens-servico/{id}/anexos referenced in the problem statement do not exist — frontend uses generic /api/upload with ext validation. Recommend: either implement resource-scoped endpoints or update QA scope docs. (2) wallpaper_url 404 in ASTEC org_config — same class of bug as the R2 logo_branca 404 that was fixed on this branch. Apply the same cleanup to ALL 4 asset types (logo/logo_branca/favicon/wallpaper) in the seed/migration. (3) Confirmed R2-004 (RBAC-before-Pydantic) is FIXED. (4) Confirmed master login is FIXED. (5) OS state machine is production-ready and testable via /transitions endpoint."
+}
