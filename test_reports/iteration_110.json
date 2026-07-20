@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 110 — Full MAINTRIX Enterprise pilot QA audit (READ-ONLY). Backend: 43/43 tests PASS in /app/backend/tests/test_iteration110_pilot_qa.py covering login for all 5 role personas (admin/pcm/supervisor/tecnico/operador), invalid credentials/no-token/invalid-token guards, /api/health (DB connected), Central de Trabalho, Dashboard (stats, os-por-setor, trend, executivo), Ativos CRUD + list (55 ativos in ASTEC Cedro), RBAC (tecnico blocked on Ativos POST, tecnico blocked on Procedimentos POST/DELETE, operador blocked on Ativos POST), OS lifecycle (create + PDF generation both templated and modo=manual, both >5KB with %PDF- header + historico), Procedimentos (list, create by PCM, empty-name 422 validation), Estoque list, Compliance (privacy 4085 chars, terms with content, status endpoint), Users (users + admin/users), Org config, Audit logs + stats, Biblioteca Corporativa, Exports (OS/ativos/estoque), multi-tenant no-token isolation across 7 protected endpoints. Frontend UI verified: login via API bootstrap works; navigation as admin to /, /dashboard, /ativos, /procedimentos, /ordens-servico, and /privacidade all render correctly. Dashboard shows KPIs (55 ativos, MTBF/MTTR, Preventiva vs Corretiva, Estoque Critico=7) and MTBF/MTTR trend + OS por tipo distribution charts. /privacidade RENDERS FULL PRIVACY POLICY CONTENT (body 4578 chars, 'Lei Geral de Proteção de Dados' present) when admin token is valid.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "LegalDocPage (App.js:3745-3760)", "issue": "SILENT ERROR HANDLER — .catch(()=>{}) swallows every API error and leaves `doc` state = null, so <Loading rows={4}/> skeleton renders forever if /api/compliance/{type} ever fails (network hiccup, transient 5xx, service-worker cache miss, race condition after token refresh, cross-tab logout). User perceives this as 'Carregando documento e nunca aparece o conteúdo'. Add explicit error state + retry: `.catch(err => setDoc({__error: err}))` and render an error card with a Retry button if __error is set. Also consider removing/handling the interceptor race where a stale 401 on /compliance/privacy triggers auto-logout, dropping the whole session BEFORE the user sees anything (currently 401 → sessionStorage cleared → redirect to /login — this pattern hides the actual failure from the user).", "selector": "route: /privacidade, /termos", "priority": "P1 (bug reported by user)"}
+    ],
+    "integration_issues": [
+      {"flow": "Org branding logo loading", "issue": "GET /api/uploads/logo_branca_9a232bf2-fc01-4253-813f-8df356be31c1_9e4deb.jpg returns 404 on EVERY authenticated page load (sidebar header). The org-config record still references this file but the file is not present in the uploads store. Minor UX (broken image icon), not blocking, but produces a 404 on every navigation and console noise.", "affected_selectors": ["sidebar-org-logo (top-left in MainLayout)"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration110_pilot_qa.py",
+    "/app/test_reports/pytest/iter110.xml"
+  ],
+  "action_items": [
+    "(P1) Fix LegalDocPage silent catch (App.js:3745-3760). Replace `.catch(()=>{})` with explicit error state so /privacidade and /termos never get stuck in <Loading> forever. Suggested pattern: const [doc,setDoc]=useState(null); const [err,setErr]=useState(null); api.get(...).then(r=>setDoc(r.data)).catch(e=>setErr(e)); if(err) return <ErrorState onRetry={...}/>; if(!doc) return <Loading/>;",
+    "(P2) Investigate missing org logo file /api/uploads/logo_branca_9a232bf2-fc01-4253-813f-8df356be31c1_9e4deb.jpg (404 on every page). Either re-upload the org branding logo or clear the reference in org.config.branding.",
+    "(P3) Login rate-limiter is aggressive (429 after ~5 rapid logins). Tests need 30-60s cooldown between full re-runs. Consider excluding whitelisted test emails from the throttle in non-prod environments (dev fixture). Not a bug but a friction point for CI."
+  ],
+  "critical_code_review_comments": [
+    "LegalDocPage.js:3745-3760 has BOTH the swallowed-catch anti-pattern AND relies on the axios interceptor's 401→logout behavior. If the compliance endpoint returns 401 for any reason, the user gets bounced to /login without any error message. Since /compliance/privacy is documented as public-safe (200 without auth verified in tests), consider making the LegalDocPage call authenticated-optional (i.e., don't Authorization-inject) so a transient token failure doesn't nuke the session just because the user wanted to read the privacy policy.",
+    "The consent gate loadDoc in AppProviders.js:59-62 also handles the same endpoint but DOES have a toast.error('Erro ao carregar documento') on catch — so the UX is inconsistent between the consent modal (shows error) and the LegalDocPage (shows infinite skeleton). Align them.",
+    "Backend RBAC is enforced correctly: tecnico role is 403 on POST /ativos, POST /procedimentos, DELETE /procedimentos/{id}; operador is 403 on POST /ativos. Admin/PCM/Supervisor can perform their expected actions.",
+    "Auth guard returns FastAPI-standard 403 (not 401) when Authorization header is entirely absent, and 401 when the header is present-but-invalid. This is HTTPBearer default behavior. Frontend interceptor treats only 401 as logout trigger, so an accidental fetch without Authorization header would NOT force-logout — mildly inconsistent but acceptable.",
+    "PDF generation works with both modo=default (templated) and modo=manual for all tested OS. Header validated (%PDF-) and size >5KB.",
+    "Compliance endpoints: /api/compliance/privacy returns 200 with 4085 chars content + version=1.0 regardless of auth (public); same for /api/compliance/terms. /api/compliance/status requires auth and returns {accepted:...}. All working as spec.",
+    "Multi-tenant isolation: 7 protected endpoints all return 401/403 without a valid token. Not tested cross-org data leakage (would require creating a second org).",
+    "Dashboard aggregations return 200 across 4 endpoints with real data (55 ativos, MTBF/MTTR, estoque critico=7). No performance issues at current data volume.",
+    "Login rate limiter is production-appropriate but blocks rapid test re-runs. Consider a 30s window per email rather than per IP in non-prod."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration110_pilot_qa.py (new — 43 tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (43/43)",
+    "frontend": "95% (login + Central + Dashboard + Ativos + OS + Procedimentos + /privacidade all render; only bug is silent-catch pattern in LegalDocPage which is not reproducible in happy path but manifests as 'Carregando documento' on any API failure)"
+  },
+  "test_credentials": "All 5 personas from /app/memory/test_credentials.md logged in successfully via API. Note: tecnico role is returned as 'tec_mecanico', supervisor as 'sup_mecanico' (canonicalized role names).",
+  "seed_data_creation": "Test suite created 1 OS titled 'TEST_OS_ITER110 QA Audit' (linked to first ativo) and 1 procedimento 'TEST_PROC_ITER110' with 2 etapas, both in ASTEC Cedro org. No cleanup performed (matches existing pattern from iter107-109).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is production-ready for pilot. All 292 endpoints not individually tested but the 43-test critical-path suite (test_iteration110_pilot_qa.py) covers login/health/central/dashboard/ativos/os/procedimentos/estoque/compliance/users/org/audit/biblioteca/exports/multitenant. Rate-limiter cooldown ~30-60s between full runs. Role names are canonicalized in DB: 'tec_mecanico'/'tec_eletrico' (not 'tecnico'), 'sup_mecanico'/'sup_eletrico' (not 'supervisor'). Frontend LegalDocPage silent-catch is the ONLY confirmed bug and is P1 for the pilot since it was explicitly flagged by user. Also noticed 404 on org branding logo file /api/uploads/logo_branca_*.jpg — either re-upload or unset the reference in org config.",
+  "rca_of_the_issue": "PRIVACY POLICY 'Carregando documento' BUG — ROOT CAUSE: LegalDocPage (App.js:3745-3760) uses `api.get('/compliance/${type}').then(r => setDoc(r.data)).catch(() => {});` — the empty catch handler swallows every error, leaving `doc` state null forever. The `if (!doc) return <Loading rows={4}/>;` line then renders an animated skeleton indefinitely (which the user described as 'Carregando documento'). In the CURRENT happy path (fresh admin token, network healthy) the endpoint returns 200 with 4085 chars and the page renders — VERIFIED via Playwright. However, ANY of the following triggers the bug in production: (a) transient network error on the /compliance/privacy fetch, (b) service-worker cache miss + offline, (c) axios interceptor race where a 401 clears session mid-request, (d) backend rate-limit 429 on that endpoint. REPRODUCTION: set an invalid token in sessionStorage and navigate to /privacidade — the axios interceptor detects 401 and force-redirects to /login (session cleared). But if the interceptor doesn't detect a specific error path (e.g., 500 or network error), the silent catch keeps the user staring at a skeleton. MITIGATION: replace the silent catch with an explicit error state + toast + retry button, OR align with AppProviders.loadDoc pattern which already shows toast.error('Erro ao carregar documento'). Est. fix effort: 5 minutes, 8 lines of code. NOT FIXED in this iteration per user directive (READ-ONLY QA)."
+}
