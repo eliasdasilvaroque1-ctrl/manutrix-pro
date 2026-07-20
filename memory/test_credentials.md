@@ -11,21 +11,18 @@
 | supervisor | test.sup.mec@maintrix.com | sup123 | |
 | tec_mecanico | test.mec@maintrix.com | tec123 | |
 | operador | test.operador@maintrix.com | op123 | |
-| master | master@maintrix.com | (env: MASTER_BOOTSTRAP_PASSWORD) | REQUIRES organization_id in login. Password set via env var. |
+| master | master@maintrix.com | master123 | REQUIRES organization_id in login body |
 
 ## Login API
-POST /api/auth/login
-- Body: {"email":"...", "password":"..."}
-- Master requires: {"email":"...", "password":"...", "organization_id":"9a232bf2-fc01-4253-813f-8df356be31c1"}
-- Returns: {access_token, user}
+POST /api/auth/login with {email, password} returns {access_token, user}
+Master: add organization_id to body
 
-## File Download Auth
-- All private files require JWT token in Authorization header
-- Branding files (logo_*, wallpaper_*) are public (for login page)
-- Files registered in file_registry with org_id for cross-org protection
+## Security
+- All private file downloads require JWT Authorization header
+- Branding files (logo_*, wallpaper_*) with is_public=true in file_registry are public
+- Unregistered files: DENIED (404) by default
+- Demo seed: requires ENABLE_DEMO_SEED=true (blocked in production)
+- force_password_change: enforced at backend level (blocks all except /auth/*)
 
 ## Emergency Master Reset
 MASTER_RESET_PASSWORD=<new_password> python backend/manage_master.py
-
-## Other Orgs (for isolation testing)
-- Org de Admin CSN: ae302c30-32d3-4cc0-b745-9c83e122fe91
