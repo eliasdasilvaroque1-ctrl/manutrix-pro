@@ -1,0 +1,39 @@
+{
+  "summary": "Focused validation of iteration 113: restoration of legal compliance docs (Privacy Policy + Terms of Use). Ran 11 pytest cases + Playwright UI walkthrough (login → /privacidade → /termos). All backend and frontend checks pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/privacidade and /termos",
+        "issues": [
+          "Content is rendered as raw markdown text (visible `#`, `**`, `-` symbols) instead of parsed HTML. Not a regression and NOT authorized to change in this iteration — noting for future iteration if desired."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration113_compliance_restore.py",
+    "/app/test_reports/pytest/iteration113_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "COMPLIANCE_DIR fallback (parent → parent.parent) works correctly; files found at /app/backend/compliance/.",
+    "/api/compliance/about now reads ENVIRONMENT env var with 'preview' default — returns 'preview' as required.",
+    "Compliance endpoints are public (no auth) as designed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration113_compliance_restore.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100%"},
+  "test_credentials": "Loaded from /app/memory/test_credentials.md — admin/pcm/master all valid; ASTEC org id 9a232bf2-fc01-4253-813f-8df356be31c1.",
+  "seed_data_creation": "None — no test data created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 113 focused change: compliance docs relocated to /app/backend/compliance/ and MAINTRIX_ENV replaced by ENVIRONMENT env var. All prior behavior for auth, ativos (55+), OS (100+), storage guard, health, RBAC preserved. LegalDocPage renders content in a <pre>-like block (raw markdown text) via [data-testid=legal-doc-content]; if the product later wants formatted rendering, that's a separate task.",
+  "rca of the issue": "N/A — no defect found. Restoration successful: GET /api/compliance/privacy returns 4085 chars with all 11 sections; GET /api/compliance/terms returns 3058 chars with all 10 sections; GET /api/compliance/about returns environment='preview'; login flows OK for admin/pcm/master; unauth /api/ativos → 403; unauth /api/storage → 401; /api/ativos → 55+ items; /api/ordens-servico → 100+ items."
+}

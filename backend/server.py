@@ -4371,7 +4371,9 @@ async def get_compliance_history(user: Dict = Depends(get_current_user)):
     ).sort("accepted_at", -1).to_list(50)
     return history
 
-COMPLIANCE_DIR = Path(__file__).resolve().parent.parent / "compliance"
+COMPLIANCE_DIR = Path(__file__).resolve().parent / "compliance"
+if not COMPLIANCE_DIR.exists():
+    COMPLIANCE_DIR = Path(__file__).resolve().parent.parent / "compliance"
 
 @api_router.get("/compliance/terms")
 async def get_terms():
@@ -4396,7 +4398,7 @@ async def get_about():
         "product": "MAINTRIX Enterprise",
         "version": "1.0.0",
         "build": "2026-07-11",
-        "environment": os.environ.get("MAINTRIX_ENV", "homologacao"),
+        "environment": os.environ.get("ENVIRONMENT", "preview"),
         "copyright": "MAINTRIX Tecnologia Ltda.",
         "support_email": "suporte@maintrix.com.br",
         "privacy_email": "privacidade@maintrix.com.br",
