@@ -7,6 +7,27 @@ import { useBranding } from "../lib/branding";
 import { ROLE_LABELS } from "../lib/constants";
 import { getPendingCount, syncPendingOperations } from "../lib/offlineQueue";
 
+const DefaultBrandIcon = ({ cor }) => (
+  <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: (cor || '#10b981') + '20' }} data-testid="sidebar-logo-fallback">
+    <Cog size={18} style={{ color: cor || '#10b981' }} />
+  </div>
+);
+
+const SidebarLogo = ({ src, alt, cor }) => {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <DefaultBrandIcon cor={cor} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-8 w-auto object-contain flex-shrink-0"
+      data-testid="sidebar-logo"
+      onError={() => { setFailed(true); console.warn('[Sidebar] Logo indisponível, usando fallback:', src); }}
+    />
+  );
+};
+
+
 const NetworkStatus = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
@@ -135,14 +156,10 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         {!collapsed && (
           <div className="flex items-center gap-3 min-w-0">
             {b.logo_branca_url || b.logo_url ? (
-              <img
-                src={b.logo_branca_url || b.logo_url}
-                alt={b.nome_empresa}
-                className="h-8 w-auto object-contain flex-shrink-0"
-                data-testid="sidebar-logo"
-                onError={e => { e.currentTarget.style.display = 'none'; console.warn('[Sidebar] Logo não encontrada:', e.currentTarget.src); }}
-              />
-            ) : null}
+              <SidebarLogo src={b.logo_branca_url || b.logo_url} alt={b.nome_empresa} cor={b.cor_primaria} />
+            ) : (
+              <DefaultBrandIcon cor={b.cor_primaria} />
+            )}
             <div className="min-w-0">
               <h1 className="text-xl font-bold tracking-wider truncate" style={{ color: b.cor_primaria || 'var(--brand-primary)' }} data-testid="sidebar-brand-name">{b.nome_empresa || 'CMMS'}</h1>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider truncate">{b.subtitulo || 'Sistema de Gestão'}</p>
