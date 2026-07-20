@@ -1,5 +1,5 @@
 """Shared dependencies: DB, auth, permissions, helpers"""
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
@@ -75,12 +75,18 @@ def create_token(user_id: str, role: str, org_id: str) -> str:
     }
     return pyjwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), request: Request = None) -> Dict:
     try:
         payload = pyjwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         user = await db.users.find_one({"id": payload["sub"], "deleted_at": None}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=401, detail="Usuário não encontrado")
+        # Enforce force_password_change: block all routes except password change
+        if user.get('force_password_change') and request:
+            path = request.url.path
+            allowed = ('/api/auth/change-password', '/api/auth/me', '/api/auth/login', '/api/compliance/')
+            if not any(path.startswith(a) or path.endswith(a.lstrip('/api')) for a in allowed):
+                raise HTTPException(status_code=403, detail="Troca de senha obrigatória antes de acessar o sistema")
         return user
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expirado")

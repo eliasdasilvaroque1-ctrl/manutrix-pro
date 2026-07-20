@@ -164,6 +164,8 @@ async def upload_logo(file: UploadFile = File(...), user: Dict = Depends(get_cur
         {"organization_id": org_id},
         {"$set": {"identidade.logo_url": url, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
+    # Register branding file as public
+    await db.file_registry.update_one({"url": url}, {"$set": {"url": url, "organization_id": org_id, "uploaded_by": user.get('id',''), "is_public": True, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
     return {"url": url}
 
 @router.post("/org/config/favicon")
@@ -190,6 +192,7 @@ async def upload_favicon(file: UploadFile = File(...), user: Dict = Depends(get_
         {"organization_id": org_id},
         {"$set": {"identidade.favicon_url": url, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
+    await db.file_registry.update_one({"url": url}, {"$set": {"url": url, "organization_id": org_id, "uploaded_by": user.get('id',''), "is_public": True, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
     return {"url": url}
 
 

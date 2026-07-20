@@ -675,16 +675,18 @@ async def _authorize_file(url_key: str, request: Request):
         return user
 
     # Check file registry for org ownership
-    record = await db.file_registry.find_one({"url": {"$regex": f".*{url_key}$"}}, {"_id": 0, "organization_id": 1, "is_public": 1})
+    # Match by full URL or URL suffix
+    url_variants = [url_key, f"/api/uploads/{url_key}", f"/api/storage/{url_key}", f"/api/uploads/manuals/{url_key}"]
+    record = await db.file_registry.find_one({"url": {"$in": url_variants}}, {"_id": 0, "organization_id": 1, "is_public": 1})
     if record:
         if record.get('is_public'):
             return user
         if record.get('organization_id') != user.get('organization_id'):
             raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-    # No registry entry: allow if authenticated (backward compat for pre-existing files)
-    # Log for audit trail
-    logger.info(f"FILE_ACCESS: unregistered file '{url_key}' accessed by {user.get('email')} org={user.get('organization_id')}")
-    return user
+        return user  # Same org — authorized
+    # No registry entry: DENY by default (security-first)
+    logger.warning(f"FILE_DENIED: unregistered file '{url_key}' blocked for {user.get('email')} org={user.get('organization_id')}")
+    raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 
 
 @api_router.post("/upload")
@@ -697,7 +699,7 @@ async def upload_file(file: UploadFile = File(...), user: Dict = Depends(get_cur
     logger.info(f"UPLOAD: {user.get('email')} file={file.filename} size={size_kb:.0f}KB")
     
     org_id = user.get('organization_id', '')
-    is_public = _is_branding_file(file.filename)
+    is_public = False  # Only server-side branding upload can set public=true
 
     # Upload to object storage
     if objstore.is_available():
@@ -2275,6 +2277,13 @@ async def list_admin_actions(user: Dict = Depends(get_current_user)):
 @api_router.post("/seed")
 async def seed_data(user: Dict = Depends(get_current_user)):
     check_admin_only(user)
+    # Security: demo seed only in non-production with explicit flag
+    env = os.environ.get("ENVIRONMENT", "preview")
+    demo_flag = os.environ.get("ENABLE_DEMO_SEED", "false").lower() == "true"
+    if env == "production":
+        raise HTTPException(status_code=403, detail="Demo seed bloqueado em produção")
+    if not demo_flag:
+        raise HTTPException(status_code=403, detail="Demo seed requer ENABLE_DEMO_SEED=true")
     existing = await db.organizations.find_one({"nome": "Indústria Demo"})
     if existing:
         return {"message": "Dados já existem"}
@@ -2507,6 +2516,12 @@ async def seed_data(user: Dict = Depends(get_current_user)):
 async def seed_test_users(user: Dict = Depends(get_current_user)):
     """Create test users for each role to validate visibility rules."""
     check_admin_only(user)
+    env = os.environ.get("ENVIRONMENT", "preview")
+    demo_flag = os.environ.get("ENABLE_DEMO_SEED", "false").lower() == "true"
+    if env == "production":
+        raise HTTPException(status_code=403, detail="Seed bloqueado em produção")
+    if not demo_flag:
+        raise HTTPException(status_code=403, detail="Seed requer ENABLE_DEMO_SEED=true")
     org_id = user.get('organization_id', '')
 
     # Get areas for assignment
@@ -4614,6 +4629,49 @@ async def run_migrations():
         
     except Exception as e:
         logger.error(f"Migration error: {e}")
+
+    # === FILE REGISTRY BACKFILL (runs after migrations) ===
+    try:
+        backfill_count = 0
+        # Backfill from ordens_servico (fotos, anexos)
+        async for doc in db.ordens_servico.find({"deleted_at": None}, {"_id": 0, "id": 1, "organization_id": 1, "fotos": 1, "anexos": 1}):
+            org = doc.get("organization_id", "")
+            for f in (doc.get("fotos") or []) + (doc.get("anexos") or []):
+                url = f if isinstance(f, str) else (f.get("url", "") if isinstance(f, dict) else "")
+                if url:
+                    await db.file_registry.update_one({"url": url}, {"$setOnInsert": {"url": url, "organization_id": org, "uploaded_by": "backfill", "is_public": False, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+                    backfill_count += 1
+        # Backfill from ativos (foto_url, documentos, manuais)
+        async for doc in db.ativos.find({"deleted_at": None}, {"_id": 0, "id": 1, "organization_id": 1, "foto_url": 1, "documentos": 1, "manuais": 1}):
+            org = doc.get("organization_id", "")
+            if doc.get("foto_url"):
+                await db.file_registry.update_one({"url": doc["foto_url"]}, {"$setOnInsert": {"url": doc["foto_url"], "organization_id": org, "uploaded_by": "backfill", "is_public": False, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+                backfill_count += 1
+            for f in (doc.get("documentos") or []) + (doc.get("manuais") or []):
+                url = f if isinstance(f, str) else (f.get("url", "") if isinstance(f, dict) else "")
+                if url:
+                    await db.file_registry.update_one({"url": url}, {"$setOnInsert": {"url": url, "organization_id": org, "uploaded_by": "backfill", "is_public": False, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+                    backfill_count += 1
+        # Backfill from org_config (branding — mark as public)
+        async for doc in db.org_config.find({}, {"_id": 0, "organization_id": 1, "identidade": 1}):
+            org = doc.get("organization_id", "")
+            ident = doc.get("identidade", {}) or {}
+            for key in ["logo_url", "logo_branca_url", "wallpaper_url", "favicon_url"]:
+                url = ident.get(key)
+                if url:
+                    await db.file_registry.update_one({"url": url}, {"$setOnInsert": {"url": url, "organization_id": org, "uploaded_by": "backfill", "is_public": True, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+                    backfill_count += 1
+        # Backfill from itens_estoque
+        async for doc in db.itens_estoque.find({"foto_url": {"$ne": None}, "deleted_at": None}, {"_id": 0, "id": 1, "organization_id": 1, "foto_url": 1}):
+            org = doc.get("organization_id", "")
+            if doc.get("foto_url"):
+                await db.file_registry.update_one({"url": doc["foto_url"]}, {"$setOnInsert": {"url": doc["foto_url"], "organization_id": org, "uploaded_by": "backfill", "is_public": False, "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+                backfill_count += 1
+        total_reg = await db.file_registry.count_documents({})
+        logger.info(f"File registry backfill: scanned {backfill_count} refs, total registered: {total_reg}")
+    except Exception as e:
+        logger.error(f"File registry backfill error: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

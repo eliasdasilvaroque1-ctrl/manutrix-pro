@@ -88,6 +88,10 @@ class TestHealthPublic:
 
 # ==================== 2) MASTER PANEL (via admin — master pwd broken) ====================
 class TestMasterPanel:
+    @classmethod
+    def setup_class(cls):
+        time.sleep(5)  # Rate limiter cooldown between test classes
+
     def test_master_organizations_forbidden_for_admin(self):
         # Admin should NOT have access to master endpoint. Accept 403 or 404 if endpoint hidden.
         r = _get("/master/organizations", role="admin")
