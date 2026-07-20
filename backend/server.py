@@ -2294,12 +2294,15 @@ async def seed_data(user: Dict = Depends(get_current_user)):
     org_doc['created_at'] = org_doc['created_at'].isoformat()
     await db.organizations.insert_one(org_doc)
     
-    # Users
+    # Users — passwords from env var (never hardcoded)
+    demo_pwd = os.environ.get("DEMO_SEED_PASSWORD", "")
+    if not demo_pwd:
+        raise HTTPException(status_code=500, detail="DEMO_SEED_PASSWORD env var required for seed")
     users_data = [
-        {"email": "admin@manutrix.com", "nome": "Carlos Administrador", "role": "admin", "password": "admin123"},
-        {"email": "supervisor@manutrix.com", "nome": "Maria Supervisora", "role": "supervisor", "password": "supervisor123", "telefone": "(11) 98765-4321"},
-        {"email": "tecnico@manutrix.com", "nome": "João Técnico", "role": "tecnico", "password": "tecnico123", "telefone": "(11) 91234-5678"},
-        {"email": "pedro@manutrix.com", "nome": "Pedro Santos", "role": "tecnico", "password": "pedro123", "telefone": "(11) 99999-8888"},
+        {"email": "admin@manutrix.com", "nome": "Carlos Administrador", "role": "admin", "password": demo_pwd},
+        {"email": "supervisor@manutrix.com", "nome": "Maria Supervisora", "role": "supervisor", "password": demo_pwd, "telefone": "(11) 98765-4321"},
+        {"email": "tecnico@manutrix.com", "nome": "João Técnico", "role": "tecnico", "password": demo_pwd, "telefone": "(11) 91234-5678"},
+        {"email": "pedro@manutrix.com", "nome": "Pedro Santos", "role": "tecnico", "password": demo_pwd, "telefone": "(11) 99999-8888"},
     ]
     
     users = []
@@ -2504,11 +2507,7 @@ async def seed_data(user: Dict = Depends(get_current_user)):
     
     return {
         "message": "Dados de demonstração criados com sucesso!",
-        "credentials": {
-            "admin": {"email": "admin@manutrix.com", "password": "admin123"},
-            "supervisor": {"email": "supervisor@manutrix.com", "password": "supervisor123"},
-            "tecnico": {"email": "tecnico@manutrix.com", "password": "tecnico123"}
-        }
+        "credentials": "Use DEMO_SEED_PASSWORD env var value for all demo accounts"
     }
 
 
@@ -2531,40 +2530,45 @@ async def seed_test_users(user: Dict = Depends(get_current_user)):
     area_eletrica = area_ids[1:3] if len(area_ids) >= 3 else area_ids  # areas 2-3
     area_producao = area_ids[:1] if area_ids else []
 
+    # Passwords from env var — never hardcoded
+    demo_pwd = os.environ.get("DEMO_SEED_PASSWORD", "")
+    if not demo_pwd:
+        raise HTTPException(status_code=500, detail="DEMO_SEED_PASSWORD env var required")
+
     test_users = [
         {
             "email": "test.admin@maintrix.com", "nome": "Admin Teste", "role": "admin",
-            "password": "admin123", "disciplina_principal": None,
+            "password": demo_pwd, "disciplina_principal": None,
             "disciplinas_secundarias": [], "area_ids": [], "turno": "ADM",
         },
         {
             "email": "test.pcm@maintrix.com", "nome": "PCM Teste", "role": "pcm",
-            "password": "pcm123", "disciplina_principal": None,
+            "password": demo_pwd, "disciplina_principal": None,
             "disciplinas_secundarias": [], "area_ids": [], "turno": "ADM",
         },
         {
             "email": "test.sup.mec@maintrix.com", "nome": "Supervisor Mecânico", "role": "supervisor",
-            "password": "sup123", "disciplina_principal": "mecanica",
+            "password": demo_pwd, "disciplina_principal": "mecanica",
             "disciplinas_secundarias": [], "area_ids": area_mecanica, "turno": "A",
         },
         {
             "email": "test.sup.ele@maintrix.com", "nome": "Supervisor Elétrico", "role": "supervisor",
-            "password": "sup123", "disciplina_principal": "eletrica",
+            "password": demo_pwd, "disciplina_principal": "eletrica",
             "disciplinas_secundarias": ["instrumentacao"], "area_ids": area_eletrica, "turno": "A",
         },
         {
             "email": "test.mec@maintrix.com", "nome": "Mecânico Teste", "role": "tecnico",
-            "password": "tec123", "disciplina_principal": "mecanica",
+            "password": demo_pwd, "disciplina_principal": "mecanica",
             "disciplinas_secundarias": [], "area_ids": area_mecanica, "turno": "A",
         },
         {
             "email": "test.ele@maintrix.com", "nome": "Eletricista Teste", "role": "tecnico",
-            "password": "tec123", "disciplina_principal": "eletrica",
+            "password": demo_pwd, "disciplina_principal": "eletrica",
             "disciplinas_secundarias": ["instrumentacao"], "area_ids": area_eletrica, "turno": "B",
         },
         {
             "email": "test.operador@maintrix.com", "nome": "Operador Teste", "role": "operador",
-            "password": "op123", "disciplina_principal": "producao",
+            "password": demo_pwd, "disciplina_principal": "producao",
             "disciplinas_secundarias": [], "area_ids": area_producao, "turno": "A",
         },
     ]
