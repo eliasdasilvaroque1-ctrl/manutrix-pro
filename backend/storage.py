@@ -1,6 +1,7 @@
 """
 Storage abstraction for MAINTRIX file management.
 Supports Supabase Storage (primary) and Emergent Object Storage (fallback).
+Fallback providers are lazy-loaded: only initialized on first actual use.
 """
 import os
 import logging
@@ -55,9 +56,8 @@ class SupabaseStorageProvider(StorageProvider):
         self._url = os.environ.get("SUPABASE_URL", "")
         self._key = os.environ.get("SUPABASE_SERVICE_KEY", "")
         self._bucket = BUCKET_NAME
-        self._ready = False
-        if self._url and self._key:
-            self._ready = True
+        self._ready = bool(self._url and self._key)
+        if self._ready:
             logger.info("SupabaseStorageProvider configured")
         else:
             logger.warning("SupabaseStorageProvider: SUPABASE_URL or SUPABASE_SERVICE_KEY missing")
@@ -91,8 +91,7 @@ class SupabaseStorageProvider(StorageProvider):
             timeout=60,
         )
         if resp.status_code == 200:
-            ct = resp.headers.get("Content-Type", "application/octet-stream")
-            return resp.content, ct
+            return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
         if resp.status_code == 404:
             raise FileNotFoundError(f"Object not found: {path}")
         resp.raise_for_status()
@@ -137,22 +136,24 @@ class SupabaseStorageProvider(StorageProvider):
             return False
 
 
-# ─── Emergent Provider ───
+# ─── Emergent Provider (fully lazy) ───
 class EmergentStorageProvider(StorageProvider):
+    """Lazy-initialized: no HTTP calls or warnings until first actual use."""
     STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 
     def __init__(self):
         self._emergent_key = os.environ.get("EMERGENT_LLM_KEY", "")
         self._storage_key = None
-        self._ready = False
-        if self._emergent_key:
-            self._init_key()
-        else:
-            logger.warning("EmergentStorageProvider: EMERGENT_LLM_KEY missing")
+        self._initialized = False
 
-    def _init_key(self):
-        if self._storage_key:
-            return self._storage_key
+    def _ensure_initialized(self):
+        """Lazy init: only called when an operation actually needs Emergent."""
+        if self._initialized:
+            return self._storage_key is not None
+        self._initialized = True
+        if not self._emergent_key:
+            logger.debug("Emergent fallback requested but EMERGENT_LLM_KEY is not configured")
+            return False
         try:
             resp = requests.post(
                 f"{self.STORAGE_URL}/init",
@@ -161,22 +162,23 @@ class EmergentStorageProvider(StorageProvider):
             )
             resp.raise_for_status()
             self._storage_key = resp.json()["storage_key"]
-            self._ready = True
-            logger.info("EmergentStorageProvider initialized")
-            return self._storage_key
+            logger.info("EmergentStorageProvider initialized on demand")
+            return True
         except Exception as e:
             logger.error(f"EmergentStorageProvider init failed: {e}")
-            return None
+            return False
 
     def _get_key(self):
         if self._storage_key:
             return self._storage_key
-        return self._init_key()
+        if self._ensure_initialized():
+            return self._storage_key
+        return None
 
     def upload(self, path: str, data: bytes, content_type: str) -> dict:
         key = self._get_key()
         if not key:
-            raise RuntimeError("Emergent storage not initialized")
+            raise RuntimeError("Emergent storage not available")
         resp = requests.put(
             f"{self.STORAGE_URL}/objects/{path}",
             headers={"X-Storage-Key": key, "Content-Type": content_type},
@@ -185,6 +187,7 @@ class EmergentStorageProvider(StorageProvider):
         )
         if resp.status_code == 403:
             self._storage_key = None
+            self._initialized = False
             key = self._get_key()
             if not key:
                 raise RuntimeError("Emergent storage re-init failed")
@@ -200,7 +203,7 @@ class EmergentStorageProvider(StorageProvider):
     def download(self, path: str) -> tuple:
         key = self._get_key()
         if not key:
-            raise RuntimeError("Emergent storage not initialized")
+            raise RuntimeError("Emergent storage not available")
         resp = requests.get(
             f"{self.STORAGE_URL}/objects/{path}",
             headers={"X-Storage-Key": key},
@@ -208,6 +211,7 @@ class EmergentStorageProvider(StorageProvider):
         )
         if resp.status_code == 403:
             self._storage_key = None
+            self._initialized = False
             key = self._get_key()
             if not key:
                 raise RuntimeError("Emergent storage re-init failed")
@@ -230,30 +234,36 @@ class EmergentStorageProvider(StorageProvider):
             return False
 
     def healthcheck(self) -> bool:
-        return self._get_key() is not None
+        """Only reports True if already initialized. Does NOT trigger init."""
+        return self._storage_key is not None
 
     def delete(self, path: str) -> bool:
         return False  # Never delete from Emergent during migration
 
 
-# ─── Composite Storage Manager ───
+# ─── Storage Manager with lazy fallback ───
 class StorageManager:
-    """Routes operations through primary + fallback providers."""
+    """Primary provider initialized eagerly. Fallback lazy-loaded on first use."""
+
+    PROVIDER_CLASSES = {
+        "supabase": SupabaseStorageProvider,
+        "emergent": EmergentStorageProvider,
+    }
 
     def __init__(self):
         self.primary = None
-        self.fallback = None
-        self._init_providers()
+        self._fallback = None
+        self._fallback_name = STORAGE_FALLBACK if STORAGE_FALLBACK != STORAGE_PROVIDER else ""
+        # Initialize ONLY the primary provider
+        if STORAGE_PROVIDER in self.PROVIDER_CLASSES:
+            self.primary = self.PROVIDER_CLASSES[STORAGE_PROVIDER]()
 
-    def _init_providers(self):
-        providers = {
-            "supabase": SupabaseStorageProvider,
-            "emergent": EmergentStorageProvider,
-        }
-        if STORAGE_PROVIDER in providers:
-            self.primary = providers[STORAGE_PROVIDER]()
-        if STORAGE_FALLBACK and STORAGE_FALLBACK in providers and STORAGE_FALLBACK != STORAGE_PROVIDER:
-            self.fallback = providers[STORAGE_FALLBACK]()
+    @property
+    def fallback(self):
+        """Lazy property: fallback created on first access."""
+        if self._fallback is None and self._fallback_name and self._fallback_name in self.PROVIDER_CLASSES:
+            self._fallback = self.PROVIDER_CLASSES[self._fallback_name]()
+        return self._fallback
 
     def upload_file(self, entity_type: str, entity_id: str, filename: str, data: bytes, content_type: str) -> str:
         """Upload to primary provider. Returns storage_path (legacy-compatible)."""
@@ -264,44 +274,45 @@ class StorageManager:
         return storage_path
 
     def get_file(self, storage_path: str) -> tuple:
-        """Download with fallback. Returns (bytes, content_type)."""
-        # Try primary
+        """Download from primary. Falls back ONLY for FileNotFoundError."""
         if self.primary:
             try:
                 return self.primary.download(storage_path)
             except FileNotFoundError:
-                pass  # Try fallback
+                pass  # May be a legacy file — try fallback
             except Exception as e:
-                logger.warning(f"Primary download failed for {storage_path}: {type(e).__name__}")
-        # Try fallback
-        if self.fallback:
+                logger.warning(f"Primary download error for {storage_path}: {type(e).__name__}")
+                raise
+        # Fallback: only for files not yet migrated
+        fb = self.fallback
+        if fb:
             try:
-                data, ct = self.fallback.download(storage_path)
-                logger.info(f"FALLBACK_READ: path={storage_path}, provider=emergent, size={len(data)}")
+                data, ct = fb.download(storage_path)
+                logger.info(f"FALLBACK_READ: path={storage_path}, provider={self._fallback_name}, size={len(data)}")
                 return data, ct
             except Exception as e:
                 logger.warning(f"Fallback download failed for {storage_path}: {type(e).__name__}")
         raise FileNotFoundError(f"File not found in any provider: {storage_path}")
 
     def is_available(self) -> bool:
-        """Check if at least one provider works."""
-        if self.primary and self.primary.healthcheck():
-            return True
-        if self.fallback and self.fallback.healthcheck():
-            return True
-        return False
+        """Primary provider health only."""
+        return bool(self.primary and self.primary.healthcheck())
 
     def healthcheck_detail(self) -> dict:
-        """Detailed health for /api/system/status."""
-        result = {"provider": STORAGE_PROVIDER, "fallback": STORAGE_FALLBACK or "none"}
+        """Detailed health. Does NOT trigger fallback initialization."""
+        result = {
+            "provider": STORAGE_PROVIDER,
+            "fallback": self._fallback_name or "none",
+        }
         if self.primary:
             result["primary_status"] = "online" if self.primary.healthcheck() else "offline"
         else:
             result["primary_status"] = "not_configured"
-        if self.fallback:
-            result["fallback_status"] = "online" if self.fallback.healthcheck() else "offline"
+        # Report fallback status only if already instantiated
+        if self._fallback is not None:
+            result["fallback_status"] = "online" if self._fallback.healthcheck() else "offline"
         else:
-            result["fallback_status"] = "not_configured"
+            result["fallback_status"] = "not_initialized"
         return result
 
 
@@ -317,12 +328,12 @@ def _get_manager() -> StorageManager:
 
 
 def init_storage():
-    """Initialize storage. Called at startup."""
+    """Initialize storage. Called at startup. Only initializes primary."""
     mgr = _get_manager()
     if mgr.is_available():
-        logger.info(f"Storage ready: primary={STORAGE_PROVIDER}, fallback={STORAGE_FALLBACK or 'none'}")
+        logger.info(f"Storage ready: primary={STORAGE_PROVIDER}")
     else:
-        logger.warning("Storage: no provider available")
+        logger.warning(f"Storage primary ({STORAGE_PROVIDER}) not available")
     return mgr.is_available()
 
 

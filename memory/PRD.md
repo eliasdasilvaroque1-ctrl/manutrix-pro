@@ -4,41 +4,47 @@
 
 ---
 
-## Status: STORAGE MIGRADO PARA SUPABASE — AGUARDANDO DEPLOY PRODUÇÃO
-## Branch: security/pre-pilot-access-hardening
+## Status: STORAGE SUPABASE OPERACIONAL — PRONTO PARA PRODUÇÃO
 ## Versao: pilot-astec-v1.0.0
 ## Domínio: https://app.maintrix.com.br
 
 ---
 
-## Storage Architecture (NOVA)
+## Storage Architecture
 - Primary: Supabase Storage (bucket: maintrix-files, privado)
-- Fallback: Emergent Object Storage (leitura apenas)
+- Fallback: Emergent Object Storage (lazy-loaded, sob demanda)
 - Abstração: StorageProvider → SupabaseStorageProvider / EmergentStorageProvider
 - Config: STORAGE_PROVIDER=supabase, STORAGE_FALLBACK_PROVIDER=emergent
-- Migração: 33/34 objetos migrados com SHA-256 verificado (1 falha: orgb_file.pdf corrupto no Emergent)
-- Branding: category=branding, is_public=true no file_registry
+- Startup: APENAS Supabase inicializado. Emergent NÃO é tocado.
+- Lazy loading: Emergent instanciado SOMENTE na primeira operação que requer fallback.
 
-## Variáveis Obrigatórias Railway
-- SUPABASE_URL (já configurado)
-- SUPABASE_SERVICE_KEY (já configurado)
-- STORAGE_PROVIDER=supabase (NOVO)
-- STORAGE_FALLBACK_PROVIDER=emergent (NOVO, opcional)
-- EMERGENT_LLM_KEY (para fallback, opcional)
+## Migração
+- 33/34 objetos migrados (SHA-256 verificado)
+- 1 falha: orgb_file.pdf (corrompido no Emergent, pré-existente)
+- Fallback Emergent mantido para objetos não migrados
+
+## Variáveis Railway Obrigatórias
+- SUPABASE_URL
+- SUPABASE_SERVICE_KEY
+- STORAGE_PROVIDER=supabase
+- STORAGE_FALLBACK_PROVIDER=emergent
+- EMERGENT_LLM_KEY (opcional, para fallback legado)
 
 ## Security
-1. File downloads: JWT auth + file_registry + deny-by-default ✅
-2. Branding público: file_registry is_public=true + category=branding ✅
-3. Bucket Supabase: privado (sem acesso público global) ✅
-4. Service key: backend only ✅
-5. Master credential: env var only ✅
-6. force_password_change: backend enforcement ✅
+- Bucket privado, sem acesso público global ✅
+- Branding: file_registry is_public=true + category=branding ✅
+- Service key: backend only ✅
+- Zero secrets no frontend/logs/bundle ✅
 
 ## Compliance
 - Política de Privacidade: v1.0, 4085 chars ✅
 - Termos de Uso: v1.0, 3058 chars ✅ (CNPJ: [A definir])
 
-## QA: 169/169 GREEN + Migration 33/34 + Preview 13/13
+## QA
+- 169/169 GREEN (pre-pilot)
+- Migration: 33/34 SHA-256 verified
+- Preview smoke: 10/10 PASS
+- Startup sem EMERGENT_LLM_KEY: LIMPO (zero warnings)
 
 ## POST-PILOTO BACKLOG
 1. Remover fallback Emergent após estabilização
