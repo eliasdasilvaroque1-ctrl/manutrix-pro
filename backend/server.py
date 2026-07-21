@@ -748,8 +748,19 @@ async def get_manual_file(filename: str, request: Request):
 async def serve_storage_file(path: str, request: Request):
     """Tenant-scoped cloud storage access with JWT auth. Branding files are public."""
     await _authorize_file(path, request)
+    url_key = f"/api/storage/{path}"
+    # Check file_registry for migrated Supabase path
+    record = await db.file_registry.find_one(
+        {"url": url_key, "storage_provider": "supabase", "migration_status": "completed"},
+        {"_id": 0, "storage_path": 1}
+    )
     try:
-        data, content_type = objstore.get_file(path)
+        if record and record.get("storage_path"):
+            # Read from Supabase using migrated path
+            data, content_type = objstore.get_file(record["storage_path"])
+        else:
+            # Fallback: try legacy path (Emergent or unmigrated)
+            data, content_type = objstore.get_file(path)
         return Response(content=data, media_type=content_type)
     except Exception as e:
         logger.warning(f"Storage file not found: {path}")
@@ -4469,8 +4480,10 @@ async def system_status(current_user=Depends(get_current_user)):
 
     # Storage check
     storage_ok = False
+    storage_detail = {}
     try:
         storage_ok = objstore.is_available()
+        storage_detail = objstore.healthcheck_detail()
     except Exception:
         pass
 
@@ -4509,6 +4522,7 @@ async def system_status(current_user=Depends(get_current_user)):
             "backend": "online",
             "database": "online" if db_ok else "offline",
             "storage": "online" if storage_ok else "offline",
+            "storage_detail": storage_detail,
         },
         "database": {
             "connected": db_ok,

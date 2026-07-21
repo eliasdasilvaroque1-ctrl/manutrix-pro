@@ -1,120 +1,342 @@
-"""Object Storage integration for MAINTRIX file uploads"""
+"""
+Storage abstraction for MAINTRIX file management.
+Supports Supabase Storage (primary) and Emergent Object Storage (fallback).
+"""
 import os
 import logging
 import requests
 import uuid
+import hashlib
+from abc import ABC, abstractmethod
 from pathlib import Path
+from datetime import datetime, timezone
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("storage")
 
-STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
-EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+# ─── Configuration ───
+STORAGE_PROVIDER = os.environ.get("STORAGE_PROVIDER", "supabase")
+STORAGE_FALLBACK = os.environ.get("STORAGE_FALLBACK_PROVIDER", "emergent")
 APP_NAME = "maintrix"
-
-storage_key = None
+BUCKET_NAME = "maintrix-files"
 
 MIME_TYPES = {
     "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
     "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf",
+    "jfif": "image/jpeg", "ico": "image/x-icon", "svg": "image/svg+xml",
 }
 
-# Local fallback directory (for serving legacy files during migration)
-LOCAL_UPLOAD_DIR = Path(__file__).parent / 'uploads'
-LOCAL_MANUALS_DIR = LOCAL_UPLOAD_DIR / 'manuals'
+
+# ─── Abstract Provider ───
+class StorageProvider(ABC):
+    @abstractmethod
+    def upload(self, path: str, data: bytes, content_type: str) -> dict:
+        """Upload file. Returns {"path": ..., "size": ..., "provider": ...}"""
+
+    @abstractmethod
+    def download(self, path: str) -> tuple:
+        """Download file. Returns (bytes, content_type)"""
+
+    @abstractmethod
+    def exists(self, path: str) -> bool:
+        """Check if file exists."""
+
+    @abstractmethod
+    def healthcheck(self) -> bool:
+        """Check if provider is operational."""
+
+    @abstractmethod
+    def delete(self, path: str) -> bool:
+        """Delete file. Returns True if deleted."""
+
+
+# ─── Supabase Provider ───
+class SupabaseStorageProvider(StorageProvider):
+    def __init__(self):
+        self._url = os.environ.get("SUPABASE_URL", "")
+        self._key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+        self._bucket = BUCKET_NAME
+        self._ready = False
+        if self._url and self._key:
+            self._ready = True
+            logger.info("SupabaseStorageProvider configured")
+        else:
+            logger.warning("SupabaseStorageProvider: SUPABASE_URL or SUPABASE_SERVICE_KEY missing")
+
+    def _headers(self, content_type=None):
+        h = {"apikey": self._key, "Authorization": f"Bearer {self._key}"}
+        if content_type:
+            h["Content-Type"] = content_type
+        return h
+
+    def upload(self, path: str, data: bytes, content_type: str) -> dict:
+        if not self._ready:
+            raise RuntimeError("Supabase storage not configured")
+        resp = requests.post(
+            f"{self._url}/storage/v1/object/{self._bucket}/{path}",
+            headers={**self._headers(content_type), "x-upsert": "true"},
+            data=data,
+            timeout=120,
+        )
+        if resp.status_code in (200, 201):
+            logger.info(f"SUPABASE_UPLOAD: path={path}, size={len(data)}, status={resp.status_code}")
+            return {"path": path, "size": len(data), "provider": "supabase"}
+        resp.raise_for_status()
+
+    def download(self, path: str) -> tuple:
+        if not self._ready:
+            raise RuntimeError("Supabase storage not configured")
+        resp = requests.get(
+            f"{self._url}/storage/v1/object/{self._bucket}/{path}",
+            headers=self._headers(),
+            timeout=60,
+        )
+        if resp.status_code == 200:
+            ct = resp.headers.get("Content-Type", "application/octet-stream")
+            return resp.content, ct
+        if resp.status_code == 404:
+            raise FileNotFoundError(f"Object not found: {path}")
+        resp.raise_for_status()
+
+    def exists(self, path: str) -> bool:
+        if not self._ready:
+            return False
+        try:
+            resp = requests.get(
+                f"{self._url}/storage/v1/object/{self._bucket}/{path}",
+                headers=self._headers(),
+                timeout=10,
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    def healthcheck(self) -> bool:
+        if not self._ready:
+            return False
+        try:
+            resp = requests.get(
+                f"{self._url}/storage/v1/bucket",
+                headers=self._headers(),
+                timeout=10,
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    def delete(self, path: str) -> bool:
+        if not self._ready:
+            return False
+        try:
+            resp = requests.delete(
+                f"{self._url}/storage/v1/object/{self._bucket}/{path}",
+                headers=self._headers(),
+                timeout=30,
+            )
+            return resp.status_code in (200, 204)
+        except Exception:
+            return False
+
+
+# ─── Emergent Provider ───
+class EmergentStorageProvider(StorageProvider):
+    STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+
+    def __init__(self):
+        self._emergent_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        self._storage_key = None
+        self._ready = False
+        if self._emergent_key:
+            self._init_key()
+        else:
+            logger.warning("EmergentStorageProvider: EMERGENT_LLM_KEY missing")
+
+    def _init_key(self):
+        if self._storage_key:
+            return self._storage_key
+        try:
+            resp = requests.post(
+                f"{self.STORAGE_URL}/init",
+                json={"emergent_key": self._emergent_key},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            self._storage_key = resp.json()["storage_key"]
+            self._ready = True
+            logger.info("EmergentStorageProvider initialized")
+            return self._storage_key
+        except Exception as e:
+            logger.error(f"EmergentStorageProvider init failed: {e}")
+            return None
+
+    def _get_key(self):
+        if self._storage_key:
+            return self._storage_key
+        return self._init_key()
+
+    def upload(self, path: str, data: bytes, content_type: str) -> dict:
+        key = self._get_key()
+        if not key:
+            raise RuntimeError("Emergent storage not initialized")
+        resp = requests.put(
+            f"{self.STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data,
+            timeout=120,
+        )
+        if resp.status_code == 403:
+            self._storage_key = None
+            key = self._get_key()
+            if not key:
+                raise RuntimeError("Emergent storage re-init failed")
+            resp = requests.put(
+                f"{self.STORAGE_URL}/objects/{path}",
+                headers={"X-Storage-Key": key, "Content-Type": content_type},
+                data=data,
+                timeout=120,
+            )
+        resp.raise_for_status()
+        return {"path": path, "size": len(data), "provider": "emergent"}
+
+    def download(self, path: str) -> tuple:
+        key = self._get_key()
+        if not key:
+            raise RuntimeError("Emergent storage not initialized")
+        resp = requests.get(
+            f"{self.STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key},
+            timeout=60,
+        )
+        if resp.status_code == 403:
+            self._storage_key = None
+            key = self._get_key()
+            if not key:
+                raise RuntimeError("Emergent storage re-init failed")
+            resp = requests.get(
+                f"{self.STORAGE_URL}/objects/{path}",
+                headers={"X-Storage-Key": key},
+                timeout=60,
+            )
+        if resp.status_code == 200:
+            return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+        if resp.status_code == 404:
+            raise FileNotFoundError(f"Object not found in Emergent: {path}")
+        resp.raise_for_status()
+
+    def exists(self, path: str) -> bool:
+        try:
+            self.download(path)
+            return True
+        except Exception:
+            return False
+
+    def healthcheck(self) -> bool:
+        return self._get_key() is not None
+
+    def delete(self, path: str) -> bool:
+        return False  # Never delete from Emergent during migration
+
+
+# ─── Composite Storage Manager ───
+class StorageManager:
+    """Routes operations through primary + fallback providers."""
+
+    def __init__(self):
+        self.primary = None
+        self.fallback = None
+        self._init_providers()
+
+    def _init_providers(self):
+        providers = {
+            "supabase": SupabaseStorageProvider,
+            "emergent": EmergentStorageProvider,
+        }
+        if STORAGE_PROVIDER in providers:
+            self.primary = providers[STORAGE_PROVIDER]()
+        if STORAGE_FALLBACK and STORAGE_FALLBACK in providers and STORAGE_FALLBACK != STORAGE_PROVIDER:
+            self.fallback = providers[STORAGE_FALLBACK]()
+
+    def upload_file(self, entity_type: str, entity_id: str, filename: str, data: bytes, content_type: str) -> str:
+        """Upload to primary provider. Returns storage_path (legacy-compatible)."""
+        ext = Path(filename).suffix.lower().lstrip('.') or "bin"
+        mime = content_type or MIME_TYPES.get(ext, "application/octet-stream")
+        storage_path = f"{APP_NAME}/{entity_type}/{entity_id}/{uuid.uuid4().hex[:8]}.{ext}"
+        self.primary.upload(storage_path, data, mime)
+        return storage_path
+
+    def get_file(self, storage_path: str) -> tuple:
+        """Download with fallback. Returns (bytes, content_type)."""
+        # Try primary
+        if self.primary:
+            try:
+                return self.primary.download(storage_path)
+            except FileNotFoundError:
+                pass  # Try fallback
+            except Exception as e:
+                logger.warning(f"Primary download failed for {storage_path}: {type(e).__name__}")
+        # Try fallback
+        if self.fallback:
+            try:
+                data, ct = self.fallback.download(storage_path)
+                logger.info(f"FALLBACK_READ: path={storage_path}, provider=emergent, size={len(data)}")
+                return data, ct
+            except Exception as e:
+                logger.warning(f"Fallback download failed for {storage_path}: {type(e).__name__}")
+        raise FileNotFoundError(f"File not found in any provider: {storage_path}")
+
+    def is_available(self) -> bool:
+        """Check if at least one provider works."""
+        if self.primary and self.primary.healthcheck():
+            return True
+        if self.fallback and self.fallback.healthcheck():
+            return True
+        return False
+
+    def healthcheck_detail(self) -> dict:
+        """Detailed health for /api/system/status."""
+        result = {"provider": STORAGE_PROVIDER, "fallback": STORAGE_FALLBACK or "none"}
+        if self.primary:
+            result["primary_status"] = "online" if self.primary.healthcheck() else "offline"
+        else:
+            result["primary_status"] = "not_configured"
+        if self.fallback:
+            result["fallback_status"] = "online" if self.fallback.healthcheck() else "offline"
+        else:
+            result["fallback_status"] = "not_configured"
+        return result
+
+
+# ─── Module-level singleton (backward compatible) ───
+_manager = None
+
+
+def _get_manager() -> StorageManager:
+    global _manager
+    if _manager is None:
+        _manager = StorageManager()
+    return _manager
 
 
 def init_storage():
-    """Initialize storage connection. Call once at startup."""
-    global storage_key
-    if storage_key:
-        return storage_key
-    if not EMERGENT_KEY:
-        logger.warning("EMERGENT_LLM_KEY not set — object storage unavailable")
-        return None
-    try:
-        resp = requests.post(
-            f"{STORAGE_URL}/init",
-            json={"emergent_key": EMERGENT_KEY},
-            timeout=30
-        )
-        resp.raise_for_status()
-        storage_key = resp.json()["storage_key"]
-        logger.info("Object storage initialized successfully")
-        return storage_key
-    except Exception as e:
-        logger.error(f"Object storage init failed: {e}")
-        return None
+    """Initialize storage. Called at startup."""
+    mgr = _get_manager()
+    if mgr.is_available():
+        logger.info(f"Storage ready: primary={STORAGE_PROVIDER}, fallback={STORAGE_FALLBACK or 'none'}")
+    else:
+        logger.warning("Storage: no provider available")
+    return mgr.is_available()
 
 
-def put_object(path: str, data: bytes, content_type: str) -> dict:
-    """Upload file to object storage. Returns {"path": "...", "size": N}"""
-    key = init_storage()
-    if not key:
-        raise RuntimeError("Object storage not initialized")
-    resp = requests.put(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data,
-        timeout=120
-    )
-    if resp.status_code == 403:
-        # Key expired, reinit once
-        global storage_key
-        storage_key = None
-        key = init_storage()
-        if not key:
-            raise RuntimeError("Object storage re-init failed")
-        resp = requests.put(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key, "Content-Type": content_type},
-            data=data,
-            timeout=120
-        )
-    resp.raise_for_status()
-    return resp.json()
+def upload_file(entity_type, entity_id, filename, data, content_type):
+    return _get_manager().upload_file(entity_type, entity_id, filename, data, content_type)
 
 
-def get_object(path: str):
-    """Download file from object storage. Returns (bytes, content_type)"""
-    key = init_storage()
-    if not key:
-        raise RuntimeError("Object storage not initialized")
-    resp = requests.get(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key},
-        timeout=60
-    )
-    if resp.status_code == 403:
-        global storage_key
-        storage_key = None
-        key = init_storage()
-        if not key:
-            raise RuntimeError("Object storage re-init failed")
-        resp = requests.get(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key},
-            timeout=60
-        )
-    resp.raise_for_status()
-    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+def get_file(storage_path):
+    return _get_manager().get_file(storage_path)
 
 
-def upload_file(entity_type: str, entity_id: str, filename: str, data: bytes, content_type: str) -> str:
-    """Upload a file and return the storage path."""
-    ext = Path(filename).suffix.lower().lstrip('.')
-    if not ext:
-        ext = "bin"
-    mime = content_type or MIME_TYPES.get(ext, "application/octet-stream")
-    storage_path = f"{APP_NAME}/{entity_type}/{entity_id}/{uuid.uuid4().hex[:8]}.{ext}"
-    put_object(storage_path, data, mime)
-    return storage_path
+def is_available():
+    return _get_manager().is_available()
 
 
-def get_file(storage_path: str):
-    """Get file content and content_type from storage path."""
-    return get_object(storage_path)
-
-
-def is_available() -> bool:
-    """Check if object storage is configured and available."""
-    return init_storage() is not None
+def healthcheck_detail():
+    return _get_manager().healthcheck_detail()
