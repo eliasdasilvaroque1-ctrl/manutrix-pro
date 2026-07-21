@@ -13,7 +13,7 @@ import {
   Zap, Target, Layers, Filter, Eye, Edit, Trash2, Save,
   Building, Hash, Droplet, Cog,
   DollarSign, AlertCircle, Users, Tag,
-  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy, Factory,
+  Shield, CheckSquare, Square, ChevronUp, LayoutDashboard, List, Download, Lock, Edit3, Copy, Factory, ExternalLink,
   Building2, Palette, BookOpen, CheckCircle2, Sparkles, Send,
   ZoomIn, Maximize2, ImagePlus, Printer
 } from "lucide-react";
@@ -71,6 +71,7 @@ const ProcedimentosPage = lazy(() => import("./pages/ProcedimentosPage"));
 const OrgConfigPage = lazy(() => import("./pages/OrgConfigPage"));
 const FieldOpsPage = lazy(() => import("./pages/FieldOpsPage"));
 const AssetDossierPage = lazy(() => import("./pages/AssetDossierPage"));
+const PublicEquipmentPage = lazy(() => import("./pages/PublicEquipmentPage"));
 
 // Suspense fallback
 const LazyFallback = () => <div className="flex items-center justify-center min-h-[50vh]"><Loading rows={3} /></div>;
@@ -1253,6 +1254,10 @@ const AtivosPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
+  const [selectedForQR, setSelectedForQR] = useState([]);
+  const [showBatchQR, setShowBatchQR] = useState(false);
+  const [batchModelo, setBatchModelo] = useState('etiqueta');
+  const [batchLayout, setBatchLayout] = useState('6_per_page');
   const navigate = useNavigate();
   const { user } = useAuth();
   
@@ -1316,6 +1321,11 @@ const AtivosPage = () => {
     <PageContainer>
       <PageHeader title="Ativos">
         <ExportButtons entity="ativos" />
+        {selectedForQR.length > 0 && (
+          <button onClick={() => setShowBatchQR(true)} className="btn-secondary flex items-center gap-2 text-sm" data-testid="batch-qr-btn">
+            <QrCode size={16} /> QR Lote ({selectedForQR.length})
+          </button>
+        )}
         {['admin','master'].includes(user?.role) && (
           <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-ativo-btn">
             <Plus size={20} /> Novo Ativo
@@ -1340,6 +1350,8 @@ const AtivosPage = () => {
             <div key={ativo.id} className="glass-card p-4 hover:border-slate-600 transition-all group cursor-pointer" data-testid={`ativo-card-${ativo.tag}`} onClick={() => navigate(`/ativos/${ativo.id}`)}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
+                  <input type="checkbox" checked={selectedForQR.includes(ativo.id)} onClick={(e) => { e.stopPropagation(); setSelectedForQR(prev => prev.includes(ativo.id) ? prev.filter(x=>x!==ativo.id) : [...prev, ativo.id]); }}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 cursor-pointer shrink-0" data-testid={`qr-select-${ativo.tag}`} />
                   <div className="p-2 rounded-lg bg-brand-10">
                     <Box size={22} className="text-brand" />
                   </div>
@@ -1404,6 +1416,46 @@ const AtivosPage = () => {
         confirmText="Excluir"
         danger
       />
+
+      {/* Batch QR Modal */}
+      {showBatchQR && (
+        <Modal isOpen={showBatchQR} onClose={() => setShowBatchQR(false)} title={`Imprimir QR Code em Lote (${selectedForQR.length} ativos)`} size="md">
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-slate-400 block mb-1">Modelo</label>
+              <Select value={batchModelo} onChange={setBatchModelo} options={[
+                { value: 'simples', label: 'QR Simples' },
+                { value: 'etiqueta', label: 'Etiqueta do Equipamento' },
+              ]} />
+            </div>
+            <div>
+              <label className="text-sm text-slate-400 block mb-1">Layout</label>
+              <Select value={batchLayout} onChange={setBatchLayout} options={[
+                { value: '6_per_page', label: '6 etiquetas por folha' },
+                { value: '8_per_page', label: '8 etiquetas por folha' },
+                { value: '12_per_page', label: '12 etiquetas por folha' },
+              ]} />
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <button onClick={() => setSelectedForQR(filtered.map(a => a.id))} className="text-xs text-emerald-400 hover:text-emerald-300">
+                Selecionar todos da página ({filtered.length})
+              </button>
+              <button onClick={() => setSelectedForQR([])} className="text-xs text-slate-500 hover:text-slate-400">Limpar seleção</button>
+            </div>
+            <button onClick={async () => {
+              try {
+                const res = await api.post('/ativos/qrcode/batch-pdf', { asset_ids: selectedForQR, modelo: batchModelo, layout: batchLayout }, { responseType: 'blob' });
+                const url = URL.createObjectURL(res.data);
+                window.open(url);
+                toast.success(`PDF gerado com ${selectedForQR.length} etiquetas!`);
+                setShowBatchQR(false);
+              } catch(e) { toast.error('Erro ao gerar PDF em lote'); }
+            }} className="btn-primary w-full" data-testid="batch-qr-generate">
+              Gerar PDF ({selectedForQR.length} etiquetas)
+            </button>
+          </div>
+        </Modal>
+      )}
     </PageContainer>
   );
 };
@@ -1797,6 +1849,7 @@ const AtivoDetailPage = () => {
     { key: 'os', label: `OS (${ativo.ordens_servico?.length || 0})` },
     { key: 'docs', label: `Docs (${manuais.length})` },
     { key: 'materiais', label: `BOM (${ativo.materiais?.length || 0})` },
+    { key: 'qrcode', label: 'QR Code' },
   ];
 
   // Health card helper
@@ -2233,6 +2286,78 @@ const AtivoDetailPage = () => {
             ) : (
               <p className="text-sm text-slate-600 text-center py-4">Nenhum material cadastrado.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== TAB: QR CODE PÚBLICO ===== */}
+      {activeTab === 'qrcode' && (
+        <div className="space-y-4" data-testid="qrcode-tab">
+          <div className="glass-card p-5">
+            <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-4">QR Code do Equipamento</h3>
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+              {/* QR Preview */}
+              <div className="bg-white p-4 rounded-xl flex flex-col items-center gap-2 shrink-0">
+                {ativo.public_qr_url ? (
+                  <QRCodeSVG value={`${window.location.origin}${ativo.public_qr_url}`} size={180} level="H" />
+                ) : (
+                  <div className="w-[180px] h-[180px] bg-slate-200 rounded flex items-center justify-center"><QrCode size={48} className="text-slate-400" /></div>
+                )}
+                <p className="text-xs text-slate-600 font-mono mt-1">{ativo.tag}</p>
+              </div>
+              {/* Info + Actions */}
+              <div className="flex-1 space-y-4 min-w-0">
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">URL Pública</label>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-emerald-400 flex-1 truncate" data-testid="qr-public-url">
+                      {ativo.public_qr_url ? `${window.location.origin}${ativo.public_qr_url}` : 'QR Code não gerado'}
+                    </code>
+                    {ativo.public_qr_url && (
+                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}${ativo.public_qr_url}`); toast.success('Link copiado!'); }}
+                        className="btn-secondary text-xs px-3 py-2" data-testid="qr-copy-btn">Copiar</button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {ativo.public_qr_url && (
+                    <>
+                      <a href={ativo.public_qr_url} target="_blank" rel="noopener noreferrer" className="btn-primary text-xs px-3 py-2 inline-flex items-center gap-1.5" data-testid="qr-open-btn">
+                        <ExternalLink size={14} /> Abrir página pública
+                      </a>
+                      <button onClick={async () => { try { const res = await api.get(`/ativos/${id}/qrcode/png`, { responseType: 'blob' }); const url = URL.createObjectURL(res.data); const a = document.createElement('a'); a.href = url; a.download = `QR_${ativo.tag}.png`; a.click(); URL.revokeObjectURL(url); toast.success('PNG baixado!'); } catch(e) { toast.error('Erro ao baixar PNG'); } }}
+                        className="btn-secondary text-xs px-3 py-2" data-testid="qr-download-png">Baixar PNG</button>
+                      <button onClick={async () => { try { const res = await api.get(`/ativos/${id}/qrcode/svg`, { responseType: 'blob' }); const url = URL.createObjectURL(res.data); const a = document.createElement('a'); a.href = url; a.download = `QR_${ativo.tag}.svg`; a.click(); URL.revokeObjectURL(url); toast.success('SVG baixado!'); } catch(e) { toast.error('Erro ao baixar SVG'); } }}
+                        className="btn-secondary text-xs px-3 py-2" data-testid="qr-download-svg">Baixar SVG</button>
+                    </>
+                  )}
+                </div>
+                {/* Print models */}
+                {ativo.public_qr_url && (
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-2">Imprimir</label>
+                    <div className="flex flex-wrap gap-2">
+                      {[{m:'simples',l:'QR Simples'},{m:'etiqueta',l:'Etiqueta'},{m:'placa',l:'Placa A4'}].map(({m,l}) => (
+                        <button key={m} onClick={async () => { try { const res = await api.get(`/ativos/${id}/qrcode/pdf?modelo=${m}`, { responseType: 'blob' }); const url = URL.createObjectURL(res.data); window.open(url); toast.success(`PDF ${l} gerado!`); } catch(e) { toast.error('Erro ao gerar PDF'); } }}
+                          className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs px-3 py-2 rounded-lg transition-all" data-testid={`qr-print-${m}`}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Regenerate (Master/Admin only) */}
+                {(user?.role === 'master' || user?.role === 'admin') && (
+                  <div className="pt-2 border-t border-slate-800">
+                    <button onClick={async () => { if (!window.confirm('Regenerar o QR Code irá invalidar o QR anterior. Continuar?')) return; try { await api.post(`/ativos/${id}/qrcode/regenerate`); toast.success('QR Code regenerado!'); fetchAtivo(); } catch(e) { toast.error('Erro ao regenerar'); } }}
+                      className="text-xs text-amber-500 hover:text-amber-400 font-medium" data-testid="qr-regenerate-btn">
+                      Regenerar QR Code
+                    </button>
+                    <p className="text-[10px] text-slate-600 mt-1">Isso invalidará imediatamente o QR Code anterior</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -3852,6 +3977,7 @@ function App() {
             <Route path="/master/cleanup" element={<ProtectedRoute allow={['master']}><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
             <Route path="/consulta" element={<ProtectedRoute><AppLayout><ConsultaEquipamentosPage /></AppLayout></ProtectedRoute>} />
             <Route path="/portal/equipamento/:id" element={<PortalPublicoPage />} />
+            <Route path="/equipamento/:slug/:token" element={<PublicEquipmentPage />} />
             <Route path="/portal/tecnico/:id" element={<ProtectedRoute><AppLayout><PortalTecnicoPage /></AppLayout></ProtectedRoute>} />
             <Route path="*" element={<CatchAllRedirect />} />
           </Routes>

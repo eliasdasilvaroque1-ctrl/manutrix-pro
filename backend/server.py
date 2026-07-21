@@ -2392,6 +2392,10 @@ async def seed_data(user: Dict = Depends(get_current_user)):
             "modelo": ad.get('modelo'),
             "sector_id": sector['id'],
             "organization_id": org.id,
+            "public_slug": None,  # Will be filled by backfill
+            "public_qr_token": None,
+            "public_qr_url": None,
+            "public_status": "nao_informado",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "deleted_at": None
@@ -4480,9 +4484,219 @@ async def system_status(current_user=Depends(get_current_user)):
         "cpu_percent": process.cpu_percent(interval=0.1),
     }
 
+# Diagnostic endpoint REMOVED for security (RC-02 audit fix P0-04)
+
+# ============== PUBLIC QR CODE ENDPOINTS ==============
+
+PUBLIC_QR_ALLOWLIST = [
+    "tag", "nome", "tipo_equipamento", "fabricante", "modelo", "ano",
+    "descricao", "potencia", "capacidade", "peso", "tensao", "rotacao",
+    "dimensoes", "especificacoes_tecnicas", "public_status",
+]
+
+@api_router.get("/public/equipment/{slug}/{token}")
+async def get_public_equipment(slug: str, token: str):
+    """Public equipment page data. No auth required."""
+    ativo = await db.ativos.find_one(
+        {"public_slug": slug, "public_qr_token": token, "deleted_at": None},
+        {"_id": 0}
+    )
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+
+    # Check if inactive
+    if ativo.get("status") == "inativo":
+        return {"available": False, "message": "Este equipamento não possui informações públicas disponíveis."}
+
+    # Build safe public DTO (allowlist only)
+    public_data = {}
+    for field in PUBLIC_QR_ALLOWLIST:
+        val = ativo.get(field)
+        if val is not None and val != "" and val != []:
+            public_data[field] = val
+
+    # Resolve organization name and location
+    org_id = ativo.get("organization_id", "")
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1})
+    empresa = (config or {}).get("identidade", {}).get("nome_empresa", "")
+    logo_url = (config or {}).get("identidade", {}).get("logo_url", "")
+
+    # Resolve area/sector name
+    sector = await db.sectors.find_one({"id": ativo.get("sector_id"), "deleted_at": None}, {"_id": 0, "nome": 1})
+    # Resolve unidade
+    unidade_nome = ""
+    if ativo.get("unidade_id"):
+        unidade = await db.unidades.find_one({"id": ativo["unidade_id"], "deleted_at": None}, {"_id": 0, "nome": 1})
+        unidade_nome = (unidade or {}).get("nome", "")
+
+    public_data["empresa"] = empresa
+    public_data["area"] = (sector or {}).get("nome", "")
+    public_data["unidade"] = unidade_nome
+
+    # Image: provide a controlled endpoint
+    if ativo.get("foto_url"):
+        public_data["image_url"] = f"/api/public/equipment/{slug}/{token}/image"
+
+    # Map internal status to public status
+    status_map = {
+        "operacional": "Operacional",
+        "em_manutencao": "Em manutenção programada",
+        "parado": "Temporariamente indisponível",
+        "inativo": "Temporariamente indisponível",
+        "nao_informado": None,
+    }
+    ps = ativo.get("public_status", "nao_informado")
+    mapped = status_map.get(ps)
+    if mapped:
+        public_data["status_publico"] = mapped
+    elif ps and ps != "nao_informado":
+        public_data["status_publico"] = ps.replace("_", " ").capitalize()
+
+    # Logo for public page (branding)
+    if logo_url:
+        public_data["logo_url"] = logo_url
+
+    return {"available": True, "equipment": public_data}
+
+
+@api_router.get("/public/equipment/{slug}/{token}/image")
+async def get_public_equipment_image(slug: str, token: str):
+    """Serve the main image for a public equipment page."""
+    ativo = await db.ativos.find_one(
+        {"public_slug": slug, "public_qr_token": token, "deleted_at": None},
+        {"_id": 0, "foto_url": 1, "status": 1}
+    )
+    if not ativo or ativo.get("status") == "inativo" or not ativo.get("foto_url"):
+        raise HTTPException(status_code=404, detail="Imagem não disponível")
+
+    url = ativo["foto_url"]
+    if url.startswith("/api/storage/"):
+        spath = url.replace("/api/storage/", "", 1)
+        record = await db.file_registry.find_one(
+            {"url": url, "storage_provider": "supabase", "migration_status": "completed"},
+            {"_id": 0, "storage_path": 1}
+        )
+        try:
+            actual_path = record["storage_path"] if record and record.get("storage_path") else spath
+            data, ct = objstore.get_file(actual_path)
+            return Response(content=data, media_type=ct)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Imagem não disponível")
+    raise HTTPException(status_code=404, detail="Imagem não disponível")
+
+
+@api_router.get("/ativos/{ativo_id}/qrcode/png")
+async def get_qr_png(ativo_id: str, user: Dict = Depends(get_current_user)):
+    """Generate QR Code PNG on demand."""
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
+    url = ativo.get("public_qr_url", "")
+    if not url:
+        raise HTTPException(status_code=400, detail="QR Code não disponível")
+    base = os.environ.get("REACT_APP_BACKEND_URL", os.environ.get("PUBLIC_URL", ""))
+    full_url = f"{base}{url}" if base else url
+    import qrcode
+    from io import BytesIO
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=20, border=4)
+    qr.add_data(full_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return Response(content=buf.getvalue(), media_type="image/png",
+                    headers={"Content-Disposition": f"attachment; filename=QR_{ativo.get('tag','')}.png"})
+
+
+@api_router.get("/ativos/{ativo_id}/qrcode/svg")
+async def get_qr_svg(ativo_id: str, user: Dict = Depends(get_current_user)):
+    """Generate QR Code SVG on demand."""
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
+    url = ativo.get("public_qr_url", "")
+    if not url:
+        raise HTTPException(status_code=400, detail="QR Code não disponível")
+    base = os.environ.get("REACT_APP_BACKEND_URL", os.environ.get("PUBLIC_URL", ""))
+    full_url = f"{base}{url}" if base else url
+    import qrcode
+    import qrcode.image.svg
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=20, border=4)
+    qr.add_data(full_url)
+    qr.make(fit=True)
+    factory = qrcode.image.svg.SvgImage
+    img = qr.make_image(image_factory=factory)
+    from io import BytesIO
+    buf = BytesIO()
+    img.save(buf)
+    buf.seek(0)
+    return Response(content=buf.getvalue(), media_type="image/svg+xml",
+                    headers={"Content-Disposition": f"attachment; filename=QR_{ativo.get('tag','')}.svg"})
+
+
+@api_router.get("/ativos/{ativo_id}/qrcode/pdf")
+async def get_qr_pdf_individual(ativo_id: str, modelo: str = "etiqueta", user: Dict = Depends(get_current_user)):
+    """Generate individual QR Code PDF. modelo=simples|etiqueta|placa"""
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
+    org_id = ativo.get("organization_id", "")
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1})
+    empresa = (config or {}).get("identidade", {}).get("nome_empresa", "MAINTRIX")
+
+    from pdf_engine import generate_qr_label_pdf
+    buf = generate_qr_label_pdf([ativo], empresa=empresa, modelo=modelo)
+    tag = ativo.get("tag", "EQUIP")
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f"inline; filename=QR_{tag}.pdf"})
+
+
+@api_router.post("/ativos/qrcode/batch-pdf")
+async def get_qr_batch_pdf(body: dict, user: Dict = Depends(get_current_user)):
+    """Generate batch QR Code PDF. body: {asset_ids: [], modelo, layout}"""
+    asset_ids = body.get("asset_ids", [])
+    modelo = body.get("modelo", "etiqueta")
+    layout = body.get("layout", "6_per_page")
+    if not asset_ids:
+        raise HTTPException(status_code=400, detail="Nenhum ativo selecionado")
+    org_id = user.get("organization_id", "")
+    ativos = await db.ativos.find(
+        {"id": {"$in": asset_ids}, "organization_id": org_id, "deleted_at": None},
+        {"_id": 0}
+    ).to_list(500)
+    if not ativos:
+        raise HTTPException(status_code=404, detail="Nenhum ativo encontrado")
+    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1})
+    empresa = (config or {}).get("identidade", {}).get("nome_empresa", "MAINTRIX")
+
+    from pdf_engine import generate_qr_batch_pdf
+    buf = generate_qr_batch_pdf(ativos, empresa=empresa, modelo=modelo, layout=layout)
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f"inline; filename=QR_Lote_{len(ativos)}.pdf"})
+
+
+@api_router.post("/ativos/{ativo_id}/qrcode/regenerate")
+async def regenerate_qr(ativo_id: str, user: Dict = Depends(get_current_user)):
+    """Regenerate QR token. Master/Admin only."""
+    if user.get("role") not in ("master", "admin"):
+        raise HTTPException(status_code=403, detail="Apenas Master/Admin podem regenerar QR Code")
+    ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
+    if not ativo:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado")
+    verify_org_access(user, ativo, "Ativo")
+    from routes.assets import _generate_public_qr_fields
+    new_fields = _generate_public_qr_fields(ativo.get("tag", ""), ativo.get("nome", ""))
+    await db.ativos.update_one({"id": ativo_id}, {"$set": new_fields})
+    await audit_log("regenerate_qr", "ativos", ativo_id, user, f"QR regenerado para {ativo.get('tag','')}")
+    return {"success": True, "public_qr_url": new_fields["public_qr_url"]}
+
+
 app.include_router(api_router)
 
-# Diagnostic endpoint REMOVED for security (RC-02 audit fix P0-04)
 # Previously exposed user data with hardcoded default key.
 
 app.add_middleware(
@@ -4649,6 +4863,24 @@ async def run_migrations():
         logger.info(f"File registry backfill: scanned {backfill_count} refs, total registered: {total_reg}")
     except Exception as e:
         logger.error(f"File registry backfill error: {e}")
+
+    # === PUBLIC QR CODE BACKFILL ===
+    try:
+        from routes.assets import _generate_public_qr_fields
+        qr_updated = 0
+        qr_skipped = 0
+        async for ativo in db.ativos.find({"deleted_at": None, "$or": [{"public_qr_token": None}, {"public_qr_token": {"$exists": False}}]}, {"_id": 0, "id": 1, "tag": 1, "nome": 1}):
+            fields = _generate_public_qr_fields(ativo.get('tag', ''), ativo.get('nome', ''))
+            await db.ativos.update_one({"id": ativo['id']}, {"$set": fields})
+            qr_updated += 1
+        qr_existing = await db.ativos.count_documents({"deleted_at": None, "public_qr_token": {"$ne": None, "$exists": True}})
+        qr_skipped = qr_existing - qr_updated
+        logger.info(f"QR Code backfill: {qr_updated} updated, {qr_skipped} already had QR, total with QR: {qr_existing}")
+        # Create indexes
+        await db.ativos.create_index([("public_slug", 1), ("public_qr_token", 1)])
+        await db.ativos.create_index("public_qr_token", unique=True, sparse=True)
+    except Exception as e:
+        logger.error(f"QR Code backfill error: {e}")
 
 
 @app.on_event("shutdown")

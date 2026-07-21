@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from enum import Enum
 import uuid
 import json as json_lib
+import secrets
+import re
 
 from deps import (
     db, get_current_user, check_admin_only, check_pcm_or_admin, check_write_permission,
@@ -17,6 +19,38 @@ from models import (
 )
 
 router = APIRouter()
+
+
+# ============== PUBLIC QR HELPERS ==============
+
+def _generate_slug(tag: str, nome: str) -> str:
+    """Generate URL-safe slug from tag and name."""
+    raw = f"{tag}-{nome}".lower().strip()
+    raw = re.sub(r'[àáâãä]', 'a', raw)
+    raw = re.sub(r'[èéêë]', 'e', raw)
+    raw = re.sub(r'[ìíîï]', 'i', raw)
+    raw = re.sub(r'[òóôõö]', 'o', raw)
+    raw = re.sub(r'[ùúûü]', 'u', raw)
+    raw = re.sub(r'[ñ]', 'n', raw)
+    raw = re.sub(r'[ç]', 'c', raw)
+    raw = re.sub(r'[^a-z0-9\-]', '-', raw)
+    raw = re.sub(r'-+', '-', raw).strip('-')
+    return raw[:80] or f"equip-{uuid.uuid4().hex[:8]}"
+
+
+def _generate_public_qr_fields(tag: str, nome: str, base_url: str = "") -> dict:
+    """Generate all public QR fields for an ativo."""
+    slug = _generate_slug(tag, nome)
+    token = secrets.token_urlsafe(24)  # 32 chars, cryptographically secure
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "public_slug": slug,
+        "public_qr_token": token,
+        "public_qr_url": f"/equipamento/{slug}/{token}",
+        "public_qr_created_at": now,
+        "public_qr_updated_at": now,
+        "public_status": "nao_informado",
+    }
 
 
 # ============== ÁREAS (sectors collection) ==============
@@ -207,6 +241,7 @@ async def create_ativo(request: Request, user: Dict = Depends(get_current_user))
         raise HTTPException(status_code=400, detail="TAG já existe nesta área")
 
     ativo_id = str(uuid.uuid4())
+    qr_fields = _generate_public_qr_fields(tag, data.nome)
     ativo_doc = {
         "id": ativo_id, "tag": tag, "qr_code": str(uuid.uuid4()),
         "nome": data.nome, "tipo_equipamento": data.tipo_equipamento,
@@ -216,6 +251,7 @@ async def create_ativo(request: Request, user: Dict = Depends(get_current_user))
         "status": data.status or "operacional",
         "organization_id": org_id,
         "observacoes": data.observacoes,
+        **qr_fields,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None
@@ -277,6 +313,7 @@ async def duplicate_ativo(ativo_id: str, body: dict, user: Dict = Depends(get_cu
         raise HTTPException(status_code=400, detail="TAG já existe nesta área")
 
     new_id = str(uuid.uuid4())
+    dup_qr_fields = _generate_public_qr_fields(new_tag, original.get('nome', ''))
     new_doc = {
         "id": new_id, "tag": new_tag, "qr_code": str(uuid.uuid4()),
         "nome": original.get('nome', ''),
@@ -287,6 +324,7 @@ async def duplicate_ativo(ativo_id: str, body: dict, user: Dict = Depends(get_cu
         "sector_id": new_sector_id,
         "organization_id": org_id,
         "observacoes": original.get('observacoes'),
+        **dup_qr_fields,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None

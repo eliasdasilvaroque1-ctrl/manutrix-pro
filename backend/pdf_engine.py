@@ -1018,3 +1018,235 @@ class MaintrixPDF(FPDF):
             self.line(10, y + 2, 80, y + 2)
             y += 8
         self.set_y(y + 2)
+
+
+
+# ============== QR CODE PDF GENERATION ==============
+
+def generate_qr_label_pdf(ativos, empresa="MAINTRIX", modelo="etiqueta"):
+    """Generate QR Code PDF for one or more assets. Returns BytesIO."""
+    from io import BytesIO
+    import qrcode
+    import tempfile
+
+    base_url = os.environ.get("REACT_APP_BACKEND_URL", os.environ.get("PUBLIC_URL", ""))
+    pdf = FPDF('P', 'mm', 'A4')
+    register_unicode_fonts(pdf)
+
+    for ativo in ativos:
+        pdf.add_page()
+        tag = _safe(ativo.get('tag', ''), 30)
+        nome = _safe(ativo.get('nome', ''), 60)
+        pub_url = ativo.get('public_qr_url', '')
+        full_url = f"{base_url}{pub_url}" if base_url and pub_url else pub_url
+        area = _safe(ativo.get('sector', {}).get('nome', '') if isinstance(ativo.get('sector'), dict) else '', 40)
+        fab = _safe(ativo.get('fabricante', '') or '', 30)
+        mod = _safe(ativo.get('modelo', '') or '', 30)
+
+        # Generate QR image
+        qr_path = None
+        if full_url:
+            try:
+                qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=20, border=3)
+                qr.add_data(full_url)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                qr_path = os.path.join(tempfile.gettempdir(), f"qr_{uuid.uuid4().hex[:8]}.png")
+                img.save(qr_path)
+            except Exception:
+                qr_path = None
+
+        if modelo == "simples":
+            # MODEL 1: Simple QR
+            pdf.set_font('DejaVu', 'B', 24)
+            pdf.set_text_color(15, 23, 42)
+            pdf.set_xy(10, 30)
+            pdf.cell(190, 12, tag, align='C')
+            if qr_path:
+                pdf.image(qr_path, 55, 55, 100, 100)
+            pdf.set_font('DejaVu', '', 11)
+            pdf.set_text_color(100, 116, 139)
+            pdf.set_xy(10, 165)
+            pdf.cell(190, 6, 'Aponte a camera para conhecer este equipamento', align='C')
+
+        elif modelo == "placa":
+            # MODEL 3: Technical Plate A4
+            pdf.set_fill_color(15, 23, 42)
+            pdf.rect(0, 0, 210, 35, 'F')
+            pdf.set_font('DejaVu', 'B', 20)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_xy(10, 8)
+            pdf.cell(190, 10, _safe(empresa, 40), align='C')
+            pdf.set_font('DejaVu', '', 11)
+            pdf.set_xy(10, 20)
+            pdf.cell(190, 7, 'Placa de Identificacao do Equipamento', align='C')
+
+            y = 45
+            pdf.set_font('DejaVu', 'B', 28)
+            pdf.set_text_color(15, 23, 42)
+            pdf.set_xy(10, y)
+            pdf.cell(190, 14, tag, align='C')
+            y += 18
+            pdf.set_font('DejaVu', '', 14)
+            pdf.set_xy(10, y)
+            pdf.cell(190, 8, nome, align='C')
+            y += 14
+
+            # Technical info
+            pdf.set_font('DejaVu', '', 10)
+            pdf.set_text_color(80, 80, 80)
+            info_lines = []
+            if fab: info_lines.append(f"Fabricante: {fab}")
+            if mod: info_lines.append(f"Modelo: {mod}")
+            if area: info_lines.append(f"Area: {area}")
+            for line in info_lines:
+                pdf.set_xy(10, y)
+                pdf.cell(190, 6, line, align='C')
+                y += 8
+
+            if qr_path:
+                pdf.image(qr_path, 55, y + 5, 100, 100)
+                y += 110
+
+            pdf.set_font('DejaVu', '', 9)
+            pdf.set_text_color(100, 116, 139)
+            pdf.set_xy(10, y + 5)
+            pdf.cell(190, 5, 'Aponte a camera do celular para conhecer este equipamento', align='C')
+
+            # Footer
+            pdf.set_y(-20)
+            pdf.set_font('DejaVu', '', 7)
+            pdf.set_text_color(148, 163, 184)
+            pdf.cell(190, 4, f'Monitorado pelo MAINTRIX Enterprise', align='C')
+
+        else:
+            # MODEL 2: Equipment Label (default)
+            pdf.set_fill_color(15, 23, 42)
+            pdf.rect(0, 0, 210, 20, 'F')
+            pdf.set_font('DejaVu', 'B', 12)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_xy(10, 5)
+            pdf.cell(190, 10, _safe(empresa, 40), align='C')
+
+            pdf.set_font('DejaVu', 'B', 22)
+            pdf.set_text_color(15, 23, 42)
+            pdf.set_xy(10, 28)
+            pdf.cell(190, 10, tag, align='C')
+            pdf.set_font('DejaVu', '', 12)
+            pdf.set_xy(10, 42)
+            pdf.cell(190, 7, nome, align='C')
+
+            if qr_path:
+                pdf.image(qr_path, 65, 58, 80, 80)
+
+            y = 145
+            pdf.set_font('DejaVu', '', 9)
+            pdf.set_text_color(80, 80, 80)
+            if area:
+                pdf.set_xy(10, y); pdf.cell(190, 5, f"Area: {area}", align='C'); y += 7
+            if fab or mod:
+                pdf.set_xy(10, y); pdf.cell(190, 5, f"{fab} {mod}".strip(), align='C'); y += 7
+
+            pdf.set_font('DejaVu', 'I', 8)
+            pdf.set_text_color(100, 116, 139)
+            pdf.set_xy(10, y + 5)
+            pdf.cell(190, 5, 'Aponte a camera para conhecer este equipamento', align='C')
+
+            pdf.set_y(-15)
+            pdf.set_font('DejaVu', '', 6.5)
+            pdf.set_text_color(148, 163, 184)
+            pdf.cell(190, 4, 'Monitorado pelo MAINTRIX Enterprise', align='C')
+
+        if qr_path:
+            try: os.remove(qr_path)
+            except Exception: pass
+
+    buf = BytesIO()
+    pdf.output(buf)
+    buf.seek(0)
+    return buf
+
+
+def generate_qr_batch_pdf(ativos, empresa="MAINTRIX", modelo="etiqueta", layout="6_per_page"):
+    """Generate batch QR labels. Returns BytesIO."""
+    from io import BytesIO
+    import qrcode
+    import tempfile
+
+    base_url = os.environ.get("REACT_APP_BACKEND_URL", os.environ.get("PUBLIC_URL", ""))
+
+    cols_rows = {"6_per_page": (2, 3), "8_per_page": (2, 4), "12_per_page": (3, 4)}
+    cols, rows = cols_rows.get(layout, (2, 3))
+    per_page = cols * rows
+
+    pdf = FPDF('P', 'mm', 'A4')
+    register_unicode_fonts(pdf)
+
+    margin_x, margin_y = 8, 10
+    usable_w = 210 - 2 * margin_x
+    usable_h = 280 - 2 * margin_y
+    cell_w = usable_w / cols
+    cell_h = usable_h / rows
+    qr_size = min(cell_w * 0.55, cell_h * 0.45)
+
+    for i, ativo in enumerate(ativos):
+        if i % per_page == 0:
+            pdf.add_page()
+
+        pos = i % per_page
+        col = pos % cols
+        row = pos // cols
+        x = margin_x + col * cell_w
+        y = margin_y + row * cell_h
+
+        tag = _safe(ativo.get('tag', ''), 20)
+        nome = _safe(ativo.get('nome', ''), 25)
+        pub_url = ativo.get('public_qr_url', '')
+        full_url = f"{base_url}{pub_url}" if base_url and pub_url else pub_url
+
+        # Draw cell border
+        pdf.set_draw_color(200, 200, 200)
+        pdf.rect(x, y, cell_w, cell_h)
+
+        # TAG
+        pdf.set_font('DejaVu', 'B', 8 if cols >= 3 else 10)
+        pdf.set_text_color(15, 23, 42)
+        pdf.set_xy(x + 2, y + 2)
+        pdf.cell(cell_w - 4, 5, tag, align='C')
+
+        # Nome
+        pdf.set_font('DejaVu', '', 6 if cols >= 3 else 7)
+        pdf.set_text_color(80, 80, 80)
+        pdf.set_xy(x + 2, y + 8)
+        pdf.cell(cell_w - 4, 4, nome, align='C')
+
+        # QR Code
+        qr_path = None
+        if full_url:
+            try:
+                qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=2)
+                qr.add_data(full_url)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                qr_path = os.path.join(tempfile.gettempdir(), f"qrbatch_{uuid.uuid4().hex[:6]}.png")
+                img.save(qr_path)
+                qr_x = x + (cell_w - qr_size) / 2
+                qr_y = y + 14
+                pdf.image(qr_path, qr_x, qr_y, qr_size, qr_size)
+            except Exception:
+                pass
+
+        # Footer text
+        pdf.set_font('DejaVu', '', 5)
+        pdf.set_text_color(148, 163, 184)
+        pdf.set_xy(x + 2, y + cell_h - 6)
+        pdf.cell(cell_w - 4, 4, 'Aponte a camera', align='C')
+
+        if qr_path:
+            try: os.remove(qr_path)
+            except Exception: pass
+
+    buf = BytesIO()
+    pdf.output(buf)
+    buf.seek(0)
+    return buf

@@ -1,69 +1,82 @@
 # MAINTRIX ENTERPRISE — PRD
 
-## Status: RC P0/P1 IMPLEMENTADO — PRONTO PARA DEPLOY
-## Versao: pilot-astec-v1.1.0
+## Status: RC P1 QR CODE IMPLEMENTADO — PRONTO PARA HOMOLOGAÇÃO
+## Versao: pilot-astec-v1.2.0
 ## Domínio: https://app.maintrix.com.br
 
 ---
 
-## RC P0/P1 — Alterações desta Release
+## RC P1 — QR CODE PÚBLICO POR EQUIPAMENTO
 
-### P0.0 — Storage/PDF fetch (DONE)
-- `fetch_file` em `pdf_engine.py` corrigido para usar `storage.py` (StorageManager)
-- Lookup no `file_registry` para path migrado Supabase
-- Fallback Emergent para arquivos não migrados
+### Modelo de Dados
+- `public_slug`: URL-safe slug gerado de TAG+nome
+- `public_qr_token`: 32 chars (secrets.token_urlsafe(24))
+- `public_qr_url`: /equipamento/{slug}/{token}
+- `public_qr_created_at`, `public_qr_updated_at`: timestamps
+- `public_status`: enum (nao_informado default)
+- Índices: (public_slug, public_qr_token), public_qr_token unique sparse
+- qr_code (UUID) existente: PRESERVADO INTEGRALMENTE
 
-### P0.1 — Procedimento completo no PDF (DONE)
-- Novo método `procedure_annex()` no MaintrixPDF
-- Procedimento vinculado renderizado como ANEXO completo após OS
-- Inclui: título, código, revisão, descrição, objetivo, pré-requisitos, ferramentas, EPIs, riscos, etapas, status de execução, imagens, observações
-- Cada procedimento inicia em nova página
-- Procedimento ausente/inativo: PDF gera normalmente sem erro
+### API Pública
+- `GET /api/public/equipment/{slug}/{token}` — DTO pública (allowlist fixa)
+- `GET /api/public/equipment/{slug}/{token}/image` — imagem controlada
+- 404 genérico para token/slug inválido
 
-### P0.2 — Imagens do Estoque (DONE)
-- Upload de material registra no `file_registry` (privado, org_id, entity_type)
-- Nenhum item tem imagem atualmente; upload funcional quando utilizado
+### API Autenticada
+- `GET /api/ativos/{id}/qrcode/png` — download PNG
+- `GET /api/ativos/{id}/qrcode/svg` — download SVG
+- `GET /api/ativos/{id}/qrcode/pdf?modelo=simples|etiqueta|placa` — PDF individual
+- `POST /api/ativos/qrcode/batch-pdf` — PDF lote (6/8/12 por folha)
+- `POST /api/ativos/{id}/qrcode/regenerate` — Master/Admin only
 
-### P0.3 — Identidade do Cliente no PDF (DONE)
-- Cabeçalho: nome da empresa (org_config) + local de trabalho (unidade)
-- Rodapé: "Documento gerado pelo MAINTRIX Enterprise" (discreto)
-- Logo do cliente no cabeçalho
+### Página Pública
+- Rota: /equipamento/{slug}/{token}
+- Mobile-first, sem login, sem sidebar
+- Logo empresa, TAG, nome, fabricante, modelo, área, tipo, specs
+- Rodapé: "Equipamento monitorado pelo MAINTRIX Enterprise"
+- Link: "Conheça o MAINTRIX"
 
-### P0.4 — Disciplina na OS (DONE)
-- Campo já existia; opções expandidas: Mecânica, Elétrica, Instrumentação, Automação, Lubrificação, Civil, Operação, Produção, Multidisciplinar, Outra
-- Obrigatório na criação; default "mecanica" para OS antigas
+### Frontend
+- Tab "QR Code" no detalhe do ativo
+- Preview QR, URL, copiar link, download PNG/SVG, imprimir 3 modelos
+- Regenerar (Master/Admin only com confirmação)
+- Checkboxes na listagem + modal impressão em lote
 
-### P0.5 — Seletor de Ativos (DONE)
-- Formato: "TAG — NOME | Área: X | Planta: Y | Modelo: Z"
-- Busca por TAG, nome, área, modelo
+### Segurança
+- DTO pública: allowlist fixa (tag, nome, tipo, fabricante, modelo, etc.)
+- ZERO exposição de: organization_id, _id, custos, estoque, OS, users, emails
+- Token criptograficamente seguro (non-sequential, non-predictable)
+- Regeneração invalida QR anterior
+- Ativo inativo: "não possui informações públicas"
+- Ativo excluído: 404
 
-### P1.1 — Campos de Texto Ampliados (DONE)
-- textarea min-h 150px, resize-y, maxLength 5000
-- PDF text_block renderiza até 5000 chars sem truncar
+### Backfill
+- 62/62 ativos com QR Code (100%)
+- Idempotente: re-execução não sobrescreve tokens existentes
 
-### P1.2 — RBAC Construtor Visual (DONE)
-- Removido do menu PCM/Supervisor/Técnico/Operador
-- Apenas Master e Admin veem no sidebar
-- Rota frontend protegida: allow=['master','admin']
-- API: `_require_layout_admin` → 403 para PCM em duplicar/publicar
+### Testes: 10/10 PASS
+- Acesso público sem auth ✅
+- Sem dados sensíveis ✅
+- Token/slug inválido → 404 ✅
+- PNG/SVG/PDF download ✅
+- Batch PDF (6 ativos) ✅
+- PCM cannot regenerate → 403 ✅
+- Backfill completo (62/62) ✅
+- Regressão: health+ativos+branding+compliance ✅
 
 ---
 
-## Arquivos Alterados (6)
-- backend/pdf_engine.py (+293 linhas)
-- backend/server.py (OS PDF + material upload registry)
-- backend/routes/personalizacao.py (RBAC layout builder)
-- frontend/src/App.js (disciplina options, textarea, route protection)
+## Arquivos Alterados (8 nesta RC)
+- backend/routes/assets.py (QR helper + auto-generation)
+- backend/server.py (endpoints + backfill + include_router fix)
+- backend/pdf_engine.py (QR PDF generation)
+- frontend/src/App.js (route + QR tab + batch modal)
+- frontend/src/pages/PublicEquipmentPage.js (NEW)
 - frontend/src/app/MainLayout.js (sidebar RBAC)
-- frontend/src/pages/InspecoesPages.js (asset selector format)
+- frontend/src/pages/InspecoesPages.js (asset selector)
 
----
-
-## Testes
-- PDF com procedimento: 50.887 bytes, 3 páginas, ANEXO PROCEDIMENTO presente ✅
-- PDF sem procedimento: 47.810 bytes, gera normalmente ✅
-- PDF cabeçalho mostra "ASTEC Cedro" (cliente) ✅
-- PDF rodapé discreto "MAINTRIX Enterprise" ✅
-- RBAC: PCM duplicar layout → 403 ✅
-- Branding, Health, CRUD, Compliance: OK ✅
-- Regressão: 10/10 PASS ✅
+## POST-PILOTO BACKLOG
+1. Remover fallback Emergent
+2. RC6.1: Construtor de Seções da OS
+3. preview_numeracao fix (digitos=null)
+4. ERP/SAP | IA Assistente
