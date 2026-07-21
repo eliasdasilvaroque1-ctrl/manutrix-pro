@@ -1,8 +1,41 @@
 # MAINTRIX ENTERPRISE — PRD
 
-## Status: RC P1 QR CODE IMPLEMENTADO — PRONTO PARA HOMOLOGAÇÃO
-## Versao: pilot-astec-v1.2.0
+## Status: HOTFIX P0 CONCLUÍDO — QR Code Público estável
+## Versao: pilot-astec-v1.2.1-hotfix
 ## Domínio: https://app.maintrix.com.br
+
+---
+
+## HOTFIX P0 — Tela Branca QR Code Público (21/07/2026)
+
+### Problema
+Tela branca em dispositivos móveis ao escanear QR Code dos equipamentos. Causado por `React.lazy()` + `ChunkLoadError` após novos deploys (chunks JS com hashes desatualizados no cache do Service Worker).
+
+### Solução Implementada
+1. **Import estático** para `PublicEquipmentPage` (removido `React.lazy()`)
+2. **PublicErrorBoundary** dedicado para rotas públicas com:
+   - Detecção de `ChunkLoadError` (5 padrões)
+   - Reload automático máximo 1x por sessão (`sessionStorage` flag)
+   - Limpeza seletiva de caches MAINTRIX (sem afetar caches globais)
+   - Fallback visual: Logo MAINTRIX + botão "Tentar novamente"
+3. **Service Worker** atualizado: network-only para navegação em `/equipamento/*` e `/portal/*`
+4. **Listener global** em `index.js` para ChunkLoadError não capturados
+
+### Arquivos Modificados
+- `frontend/src/App.js` — Import estático + PublicErrorBoundary wrapping
+- `frontend/src/components/PublicErrorBoundary.js` — NOVO
+- `frontend/src/pages/PublicEquipmentPage.js` — clearChunkReloadFlag no mount
+- `frontend/src/index.js` — Listener global ChunkLoadError
+- `frontend/public/service-worker.js` — Network-only para rotas públicas
+
+### Testes: 13/13 PASS (9 backend + 4 frontend flows)
+- Carregamento mobile (390x844): ~1.7s ✅
+- Carregamento desktop: ~1.3s ✅
+- Sem tela branca ✅
+- Sem ChunkLoadError no console ✅
+- Rota pública sem login ✅
+- Slug/token inválido: mensagem amigável ✅
+- Rotas autenticadas sem regressão ✅
 
 ---
 
@@ -76,7 +109,8 @@
 - frontend/src/pages/InspecoesPages.js (asset selector)
 
 ## POST-PILOTO BACKLOG
-1. Remover fallback Emergent
-2. RC6.1: Construtor de Seções da OS
-3. preview_numeracao fix (digitos=null)
-4. ERP/SAP | IA Assistente
+1. P2: Inserir CNPJ nos Termos de Uso
+2. P2: Remover fallback Emergent Storage
+3. P2: Corrigir erro 500 intermitente `preview_numeracao` (digitos=null)
+4. P1: RC6.1 — Construtor de Seções da OS (Ondas 2 e 3)
+5. P3: Integrações ERP/SAP | IA Assistente
