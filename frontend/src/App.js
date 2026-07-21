@@ -557,8 +557,13 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
                   { value: 'mecanica', label: 'Mecânica' },
                   { value: 'eletrica', label: 'Elétrica' },
                   { value: 'instrumentacao', label: 'Instrumentação' },
+                  { value: 'automacao', label: 'Automação' },
+                  { value: 'lubrificacao', label: 'Lubrificação' },
                   { value: 'civil', label: 'Civil' },
+                  { value: 'operacao', label: 'Operação' },
                   { value: 'producao', label: 'Produção' },
+                  { value: 'multidisciplinar', label: 'Multidisciplinar' },
+                  { value: 'outra', label: 'Outra' },
                 ]}
               />
             </FormInput>
@@ -580,8 +585,9 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
             <textarea
               value={form.descricao}
               onChange={(e) => setForm({...form, descricao: e.target.value})}
-              className="input-industrial w-full px-4 py-3 min-h-[100px]"
+              className="input-industrial w-full px-4 py-3 min-h-[150px] resize-y"
               placeholder="Descreva o problema ou serviço..."
+              maxLength={5000}
             />
           </FormInput>
           
@@ -3831,7 +3837,7 @@ function App() {
             <Route path="/admin/usuarios" element={<ProtectedRoute allow={['master','admin']}><AppLayout><AdminUsuariosPage /></AppLayout></ProtectedRoute>} />
             <Route path="/admin/templates" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><AdminTemplatesPage /></AppLayout></ProtectedRoute>} />
             <Route path="/config/documentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><DocConfigPage /></AppLayout></ProtectedRoute>} />
-            <Route path="/config/construtor" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><LayoutBuilderPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/config/construtor" element={<ProtectedRoute allow={['master','admin']}><AppLayout><LayoutBuilderPage /></AppLayout></ProtectedRoute>} />
             <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaCorporativaPage /></AppLayout></ProtectedRoute>} />
             <Route path="/procedimentos" element={<ProtectedRoute allow={['master','admin','pcm','supervisor']}><AppLayout><ProcedimentosPage /></AppLayout></ProtectedRoute>} />
             <Route path="/admin/auditoria" element={<ProtectedRoute allow={['master','admin','gerente','supervisor']}><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />

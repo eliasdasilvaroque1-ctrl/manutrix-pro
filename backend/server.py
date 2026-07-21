@@ -3232,7 +3232,18 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     logo_url = (config or {}).get('identidade', {}).get('logo_url', '')
     cor = (config or {}).get('tema', {}).get('cor_primaria', '#6366f1')
 
-    ativo = await db.ativos.find_one({"id": os_doc.get('ativo_id'), "deleted_at": None}, {"_id": 0, "tag": 1, "nome": 1, "sector": 1, "tipo_equipamento": 1, "fabricante": 1, "numero_serie": 1})
+    # Resolve local de trabalho from unidade/planta
+    local_trabalho = ''
+    ativo_full = await db.ativos.find_one({"id": os_doc.get('ativo_id'), "deleted_at": None}, {"_id": 0, "tag": 1, "nome": 1, "sector": 1, "tipo_equipamento": 1, "fabricante": 1, "numero_serie": 1, "area_id": 1, "unidade_id": 1})
+    if ativo_full and ativo_full.get('unidade_id'):
+        unidade = await db.unidades.find_one({"id": ativo_full['unidade_id'], "deleted_at": None}, {"_id": 0, "nome": 1})
+        if unidade:
+            local_trabalho = unidade.get('nome', '')
+    if not local_trabalho:
+        unidades = await db.unidades.find({"organization_id": org_id, "deleted_at": None}, {"_id": 0, "nome": 1}).to_list(1)
+        if unidades:
+            local_trabalho = unidades[0].get('nome', '')
+    ativo = ativo_full
     responsavel = await db.users.find_one({"id": os_doc.get('responsavel_id')}, {"_id": 0, "nome": 1, "turno": 1}) if os_doc.get('responsavel_id') else None
     equipe_ids = os_doc.get('equipe') or os_doc.get('executantes') or []
     equipe_batch = await db.users.find({"id": {"$in": equipe_ids}}, {"_id": 0, "nome": 1}).to_list(50) if equipe_ids else []
@@ -3249,7 +3260,7 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     numero = os_doc.get('numero', os_id[:12])
     qr_path = make_qr(f"{os.environ.get('APP_URL', '')}/os/{os_id}")
 
-    pdf = MaintrixPDF(empresa=empresa, doc_title=f"Ordem de Servico {numero}", logo_path=logo_path, qr_path=qr_path, cor_primaria=cor, modo_manual=is_manual, emissor_nome=user.get('nome', ''), versao='v5.2.0')
+    pdf = MaintrixPDF(empresa=empresa, doc_title=f"Ordem de Servico {numero}", logo_path=logo_path, qr_path=qr_path, cor_primaria=cor, modo_manual=is_manual, emissor_nome=user.get('nome', ''), versao='v5.2.0', local_trabalho=local_trabalho)
     # Apply custom layout from OS snapshot or org settings
     layout_snap = os_doc.get('layout_snapshot')
     if layout_snap:
@@ -3352,130 +3363,34 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
             pdf.manual_box('Listar materiais utilizados:', 18)
         pdf.line_sep()
 
-    # PROCEDIMENTO OPERACIONAL
+    # PROCEDIMENTO OPERACIONAL (inline summary)
     proc_id = os_doc.get('procedimento_id')
+    proc_snapshot = os_doc.get('procedimento_snapshot')
+    proc_for_annex = None
     if proc_id:
-        proc = await db.procedimentos.find_one({"id": proc_id, "deleted_at": None}, {"_id": 0})
-        if proc:
-            execucao = await db.procedimento_execucoes.find_one(
-                {"os_id": os_id, "procedimento_id": proc_id}, {"_id": 0}
-            )
-            etapas_exec = (execucao or {}).get('etapas_executadas', {})
+        # Use snapshot if available (preserves version at time of link), else fetch live
+        proc_for_annex = proc_snapshot or await db.procedimentos.find_one({"id": proc_id, "deleted_at": None}, {"_id": 0})
+        if not proc_for_annex:
+            proc_for_annex = await db.procedimentos_padrao.find_one({"id": proc_id, "deleted_at": None}, {"_id": 0})
 
-            pdf.section_title(f'Procedimento Operacional')
+    if proc_for_annex:
+        execucao = await db.procedimento_execucoes.find_one(
+            {"os_id": os_id, "procedimento_id": proc_id}, {"_id": 0}
+        )
+        etapas_exec = (execucao or {}).get('etapas_executadas', {})
+        sorted_etapas = sorted(proc_for_annex.get('etapas', []), key=lambda e: e.get('ordem', 0))
+        total_e = len(sorted_etapas)
+        done_e = sum(1 for e in sorted_etapas if etapas_exec.get(e.get('id',''), {}).get('concluida'))
 
-            # Header: code + name
-            pdf.set_font("DejaVu", "B", 8.5)
-            pdf.set_text_color(15, 23, 42)
-            pdf.cell(0, 5, _safe(f'{proc.get("codigo","")} - {proc.get("nome","")}', 100), ln=True)
-
-            sorted_etapas = sorted(proc.get('etapas', []), key=lambda e: e.get('ordem', 0))
-            total_e = len(sorted_etapas)
-            done_e = sum(1 for e in sorted_etapas if etapas_exec.get(e.get('id',''), {}).get('concluida'))
-            executor_name = ''
-            exec_date = ''
-            for e in sorted_etapas:
-                ex = etapas_exec.get(e.get('id',''), {})
-                if ex.get('executado_por_nome') and not executor_name:
-                    executor_name = ex['executado_por_nome']
-                    exec_date = (ex.get('executado_em',''))[:10]
-
-            # Info line
-            pdf.set_font("DejaVu", "", 7)
-            pdf.set_text_color(100, 116, 139)
-            info_parts = [f'Revisao: {proc.get("revisao","01")}', f'Versao: {proc.get("versao",1)}']
-            if proc.get('tempo_estimado_minutos'):
-                info_parts.append(f'Tempo est.: {proc["tempo_estimado_minutos"]} min')
-            if executor_name:
-                info_parts.append(f'Executor: {executor_name}')
-            if exec_date:
-                info_parts.append(f'Data: {exec_date}')
-            pdf.cell(0, 4, ' | '.join(info_parts), ln=True)
-
-            # Progress
-            pdf.set_font("DejaVu", "B", 7.5)
-            if done_e == total_e:
-                pdf.set_text_color(16, 185, 129)
-            else:
-                pdf.set_text_color(30, 41, 59)
-            pdf.cell(0, 4, f'Etapas concluidas: {done_e} de {total_e}', ln=True)
-            pdf.ln(3)
-
-            # Table header
-            cy = pdf.get_y()
-            pdf.set_font("DejaVu", "B", 6.5)
-            pdf.set_text_color(100, 116, 139)
-            pdf.set_xy(10, cy); pdf.cell(10, 4, '#')
-            pdf.set_xy(20, cy); pdf.cell(75, 4, 'ETAPA')
-            pdf.set_xy(95, cy); pdf.cell(25, 4, 'STATUS')
-            pdf.set_xy(120, cy); pdf.cell(40, 4, 'EXECUTADO POR')
-            pdf.set_xy(160, cy); pdf.cell(40, 4, 'DATA')
-            pdf.set_draw_color(226, 232, 240)
-            cy += 5
-            pdf.line(10, cy, 200, cy)
-            cy += 1.5
-
-            for etapa in sorted_etapas:
-                eid = etapa.get('id', '')
-                ex = etapas_exec.get(eid, {})
-                concluida = ex.get('concluida', False)
-                status_txt = 'CONCLUIDA' if concluida else 'PENDENTE'
-                obrig = ' *' if etapa.get('obrigatoria') else ''
-
-                if cy > 265:
-                    pdf.add_page(); cy = 30
-
-                # Step number (highlighted)
-                pdf.set_font("DejaVu", "B", 8)
-                pdf.set_text_color(pdf.cor_r, pdf.cor_g, pdf.cor_b)
-                pdf.set_xy(10, cy); pdf.cell(10, 5, f'{etapa.get("ordem", "")}.')
-
-                # Step title
-                pdf.set_font("DejaVu", "B" if not concluida else "", 7.5)
-                pdf.set_text_color(15, 23, 42)
-                pdf.set_xy(20, cy); pdf.cell(75, 5, _safe(etapa.get('titulo', ''), 50))
-
-                # Status
-                if concluida:
-                    pdf.set_text_color(16, 185, 129)
-                else:
-                    pdf.set_text_color(234, 179, 8)
-                pdf.set_font("DejaVu", "B", 6.5)
-                pdf.set_xy(95, cy); pdf.cell(25, 5, f'{status_txt}{obrig}')
-
-                # Executor
-                pdf.set_font("DejaVu", "", 7)
-                pdf.set_text_color(30, 41, 59)
-                pdf.set_xy(120, cy); pdf.cell(40, 5, _safe(ex.get('executado_por_nome', '-'), 25))
-
-                # Date
-                pdf.set_xy(160, cy)
-                pdf.cell(40, 5, _safe((ex.get('executado_em', '') or '')[:16].replace('T', ' '), 20))
-
-                cy += 6
-
-                # Description (indented)
-                if etapa.get('descricao'):
-                    if cy > 268: pdf.add_page(); cy = 30
-                    pdf.set_font("DejaVu", "", 6.5)
-                    pdf.set_text_color(100, 116, 139)
-                    pdf.set_xy(20, cy)
-                    pdf.multi_cell(175, 3.5, _safe(etapa['descricao'], 200))
-                    cy = pdf.get_y() + 1
-
-                # Observation (indented, italic)
-                if ex.get('observacao'):
-                    if cy > 268: pdf.add_page(); cy = 30
-                    pdf.set_font("DejaVu", "I", 6.5)
-                    pdf.set_text_color(100, 116, 139)
-                    pdf.set_xy(20, cy)
-                    pdf.multi_cell(175, 3.5, f'Obs: {_safe(ex["observacao"], 200)}')
-                    cy = pdf.get_y() + 1
-
-                cy += 1  # spacing between steps
-
-            pdf.set_y(cy + 1)
-            pdf.line_sep()
+        pdf.section_title('Procedimento Operacional')
+        pdf.set_font("DejaVu", "B", 8.5)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(0, 5, _safe(f'{proc_for_annex.get("codigo","")} - {proc_for_annex.get("nome",proc_for_annex.get("titulo",""))}', 100), ln=True)
+        pdf.set_font("DejaVu", "", 7)
+        pdf.set_text_color(100, 116, 139)
+        pdf.cell(0, 4, f'Revisão: {proc_for_annex.get("revisao","01")} | Etapas: {done_e}/{total_e} concluídas | (Ver Anexo completo ao final)', ln=True)
+        pdf.ln(2)
+        pdf.line_sep()
 
     # OBSERVATIONS
     pdf.section_title('Observacoes')
@@ -3500,6 +3415,16 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
         pdf.custom_signature_blocks(assinaturas_dados=ass_dados)
     else:
         pdf.signature_block([('Executor', resp_nome or '-'), ('Supervisor', '-')])
+
+    # ═══════════════════════════════════════════════
+    # ANNEXES — Full Procedures (new page for each)
+    # ═══════════════════════════════════════════════
+    proc_execution_data = None
+    if proc_for_annex and proc_id:
+        proc_execution_data = await db.procedimento_execucoes.find_one(
+            {"os_id": os_id, "procedimento_id": proc_id}, {"_id": 0}
+        )
+        await pdf.procedure_annex(proc_for_annex, proc_index=1, execution_data=proc_execution_data)
 
     temp_files = [qr_path, logo_path] + [a.get('_local_path') for a in attachments if a.get('_local_path')]
     buf = pdf.output_bytes()
@@ -3657,6 +3582,25 @@ async def upload_material_image(
         async with aiofiles.open(filepath, 'wb') as f:
             await f.write(content)
         file_url = f"/api/uploads/{filename}"
+    
+    # Register in file_registry for auth/access control
+    org_id = user.get('organization_id', '')
+    await db.file_registry.update_one(
+        {"url": file_url},
+        {"$set": {
+            "url": file_url,
+            "organization_id": org_id,
+            "entity_type": f"material_{tipo}",
+            "entity_id": item_id,
+            "uploaded_by": user.get('id', ''),
+            "is_public": False,
+            "category": "material",
+            "content_type": file.content_type or "image/jpeg",
+            "size_bytes": len(content),
+            "registered_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True
+    )
     
     await collection.update_one({"id": item_id}, {"$push": {"images": file_url}})
     await audit_log("upload", tipo, item_id, user, f"Imagem adicionada ao material {item.get('sku', item.get('tag', ''))}")

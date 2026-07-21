@@ -13,6 +13,13 @@ import re
 from deps import db, get_current_user
 from routes.doc_config import archive_version, require_editor
 
+
+def _require_layout_admin(user):
+    """Validate user has admin/master role for layout builder operations."""
+    if user.get('role', '') not in ('master', 'admin'):
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
+    return user.get('organization_id', ''), user.get('id', '')
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -470,7 +477,7 @@ async def capturar_assinatura(body: SignatureCapture, user=Depends(get_current_u
 @router.post("/doc-config/layouts/{layout_id}/duplicar", tags=["layout_builder"])
 async def duplicar_layout(layout_id: str, user=Depends(get_current_user)):
     """Duplicate a layout as a new draft."""
-    org_id, user_id = require_editor(user)
+    org_id, user_id = _require_layout_admin(user)
     source = await db.layouts_documento.find_one({"id": layout_id, "organization_id": org_id, "deleted_at": None}, {"_id": 0})
     if not source:
         raise HTTPException(status_code=404, detail="Layout não encontrado")
@@ -493,7 +500,7 @@ async def duplicar_layout(layout_id: str, user=Depends(get_current_user)):
 @router.post("/doc-config/layouts/{layout_id}/publicar", tags=["layout_builder"])
 async def publicar_layout(layout_id: str, user=Depends(get_current_user)):
     """Publish a draft layout. Only one published layout per tipo_documento per org."""
-    org_id, user_id = require_editor(user)
+    org_id, user_id = _require_layout_admin(user)
     layout = await db.layouts_documento.find_one({"id": layout_id, "organization_id": org_id, "deleted_at": None})
     if not layout:
         raise HTTPException(status_code=404, detail="Layout não encontrado")

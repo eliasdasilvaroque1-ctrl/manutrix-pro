@@ -50,7 +50,7 @@ def make_qr(data_str, size=4):
 
 
 async def fetch_file(url, prefix="dl"):
-    """Download a file to temp. Returns path or None. Uses direct storage access for internal URLs."""
+    """Download a file to temp. Returns path or None. Uses StorageManager for cloud files."""
     if not url:
         return None
     try:
@@ -65,20 +65,37 @@ async def fetch_file(url, prefix="dl"):
             local = os.path.join(os.path.dirname(__file__), 'uploads', fname)
             if os.path.exists(local):
                 return local
-        # Direct cloud storage access (no HTTP needed)
+        # Cloud storage via StorageManager (Supabase primary + Emergent fallback)
         if url.startswith('/api/storage/'):
             spath = url.replace('/api/storage/', '', 1)
             try:
-                from object_storage import ObjectStorageClient
-                store = ObjectStorageClient()
-                if store.is_available():
-                    data, _ = store.get_file(spath)
-                    if data and len(data) > 100:
-                        ext = '.png' if '.png' in spath else '.jpg'
-                        path = os.path.join(tempfile.gettempdir(), f"{prefix}_{uuid.uuid4().hex[:8]}{ext}")
-                        with open(path, 'wb') as f:
-                            f.write(data)
-                        return path
+                import storage as objstore
+                # Check file_registry for migrated Supabase path
+                try:
+                    import pymongo
+                    from dotenv import load_dotenv
+                    load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+                    mongo_url = os.environ.get('MONGO_URL', '')
+                    db_name = os.environ.get('DB_NAME', 'maintrix')
+                    if mongo_url:
+                        client = pymongo.MongoClient(mongo_url)
+                        db_sync = client[db_name]
+                        record = db_sync.file_registry.find_one(
+                            {"url": f"/api/storage/{spath}", "storage_provider": "supabase", "migration_status": "completed"},
+                            {"_id": 0, "storage_path": 1}
+                        )
+                        if record and record.get("storage_path"):
+                            spath = record["storage_path"]
+                except Exception:
+                    pass  # Use original spath as fallback
+
+                data, ct = objstore.get_file(spath)
+                if data and len(data) > 100:
+                    ext = '.png' if '.png' in spath or 'png' in (ct or '') else '.jpg'
+                    path = os.path.join(tempfile.gettempdir(), f"{prefix}_{uuid.uuid4().hex[:8]}{ext}")
+                    with open(path, 'wb') as f:
+                        f.write(data)
+                    return path
             except Exception:
                 pass
         # Fallback to HTTP for external URLs only
@@ -96,7 +113,6 @@ async def fetch_file(url, prefix="dl"):
     except Exception:
         pass
     return None
-    return None
 
 
 def cleanup_files(*paths):
@@ -111,11 +127,12 @@ def cleanup_files(*paths):
 class MaintrixPDF(FPDF):
     """Extended FPDF with MAINTRIX document helpers."""
 
-    def __init__(self, empresa='MAINTRIX', doc_title='', doc_code='', logo_path=None, qr_path=None, cor_primaria='#6366f1', modo_manual=False, emissor_nome='', versao='v5.2.0'):
+    def __init__(self, empresa='MAINTRIX', doc_title='', doc_code='', logo_path=None, qr_path=None, cor_primaria='#6366f1', modo_manual=False, emissor_nome='', versao='v5.2.0', local_trabalho=''):
         super().__init__('P', 'mm', 'A4')
         register_unicode_fonts(self)
         self.set_auto_page_break(auto=True, margin=22)
         self.empresa = _safe(empresa, 40)
+        self.local_trabalho = _safe(local_trabalho, 50)
         self.doc_title = _safe(doc_title, 60)
         self.doc_code = _safe(doc_code, 30)
         self.logo_path = logo_path
@@ -181,7 +198,7 @@ class MaintrixPDF(FPDF):
         self.set_font('DejaVu', '', 8.5)
         self.set_text_color(30, 41, 59)
         self.set_xy(10, y)
-        self.multi_cell(190, 4.5, _safe_long(text, 800))
+        self.multi_cell(190, 4.5, _safe_long(text, 5000))
         return self.get_y() + 2
 
     def manual_box(self, label='', height=20, y=None):
@@ -312,7 +329,228 @@ class MaintrixPDF(FPDF):
             y += img_h + 10
         self.set_y(y)
 
-    # ===== PROCEDURE SECTION =====
+    # ===== PROCEDURE ANNEX (full document) =====
+    async def procedure_annex(self, proc, proc_index=1, execution_data=None):
+        """Render a complete procedure as a full-page annex.
+        proc: procedure document from DB
+        proc_index: 1-based index for multiple procedures
+        execution_data: etapas_executadas dict from procedimento_execucoes
+        """
+        if not proc:
+            return
+        etapas_exec = (execution_data or {}).get('etapas_executadas', {}) if execution_data else {}
+
+        # New page for each procedure annex
+        self.add_page()
+
+        # Annex header
+        self.set_fill_color(self.cor_r, self.cor_g, self.cor_b)
+        self.rect(8, 15, 194, 10, 'F')
+        self.set_font('DejaVu', 'B', 11)
+        self.set_text_color(255, 255, 255)
+        self.set_xy(12, 16.5)
+        self.cell(0, 7, f'ANEXO {proc_index} — PROCEDIMENTO DE MANUTENÇÃO')
+        self.set_y(30)
+
+        # Identification block
+        self.section_title('Identificação do Procedimento')
+        cy = self.get_y()
+        self.field_pair('Título', proc.get('nome', proc.get('titulo', '')), 10, cy, w=190)
+        cy += 11
+        self.field_pair('Código', proc.get('codigo', ''), 10, cy)
+        self.field_pair('Revisão', proc.get('revisao', '01'), 105, cy)
+        cy += 11
+        self.field_pair('Versão', str(proc.get('versao', 1)), 10, cy)
+        data_rev = (proc.get('updated_at') or proc.get('created_at') or '')[:10]
+        self.field_pair('Data da Revisão', data_rev, 105, cy)
+        cy += 11
+        self.field_pair('Responsável Aprovação', proc.get('aprovador', proc.get('responsavel', '-')), 10, cy)
+        status = proc.get('status', 'ativo')
+        self.field_pair('Status', status.capitalize() if status else '-', 105, cy)
+        self.set_y(cy + 13)
+        self.line_sep()
+
+        # Objective
+        objetivo = proc.get('objetivo', '')
+        if objetivo:
+            self.section_title('Objetivo')
+            self.text_block(objetivo)
+            self.line_sep()
+
+        # Description
+        descricao = proc.get('descricao', '')
+        if descricao:
+            self.section_title('Descrição')
+            self.text_block(descricao)
+            self.line_sep()
+
+        # Prerequisites
+        prereqs = proc.get('pre_requisitos', proc.get('prerequisitos', ''))
+        if prereqs:
+            self.section_title('Pré-Requisitos')
+            if isinstance(prereqs, list):
+                for p in prereqs:
+                    self._bullet_item(str(p))
+            else:
+                self.text_block(str(prereqs))
+            self.line_sep()
+
+        # Tools
+        ferramentas = proc.get('ferramentas', [])
+        if ferramentas:
+            self.section_title('Ferramentas')
+            if isinstance(ferramentas, list):
+                for f in ferramentas:
+                    name = f.get('nome', str(f)) if isinstance(f, dict) else str(f)
+                    self._bullet_item(name)
+            else:
+                self.text_block(str(ferramentas))
+            self.line_sep()
+
+        # EPIs
+        epis = proc.get('epis', proc.get('epi', []))
+        if epis:
+            self.section_title('Equipamentos de Proteção Individual (EPI)')
+            if isinstance(epis, list):
+                for e in epis:
+                    name = e.get('nome', str(e)) if isinstance(e, dict) else str(e)
+                    self._bullet_item(name)
+            else:
+                self.text_block(str(epis))
+            self.line_sep()
+
+        # Risks and control measures
+        riscos = proc.get('riscos', proc.get('analise_risco', []))
+        if riscos:
+            self.section_title('Riscos e Medidas de Controle')
+            if isinstance(riscos, list):
+                for r in riscos:
+                    if isinstance(r, dict):
+                        risco_txt = r.get('risco', r.get('descricao', ''))
+                        medida_txt = r.get('medida', r.get('controle', ''))
+                        self._bullet_item(f"{risco_txt} → {medida_txt}" if medida_txt else risco_txt)
+                    else:
+                        self._bullet_item(str(r))
+            else:
+                self.text_block(str(riscos))
+            self.line_sep()
+
+        # Steps (complete)
+        etapas = proc.get('etapas', [])
+        if etapas:
+            self.section_title('Etapas de Execução')
+            sorted_etapas = sorted(etapas, key=lambda e: e.get('ordem', 0))
+            for etapa in sorted_etapas:
+                cy = self.get_y()
+                if cy > 250:
+                    self.add_page()
+                    cy = 30
+
+                eid = etapa.get('id', '')
+                ex = etapas_exec.get(eid, {})
+                concluida = ex.get('concluida', False)
+                ordem = etapa.get('ordem', '')
+
+                # Step number + title
+                self.set_font('DejaVu', 'B', 9)
+                self.set_text_color(self.cor_r, self.cor_g, self.cor_b)
+                self.set_xy(10, cy)
+                self.cell(12, 5, f'{ordem}.')
+                self.set_font('DejaVu', 'B', 9)
+                self.set_text_color(15, 23, 42)
+                self.set_xy(22, cy)
+                self.cell(0, 5, _safe(etapa.get('titulo', ''), 80))
+                cy += 7
+
+                # Status badge
+                if etapas_exec:
+                    self.set_font('DejaVu', 'B', 7)
+                    if concluida:
+                        self.set_text_color(16, 185, 129)
+                        badge = 'CONCLUÍDA'
+                    else:
+                        self.set_text_color(234, 179, 8)
+                        badge = 'PENDENTE'
+                    obrig = ' (obrigatória)' if etapa.get('obrigatoria') else ''
+                    self.set_xy(22, cy)
+                    self.cell(0, 4, f'{badge}{obrig}')
+                    cy += 5
+
+                # Description
+                desc = etapa.get('descricao', '')
+                if desc:
+                    self.set_font('DejaVu', '', 8)
+                    self.set_text_color(50, 50, 50)
+                    self.set_xy(22, cy)
+                    self.multi_cell(175, 4, _safe_long(desc, 1000))
+                    cy = self.get_y() + 1
+
+                # Execution info
+                if ex.get('executado_por_nome'):
+                    self.set_font('DejaVu', 'I', 7)
+                    self.set_text_color(100, 116, 139)
+                    self.set_xy(22, cy)
+                    exec_info = f"Executado por: {ex['executado_por_nome']}"
+                    if ex.get('executado_em'):
+                        exec_info += f" em {str(ex['executado_em'])[:16].replace('T', ' ')}"
+                    self.cell(0, 4, _safe(exec_info, 80))
+                    cy += 5
+
+                # Observation
+                if ex.get('observacao'):
+                    self.set_font('DejaVu', 'I', 7)
+                    self.set_text_color(100, 116, 139)
+                    self.set_xy(22, cy)
+                    self.multi_cell(175, 3.5, f'Obs: {_safe_long(ex["observacao"], 500)}')
+                    cy = self.get_y() + 1
+
+                # Image of step
+                img_url = etapa.get('imagem_url', etapa.get('foto_url', ''))
+                if img_url:
+                    img_path = await fetch_file(img_url, f'proc_step_{ordem}')
+                    if img_path:
+                        if cy > 210:
+                            self.add_page()
+                            cy = 30
+                        try:
+                            self.image(img_path, 22, cy, 60, 40)
+                            cy += 43
+                        except Exception:
+                            pass
+                        try:
+                            os.remove(img_path)
+                        except Exception:
+                            pass
+
+                self.set_y(cy + 2)
+                # Separator between steps
+                self.set_draw_color(230, 230, 230)
+                self.line(22, self.get_y(), 200, self.get_y())
+                self.set_y(self.get_y() + 3)
+
+        # Observations
+        obs = proc.get('observacoes', proc.get('notas', ''))
+        if obs:
+            self.section_title('Observações do Procedimento')
+            self.text_block(str(obs))
+            self.line_sep()
+
+    def _bullet_item(self, text):
+        """Render a bullet-pointed item."""
+        cy = self.get_y()
+        if cy > 270:
+            self.add_page()
+            cy = 30
+        self.set_font('DejaVu', '', 8)
+        self.set_text_color(30, 41, 59)
+        self.set_xy(14, cy)
+        self.cell(4, 4, '•')
+        self.set_xy(19, cy)
+        self.multi_cell(178, 4, _safe_long(text, 300))
+        if self.get_y() == cy:
+            self.set_y(cy + 5)
+
+    # ===== PROCEDURE SECTION (inline summary — kept for backward compat) =====
     def procedure_section(self, proc, manual=False):
         """Render structured procedure: steps, tools, materials."""
         if not proc:
@@ -591,13 +829,23 @@ class MaintrixPDF(FPDF):
                 x = 30
             except Exception:
                 pass
+        # Client name (primary)
         self.set_font('DejaVu', 'B', 14)
         self.set_text_color(255, 255, 255)
-        self.set_xy(x, 4)
+        self.set_xy(x, 3)
         self.cell(100, 7, self.empresa)
-        self.set_font('DejaVu', '', 8)
-        self.set_xy(x, 12)
-        self.cell(100, 5, self.doc_title)
+        # Local de trabalho (secondary)
+        if self.local_trabalho and self.local_trabalho != '-':
+            self.set_font('DejaVu', '', 8)
+            self.set_xy(x, 11)
+            self.cell(100, 4, self.local_trabalho)
+            self.set_font('DejaVu', '', 7.5)
+            self.set_xy(x, 16)
+            self.cell(100, 4, self.doc_title)
+        else:
+            self.set_font('DejaVu', '', 8)
+            self.set_xy(x, 12)
+            self.cell(100, 5, self.doc_title)
         if self.qr_path:
             try:
                 self.image(self.qr_path, 178, 1, 22, 22)
@@ -672,13 +920,10 @@ class MaintrixPDF(FPDF):
         self.set_y(-12)
         self.set_font('DejaVu', '', 6.5)
         self.set_text_color(148, 163, 184)
-        parts = [self.empresa]
-        if self.doc_code:
-            parts.append(self.doc_code)
+        parts = ["Documento gerado pelo MAINTRIX Enterprise"]
         parts.append(datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M") + " UTC")
         if self.emissor_nome:
             parts.append(f"Emitido por: {self.emissor_nome}")
-        parts.append(self.versao)
         parts.append(f"Pagina {self.page_no()}/{{nb}}")
         self.cell(0, 4, ' | '.join(parts), align='C')
 

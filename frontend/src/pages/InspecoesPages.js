@@ -1553,7 +1553,7 @@ const ModalNovaInspecao = ({ isOpen, onClose, onSuccess, ativos = [], rotas = []
                 </div>
               ) : (
                 <Select value={form.ativo_id} onChange={(val) => handleAtivoChange(val)}
-                  options={ativos.map(a => ({ value: a.id, label: `${a.sector?.nome || ''} • ${a.tag} - ${a.nome}` }))} placeholder="Selecione o equipamento..." />
+                  options={ativos.map(a => ({ value: a.id, label: `${a.tag} — ${a.nome}${a.area?.nome ? ` | Área: ${a.area.nome}` : ''}${a.sector?.nome ? ` | Planta: ${a.sector.nome}` : ''}${a.modelo ? ` | Modelo: ${a.modelo}` : ''}` }))} placeholder="Buscar por TAG, nome, área ou modelo..." />
               )}
             </FormInput>
             <FormInput label="Responsável">

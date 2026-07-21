@@ -1,55 +1,69 @@
 # MAINTRIX ENTERPRISE — PRD
 
-## Visao: CMMS/EAM SaaS multi-tenant | Stack: React PWA + FastAPI + MongoDB Atlas | Piloto: ASTEC
-
----
-
-## Status: STORAGE SUPABASE OPERACIONAL — PRONTO PARA PRODUÇÃO
-## Versao: pilot-astec-v1.0.0
+## Status: RC P0/P1 IMPLEMENTADO — PRONTO PARA DEPLOY
+## Versao: pilot-astec-v1.1.0
 ## Domínio: https://app.maintrix.com.br
 
 ---
 
-## Storage Architecture
-- Primary: Supabase Storage (bucket: maintrix-files, privado)
-- Fallback: Emergent Object Storage (lazy-loaded, sob demanda)
-- Abstração: StorageProvider → SupabaseStorageProvider / EmergentStorageProvider
-- Config: STORAGE_PROVIDER=supabase, STORAGE_FALLBACK_PROVIDER=emergent
-- Startup: APENAS Supabase inicializado. Emergent NÃO é tocado.
-- Lazy loading: Emergent instanciado SOMENTE na primeira operação que requer fallback.
+## RC P0/P1 — Alterações desta Release
 
-## Migração
-- 33/34 objetos migrados (SHA-256 verificado)
-- 1 falha: orgb_file.pdf (corrompido no Emergent, pré-existente)
-- Fallback Emergent mantido para objetos não migrados
+### P0.0 — Storage/PDF fetch (DONE)
+- `fetch_file` em `pdf_engine.py` corrigido para usar `storage.py` (StorageManager)
+- Lookup no `file_registry` para path migrado Supabase
+- Fallback Emergent para arquivos não migrados
 
-## Variáveis Railway Obrigatórias
-- SUPABASE_URL
-- SUPABASE_SERVICE_KEY
-- STORAGE_PROVIDER=supabase
-- STORAGE_FALLBACK_PROVIDER=emergent
-- EMERGENT_LLM_KEY (opcional, para fallback legado)
+### P0.1 — Procedimento completo no PDF (DONE)
+- Novo método `procedure_annex()` no MaintrixPDF
+- Procedimento vinculado renderizado como ANEXO completo após OS
+- Inclui: título, código, revisão, descrição, objetivo, pré-requisitos, ferramentas, EPIs, riscos, etapas, status de execução, imagens, observações
+- Cada procedimento inicia em nova página
+- Procedimento ausente/inativo: PDF gera normalmente sem erro
 
-## Security
-- Bucket privado, sem acesso público global ✅
-- Branding: file_registry is_public=true + category=branding ✅
-- Service key: backend only ✅
-- Zero secrets no frontend/logs/bundle ✅
+### P0.2 — Imagens do Estoque (DONE)
+- Upload de material registra no `file_registry` (privado, org_id, entity_type)
+- Nenhum item tem imagem atualmente; upload funcional quando utilizado
 
-## Compliance
-- Política de Privacidade: v1.0, 4085 chars ✅
-- Termos de Uso: v1.0, 3058 chars ✅ (CNPJ: [A definir])
+### P0.3 — Identidade do Cliente no PDF (DONE)
+- Cabeçalho: nome da empresa (org_config) + local de trabalho (unidade)
+- Rodapé: "Documento gerado pelo MAINTRIX Enterprise" (discreto)
+- Logo do cliente no cabeçalho
 
-## QA
-- 169/169 GREEN (pre-pilot)
-- Migration: 33/34 SHA-256 verified
-- Preview smoke: 10/10 PASS
-- Startup sem EMERGENT_LLM_KEY: LIMPO (zero warnings)
+### P0.4 — Disciplina na OS (DONE)
+- Campo já existia; opções expandidas: Mecânica, Elétrica, Instrumentação, Automação, Lubrificação, Civil, Operação, Produção, Multidisciplinar, Outra
+- Obrigatório na criação; default "mecanica" para OS antigas
 
-## POST-PILOTO BACKLOG
-1. Remover fallback Emergent após estabilização
-2. RC6.1: Construtor de Seções da OS
-3. QR Code MVP (Fase 2)
-4. preview_numeracao fix (digitos=null)
-5. ERP/SAP
-6. IA Assistente
+### P0.5 — Seletor de Ativos (DONE)
+- Formato: "TAG — NOME | Área: X | Planta: Y | Modelo: Z"
+- Busca por TAG, nome, área, modelo
+
+### P1.1 — Campos de Texto Ampliados (DONE)
+- textarea min-h 150px, resize-y, maxLength 5000
+- PDF text_block renderiza até 5000 chars sem truncar
+
+### P1.2 — RBAC Construtor Visual (DONE)
+- Removido do menu PCM/Supervisor/Técnico/Operador
+- Apenas Master e Admin veem no sidebar
+- Rota frontend protegida: allow=['master','admin']
+- API: `_require_layout_admin` → 403 para PCM em duplicar/publicar
+
+---
+
+## Arquivos Alterados (6)
+- backend/pdf_engine.py (+293 linhas)
+- backend/server.py (OS PDF + material upload registry)
+- backend/routes/personalizacao.py (RBAC layout builder)
+- frontend/src/App.js (disciplina options, textarea, route protection)
+- frontend/src/app/MainLayout.js (sidebar RBAC)
+- frontend/src/pages/InspecoesPages.js (asset selector format)
+
+---
+
+## Testes
+- PDF com procedimento: 50.887 bytes, 3 páginas, ANEXO PROCEDIMENTO presente ✅
+- PDF sem procedimento: 47.810 bytes, gera normalmente ✅
+- PDF cabeçalho mostra "ASTEC Cedro" (cliente) ✅
+- PDF rodapé discreto "MAINTRIX Enterprise" ✅
+- RBAC: PCM duplicar layout → 403 ✅
+- Branding, Health, CRUD, Compliance: OK ✅
+- Regressão: 10/10 PASS ✅
