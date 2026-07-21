@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Cog, AlertCircle, MapPin, Factory, Gauge, Zap, Weight, Maximize2, Box } from "lucide-react";
 import axios from "axios";
 import { BACKEND_URL } from "../lib/api";
+import { clearChunkReloadFlag } from "../components/PublicErrorBoundary";
 
 const PublicEquipmentPage = () => {
   const { slug, token } = useParams();
@@ -10,6 +11,11 @@ const PublicEquipmentPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [imgError, setImgError] = useState(false);
+
+  // HOTFIX P0: Limpa flag de reload ao montar com sucesso (evita loops)
+  useEffect(() => {
+    clearChunkReloadFlag();
+  }, []);
 
   useEffect(() => {
     (async () => {

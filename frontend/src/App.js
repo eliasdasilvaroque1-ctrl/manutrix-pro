@@ -39,6 +39,7 @@ import { PhotoUploader } from "./pages/InspecoesPages";
 import { QRLabelModal } from "./pages/WhiteLabelDesignerPage";
 import { AppProviders, BrandingLoader, ConsentGate } from "./app/AppProviders";
 import MainLayout from "./app/MainLayout";
+import PublicErrorBoundary from "./components/PublicErrorBoundary";
 
 // Lazy-loaded pages (heavy, less frequently accessed)
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -71,7 +72,8 @@ const ProcedimentosPage = lazy(() => import("./pages/ProcedimentosPage"));
 const OrgConfigPage = lazy(() => import("./pages/OrgConfigPage"));
 const FieldOpsPage = lazy(() => import("./pages/FieldOpsPage"));
 const AssetDossierPage = lazy(() => import("./pages/AssetDossierPage"));
-const PublicEquipmentPage = lazy(() => import("./pages/PublicEquipmentPage"));
+// HOTFIX P0: Import estático — evita ChunkLoadError em dispositivos móveis após deploy
+import PublicEquipmentPage from "./pages/PublicEquipmentPage";
 
 // Suspense fallback
 const LazyFallback = () => <div className="flex items-center justify-center min-h-[50vh]"><Loading rows={3} /></div>;
@@ -3976,8 +3978,8 @@ function App() {
             <Route path="/master/white-label" element={<ProtectedRoute allow={['master']}><AppLayout><WhiteLabelDesignerPage /></AppLayout></ProtectedRoute>} />
             <Route path="/master/cleanup" element={<ProtectedRoute allow={['master']}><AppLayout><MasterCleanupPage /></AppLayout></ProtectedRoute>} />
             <Route path="/consulta" element={<ProtectedRoute><AppLayout><ConsultaEquipamentosPage /></AppLayout></ProtectedRoute>} />
-            <Route path="/portal/equipamento/:id" element={<PortalPublicoPage />} />
-            <Route path="/equipamento/:slug/:token" element={<PublicEquipmentPage />} />
+            <Route path="/portal/equipamento/:id" element={<PublicErrorBoundary><PortalPublicoPage /></PublicErrorBoundary>} />
+            <Route path="/equipamento/:slug/:token" element={<PublicErrorBoundary><PublicEquipmentPage /></PublicErrorBoundary>} />
             <Route path="/portal/tecnico/:id" element={<ProtectedRoute><AppLayout><PortalTecnicoPage /></AppLayout></ProtectedRoute>} />
             <Route path="*" element={<CatchAllRedirect />} />
           </Routes>

@@ -51,12 +51,33 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// HOTFIX P0: Rotas públicas que NÃO devem ser cacheadas pelo Service Worker
+const PUBLIC_ROUTES_NO_CACHE = ['/equipamento/', '/portal/'];
+
 // Fetch strategy: network-first with cache fallback
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Only cache GET requests
   if (event.request.method !== 'GET') return;
+
+  // HOTFIX P0: Rotas públicas (QR Code) — network-only para navigation requests
+  // Garante que o index.html mais recente é sempre servido do servidor
+  if (event.request.mode === 'navigate' &&
+      PUBLIC_ROUTES_NO_CACHE.some((p) => url.pathname.startsWith(p))) {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        // Fallback mínimo se totalmente offline — retorna o cache como última opção
+        return caches.match(event.request).then((cached) => {
+          return cached || new Response(
+            '<html><body style="background:#0f172a;color:#94a3b8;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif"><div style="text-align:center"><h1 style="color:#10b981">MAINTRIX</h1><p>Sem conexão. Verifique sua internet e tente novamente.</p></div></body></html>',
+            { headers: { 'Content-Type': 'text/html' } }
+          );
+        });
+      })
+    );
+    return;
+  }
 
   // API requests: network-first, cache on success, fallback to cache
   if (API_PREFIXES.some((p) => url.pathname.startsWith(p))) {
