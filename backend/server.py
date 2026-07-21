@@ -4674,7 +4674,12 @@ async def run_migrations():
             for key in ["logo_url", "logo_branca_url", "wallpaper_url", "favicon_url"]:
                 url = ident.get(key)
                 if url:
-                    await db.file_registry.update_one({"url": url}, {"$setOnInsert": {"url": url, "organization_id": org, "uploaded_by": "backfill", "is_public": True, "category": "branding", "registered_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+                    await db.file_registry.update_one(
+                        {"url": url},
+                        {"$set": {"is_public": True, "category": "branding", "organization_id": org},
+                         "$setOnInsert": {"url": url, "uploaded_by": "backfill", "registered_at": datetime.now(timezone.utc).isoformat()}},
+                        upsert=True
+                    )
                     backfill_count += 1
         # Backfill from itens_estoque
         async for doc in db.itens_estoque.find({"foto_url": {"$ne": None}, "deleted_at": None}, {"_id": 0, "id": 1, "organization_id": 1, "foto_url": 1}):
