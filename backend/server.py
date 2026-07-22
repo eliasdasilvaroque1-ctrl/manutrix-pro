@@ -55,6 +55,7 @@ from routes.biblioteca_corporativa import router as bib_corp_router, INDEXES as 
 from routes.personalizacao import router as personalizacao_router, INDEXES as PERS_INDEXES
 from routes.documentos_corporativos import router as docs_corp_router
 from routes.procedimentos import router as procedimentos_router
+from routes.dossier import router as dossier_router
 
 app = FastAPI(title="MAINTRIX API", version="1.0.0")
 api_router = APIRouter(prefix="/api")
@@ -387,6 +388,7 @@ app.include_router(events_router, prefix="/api")
 app.include_router(org_router, prefix="/api")
 app.include_router(biblioteca_router, prefix="/api")
 app.include_router(central_router, prefix="/api")
+app.include_router(dossier_router, prefix="/api")
 
 # ============== AUTH ROUTES ==============
 
@@ -4492,11 +4494,14 @@ PUBLIC_QR_ALLOWLIST = [
     "tag", "nome", "tipo_equipamento", "fabricante", "modelo", "ano",
     "descricao", "potencia", "capacidade", "peso", "tensao", "rotacao",
     "dimensoes", "especificacoes_tecnicas", "public_status",
+    "numero_serie", "corrente", "frequencia",
 ]
 
 @api_router.get("/public/equipment/{slug}/{token}")
 async def get_public_equipment(slug: str, token: str):
-    """Public equipment page data. No auth required."""
+    """Public equipment page data — Dossiê Digital v1.0. No auth required."""
+    from routes.dossier import get_visibility, DEFAULT_VISIBILITY
+
     ativo = await db.ativos.find_one(
         {"public_slug": slug, "public_qr_token": token, "deleted_at": None},
         {"_id": 0}
@@ -4504,76 +4509,207 @@ async def get_public_equipment(slug: str, token: str):
     if not ativo:
         raise HTTPException(status_code=404, detail="Equipamento não encontrado")
 
-    # Check if inactive
     if ativo.get("status") == "inativo":
         return {"available": False, "message": "Este equipamento não possui informações públicas disponíveis."}
 
-    # Build safe public DTO (allowlist only)
+    dossier = ativo.get("public_dossier") or {}
+    org_id = ativo.get("organization_id", "")
+
+    # === Build safe public DTO ===
     public_data = {}
     for field in PUBLIC_QR_ALLOWLIST:
         val = ativo.get(field)
         if val is not None and val != "" and val != []:
             public_data[field] = val
 
-    # Resolve organization name and location
-    org_id = ativo.get("organization_id", "")
+    # --- Org/Branding ---
     config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1})
-    empresa = (config or {}).get("identidade", {}).get("nome_empresa", "")
-    logo_url = (config or {}).get("identidade", {}).get("logo_url", "")
+    identidade = (config or {}).get("identidade", {})
+    public_data["empresa"] = identidade.get("nome_empresa", "")
+    public_data["branding"] = {
+        "logo_url": identidade.get("logo_url", ""),
+        "cor_primaria": identidade.get("cor_primaria", "#10b981"),
+        "cor_secundaria": identidade.get("cor_secundaria", ""),
+        "nome_empresa": identidade.get("nome_empresa", ""),
+    }
+    if identidade.get("logo_url"):
+        public_data["logo_url"] = identidade["logo_url"]
 
-    # Resolve area/sector name
+    # --- Location ---
     sector = await db.sectors.find_one({"id": ativo.get("sector_id"), "deleted_at": None}, {"_id": 0, "nome": 1})
-    # Resolve unidade
+    public_data["area"] = (sector or {}).get("nome", "")
     unidade_nome = ""
     if ativo.get("unidade_id"):
         unidade = await db.unidades.find_one({"id": ativo["unidade_id"], "deleted_at": None}, {"_id": 0, "nome": 1})
         unidade_nome = (unidade or {}).get("nome", "")
-
-    public_data["empresa"] = empresa
-    public_data["area"] = (sector or {}).get("nome", "")
     public_data["unidade"] = unidade_nome
+    # Location extra do dossiê
+    loc = dossier.get("location") or {}
+    location = {"area": public_data.get("area", ""), "unidade": unidade_nome}
+    if loc.get("linha"):
+        location["linha"] = loc["linha"]
+    if loc.get("ponto_instalacao"):
+        location["ponto_instalacao"] = loc["ponto_instalacao"]
+    public_data["location"] = location
 
-    # Image: provide a controlled endpoint
-    if ativo.get("foto_url"):
+    # --- Image ---
+    dossier_image = dossier.get("image_url", "")
+    if dossier_image:
+        public_data["image_url"] = f"/api/public/equipment/{slug}/{token}/image"
+    elif ativo.get("foto_url"):
         public_data["image_url"] = f"/api/public/equipment/{slug}/{token}/image"
 
-    # Map internal status to public status
-    status_map = {
-        "operacional": "Operacional",
-        "em_manutencao": "Em manutenção programada",
-        "parado": "Temporariamente indisponível",
-        "inativo": "Temporariamente indisponível",
+    # --- Public Status ---
+    STATUS_DISPLAY = {
+        "operando": {"label": "Operando", "color": "green"},
+        "parado": {"label": "Parado", "color": "red"},
+        "em_manutencao": {"label": "Em Manutencao", "color": "yellow"},
+        "indisponivel": {"label": "Indisponivel", "color": "red"},
+        "standby": {"label": "Standby", "color": "blue"},
         "nao_informado": None,
     }
     ps = ativo.get("public_status", "nao_informado")
-    mapped = status_map.get(ps)
-    if mapped:
-        public_data["status_publico"] = mapped
-    elif ps and ps != "nao_informado":
-        public_data["status_publico"] = ps.replace("_", " ").capitalize()
+    status_info = STATUS_DISPLAY.get(ps)
+    if status_info:
+        public_data["status_publico"] = status_info["label"]
+        public_data["status_color"] = status_info["color"]
 
-    # Logo for public page (branding)
-    if logo_url:
-        public_data["logo_url"] = logo_url
+    # --- Dossier text blocks (filtered by visibility) ---
+    for block_key, field_name in [
+        ("curiosity", "curiosity"), ("warning", "warning"),
+        ("safety", "safety"), ("best_practices", "best_practices"),
+    ]:
+        if get_visibility(dossier, block_key) == "public":
+            val = dossier.get(field_name, "")
+            if val:
+                public_data[field_name] = val
+
+    # Description (always public if present)
+    desc = dossier.get("description", "")
+    if desc:
+        public_data["description"] = desc
+
+    # --- Technical data (visibility check) ---
+    if get_visibility(dossier, "technical_data") == "public":
+        tech = {}
+        for field in ["fabricante", "modelo", "numero_serie", "ano", "potencia", "tensao",
+                       "rotacao", "peso", "capacidade", "dimensoes", "tipo_equipamento"]:
+            val = ativo.get(field)
+            if val:
+                tech[field] = val
+        # Extra fields from dossier
+        td = dossier.get("technical_data") or {}
+        for field in ["corrente", "frequencia"]:
+            val = td.get(field)
+            if val:
+                tech[field] = val
+        if tech:
+            public_data["technical_data"] = tech
+
+    # --- History summary (visibility check) ---
+    if get_visibility(dossier, "history") == "public":
+        os_count = await db.ordens_servico.count_documents(
+            {"ativo_id": ativo["id"], "status": "concluida", "deleted_at": None}
+        )
+        insp_count = await db.inspecoes.count_documents(
+            {"ativo_id": ativo["id"], "deleted_at": None}
+        )
+        last_os = await db.ordens_servico.find_one(
+            {"ativo_id": ativo["id"], "status": "concluida", "deleted_at": None},
+            {"_id": 0, "data_conclusao": 1}
+        )
+        last_insp = await db.inspecoes.find_one(
+            {"ativo_id": ativo["id"], "deleted_at": None},
+            {"_id": 0, "data_conclusao": 1, "created_at": 1}
+        )
+        history = {}
+        if os_count:
+            history["total_manutencoes"] = os_count
+        if insp_count:
+            history["total_inspecoes"] = insp_count
+        if last_os and last_os.get("data_conclusao"):
+            history["ultima_manutencao"] = last_os["data_conclusao"]
+        if last_insp:
+            history["ultima_inspecao"] = last_insp.get("data_conclusao") or last_insp.get("created_at", "")
+        if history:
+            public_data["history_summary"] = history
+
+    # --- Inspections (visibility check, max 3, safe fields only) ---
+    if get_visibility(dossier, "inspections") == "public":
+        raw_insp = await db.inspecoes.find(
+            {"ativo_id": ativo["id"], "deleted_at": None},
+            {"_id": 0, "tipo": 1, "status": 1, "resultado": 1, "data_conclusao": 1, "created_at": 1}
+        ).sort("created_at", -1).limit(3).to_list(3)
+        inspections = []
+        for i in raw_insp:
+            inspections.append({
+                "data": i.get("data_conclusao") or i.get("created_at", ""),
+                "tipo": i.get("tipo", ""),
+                "resultado": i.get("resultado", ""),
+                "status": i.get("status", ""),
+            })
+        if inspections:
+            public_data["inspections"] = inspections
+
+    # --- Maintenance (visibility check, max 3, safe fields only) ---
+    if get_visibility(dossier, "maintenance") == "public":
+        raw_os = await db.ordens_servico.find(
+            {"ativo_id": ativo["id"], "status": "concluida", "deleted_at": None},
+            {"_id": 0, "titulo": 1, "tipo": 1, "status": 1, "data_conclusao": 1, "disciplina": 1}
+        ).sort("data_conclusao", -1).limit(3).to_list(3)
+        maintenance = []
+        for o in raw_os:
+            maintenance.append({
+                "data": o.get("data_conclusao", ""),
+                "tipo": o.get("tipo", ""),
+                "titulo": o.get("titulo", ""),
+                "status": o.get("status", ""),
+            })
+        if maintenance:
+            public_data["maintenance"] = maintenance
+
+    # --- Documents (visibility check, only published) ---
+    if get_visibility(dossier, "documents") == "public":
+        raw_docs = await db.dossier_documents.find(
+            {"ativo_id": ativo["id"], "organization_id": org_id, "is_published": True, "deleted_at": None},
+            {"_id": 0, "id": 1, "title": 1, "doc_type": 1, "filename": 1, "size_bytes": 1, "created_at": 1}
+        ).sort("created_at", -1).to_list(20)
+        documents = []
+        for d in raw_docs:
+            documents.append({
+                "id": d["id"],
+                "title": d.get("title", ""),
+                "doc_type": d.get("doc_type", "outro"),
+                "filename": d.get("filename", ""),
+                "size_bytes": d.get("size_bytes", 0),
+                "download_url": f"/api/public/equipment/{slug}/{token}/document/{d['id']}",
+            })
+        if documents:
+            public_data["documents"] = documents
 
     return {"available": True, "equipment": public_data}
 
 
 @api_router.get("/public/equipment/{slug}/{token}/image")
 async def get_public_equipment_image(slug: str, token: str):
-    """Serve the main image for a public equipment page."""
+    """Serve the main image for a public equipment page (dossier photo or ativo foto)."""
     ativo = await db.ativos.find_one(
         {"public_slug": slug, "public_qr_token": token, "deleted_at": None},
-        {"_id": 0, "foto_url": 1, "status": 1}
+        {"_id": 0, "foto_url": 1, "status": 1, "public_dossier": 1}
     )
-    if not ativo or ativo.get("status") == "inativo" or not ativo.get("foto_url"):
+    if not ativo or ativo.get("status") == "inativo":
         raise HTTPException(status_code=404, detail="Imagem não disponível")
 
-    url = ativo["foto_url"]
+    # Priorizar foto do dossiê, depois foto_url do ativo
+    dossier = ativo.get("public_dossier") or {}
+    url = dossier.get("image_url", "") or ativo.get("foto_url", "")
+    if not url:
+        raise HTTPException(status_code=404, detail="Imagem não disponível")
+
     if url.startswith("/api/storage/"):
         spath = url.replace("/api/storage/", "", 1)
         record = await db.file_registry.find_one(
-            {"url": url, "storage_provider": "supabase", "migration_status": "completed"},
+            {"url": url, "storage_provider": "supabase"},
             {"_id": 0, "storage_path": 1}
         )
         try:
@@ -4583,6 +4719,49 @@ async def get_public_equipment_image(slug: str, token: str):
         except Exception:
             raise HTTPException(status_code=404, detail="Imagem não disponível")
     raise HTTPException(status_code=404, detail="Imagem não disponível")
+
+
+@api_router.get("/public/equipment/{slug}/{token}/document/{doc_id}")
+async def get_public_document(slug: str, token: str, doc_id: str):
+    """Download público de documento do Dossiê. Valida slug/token/org/publicação."""
+    ativo = await db.ativos.find_one(
+        {"public_slug": slug, "public_qr_token": token, "deleted_at": None},
+        {"_id": 0, "id": 1, "organization_id": 1, "status": 1, "public_dossier": 1}
+    )
+    if not ativo or ativo.get("status") == "inativo":
+        raise HTTPException(status_code=404, detail="Documento não disponível")
+
+    # Verificar visibilidade de documentos
+    from routes.dossier import get_visibility
+    dossier = ativo.get("public_dossier") or {}
+    if get_visibility(dossier, "documents") != "public":
+        raise HTTPException(status_code=404, detail="Documento não disponível")
+
+    doc = await db.dossier_documents.find_one({
+        "id": doc_id,
+        "ativo_id": ativo["id"],
+        "organization_id": ativo.get("organization_id"),
+        "is_published": True,
+        "deleted_at": None,
+    })
+    if not doc or not doc.get("file_url"):
+        raise HTTPException(status_code=404, detail="Documento não disponível")
+
+    url = doc["file_url"]
+    if url.startswith("/api/storage/"):
+        spath = url.replace("/api/storage/", "", 1)
+        record = await db.file_registry.find_one({"url": url}, {"_id": 0, "storage_path": 1})
+        try:
+            actual_path = record["storage_path"] if record and record.get("storage_path") else spath
+            data, ct = objstore.get_file(actual_path)
+            filename = doc.get("filename", "documento.pdf")
+            return Response(
+                content=data, media_type=ct,
+                headers={"Content-Disposition": f'inline; filename="{filename}"'}
+            )
+        except Exception:
+            raise HTTPException(status_code=404, detail="Documento não disponível")
+    raise HTTPException(status_code=404, detail="Documento não disponível")
 
 
 @api_router.get("/ativos/{ativo_id}/qrcode/png")
@@ -4903,6 +5082,13 @@ async def run_migrations():
         await db.ativos.create_index("public_qr_token", unique=True, sparse=True)
     except Exception as e:
         logger.error(f"QR Code backfill error: {e}")
+
+    # === DOSSIER DOCUMENTS INDEXES ===
+    try:
+        await db.dossier_documents.create_index([("ativo_id", 1), ("organization_id", 1), ("deleted_at", 1)])
+        await db.dossier_documents.create_index([("ativo_id", 1), ("is_published", 1), ("deleted_at", 1)])
+    except Exception as e:
+        logger.error(f"Dossier documents index error: {e}")
 
 
 @app.on_event("shutdown")

@@ -1,0 +1,38 @@
+{
+  "summary": "RC P1 Dossiê Digital do Ativo v1.0 FASE 1 (backend) VALIDADO. 34/34 testes passaram (100%). Cobertura: GET /api/ativos/{id}/dossier (auth + defaults de visibilidade), PUT /api/ativos/{id}/dossier (RBAC master/admin/pcm, validação public_status, visibilidade), endpoint público evoluído GET /api/public/equipment/{slug}/{token} (branding, location, technical_data, status_publico com color, history_summary, inspections/maintenance com max 3 e campos seguros, filtragem por visibility=public/hidden), documentos (upload, toggle publish, download público condicional, soft-delete), zero vazamento de dados sensíveis (organization_id, _id, responsavel_id, custos, uploaded_by, emails @maintrix.com), backwards-compat (public_qr_url preservada, ativos sem dossier continuam funcionando).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration117_dossier_digital.py",
+    "/app/test_reports/pytest/iteration117_dossier.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/dossier.py:132 — PUT retorna 400 'Nenhum campo para atualizar' quando body só contém visibility com nível inválido (o único item é ignorado, dict update fica vazio). Comportamento consistente com o teste de validação de visibilidade e evita falso 200. OK.",
+    "server.py:4520 — PUBLIC_QR_ALLOWLIST inclui 'numero_serie'. Confirmar com PO se número de série deve ser público (potencial risco de rastreabilidade/uso indevido). Não é crítico, apenas alerta de design.",
+    "server.py:4671-4688 — endpoint público lista documentos apenas quando visibility.documents=public E is_published=True. Boa defesa em profundidade.",
+    "server.py:4724-4762 — GET /public/equipment/.../document/{doc_id} verifica também visibility.documents=public antes de servir. Se admin colocar visibility=hidden, todos os documentos ficam inacessíveis mesmo com is_published=True. Comportamento correto (visibility é o gate global do bloco).",
+    "routes/dossier.py:38-41 — MAX_IMAGE_SIZE=5MB e MAX_DOC_SIZE=20MB. Adequado para produção.",
+    "routes/dossier.py:74-77 — GET dossier lista até 50 documentos incluindo softdeleted=None. OK. Sem paginação, mas dossiês por ativo raramente terão >50 docs.",
+    "routes/dossier.py:171 — upload_file usa 'dossier_photos' como categoria de storage; documentos usam 'dossier_docs'. Naming convention clara.",
+    "server.py:4685 — download_url no bloco documents é relativo (/api/public/...). Frontend precisa prefixar com REACT_APP_BACKEND_URL para funcionar em produção. Consistente com public_qr_url que agora é absoluta — se PO quer paridade, considerar tornar download_url absoluta também. Não é bug, apenas nota de design."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (34/34 testes)",
+    "frontend": "N/A — fase 2"
+  },
+  "test_credentials": "test.admin@maintrix.com / admin123 (edit dossiê), test.pcm@maintrix.com / pcm123 (edit dossiê), test.operador@maintrix.com / op123 (RBAC negativo → 403)",
+  "seed_data_creation": "Nenhum seed persistente. Um documento TEST_MANUAL foi criado, publicado, despublicado e soft-deleted durante os testes (cleanup automático). Visibilidade do ativo AV-01 restaurada para public em todos os blocos ao final (test_zzz_restore_visibility_public).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "FASE 1 backend do Dossiê Digital 100% validada. Ativo 0f8972a8-72c6-4941-97af-06cd61171904 (AV-01) tem: description, curiosity, warning, safety, best_practices, location.linha='Linha 1', location.ponto_instalacao='Entrada Britagem', technical_data.corrente='95 A', technical_data.frequencia='60 Hz', public_status='operando', e visibility=public em todos os 9 blocos. Endpoint público https://.../api/public/equipment/av-01-alimentador/Wb2xZ_y_eeAWO8Q8iLzjQJkH4sa_TuIu retorna JSON completo sem auth. Coleção dossier_documents está vazia (documento de teste foi soft-deleted). Para FASE 2 (frontend), testar: (1) tela de edição do dossiê chamando GET/PUT /api/ativos/{id}/dossier; (2) upload de foto e documentos; (3) toggle publish; (4) rota pública /equipamento/:slug/:token exibindo os novos blocos conforme visibility. Sensitive-field check no endpoint público continua sendo o principal item de segurança — qualquer nova adição de campo em PUBLIC_QR_ALLOWLIST ou no builder do public_data deve ser re-validada.",
+  "rca of the issue": "N/A — nenhuma issue encontrada nesta iteração. Todos os cenários do problem_statement passaram: (a) GET dossier retorna defaults; (b) PUT com todos os campos persiste corretamente; (c) RBAC 403 para operador; (d) public_status inválido → 400; (e) visibility inválida ignorada (400 quando único campo); (f) blocos aparecem quando public e somem quando hidden; (g) branding/location/technical_data/status_color/history_summary retornados; (h) inspections/maintenance com max 3 e apenas data/tipo/resultado/titulo/status; (i) zero vazamento de organization_id/_id/responsavel_id/custos/uploaded_by/emails; (j) 404 em token/slug inválidos; (k) upload/publish/download público/soft-delete de documentos funcionam com RBAC; (l) documento não publicado → 404 público; (m) public_qr_url preservada."
+}
