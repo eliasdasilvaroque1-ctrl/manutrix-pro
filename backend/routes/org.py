@@ -215,7 +215,13 @@ async def preview_numeracao(
     ano = datetime.now().year
     
     pattern = numeracao.get(entidade, {})
-    digitos = pattern.get("digitos", 5)
+    raw_digitos = pattern.get("digitos", 5)
+    try:
+        digitos = int(raw_digitos) if raw_digitos else 5
+    except (TypeError, ValueError):
+        digitos = 5
+    if digitos < 1:
+        digitos = 5
     padrao = pattern.get("prefixo", "")
     
     tipo_abrev = TIPO_ABREVIACOES.get(tipo, tipo[:4].upper()) if tipo else ""
