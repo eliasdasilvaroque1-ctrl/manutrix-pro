@@ -132,6 +132,24 @@ def _check_rate_limit(ip: str, path: str) -> bool:
     return True
 
 @app.middleware("http")
+async def performance_middleware(request: Request, call_next):
+    """Mede duração de cada request e loga endpoints lentos."""
+    import time as _time
+    start = _time.perf_counter()
+    response = await call_next(request)
+    duration = _time.perf_counter() - start
+    path = request.url.path
+    # Normalizar rota (remover UUIDs)
+    import re as _re
+    norm_path = _re.sub(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '{id}', path)
+    response.headers["X-Response-Time"] = f"{duration*1000:.1f}ms"
+    if duration > 3.0:
+        logger.warning(f"SLOW_REQUEST_CRITICAL: {request.method} {norm_path} {duration:.2f}s status={response.status_code}")
+    elif duration > 1.0:
+        logger.info(f"SLOW_REQUEST: {request.method} {norm_path} {duration:.2f}s status={response.status_code}")
+    return response
+
+@app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
     if request.method == "POST" or path.startswith("/api/public/"):
@@ -4552,8 +4570,14 @@ async def get_public_equipment(slug: str, token: str):
         if val is not None and val != "" and val != []:
             public_data[field] = val
 
-    # --- Org/Branding ---
-    config = await db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1})
+    # --- Org/Branding + Location (paralelo) ---
+    import asyncio as _aio
+    async def _noop(val=None): return val
+    config_t = db.org_config.find_one({"organization_id": org_id}, {"_id": 0, "identidade": 1})
+    sector_t = db.sectors.find_one({"id": ativo.get("sector_id"), "deleted_at": None}, {"_id": 0, "nome": 1})
+    unidade_t = db.unidades.find_one({"id": ativo.get("unidade_id"), "deleted_at": None}, {"_id": 0, "nome": 1}) if ativo.get("unidade_id") else _noop()
+    config, sector, unidade = await _aio.gather(config_t, sector_t, unidade_t)
+
     identidade = (config or {}).get("identidade", {})
     public_data["empresa"] = identidade.get("nome_empresa", "")
     public_data["branding"] = {
@@ -4565,13 +4589,8 @@ async def get_public_equipment(slug: str, token: str):
     if identidade.get("logo_url"):
         public_data["logo_url"] = identidade["logo_url"]
 
-    # --- Location ---
-    sector = await db.sectors.find_one({"id": ativo.get("sector_id"), "deleted_at": None}, {"_id": 0, "nome": 1})
     public_data["area"] = (sector or {}).get("nome", "")
-    unidade_nome = ""
-    if ativo.get("unidade_id"):
-        unidade = await db.unidades.find_one({"id": ativo["unidade_id"], "deleted_at": None}, {"_id": 0, "nome": 1})
-        unidade_nome = (unidade or {}).get("nome", "")
+    unidade_nome = (unidade or {}).get("nome", "")
     public_data["unidade"] = unidade_nome
     # Location extra do dossiê
     loc = dossier.get("location") or {}
@@ -5119,6 +5138,23 @@ async def run_migrations():
         await db.dossier_documents.create_index([("ativo_id", 1), ("is_published", 1), ("deleted_at", 1)])
     except Exception as e:
         logger.error(f"Dossier documents index error: {e}")
+
+    # === PERFORMANCE INDEXES ===
+    try:
+        # OS: consultas por status + org + data (central de trabalho)
+        await db.ordens_servico.create_index([("organization_id", 1), ("status", 1), ("data_planejada", 1)], background=True)
+        await db.ordens_servico.create_index([("organization_id", 1), ("status", 1), ("created_at", -1)], background=True)
+        await db.ordens_servico.create_index([("ativo_id", 1), ("status", 1), ("deleted_at", 1)], background=True)
+        # Inspeções: consultas por status + org + data
+        await db.inspecoes.create_index([("organization_id", 1), ("status", 1), ("data_programada", 1)], background=True)
+        await db.inspecoes.create_index([("ativo_id", 1), ("deleted_at", 1), ("created_at", -1)], background=True)
+        # Ativos: consulta por org + deleted + sector
+        await db.ativos.create_index([("organization_id", 1), ("deleted_at", 1), ("sector_id", 1)], background=True)
+        # Users: consulta por id batch
+        await db.users.create_index("id", unique=True, sparse=True, background=True)
+        logger.info("Performance indexes created/verified")
+    except Exception as e:
+        logger.error(f"Performance index error: {e}")
 
 
 @app.on_event("shutdown")

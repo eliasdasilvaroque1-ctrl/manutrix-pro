@@ -9,7 +9,16 @@ from deps import (
     _get_asset_ids_for_areas, audit_log
 )
 
+import asyncio as _aio
+
 router = APIRouter()
+
+# Projeção leve para consultas da central (excluir campos pesados)
+_CENTRAL_OS_PROJ = {
+    "_id": 0, "fotos": 0, "servicos_realizados": 0,
+    "campos_personalizados": 0, "campos_personalizados_ids": 0,
+    "historico_status": 0, "observacoes": 0,
+}
 
 
 async def _bulk_enrich_ativos(items: list) -> None:
@@ -39,84 +48,74 @@ async def get_central_trabalho(user: Dict = Depends(get_current_user)):
 
     result = {"role": role, "user_nome": user.get('nome', ''), "turno": user.get('turno', '')}
 
-    # ===== ATIVIDADES VENCIDAS (todas as roles) =====
+    # ===== CONSULTAS PARALELAS (independentes) =====
     os_query_base = await build_visibility_query(user, entity_type="os")
-    vencidas_os = await db.ordens_servico.find(
+    insp_query_base = await build_visibility_query(user, entity_type="inspecao")
+
+    # Todas as consultas de OS e inspeções em paralelo
+    vencidas_os_t = db.ordens_servico.find(
         {**os_query_base, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]},
          "data_planejada": {"$lt": hoje, "$ne": None}},
-        {"_id": 0}
+        _CENTRAL_OS_PROJ
     ).sort("data_planejada", 1).to_list(50)
 
-    insp_query_base = await build_visibility_query(user, entity_type="inspecao")
-    vencidas_insp = await db.inspecoes.find(
+    vencidas_insp_t = db.inspecoes.find(
         {**insp_query_base, "status": {"$in": ["pendente", "em_andamento"]},
          "data_programada": {"$lt": hoje, "$ne": None}},
         {"_id": 0, "checklist": 0}
     ).sort("data_programada", 1).to_list(50)
 
-    result['vencidas'] = {
-        "os": vencidas_os,
-        "inspecoes": vencidas_insp,
-        "total": len(vencidas_os) + len(vencidas_insp)
-    }
-
-    # ===== HOJE =====
-    hoje_os = await db.ordens_servico.find(
+    hoje_os_t = db.ordens_servico.find(
         {**os_query_base, "status": {"$in": ["aberta", "planejada", "em_execucao"]},
          "data_planejada": {"$gte": hoje, "$lt": amanha}},
-        {"_id": 0}
+        _CENTRAL_OS_PROJ
     ).sort("prioridade", -1).to_list(50)
 
-    hoje_insp = await db.inspecoes.find(
+    hoje_insp_t = db.inspecoes.find(
         {**insp_query_base, "status": {"$in": ["pendente", "em_andamento"]},
          "data_programada": {"$gte": hoje, "$lt": amanha}},
         {"_id": 0, "checklist": 0}
     ).sort("data_programada", 1).to_list(50)
 
-    result['hoje'] = {
-        "os": hoje_os,
-        "inspecoes": hoje_insp,
-        "total": len(hoje_os) + len(hoje_insp)
-    }
-
-    # ===== SEMANA =====
-    semana_os = await db.ordens_servico.find(
+    semana_os_t = db.ordens_servico.find(
         {**os_query_base, "status": {"$in": ["aberta", "planejada"]},
          "data_planejada": {"$gte": amanha, "$lt": fim_semana}},
-        {"_id": 0}
+        _CENTRAL_OS_PROJ
     ).sort("data_planejada", 1).to_list(50)
 
-    semana_insp = await db.inspecoes.find(
+    semana_insp_t = db.inspecoes.find(
         {**insp_query_base, "status": "pendente",
          "data_programada": {"$gte": amanha, "$lt": fim_semana}},
         {"_id": 0, "checklist": 0}
     ).sort("data_programada", 1).to_list(50)
 
-    result['semana'] = {
-        "os": semana_os,
-        "inspecoes": semana_insp,
-        "total": len(semana_os) + len(semana_insp)
-    }
-
-    # ===== SEM DATA (backlog) =====
     sem_data_q = {**os_query_base, "status": {"$in": ["aberta", "planejada", "em_execucao", "pausada"]}}
     sem_data_q.setdefault("$and", []).append(
         {"$or": [{"data_planejada": None}, {"data_planejada": {"$exists": False}}, {"data_planejada": ""}]}
     )
-    sem_data_os = await db.ordens_servico.find(sem_data_q, {"_id": 0}).sort("created_at", -1).to_list(30)
+    sem_data_os_t = db.ordens_servico.find(sem_data_q, _CENTRAL_OS_PROJ).sort("created_at", -1).to_list(30)
 
-    result['sem_data'] = {"os": sem_data_os, "total": len(sem_data_os)}
-
-    # ===== EM EXECUÇÃO (ativas agora) =====
-    em_exec_os = await db.ordens_servico.find(
+    em_exec_os_t = db.ordens_servico.find(
         {**os_query_base, "status": "em_execucao"},
-        {"_id": 0}
+        _CENTRAL_OS_PROJ
     ).sort("data_inicio", -1).to_list(20)
 
-    em_exec_insp = await db.inspecoes.find(
+    em_exec_insp_t = db.inspecoes.find(
         {**insp_query_base, "status": "em_andamento"},
         {"_id": 0, "checklist": 0}
     ).to_list(20)
+
+    # Executar todas em paralelo
+    (vencidas_os, vencidas_insp, hoje_os, hoje_insp,
+     semana_os, semana_insp, sem_data_os, em_exec_os, em_exec_insp) = await _aio.gather(
+        vencidas_os_t, vencidas_insp_t, hoje_os_t, hoje_insp_t,
+        semana_os_t, semana_insp_t, sem_data_os_t, em_exec_os_t, em_exec_insp_t
+    )
+
+    result['vencidas'] = {"os": vencidas_os, "inspecoes": vencidas_insp, "total": len(vencidas_os) + len(vencidas_insp)}
+    result['hoje'] = {"os": hoje_os, "inspecoes": hoje_insp, "total": len(hoje_os) + len(hoje_insp)}
+    result['semana'] = {"os": semana_os, "inspecoes": semana_insp, "total": len(semana_os) + len(semana_insp)}
+    result['sem_data'] = {"os": sem_data_os, "total": len(sem_data_os)}
 
     result['em_execucao'] = {
         "os": em_exec_os,

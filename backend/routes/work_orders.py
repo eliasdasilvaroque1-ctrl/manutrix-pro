@@ -90,8 +90,14 @@ async def list_os(
     ativo_id: Optional[str] = None,
     sector_id: Optional[str] = None,
     origem: Optional[str] = None,
+    limit: int = 50,
+    skip: int = 0,
     user: Dict = Depends(get_current_user)
 ):
+    # Sanitize pagination
+    limit = min(max(limit, 1), 200)
+    skip = max(skip, 0)
+
     # Start with role-based visibility filter
     query = await build_visibility_query(user, entity_type="os")
 
@@ -116,20 +122,35 @@ async def list_os(
         if asset_ids is not None:
             query['ativo_id'] = {"$in": asset_ids}
 
-    os_list = await db.ordens_servico.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Projeção reduzida para lista (excluir campos pesados)
+    list_projection = {
+        "_id": 0,
+        "fotos": 0,
+        "servicos_realizados": 0,
+        "campos_personalizados": 0,
+        "campos_personalizados_ids": 0,
+        "historico_status": 0,
+    }
+
+    os_list = await db.ordens_servico.find(query, list_projection).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
 
     ativo_ids = list(set(o.get('ativo_id') for o in os_list if o.get('ativo_id')))
     resp_ids = list(set(o.get('responsavel_id') for o in os_list if o.get('responsavel_id')))
     equipe_all_ids = list(set(uid for o in os_list for uid in (o.get('equipe') or [])))
 
-    ativos_batch = await db.ativos.find({"id": {"$in": ativo_ids}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1, "sector_id": 1}).to_list(len(ativo_ids)) if ativo_ids else []
-    resp_batch = await db.users.find({"id": {"$in": resp_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(resp_ids)) if resp_ids else []
+    # Batch lookups em paralelo
+    import asyncio as _aio
+    async def _noop_list(): return []
+    ativos_task = db.ativos.find({"id": {"$in": ativo_ids}}, {"_id": 0, "id": 1, "tag": 1, "nome": 1, "sector_id": 1}).to_list(len(ativo_ids)) if ativo_ids else _noop_list()
+    resp_task = db.users.find({"id": {"$in": resp_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(resp_ids)) if resp_ids else _noop_list()
+    equipe_task = db.users.find({"id": {"$in": equipe_all_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(equipe_all_ids)) if equipe_all_ids else _noop_list()
+
+    ativos_batch, resp_batch, equipe_batch = await _aio.gather(ativos_task, resp_task, equipe_task)
 
     sector_ids = list(set(a.get('sector_id') for a in ativos_batch if a.get('sector_id')))
     sectors_batch = await db.sectors.find({"id": {"$in": sector_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(sector_ids)) if sector_ids else []
     sector_map = {s['id']: s for s in sectors_batch}
 
-    equipe_batch = await db.users.find({"id": {"$in": equipe_all_ids}}, {"_id": 0, "id": 1, "nome": 1}).to_list(len(equipe_all_ids)) if equipe_all_ids else []
     equipe_map = {u['id']: u.get('nome', '') for u in equipe_batch}
 
     ativo_map = {a['id']: a for a in ativos_batch}

@@ -732,49 +732,43 @@ async def get_ativo_dossie(ativo_id: str, user: Dict = Depends(get_current_user)
 
     org_id = ativo.get('organization_id', '')
 
-    # Parallel data fetch
-    sector = await db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0}) or {}
-
-    # OS (all, most recent first) — org_id enforced
-    os_all = await db.ordens_servico.find(
+    # Consultas paralelas (independentes)
+    import asyncio as _aio
+    sector_t = db.sectors.find_one({"id": ativo.get('sector_id')}, {"_id": 0})
+    os_t = db.ordens_servico.find(
         {"ativo_id": ativo_id, "organization_id": org_id, "deleted_at": None},
         {"_id": 0, "id": 1, "numero": 1, "titulo": 1, "tipo": 1, "disciplina": 1,
          "prioridade": 1, "status": 1, "responsavel_id": 1, "data_abertura": 1,
          "data_inicio": 1, "data_conclusao": 1, "tempo_execucao_minutos": 1,
          "materiais": 1, "created_at": 1, "origem": 1}
-    ).sort("created_at", -1).to_list(500)
-
-    # Inspections (all)
-    insp_all = await db.inspecoes.find(
+    ).sort("created_at", -1).to_list(200)
+    insp_t = db.inspecoes.find(
         {"ativo_id": ativo_id, "deleted_at": None},
         {"_id": 0, "id": 1, "tipo": 1, "status": 1, "resultado": 1,
          "responsavel_id": 1, "data_programada": 1, "data_inicio": 1,
          "data_conclusao": 1, "duracao_minutos": 1, "plano_id": 1,
          "checklist": 1, "fotos": 1, "observacoes": 1, "created_at": 1}
-    ).sort("created_at", -1).to_list(500)
-
-    # Plans
-    planos = await db.planos_inspecao.find(
+    ).sort("created_at", -1).to_list(200)
+    planos_t = db.planos_inspecao.find(
         {"$or": [{"ativo_id": ativo_id}, {"tipo_equipamento": ativo.get('tipo_equipamento', '__none__')}],
          "organization_id": org_id, "deleted_at": None},
         {"_id": 0}
     ).to_list(100)
-
-    # Solicitações
-    solicitacoes = await db.solicitacoes.find(
+    solic_t = db.solicitacoes.find(
         {"ativo_id": ativo_id, "deleted_at": None},
         {"_id": 0}
     ).sort("created_at", -1).to_list(200)
-
-    # Documents (manuals + attachments) — attachments has org_id
-    manuais = await db.manuais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(50)
-    attachments = await db.attachments.find(
+    manuais_t = db.manuais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(50)
+    attach_t = db.attachments.find(
         {"entity_type": "ativo", "entity_id": ativo_id, "organization_id": org_id, "deleted_at": None},
         {"_id": 0}
     ).to_list(100)
+    mat_t = db.ativo_materiais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(100)
 
-    # BOM (materials list)
-    materiais = await db.ativo_materiais.find({"ativo_id": ativo_id, "deleted_at": None}, {"_id": 0}).to_list(100)
+    sector, os_all, insp_all, planos, solicitacoes, manuais, attachments, materiais = await _aio.gather(
+        sector_t, os_t, insp_t, planos_t, solic_t, manuais_t, attach_t, mat_t
+    )
+    sector = sector or {}
 
     # KPI calculation
     os_corretivas = [o for o in os_all if o.get('tipo') == 'corretiva' and o.get('status') == 'concluida']
