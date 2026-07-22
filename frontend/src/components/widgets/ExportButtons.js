@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FileText, Printer, Download, X, CheckSquare, Square } from "lucide-react";
 import { toast } from "sonner";
-import { api, BACKEND_URL, useAuth } from "../../lib/api";
+import { api, BACKEND_URL, useAuth, safeErrorMsg } from "../../lib/api";
 
 const ExportButtons = ({ entity }) => {
   const { user } = useAuth();
@@ -13,7 +13,7 @@ const ExportButtons = ({ entity }) => {
       const contentType = res.headers?.['content-type'] || res.data?.type || '';
       if (contentType.includes('application/json') || contentType.includes('text/html')) {
         const text = await res.data.text();
-        try { const err = JSON.parse(text); toast.error(err.detail || 'Erro na exportação'); } catch { toast.error('Erro na exportação'); }
+        try { const err = JSON.parse(text); toast.error(typeof err.detail === 'string' ? err.detail : safeErrorMsg({response:{data:err}}, 'Erro na exportação')); } catch { toast.error('Erro na exportação'); }
         return;
       }
       const blob = new Blob([res.data]);

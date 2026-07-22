@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { FileText, Settings, Shield, Wrench, Camera, PenTool, Plus, Save, Trash2, ChevronRight, Eye, GripVertical, History, RotateCcw, ClipboardList, BookOpen, Cog, FormInput as FormInputIcon, FileSignature, Layout, Type } from "lucide-react";
-import { api, useAuth } from "../lib/api";
+import { api, useAuth, safeErrorMsg } from "../lib/api";
 import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "../components/shared";
 import { toast } from "sonner";
 
@@ -765,7 +765,7 @@ const CampoForm = ({ item, onClose, onSuccess }) => {
       if (item?.id) await api.put(`/doc-config/campos/${item.id}`, payload);
       else await api.post('/doc-config/campos', payload);
       toast.success('Campo salvo'); onSuccess();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro ao salvar'); }
+    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao salvar')); }
     setSaving(false);
   };
   return (
@@ -862,7 +862,7 @@ const CabecalhoForm = ({ item, onClose, onSuccess }) => {
       if (item?.id) await api.put(`/doc-config/cabecalhos-rodapes/${item.id}`, form);
       else await api.post('/doc-config/cabecalhos-rodapes', form);
       toast.success('Salvo'); onSuccess();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(safeErrorMsg(e)); }
     setSaving(false);
   };
   return (
@@ -958,7 +958,7 @@ const AssinaturaForm = ({ item, onClose, onSuccess }) => {
       if (item?.id) await api.put(`/doc-config/assinaturas/${item.id}`, form);
       else await api.post('/doc-config/assinaturas', form);
       toast.success('Salvo'); onSuccess();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(safeErrorMsg(e)); }
     setSaving(false);
   };
   return (
@@ -1056,7 +1056,7 @@ const LayoutForm = ({ item, cabecalhos, campos, assinaturas, onClose, onSuccess 
       if (item?.id) await api.put(`/doc-config/layouts/${item.id}`, payload);
       else await api.post('/doc-config/layouts', payload);
       toast.success('Layout salvo'); onSuccess();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(safeErrorMsg(e)); }
     setSaving(false);
   };
   const cabs = (cabecalhos||[]).filter(c => c.tipo === 'cabecalho');
@@ -1147,7 +1147,7 @@ const VersionHistoryModal = ({ itemType, itemId, itemName, onClose, onRestore })
       toast.success(`Restaurado para v${versao}`);
       onRestore();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Erro ao restaurar');
+      toast.error(safeErrorMsg(e, 'Erro ao restaurar'));
     }
     setRestoring(null);
   };

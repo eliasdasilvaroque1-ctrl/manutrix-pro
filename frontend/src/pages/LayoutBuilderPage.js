@@ -3,7 +3,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, 
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Save, FileText, Copy, Send, ArrowLeft, Settings, Printer, RotateCcw } from "lucide-react";
-import { api, useAuth } from "../lib/api";
+import { api, useAuth, safeErrorMsg } from "../lib/api";
 import { toast } from "sonner";
 
 const BLOCK_CATALOG = [
@@ -245,7 +245,7 @@ const LayoutBuilderPage = () => {
       }
       setDirty(false);
       fetchLayouts();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro ao salvar'); }
+    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao salvar')); }
     setSaving(false);
   };
 
@@ -256,7 +256,7 @@ const LayoutBuilderPage = () => {
       await api.post(`/doc-config/layouts/${currentLayout.id}/publicar`);
       toast.success('Layout publicado');
       fetchLayouts();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro ao publicar'); }
+    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao publicar')); }
   };
 
   const handleDuplicate = async (id) => {
@@ -264,7 +264,7 @@ const LayoutBuilderPage = () => {
       const r = await api.post(`/doc-config/layouts/${id}/duplicar`);
       toast.success('Layout duplicado');
       fetchLayouts();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(safeErrorMsg(e)); }
   };
 
   const handleDelete = async (id) => {

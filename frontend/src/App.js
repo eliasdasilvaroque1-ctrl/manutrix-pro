@@ -469,6 +469,8 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
         horas_parada: form.horas_parada ? parseFloat(form.horas_parada) : null,
         data_planejada: form.data_planejada || null,
         responsavel_id: form.responsavel_id || null,
+        procedimento_id: form.procedimento_id || null,
+        causa_falha: form.causa_falha || null,
       };
       
       if (!navigator.onLine) {

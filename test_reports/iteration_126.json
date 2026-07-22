@@ -1,0 +1,38 @@
+{
+  "summary": "HOTFIX P0 — REACT ERROR #31 EM ERROS DE VALIDAÇÃO validado backend + frontend. (Backend/pytest 11/11 passing) POST /api/ordens-servico sem ativo_id retorna 422 com detail=Array<{type, loc, msg, input, url}> — contrato Pydantic 2.12 confirmado (loc=['body','ativo_id'], msg='Field required'). OS válida cria com sucesso; procedimento_id=null e causa_falha=null aceitos; /api/admin/audit-logs 200 para admin e 403 para PCM. (Frontend/Playwright) Login admin/PCM ok; /admin/auditoria renderiza 409 registros para admin SEM error boundary / SEM React #31 no console; PCM sidebar NÃO exibe 'Auditoria' (0 links, 'Auditoria' ausente no body); PCM em /admin/auditoria vê tela 'Acesso Restrito — Seu perfil (PCM) não possui permissão'. Verificação matemática dos formatadores executada em navegador com o payload real 422: formatApiDetail(detail) → 'Campo \\'Ativo\\' é obrigatório' (string) e safeErrorMsg(err) → 'ativo_id: Field required' (string). Nenhuma renderização de objeto/array em toast — React #31 eliminado. Grep em toda /app/frontend/src confirma que toast.error() nunca recebe err.response.data.detail cru; todos os catches usam safeErrorMsg, normalizeError, string literal ou verificação typeof==='string' com fallback.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/ordens-servico", "issue": "Aceita data_planejada='abc' (string arbitrária) com status 200 em vez de rejeitar com 422. Não afeta o hotfix atual — o frontend sempre envia null quando vazio (App.js:470). Se algum dia o backend passar a validar, o safeErrorMsg já cobre. Sugerido: adicionar validador Pydantic para datetime em OSCreate.data_planejada."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration126_react_error_31_hotfix.py",
+    "/app/test_reports/pytest/iteration_126.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "lib/api.js:5-23 (safeErrorMsg) — filtro loc removendo 'body/query/path/header' está correto. msg é sempre coagida para string via typeof check + String() fallback. Array vazio cai em fallback via '|| fallback'. Cobertura para string | array | object | outros tipos completa.",
+    "lib/constants.js:39-73 (normalizeError + formatApiDetail) — normalizeError delega para formatApiDetail preservando mensagens específicas de rede (Network Error / timeout). formatApiDetail traduz nomes técnicos (ativo_id → 'Ativo') via FIELD_LABEL_MAP e produz mensagem em pt-BR para 'required'. Fallback JSON.stringify apenas para objeto não-Pydantic. Excelente. Sugestão menor: incluir mais chaves em FIELD_LABEL_MAP (procedimento_id, causa_falha, data_planejada) para toasts ainda mais amigáveis.",
+    "App.js:464-474 (ModalNovaOS payload sanitization) — Correto: procedimento_id e causa_falha viram null quando falsy. Mantém tipo consistente com backend (evita string vazia gerar 422 futuro). data_planejada, responsavel_id também tratados.",
+    "pages/FieldOpsPage.js:46 — Padrão inline seguro: só usa detail se typeof==='string', senão fallback. Não crasha, mas perde info em 422. Preferível migrar para safeErrorMsg(err, 'Erro ao criar OS') para consistência e melhor UX.",
+    "components/widgets/ExportButtons.js:97-99 — Template literal string usando error.response.status. Seguro. OK.",
+    "Grep completo em /app/frontend/src confirma: nenhum toast.error() renderiza objeto/array não-string. Todos os catches passam por safeErrorMsg, normalizeError, string literal ou template literal com valores primitivos. React #31 eliminado por design.",
+    "Backend /api/admin/audit-logs corretamente responde 403 para PCM e 200 para admin — RBAC funcionando (regressão OK)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration126_react_error_31_hotfix.py (novo — 11 testes de contrato 422 + auth regression + auditoria RBAC)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (todos os cenários verificados: admin+PCM login, auditoria admin, sidebar PCM sem auditoria, acesso restrito PCM, formatadores retornam string para payload Pydantic real, zero React #31 no console)"},
+  "test_credentials": "Admin: test.admin@maintrix.com / admin123 ; PCM: test.pcm@maintrix.com / pcm123",
+  "seed_data_creation": "Nenhum dado persistente. OS criadas em testes são deletadas ao final de cada teste.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Contrato 422 do backend confirmado como Pydantic 2.12 array de objetos {type, loc, msg, input, url}. loc vem como ['body', <field>]. Frontend tem DUAS funções seguras: safeErrorMsg em lib/api.js (produz 'ativo_id: Field required') e formatApiDetail em lib/constants.js (produz 'Campo \\'Ativo\\' é obrigatório' via FIELD_LABEL_MAP). Login exige org auto-detect por email — digitar email letra-por-letra com .type(email, delay=30) e aguardar ~2s antes de submit. /admin/audit-logs é o endpoint (não /auditoria nem /audit/logs). Client-side validation em ModalNovaOS ('Preencha Ativo, Título e Disciplina') sempre pega antes do 422; para testar 422 real via UI seria necessário monkey-patch — não é regressão.",
+  "rca of the issue": "Bug original: toast.error(error.response.data.detail) renderizava Array<Object> Pydantic diretamente no JSX do sonner, disparando React error #31 ('Objects are not valid as a React child'). Fix: (a) criada safeErrorMsg em lib/api.js que reduz detail para string tratando array/object/string; (b) normalizeError em lib/constants.js re-escrito para delegar a formatApiDetail que traduz field names via FIELD_LABEL_MAP e detecta 'required' para mensagens em pt-BR; (c) todos os toast.error com objetos migrados para safeErrorMsg em BibliotecaCorporativaPage, DocConfigPage, LayoutBuilderPage, DossierEditTab, ExportButtons; (d) FieldOpsPage:46 usa guard typeof==='string' inline. Verificação empírica: payload Pydantic real {loc:['body','ativo_id'], msg:'Field required'} passa por ambos formatadores retornando strings — nenhum objeto chega ao JSX. React #31 impossível pelo desenho atual."
+}

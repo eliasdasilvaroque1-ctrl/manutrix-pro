@@ -11,7 +11,7 @@ import {
   Shield, Lightbulb, CheckCircle, Globe, Lock, Users, RefreshCw,
   MapPin, Zap, Gauge, Factory, BookOpen, File
 } from "lucide-react";
-import { api, useAuth, BACKEND_URL } from "../lib/api";
+import { api, useAuth, BACKEND_URL, safeErrorMsg } from "../lib/api";
 import { toast } from "sonner";
 
 // ============== CONSTANTS ==============
@@ -362,7 +362,7 @@ const DossierEditTab = ({ ativo, ativoId, onRefresh }) => {
       setDirty(false);
       if (onRefresh) onRefresh();
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Erro ao salvar dossie");
+      toast.error(safeErrorMsg(err, "Erro ao salvar dossie"));
     } finally {
       setSaving(false);
     }
@@ -394,7 +394,7 @@ const DossierEditTab = ({ ativo, ativoId, onRefresh }) => {
       toast.success("Foto atualizada!");
     } catch (err) {
       setForm(prev => ({ ...prev, _previewImageUrl: null }));
-      toast.error(err.response?.data?.detail || "Erro ao enviar foto");
+      toast.error(safeErrorMsg(err, "Erro ao enviar foto"));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -432,7 +432,7 @@ const DossierEditTab = ({ ativo, ativoId, onRefresh }) => {
       setDocUpload({ title: "", doc_type: "manual" });
       toast.success("Documento adicionado!");
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Erro ao enviar documento");
+      toast.error(safeErrorMsg(err, "Erro ao enviar documento"));
     } finally {
       setUploading(false);
       if (docInputRef.current) docInputRef.current.value = "";

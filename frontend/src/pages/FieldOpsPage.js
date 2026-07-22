@@ -43,7 +43,7 @@ const FieldOpsPage = () => {
       setShowNovaOS(false);
       setNovaOSForm({ tipo: 'corretiva', titulo: '', descricao: '', prioridade: 'media' });
       fetchData();
-    } catch (err) { toast.error(err?.response?.data?.detail || 'Erro ao criar OS'); }
+    } catch (err) { toast.error(err?.response?.data?.detail && typeof err.response.data.detail === 'string' ? err.response.data.detail : 'Erro ao criar OS'); }
     finally { setSaving(false); }
   };
 

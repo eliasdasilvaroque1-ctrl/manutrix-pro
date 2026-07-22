@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Save, Trash2, Search, Filter, History, Eye, Shield, FileText, ChevronLeft, ChevronRight, RotateCcw, Archive, Send, Edit } from "lucide-react";
-import { api, useAuth } from "../lib/api";
+import { api, useAuth, safeErrorMsg } from "../lib/api";
 import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "../components/shared";
 import { toast } from "sonner";
 
@@ -71,7 +71,7 @@ const BibliotecaCorporativaPage = () => {
 
   const handleDelete = async (id, title) => {
     if (!window.confirm(`Excluir "${title}"?\nEsta ação pode ser revertida.`)) return;
-    try { await api.delete(`/documentos-corporativos/${id}`); toast.success('Documento excluído'); fetchDocs(); } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    try { await api.delete(`/documentos-corporativos/${id}`); toast.success('Documento excluído'); fetchDocs(); } catch (e) { toast.error(safeErrorMsg(e)); }
   };
 
   const handleStatusChange = async (id, newStatus, motivo = '') => {
@@ -79,7 +79,7 @@ const BibliotecaCorporativaPage = () => {
       await api.patch(`/documentos-corporativos/${id}/status`, { status: newStatus, motivo });
       toast.success(`Status alterado para ${STATUS_MAP[newStatus]?.label || newStatus}`);
       fetchDocs();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(safeErrorMsg(e)); }
   };
 
   const handleDuplicate = async (id) => {
@@ -87,7 +87,7 @@ const BibliotecaCorporativaPage = () => {
       const r = await api.post(`/documentos-corporativos/${id}/duplicar`);
       toast.success(`Documento duplicado: ${r.data.title}`);
       fetchDocs();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro ao duplicar'); }
+    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao duplicar')); }
   };
 
   return (
@@ -224,7 +224,7 @@ const DocForm = ({ item, onClose, onSuccess }) => {
       else await api.post('/documentos-corporativos', form);
       toast.success(item ? 'Documento atualizado' : 'Documento criado');
       onSuccess();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro ao salvar'); }
+    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao salvar')); }
     setSaving(false);
   };
 
@@ -392,7 +392,7 @@ const VersionModal = ({ docId, docTitle, onClose, onRestore, canRestore }) => {
       toast.success(`Restaurado para v${versao}`);
       onRestore();
       onClose();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Erro'); }
+    } catch (e) { toast.error(safeErrorMsg(e)); }
   };
 
   return (

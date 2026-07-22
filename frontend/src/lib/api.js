@@ -2,6 +2,27 @@ import axios from "axios";
 import { createContext, useContext } from "react";
 import { cacheData, getCachedData } from "./offlineQueue";
 
+/** Extrai mensagem segura de erro de API (string). Nunca retorna objeto/array para JSX. */
+export const safeErrorMsg = (err, fallback = 'Erro ao processar operação') => {
+  const detail = err?.response?.data?.detail;
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(d => {
+      if (typeof d === 'object' && d !== null) {
+        const loc = (d.loc || []).filter(l => !['body','query','path','header'].includes(l));
+        const field = loc[loc.length - 1] || '';
+        const msg = typeof d.msg === 'string' ? d.msg : String(d.msg || 'valor inválido');
+        return field ? `${field}: ${msg}` : msg;
+      }
+      return String(d);
+    }).join('; ') || fallback;
+  }
+  if (typeof detail === 'object') return typeof detail.msg === 'string' ? detail.msg : fallback;
+  return String(detail);
+};
+
+
 export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
 
