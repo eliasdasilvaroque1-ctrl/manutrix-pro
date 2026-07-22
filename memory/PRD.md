@@ -43,6 +43,64 @@ QR Codes codificavam URLs internas autenticadas (`/ativos/{id}`) e relativas, fa
 - PNG/SVG/PDF decodificados confirmam URL absoluta ✅
 - Batch PDF (6 QRs) todos válidos ✅
 - API pública sem Authorization → 200 ✅
+
+---
+
+## RC P1 — Dossiê Digital do Ativo v1.0 — FASE 1 CONCLUÍDA (22/07/2026)
+
+### Modelo de Dados (`public_dossier` embedded no ativo)
+```json
+{
+  "public_dossier": {
+    "description": "", "curiosity": "", "warning": "", "safety": "", "best_practices": "",
+    "image_url": "",
+    "location": { "linha": "", "ponto_instalacao": "" },
+    "technical_data": { "corrente": "", "frequencia": "" },
+    "visibility": {
+      "technical_data": "public", "history": "hidden", "inspections": "hidden",
+      "maintenance": "hidden", "documents": "hidden",
+      "curiosity": "public", "warning": "public", "safety": "public", "best_practices": "public"
+    }
+  }
+}
+```
+
+### Endpoints Criados/Alterados
+- `GET /api/ativos/{id}/dossier` — Retorna dossiê para edição (auth)
+- `PUT /api/ativos/{id}/dossier` — Atualiza dossiê (RBAC: master/admin/pcm)
+- `POST /api/ativos/{id}/dossier/photo` — Upload foto pública (Supabase)
+- `DELETE /api/ativos/{id}/dossier/photo` — Remove foto pública
+- `POST /api/ativos/{id}/dossier/documents` — Upload documento (FormData)
+- `PUT /api/ativos/{id}/dossier/documents/{doc_id}/publish` — Toggle publicação
+- `DELETE /api/ativos/{id}/dossier/documents/{doc_id}` — Soft-delete
+- `GET /api/public/equipment/{slug}/{token}` — EVOLUÍDO: branding, location, technical_data, status com cor, history, inspeções (max 3), manutenções (max 3), documentos públicos
+- `GET /api/public/equipment/{slug}/{token}/document/{doc_id}` — Download público controlado
+
+### Visibilidade (4 níveis)
+- `public` — QR sem auth
+- `authenticated` — Login MAINTRIX + org
+- `restricted` — Master/Admin/PCM
+- `hidden` — Não retornado
+
+### Segurança
+- Zero dados sensíveis no endpoint público (organization_id, _id, custos, emails, responsáveis)
+- Projeção explícita — nunca retorna doc completo
+- Documentos: slug/token + is_published + visibility + org match
+- RBAC backend obrigatório (não só frontend)
+
+### Testes: 34/34 PASS
+- CRUD dossiê ✅ | RBAC ✅ | Validação status ✅ | Visibilidade ✅
+- Endpoint público com/sem blocos ✅ | Sem dados sensíveis ✅
+- Upload/publish/download/delete documentos ✅ | Token inválido 404 ✅
+
+### Arquivos
+- `backend/routes/dossier.py` — NOVO (265 linhas)
+- `backend/server.py` — Endpoint público evoluído + document download + indexes
+
+### Compatibilidade
+- Nenhum campo obrigatório ✅ | Ativos antigos funcionam ✅ | QR Codes preservados ✅
+- Nenhuma IA ✅ | Nenhum serviço pago ✅
+
 - Rota frontend pública sem login ✅
 - Nenhum QR contém blob:, localhost, rota interna ✅
 - Interceptor Axios skip para /api/public/ ✅
@@ -153,8 +211,10 @@ Tela branca em dispositivos móveis ao escanear QR Code dos equipamentos. Causad
 - frontend/src/pages/InspecoesPages.js (asset selector)
 
 ## POST-PILOTO BACKLOG
-1. P2: Inserir CNPJ nos Termos de Uso
-2. P2: Remover fallback Emergent Storage
-3. P2: Corrigir erro 500 intermitente `preview_numeracao` (digitos=null)
-4. P1: RC6.1 — Construtor de Seções da OS (Ondas 2 e 3)
-5. P3: Integrações ERP/SAP | IA Assistente
+1. P1: RC Dossiê Digital v1.0 — **Fase 2** (Frontend Edição) e **Fase 3** (Página Pública Evoluída)
+2. P2: Remover AtivoDetailPage dead code (App.js linhas 1746-2365)
+3. P2: Inserir CNPJ nos Termos de Uso
+4. P2: Remover fallback Emergent Storage
+5. P2: Corrigir erro 500 intermitente `preview_numeracao` (digitos=null)
+6. P1: RC6.1 — Construtor de Seções da OS (Ondas 2 e 3)
+7. P3: Integrações ERP/SAP | IA Assistente
