@@ -24,12 +24,6 @@ const STATUS_COLORS = {
   blue: { bg: "bg-blue-500/15", border: "border-blue-500/30", text: "text-blue-400", dot: "bg-blue-400" },
 };
 
-// ============== SAFE TEXT (prevent XSS) ==============
-function safeText(text) {
-  if (!text) return "";
-  return String(text).replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
 // ============== TECH FIELD LABELS ==============
 const TECH_LABELS = {
   fabricante: "Fabricante", modelo: "Modelo", numero_serie: "N. Serie", ano: "Ano",

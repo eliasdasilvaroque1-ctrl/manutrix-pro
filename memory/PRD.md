@@ -128,6 +128,32 @@ QR Codes codificavam URLs internas autenticadas (`/ativos/{id}`) e relativas, fa
 - Documentos ✅ | Visibilidade selects ✅ | Toast sucesso ✅
 - Regressão tabs existentes ✅ | Console limpo ✅
 
+---
+
+## RC P1 — Dossiê Digital v1.0 — FASE 3 CONCLUÍDA (22/07/2026)
+
+### Página Pública Evoluída
+- PublicEquipmentPage reescrita completamente (~220 linhas)
+- Mobile-first (360px), desktop com max-w-2xl
+- 16 blocos condicionais — só renderiza se houver conteúdo público
+- Branding da empresa (logo, nome, cor primária)
+- Status com indicador visual colorido + texto
+- Localização completa (área/unidade/linha/ponto)
+- Blocos informativos com cores distintas (amber/orange/red/emerald)
+- Dados técnicos em grid 2 colunas
+- Últimas 3 inspeções e 3 manutenções (campos seguros)
+- Histórico resumido, documentos públicos com download
+- Estados de loading, erro, ativo indisponível
+- Zero dados sensíveis | Zero tela branca
+
+### Testes: 35/35 PASS (17 backend + 18 frontend)
+- QR válido abre ativo ✅ | QR inválido = erro amigável ✅
+- Status verde ✅ | Blocos com cores ✅ | Dados técnicos ✅
+- Inspeções/manutenções ✅ | Histórico ✅ | Documentos ✅
+- Mobile 360px ✅ | Desktop centralizado ✅ | Sem dados sensíveis ✅
+- Refresh direto ✅ | Console limpo ✅ | Regressão OK ✅
+- Campos vazios NÃO geram cartões ✅ | Ativo sem dossiê funciona ✅
+
 - Rota frontend pública sem login ✅
 - Nenhum QR contém blob:, localhost, rota interna ✅
 - Interceptor Axios skip para /api/public/ ✅
@@ -238,10 +264,9 @@ Tela branca em dispositivos móveis ao escanear QR Code dos equipamentos. Causad
 - frontend/src/pages/InspecoesPages.js (asset selector)
 
 ## POST-PILOTO BACKLOG
-1. P1: RC Dossiê Digital v1.0 — **Fase 2** (Frontend Edição) e **Fase 3** (Página Pública Evoluída)
-2. P2: Remover AtivoDetailPage dead code (App.js linhas 1746-2365)
-3. P2: Inserir CNPJ nos Termos de Uso
-4. P2: Remover fallback Emergent Storage
-5. P2: Corrigir erro 500 intermitente `preview_numeracao` (digitos=null)
-6. P1: RC6.1 — Construtor de Seções da OS (Ondas 2 e 3)
-7. P3: Integrações ERP/SAP | IA Assistente
+1. P2: Remover AtivoDetailPage dead code (App.js linhas 1746-2365)
+2. P2: Inserir CNPJ nos Termos de Uso
+3. P2: Remover fallback Emergent Storage
+4. P2: Corrigir erro 500 intermitente `preview_numeracao` (digitos=null)
+5. P1: RC6.1 — Construtor de Seções da OS (Ondas 2 e 3)
+6. P3: Integrações ERP/SAP | IA Assistente
