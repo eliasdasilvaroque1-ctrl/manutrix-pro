@@ -264,9 +264,11 @@ Tela branca em dispositivos móveis ao escanear QR Code dos equipamentos. Causad
 - frontend/src/pages/InspecoesPages.js (asset selector)
 
 ## POST-PILOTO BACKLOG
-1. P2: Remover AtivoDetailPage dead code (App.js linhas 1746-2365)
-2. P2: Inserir CNPJ nos Termos de Uso
-3. P2: Remover fallback Emergent Storage
-4. P2: Corrigir erro 500 intermitente `preview_numeracao` (digitos=null)
-5. P1: RC6.1 — Construtor de Seções da OS (Ondas 2 e 3)
-6. P3: Integrações ERP/SAP | IA Assistente
+1. P0: RC Estabilização Fase 4 — Wallpaper Real White Label
+2. P0: RC Estabilização Fase 5 — Diagnóstico e Otimização Performance
+3. P2: Remover AtivoDetailPage dead code (App.js linhas 1746-2365)
+4. P2: Inserir CNPJ nos Termos de Uso
+5. P2: Remover fallback Emergent Storage
+6. P2: Corrigir erro 500 intermitente `preview_numeracao` (digitos=null)
+7. P1: RC6.1 — Construtor de Seções da OS (Ondas 2 e 3)
+8. P3: Integrações ERP/SAP | IA Assistente
