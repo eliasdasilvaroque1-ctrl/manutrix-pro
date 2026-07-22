@@ -4587,16 +4587,18 @@ async def get_public_equipment_image(slug: str, token: str):
 
 @api_router.get("/ativos/{ativo_id}/qrcode/png")
 async def get_qr_png(ativo_id: str, user: Dict = Depends(get_current_user)):
-    """Generate QR Code PNG on demand."""
+    """Generate QR Code PNG on demand. URL recalculada via build_public_equipment_url."""
     ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     verify_org_access(user, ativo, "Ativo")
-    url = ativo.get("public_qr_url", "")
-    if not url:
-        raise HTTPException(status_code=400, detail="QR Code não disponível")
-    base = os.environ.get("REACT_APP_BACKEND_URL", os.environ.get("PUBLIC_URL", ""))
-    full_url = f"{base}{url}" if base else url
+    from routes.assets import build_public_equipment_url
+    try:
+        full_url = build_public_equipment_url(ativo)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not full_url:
+        raise HTTPException(status_code=400, detail="QR Code não disponível — slug/token ausente")
     import qrcode
     from io import BytesIO
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=20, border=4)
@@ -4612,16 +4614,18 @@ async def get_qr_png(ativo_id: str, user: Dict = Depends(get_current_user)):
 
 @api_router.get("/ativos/{ativo_id}/qrcode/svg")
 async def get_qr_svg(ativo_id: str, user: Dict = Depends(get_current_user)):
-    """Generate QR Code SVG on demand."""
+    """Generate QR Code SVG on demand. URL recalculada via build_public_equipment_url."""
     ativo = await db.ativos.find_one({"id": ativo_id, "deleted_at": None}, {"_id": 0})
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     verify_org_access(user, ativo, "Ativo")
-    url = ativo.get("public_qr_url", "")
-    if not url:
-        raise HTTPException(status_code=400, detail="QR Code não disponível")
-    base = os.environ.get("REACT_APP_BACKEND_URL", os.environ.get("PUBLIC_URL", ""))
-    full_url = f"{base}{url}" if base else url
+    from routes.assets import build_public_equipment_url
+    try:
+        full_url = build_public_equipment_url(ativo)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not full_url:
+        raise HTTPException(status_code=400, detail="QR Code não disponível — slug/token ausente")
     import qrcode
     import qrcode.image.svg
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=20, border=4)
@@ -4688,11 +4692,12 @@ async def regenerate_qr(ativo_id: str, user: Dict = Depends(get_current_user)):
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado")
     verify_org_access(user, ativo, "Ativo")
-    from routes.assets import _generate_public_qr_fields
+    from routes.assets import _generate_public_qr_fields, build_public_equipment_url
     new_fields = _generate_public_qr_fields(ativo.get("tag", ""), ativo.get("nome", ""))
     await db.ativos.update_one({"id": ativo_id}, {"$set": new_fields})
     await audit_log("regenerate_qr", "ativos", ativo_id, user, f"QR regenerado para {ativo.get('tag','')}")
-    return {"success": True, "public_qr_url": new_fields["public_qr_url"]}
+    computed_url = build_public_equipment_url({**ativo, **new_fields})
+    return {"success": True, "public_qr_url": computed_url}
 
 
 app.include_router(api_router)
@@ -4866,16 +4871,33 @@ async def run_migrations():
 
     # === PUBLIC QR CODE BACKFILL ===
     try:
-        from routes.assets import _generate_public_qr_fields
-        qr_updated = 0
-        qr_skipped = 0
+        from routes.assets import _generate_public_qr_fields, build_public_equipment_url, _get_public_app_url
+        qr_new = 0
+        qr_url_fixed = 0
+        qr_ok = 0
+        public_base = _get_public_app_url()
+        # 1) Ativos sem QR token — gerar novo
         async for ativo in db.ativos.find({"deleted_at": None, "$or": [{"public_qr_token": None}, {"public_qr_token": {"$exists": False}}]}, {"_id": 0, "id": 1, "tag": 1, "nome": 1}):
             fields = _generate_public_qr_fields(ativo.get('tag', ''), ativo.get('nome', ''))
             await db.ativos.update_one({"id": ativo['id']}, {"$set": fields})
-            qr_updated += 1
-        qr_existing = await db.ativos.count_documents({"deleted_at": None, "public_qr_token": {"$ne": None, "$exists": True}})
-        qr_skipped = qr_existing - qr_updated
-        logger.info(f"QR Code backfill: {qr_updated} updated, {qr_skipped} already had QR, total with QR: {qr_existing}")
+            qr_new += 1
+        # 2) Ativos com QR token — recalcular public_qr_url (preservar slug/token)
+        async for ativo in db.ativos.find(
+            {"deleted_at": None, "public_qr_token": {"$ne": None, "$exists": True}},
+            {"_id": 0, "id": 1, "public_slug": 1, "public_qr_token": 1, "public_qr_url": 1}
+        ):
+            expected_url = build_public_equipment_url(ativo) if ativo.get("public_slug") and ativo.get("public_qr_token") else ""
+            current_url = ativo.get("public_qr_url", "")
+            if current_url != expected_url and expected_url:
+                await db.ativos.update_one(
+                    {"id": ativo["id"]},
+                    {"$set": {"public_qr_url": expected_url, "public_qr_updated_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                qr_url_fixed += 1
+            else:
+                qr_ok += 1
+        total_qr = await db.ativos.count_documents({"deleted_at": None, "public_qr_token": {"$ne": None, "$exists": True}})
+        logger.info(f"QR Code backfill: {qr_new} novos, {qr_url_fixed} URLs corrigidas, {qr_ok} já corretas, total com QR: {total_qr}, PUBLIC_APP_URL: {public_base}")
         # Create indexes
         await db.ativos.create_index([("public_slug", 1), ("public_qr_token", 1)])
         await db.ativos.create_index("public_qr_token", unique=True, sparse=True)

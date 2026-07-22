@@ -2298,10 +2298,10 @@ const AtivoDetailPage = () => {
           <div className="glass-card p-5">
             <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-4">QR Code do Equipamento</h3>
             <div className="flex flex-col lg:flex-row gap-6 items-start">
-              {/* QR Preview */}
+              {/* QR Preview — usa public_qr_url absoluta do backend */}
               <div className="bg-white p-4 rounded-xl flex flex-col items-center gap-2 shrink-0">
                 {ativo.public_qr_url ? (
-                  <QRCodeSVG value={`${window.location.origin}${ativo.public_qr_url}`} size={180} level="H" />
+                  <QRCodeSVG value={ativo.public_qr_url} size={180} level="H" />
                 ) : (
                   <div className="w-[180px] h-[180px] bg-slate-200 rounded flex items-center justify-center"><QrCode size={48} className="text-slate-400" /></div>
                 )}
@@ -2313,10 +2313,10 @@ const AtivoDetailPage = () => {
                   <label className="text-xs text-slate-500 block mb-1">URL Pública</label>
                   <div className="flex items-center gap-2">
                     <code className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-emerald-400 flex-1 truncate" data-testid="qr-public-url">
-                      {ativo.public_qr_url ? `${window.location.origin}${ativo.public_qr_url}` : 'QR Code não gerado'}
+                      {ativo.public_qr_url || 'QR Code não gerado'}
                     </code>
                     {ativo.public_qr_url && (
-                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}${ativo.public_qr_url}`); toast.success('Link copiado!'); }}
+                      <button onClick={() => { navigator.clipboard.writeText(ativo.public_qr_url); toast.success('Link copiado!'); }}
                         className="btn-secondary text-xs px-3 py-2" data-testid="qr-copy-btn">Copiar</button>
                     )}
                   </div>

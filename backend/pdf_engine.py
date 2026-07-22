@@ -1028,8 +1028,8 @@ def generate_qr_label_pdf(ativos, empresa="MAINTRIX", modelo="etiqueta"):
     from io import BytesIO
     import qrcode
     import tempfile
+    from routes.assets import build_public_equipment_url
 
-    base_url = os.environ.get("REACT_APP_BACKEND_URL", os.environ.get("PUBLIC_URL", ""))
     pdf = FPDF('P', 'mm', 'A4')
     register_unicode_fonts(pdf)
 
@@ -1037,8 +1037,8 @@ def generate_qr_label_pdf(ativos, empresa="MAINTRIX", modelo="etiqueta"):
         pdf.add_page()
         tag = _safe(ativo.get('tag', ''), 30)
         nome = _safe(ativo.get('nome', ''), 60)
-        pub_url = ativo.get('public_qr_url', '')
-        full_url = f"{base_url}{pub_url}" if base_url and pub_url else pub_url
+        # URL recalculada via build_public_equipment_url — nunca confia no campo salvo
+        full_url = build_public_equipment_url(ativo)
         area = _safe(ativo.get('sector', {}).get('nome', '') if isinstance(ativo.get('sector'), dict) else '', 40)
         fab = _safe(ativo.get('fabricante', '') or '', 30)
         mod = _safe(ativo.get('modelo', '') or '', 30)
@@ -1172,8 +1172,7 @@ def generate_qr_batch_pdf(ativos, empresa="MAINTRIX", modelo="etiqueta", layout=
     from io import BytesIO
     import qrcode
     import tempfile
-
-    base_url = os.environ.get("REACT_APP_BACKEND_URL", os.environ.get("PUBLIC_URL", ""))
+    from routes.assets import build_public_equipment_url
 
     cols_rows = {"6_per_page": (2, 3), "8_per_page": (2, 4), "12_per_page": (3, 4)}
     cols, rows = cols_rows.get(layout, (2, 3))
@@ -1201,8 +1200,8 @@ def generate_qr_batch_pdf(ativos, empresa="MAINTRIX", modelo="etiqueta", layout=
 
         tag = _safe(ativo.get('tag', ''), 20)
         nome = _safe(ativo.get('nome', ''), 25)
-        pub_url = ativo.get('public_qr_url', '')
-        full_url = f"{base_url}{pub_url}" if base_url and pub_url else pub_url
+        # URL recalculada via build_public_equipment_url — nunca confia no campo salvo
+        full_url = build_public_equipment_url(ativo)
 
         # Draw cell border
         pdf.set_draw_color(200, 200, 200)

@@ -37,6 +37,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Identifica se a URL é de um endpoint público (não exige autenticação)
+function isPublicEndpoint(url) {
+  if (!url) return false;
+  const normalized = url.replace(/^https?:\/\/[^/]+/, '');
+  return normalized.startsWith('/api/public/') || normalized.startsWith('/public/');
+}
+
 // Response interceptor: auto-cache successful GET responses
 api.interceptors.response.use(
   (response) => {
@@ -48,11 +55,14 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    // 401 → force logout
+    // 401 → force logout, MAS não para endpoints públicos
     if (error.response?.status === 401) {
-      sessionStorage.removeItem('maintrix_token');
-      sessionStorage.removeItem('maintrix_user');
-      window.location.href = '/login';
+      const requestUrl = error.config?.url || '';
+      if (!isPublicEndpoint(requestUrl)) {
+        sessionStorage.removeItem('maintrix_token');
+        sessionStorage.removeItem('maintrix_user');
+        window.location.href = '/login';
+      }
       return Promise.reject(error);
     }
 

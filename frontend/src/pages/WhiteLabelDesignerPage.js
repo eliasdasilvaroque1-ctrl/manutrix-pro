@@ -507,7 +507,8 @@ export const QRLabelModal = ({ ativo, onClose }) => {
   const labelRef = useRef(null);
 
   const size = QR_LABEL_SIZES.find(s => s.id === selectedSize) || QR_LABEL_SIZES[2];
-  const portalUrl = `${window.location.origin}/portal/equipamento/${ativo.id}`;
+  // Usa public_qr_url absoluta do backend — nunca window.location.origin
+  const publicUrl = ativo.public_qr_url || '';
 
   const handlePrint = () => {
     const el = labelRef.current;
@@ -554,7 +555,7 @@ export const QRLabelModal = ({ ativo, onClose }) => {
                   <span style={{ fontSize: 10, color: '#64748b' }}>Prontuário do Equipamento</span>
                 </div>
                 <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                  <QRCodeSVG value={portalUrl} size={size.qrSize} level="H" bgColor="white" fgColor={b.cor_primaria || '#000'} />
+                  <QRCodeSVG value={publicUrl} size={size.qrSize} level="H" bgColor="white" fgColor={b.cor_primaria || '#000'} />
                 </div>
                 <div style={{ textAlign: 'center', marginBottom: 8 }}>
                   <p style={{ fontSize: 24, fontWeight: 800, fontFamily: 'monospace', color: b.cor_primaria }}>{ativo.tag}</p>
@@ -573,7 +574,7 @@ export const QRLabelModal = ({ ativo, onClose }) => {
               /* Compact Label */
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, fontFamily: 'Inter, Arial, sans-serif', height: size.h * 1.5, backgroundColor: 'white' }}>
                 <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                  <QRCodeSVG value={portalUrl} size={size.qrSize} level="M" bgColor="white" fgColor="#000" />
+                  <QRCodeSVG value={publicUrl} size={size.qrSize} level="M" bgColor="white" fgColor="#000" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                   {b.logo_url ? <img src={b.logo_url?.startsWith('http') ? b.logo_url : `${BACKEND_URL}${b.logo_url}`} alt="" style={{ height: size.fontSize * 2, objectFit: 'contain', marginBottom: 2 }} /> : <p style={{ fontSize: size.fontSize, fontWeight: 700, color: b.cor_primaria, marginBottom: 2 }}>{b.nome_empresa}</p>}

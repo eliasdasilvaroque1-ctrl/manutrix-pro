@@ -7,6 +7,8 @@ import uuid
 import json as json_lib
 import secrets
 import re
+import os
+import logging
 
 from deps import (
     db, get_current_user, check_admin_only, check_pcm_or_admin, check_write_permission,
@@ -19,9 +21,18 @@ from models import (
 )
 
 router = APIRouter()
+logger = logging.getLogger("maintrix.assets")
 
 
 # ============== PUBLIC QR HELPERS ==============
+
+def _get_public_app_url() -> str:
+    """Retorna PUBLIC_APP_URL sem barra final."""
+    url = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
+    if not url:
+        logger.warning("PUBLIC_APP_URL não configurada — QR Codes gerados sem domínio")
+    return url
+
 
 def _generate_slug(tag: str, nome: str) -> str:
     """Generate URL-safe slug from tag and name."""
@@ -38,15 +49,59 @@ def _generate_slug(tag: str, nome: str) -> str:
     return raw[:80] or f"equip-{uuid.uuid4().hex[:8]}"
 
 
-def _generate_public_qr_fields(tag: str, nome: str, base_url: str = "") -> dict:
-    """Generate all public QR fields for an ativo."""
+def build_public_equipment_url(asset: dict) -> str:
+    """
+    FONTE OFICIAL ÚNICA da URL pública do equipamento.
+    Sempre recalcula a partir de PUBLIC_APP_URL + public_slug + public_qr_token.
+    Nunca confia no campo public_qr_url salvo no banco.
+    """
+    slug = asset.get("public_slug", "")
+    token = asset.get("public_qr_token", "")
+    if not slug or not token:
+        return ""
+    base = _get_public_app_url()
+    url = f"{base}/equipamento/{slug}/{token}"
+    validate_public_qr_url(url)
+    return url
+
+
+def validate_public_qr_url(url: str) -> None:
+    """
+    Valida a URL pública antes de gerar QR Code.
+    Lança ValueError se a URL for inválida.
+    """
+    if not url:
+        raise ValueError("URL pública vazia — QR Code não pode ser gerado")
+    if not url.startswith("https://"):
+        raise ValueError(f"URL pública deve iniciar com https:// — recebido: {url[:50]}")
+    if "blob:" in url:
+        raise ValueError("URL pública não pode conter blob:")
+    if "localhost" in url:
+        raise ValueError("URL pública não pode conter localhost")
+    if " " in url:
+        raise ValueError("URL pública não pode conter espaços")
+    # Verifica estrutura: deve conter /equipamento/{slug}/{token}
+    if "/equipamento/" not in url:
+        raise ValueError(f"URL pública deve conter /equipamento/ — recebido: {url[:80]}")
+    parts = url.split("/equipamento/")
+    if len(parts) != 2 or "/" not in parts[1]:
+        raise ValueError(f"URL pública malformada: falta slug/token — {url[:80]}")
+    path_parts = parts[1].split("/")
+    if len(path_parts) < 2 or not path_parts[0] or not path_parts[1]:
+        raise ValueError(f"URL pública malformada: slug ou token vazio — {url[:80]}")
+
+
+def _generate_public_qr_fields(tag: str, nome: str) -> dict:
+    """Generate all public QR fields for an ativo. Sempre gera URL absoluta."""
     slug = _generate_slug(tag, nome)
     token = secrets.token_urlsafe(24)  # 32 chars, cryptographically secure
     now = datetime.now(timezone.utc).isoformat()
+    base = _get_public_app_url()
+    public_url = f"{base}/equipamento/{slug}/{token}"
     return {
         "public_slug": slug,
         "public_qr_token": token,
-        "public_qr_url": f"/equipamento/{slug}/{token}",
+        "public_qr_url": public_url,
         "public_qr_created_at": now,
         "public_qr_updated_at": now,
         "public_status": "nao_informado",

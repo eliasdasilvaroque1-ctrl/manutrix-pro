@@ -1,0 +1,62 @@
+{
+  "summary": "HOTFIX P0 QR URL Absoluta parcialmente validado. Backend 18/18 PASS: endpoints QR (PNG/SVG/PDF simples/etiqueta/placa/batch) codificam corretamente URL absoluta https://www.maintrix.com.br/equipamento/{slug}/{token}, decodificados via pyzbar/PyMuPDF. Rota pública GET /api/public/equipment/{slug}/{token} funciona sem auth. Interceptor Axios NÃO redireciona /api/public/ para /login. Rotas autenticadas sem regressão. PORÉM, encontrado BUG CRÍTICO no frontend: o QR exibido no header da tela de detalhe do ativo (rota /ativos/:id renderizada por AssetDossierPage.js) codifica a URL INTERNA autenticada 'https://procure-manutrix.preview.emergentagent.com/ativos/{id}' — NÃO a URL pública. O componente AtivoDetailPage em App.js (com a tab data-testid='qrcode-tab', 'qr-public-url', 'qr-copy-btn', 'qr-open-btn' e uso correto de ativo.public_qr_url) é código MORTO — nenhuma rota o utiliza. Rota /ativos/:id (App.js linha 3951) mapeia para AssetDossierPage.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AssetDossierPage.js (linha 49)",
+        "issue": "QR do header codifica URL INTERNA autenticada 'https://{origin}/ativos/{id}' (window.location.origin + rota /ativos/) em vez de ativo.public_qr_url. Valor real extraído via React fiber: 'https://procure-manutrix.preview.emergentagent.com/ativos/0f8972a8-72c6-4941-97af-06cd61171904'. Ao ser escaneado, redireciona para /login (rota autenticada) — reproduz exatamente o bug P0 que o hotfix deveria corrigir.",
+        "selector": "[data-testid='ativo-qr-code']",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "AtivoDetailPage (App.js linha 1746) — DEAD CODE",
+        "issue": "O componente com a QR tab (data-testid='qrcode-tab', 'qr-public-url', 'qr-copy-btn', 'qr-open-btn', 'qr-download-png', etc.) que usa ativo.public_qr_url corretamente é definido mas NUNCA é utilizado em nenhuma rota. Único uso em App.js:1746 (declaração). A rota /ativos/:id (linha 3951) usa AssetDossierPage. Todos os testes do problem_statement referentes a data-testid='qrcode-tab' são impossíveis de executar pois o componente não é renderizado em produção.",
+        "selector": "[data-testid='qrcode-tab']",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "QR scan do header do ativo (usuário final escaneia com câmera)",
+        "issue": "QR codificado leva para /ativos/{id} (rota autenticada), Axios interceptor detecta 401 nesta rota (NÃO é /api/public/) → sessionStorage limpo → redireciona para /login. Fix do PUBLIC_APP_URL + backfill não tem efeito porque frontend não usa ativo.public_qr_url na tela de detalhe.",
+        "affected_selectors": ["[data-testid='ativo-qr-code']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration115_qr_absolute_url.py",
+    "/app/test_reports/pytest/iteration115_results.xml"
+  ],
+  "action_items": [
+    "URGENTE: Corrigir /app/frontend/src/pages/AssetDossierPage.js linha 49: trocar QRCodeSVG value={`${window.location.origin}/ativos/${a.id}`} por value={a.public_qr_url || ''} (com condicional para não renderizar QR se public_qr_url ausente). O campo public_qr_url já vem no objeto ativo (validado via API GET /api/ativos e /api/ativos/{id}/dossie).",
+    "Decidir: (a) remover completamente AtivoDetailPage (dead code em App.js linhas 1746-2365) OU (b) migrar toda a tab QR Code (data-testid='qrcode-tab', 'qr-public-url', 'qr-copy-btn', 'qr-open-btn', 'qr-download-png/svg', 'qr-print-simples/etiqueta/placa', 'qr-regenerate-btn') para AssetDossierPage — recomendo (b) pois os testes especificados no problem_statement dependem desses data-testids.",
+    "Verificar outros locais que ainda usem window.location.origin ou /ativos/{id} para QR: grep -rn 'window.location.origin' /app/frontend/src (validar cada ocorrência).",
+    "Após fix, retestar com pytest /app/backend/tests/test_iteration115_qr_absolute_url.py + validação Playwright do QR na rota /ativos/:id."
+  ],
+  "critical_code_review_comments": [
+    "AssetDossierPage.js:49 — window.location.origin + /ativos/{id} embutido no QR viola diretamente a diretriz do hotfix P0. Fonte oficial da URL (build_public_equipment_url + PUBLIC_APP_URL + backfill) tem 0% de efeito no que o usuário vê/escaneia.",
+    "App.js:1746-2365 — AtivoDetailPage é dead code (~620 linhas). Contém toda a implementação do hotfix (QR tab, uso de ativo.public_qr_url, botões PDF/PNG/SVG) mas não é referenciada em nenhuma rota. Se a intenção era consolidar em AssetDossierPage, a migração NÃO foi feita.",
+    "Backend 100% conforme: build_public_equipment_url() em routes/assets.py é fonte única de verdade, PUBLIC_APP_URL do .env carregada corretamente, backfill (55 ativos ASTEC Cedro visíveis para admin) executado, todos os endpoints QR (PNG/SVG/PDF/batch) recalculam URL via build_public_equipment_url(). QR decodificado bit-a-bit confirma https://www.maintrix.com.br/equipamento/{slug}/{token}.",
+    "isPublicEndpoint() em api.js:41-45 corretamente skipa /api/public/ e /public/ do interceptor 401 — validado.",
+    "QRLabelModal.js:511 usa publicUrl = ativo.public_qr_url — OK, mas modal só abre via componente WhiteLabelDesignerPage (não testado runtime nesta iteração, código estático correto).",
+    "Rota pública /equipamento/:slug/:token carrega sem redirect para /login (validado em 2 URLs distintas)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration115_qr_absolute_url.py (novo — 18 test cases)"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 pytest com QR decoding via pyzbar/PyMuPDF)",
+    "frontend": "40% (rota pública OK, interceptor Axios OK, mas QR visível codifica URL errada e QR tab do hotfix não é renderizada)"
+  },
+  "test_credentials": "Validados de /app/memory/test_credentials.md — admin (test.admin@maintrix.com/admin123) e pcm (test.pcm@maintrix.com/pcm123). Ambos login API 200 OK.",
+  "seed_data_creation": "Nenhum — testes read-only + geração QR bytes.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Backend 100% OK — todos os endpoints QR (PNG/SVG/PDF simples/etiqueta/placa/batch) codificam URL absoluta correta https://www.maintrix.com.br/equipamento/{slug}/{token}, validado por decodificação bit-a-bit dos QRs. Bug crítico: /ativos/:id renderiza AssetDossierPage (não AtivoDetailPage). AssetDossierPage.js linha 49 hardcoda window.location.origin no QRCodeSVG value. O componente AtivoDetailPage em App.js (com toda a implementação correta do hotfix — data-testid qrcode-tab, qr-public-url, qr-copy-btn, etc.) é código morto. Após o fix do main agent, rodar: pytest /app/backend/tests/test_iteration115_qr_absolute_url.py + Playwright para verificar QR na rota /ativos/{ativo-id} decodifica para https://www.maintrix.com.br/equipamento/... Para decodificar QR renderizado, uso técnica de extração via React fiber (page.evaluate) — muito mais confiável que screenshot+pyzbar para QRs pequenos (64x64).",
+  "rca of the issue": "RCA do bug crítico frontend: O hotfix P0 foi implementado corretamente no backend (build_public_equipment_url + PUBLIC_APP_URL + backfill + endpoints QR + validate_public_qr_url). No frontend, o hotfix foi aplicado em AtivoDetailPage (App.js linha 1746) — mas essa componente NÃO está mapeada em nenhuma rota. A rota /ativos/:id usa AssetDossierPage (pages/AssetDossierPage.js) que ainda contém a linha 49 antiga: <QRCodeSVG value={`${window.location.origin}/ativos/${a.id}`} />. Ao escanear o QR do header do ativo, câmera abre https://procure-manutrix.preview.emergentagent.com/ativos/{id} → axios interceptor recebe 401 (URL não começa com /api/public/) → redireciona para /login. Mitigação: (1) Trocar linha 49 de AssetDossierPage.js para usar a.public_qr_url; (2) Adicionar cascata condicional se public_qr_url ausente/vazia (não renderizar QR ou mostrar placeholder); (3) Remover ou migrar AtivoDetailPage para consolidar em um único componente. Reprodução: login como admin, navegar até /ativos/0f8972a8-72c6-4941-97af-06cd61171904, inspecionar [data-testid='ativo-qr-code'] via React fiber, o value do QRCodeSVG é 'https://procure-manutrix.preview.emergentagent.com/ativos/0f8972a8-...' — deveria ser 'https://www.maintrix.com.br/equipamento/av-01-alimentador/Wb2xZ_y_eeAWO8Q8iLzjQJkH4sa_TuIu'."
+}
