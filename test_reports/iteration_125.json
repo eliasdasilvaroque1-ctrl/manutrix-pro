@@ -1,0 +1,35 @@
+{
+  "summary": "HOTFIX P0 — PROCEDIMENTO NO PDF DA OS validado end-to-end via pytest (24/24 passing). Todos os campos exigidos do procedimento aparecem no anexo do PDF quando a OS possui procedimento vinculado, e o anexo NÃO aparece quando não há procedimento. Verificações incluídas: (a) OS be9878f1 (sem procedimento) → exatamente 1 página, sem seção 'Procedimento Aplicável' vazia, sem cabeçalho de anexo, sem CNPJ/telefone/endereço fictícios. (b) OS ff2bb384 (com PROC-0001) → 2 páginas totais; página 1 contém resumo 'PROCEDIMENTO APLICÁVEL PROC-0001 — Troca de Rolamento em Motor Elétrico WEG' + 'Revisão: 03' + 'Consultar procedimento completo em anexo.'; página 2 é o ANEXO 1 — PROCEDIMENTO DE MANUTENÇÃO com IDENTIFICAÇÃO (Título=Troca de Rolamento em Motor Elétrico WEG, Código=PROC-0001, Revisão=03, Versão=1, Data da Revisão, Tempo Estimado=120 min), DESCRIÇÃO (Procedimento padrão para substituição de rolamentos em motores elétricos WEG), ETAPAS DE EXECUÇÃO numeradas 1..7 (Desenergizar/Remover acoplamento/Remover tampa/Extrair rolamento/Inspecionar eixo/Instalar rolamento novo/Remontar e testar), OBSERVAÇÕES DO PROCEDIMENTO (Utilizar EPI completo. Bloquear alimentação elétrica antes de iniciar). Seções sem dado no DB (EPIs, Ferramentas, Riscos, Bloqueios/LOTO, Critérios de Conclusão, Disciplina) corretamente ocultadas — comportamento condicional do procedure_annex funciona. Título da OS 'Troca do rolamento do alimentador' preservado (não substituído pelo nome do procedimento). Procedimento não duplicado (ANEXO 1 aparece exatamente 1x). (c) OS c8f9b1ea (campos vazios) → 1 página, Fabricante/Nº Série não renderizados com '-'. (d) QR de Ativos permanece funcional (GET /api/ativos/{id}/qrcode/png retorna 200 image/png com magic bytes válidos).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration125_procedure_annex_fields.py",
+    "/app/test_reports/pytest/iteration_125.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "pdf_engine.py:333-526 (procedure_annex) — Renderização condicional bem implementada: cada seção só aparece se o campo correspondente contém dados (linhas 367, 380, 386, 393, 405, 415, 428, 440, 451, 511, 518). PROC-0001 tem disciplina/EPIs/ferramentas/riscos/bloqueios/critérios=None e essas seções corretamente NÃO aparecem no anexo.",
+    "pdf_engine.py:356 — Título usa fallback proc.get('nome', proc.get('titulo', '')). PROC-0001 tem 'nome' populado e 'titulo'=None; funciona corretamente.",
+    "pdf_engine.py:404, 415, 439, 518 — Boas coalescências entre nomes alternativos de campos (alertas_seguranca/seguranca/riscos, epis/epi, bloqueios/loto/bloqueio_loto, criterios_conclusao/criterios/criterio_aceitacao) — cobertura robusta contra variações de schema.",
+    "server.py:3374-3402 — proc_for_annex usa snapshot se existir, senão faz fallback para db.procedimentos (linhas 3377-3380). Para OS ff2bb384, procedimento_snapshot=None e o fallback via procedimento_id=0ef8981b funciona. Comportamento correto.",
+    "server.py:3382-3402 — Seção 'Procedimento Aplicável' na página 1 é apenas um resumo (código + título + revisão + 'Consultar procedimento completo em anexo'). Correto — não duplica o anexo.",
+    "server.py:3482-3483 — Anexo só é adicionado se proc_for_annex E proc_id existirem; garante que OS sem procedimento não gera página vazia."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration125_procedure_annex_fields.py (novo — 24 testes cobrindo todos os campos do anexo)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "N/A (backend-only)"},
+  "test_credentials": "Admin: test.admin@maintrix.com / admin123",
+  "seed_data_creation": "Nenhum. Reutiliza OS existentes: be9878f1 (sem proc), ff2bb384 (com PROC-0001), c8f9b1ea (campos vazios).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Testa GET /api/ordens-servico/{id}/pdf?modo=digital com pymupdf (fitz). Fluxo: fetch → doc = fitz.open(stream=bytes, filetype='pdf') → page.get_text() por página. Section titles são renderizados em UPPERCASE via section_title(); use annex_upper = text.upper() para case-insensitive assertions. Cabe lembrar que 'FERRAMENTAS' aparece no annex apenas como section title, MAS 'Ferramentas separadas' está na página 1 como item de checklist da 'Preparação da Intervenção' — não confundir. PROC-0001 tem apenas: codigo, nome, revisao, descricao, tempo_estimado_minutos, observacoes, etapas (7); demais campos são None e não devem aparecer.",
+  "rca of the issue": "Sem bug reportado. Toda a cadeia HOTFIX P0 funciona: server.py:3377-3383 resolve procedimento (snapshot ou fallback por id), server.py:3382-3402 renderiza resumo na página 1, server.py:3482-3483 chama pdf.procedure_annex apenas se houver procedimento, pdf_engine.py:333-526 renderiza cada seção condicionalmente. Falhas iniciais em 2 testes (test_page1_summary_reference e test_annex_contains_observacoes) foram problemas dos assertions (case-sensitivity contra UPPERCASE do section_title), corrigidos nos próprios testes — não bugs de aplicação. Total run 30-32s inclui login (com bcrypt) + 3 fetches de PDF (~10s cada devido à geração server-side com fonts embutidas)."
+}
