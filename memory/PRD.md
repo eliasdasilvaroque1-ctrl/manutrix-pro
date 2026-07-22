@@ -1,12 +1,56 @@
 # MAINTRIX ENTERPRISE — PRD
 
-## Status: HOTFIX P0 CONCLUÍDO — QR Code Público estável
-## Versao: pilot-astec-v1.2.1-hotfix
+## Status: HOTFIX P0 QR URLs CORRIGIDO — PRONTO PARA HOMOLOGAÇÃO
+## Versao: pilot-astec-v1.2.2-hotfix
 ## Domínio: https://app.maintrix.com.br
 
 ---
 
-## HOTFIX P0 — Tela Branca QR Code Público (21/07/2026)
+## HOTFIX P0.2 — QR Code Redirecionando para Login e URL Inválida (22/07/2026)
+
+### Problema
+QR Codes codificavam URLs internas autenticadas (`/ativos/{id}`) e relativas, fazendo com que câmeras de celular abrissem a página de login ou interpretassem o QR como pesquisa.
+
+### Causa Raiz
+1. `public_qr_url` armazenado no banco como rota relativa (`/equipamento/{slug}/{token}`)
+2. Frontend usava `window.location.origin` para montar URL (domínio errado em preview/admin)
+3. Backend PNG/SVG/PDF usava `REACT_APP_BACKEND_URL` (URL da API, não do frontend)
+4. `AssetDossierPage.js` usava `window.location.origin + /ativos/{id}` (rota interna)
+5. `QRLabelModal` usava `/portal/equipamento/{id}` (rota interna com ID)
+
+### Solução Implementada
+1. **`build_public_equipment_url(asset)`** — Função centralizada única em `routes/assets.py`
+2. **`PUBLIC_APP_URL=https://www.maintrix.com.br`** no backend `.env`
+3. **Validação de URL** (`validate_public_qr_url`) antes de gerar QR
+4. **Todos os consumidores corrigidos**: PNG, SVG, PDF (3 modelos), Batch PDF (6/8/12 por folha), header do ativo, tab QR Code, QRLabelModal
+5. **Interceptor Axios** — `isPublicEndpoint()` skip 401 redirect para `/api/public/`
+6. **Backfill idempotente** — 62 URLs corrigidas para absoluta (tokens preservados)
+7. **Tab QR Code migrada** de código morto (App.js) para `AssetDossierPage.js`
+
+### Arquivos Modificados
+- `backend/.env` — Adicionado `PUBLIC_APP_URL`
+- `backend/routes/assets.py` — `build_public_equipment_url()`, `validate_public_qr_url()`, `_generate_public_qr_fields()` com URL absoluta
+- `backend/server.py` — QR endpoints usam `build_public_equipment_url()`, backfill com recálculo
+- `backend/pdf_engine.py` — Usa `build_public_equipment_url()` (sem `REACT_APP_BACKEND_URL`)
+- `frontend/src/pages/AssetDossierPage.js` — Header QR + Tab QR Code completa
+- `frontend/src/pages/WhiteLabelDesignerPage.js` — QRLabelModal usa `public_qr_url`
+- `frontend/src/App.js` — Tab QR usa `public_qr_url` direto
+- `frontend/src/lib/api.js` — `isPublicEndpoint()` + interceptor skip
+
+### Testes: 33/33 PASS (18 backend + 15 frontend)
+- Header QR codifica `https://www.maintrix.com.br/equipamento/...` ✅
+- Tab QR Code com todos os botões (copiar, abrir, download, imprimir) ✅
+- PNG/SVG/PDF decodificados confirmam URL absoluta ✅
+- Batch PDF (6 QRs) todos válidos ✅
+- API pública sem Authorization → 200 ✅
+- Rota frontend pública sem login ✅
+- Nenhum QR contém blob:, localhost, rota interna ✅
+- Interceptor Axios skip para /api/public/ ✅
+- Rotas autenticadas sem regressão ✅
+
+---
+
+## HOTFIX P0.1 — Tela Branca QR Code Público (21/07/2026)
 
 ### Problema
 Tela branca em dispositivos móveis ao escanear QR Code dos equipamentos. Causado por `React.lazy()` + `ChunkLoadError` após novos deploys (chunks JS com hashes desatualizados no cache do Service Worker).
