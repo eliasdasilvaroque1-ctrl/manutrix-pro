@@ -758,6 +758,7 @@ const LoginPage = () => {
   const { login } = useAuth();
   const { branding, organizations, selectOrg, orgId, loadOrganizations } = useBranding();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   // Determine org source for UX clarity
@@ -860,7 +861,10 @@ const LoginPage = () => {
         login(response.data);
         toast.success('Login realizado!');
         const userRole = response.data.user?.role;
-        navigate(userRole === 'visualizador' || userRole === 'viewer' ? '/consulta' : '/');
+        // Restaurar destino original (ex: /os/{id} escaneado via QR)
+        const from = location.state?.from;
+        const defaultRoute = (userRole === 'visualizador' || userRole === 'viewer') ? '/consulta' : '/';
+        navigate(from || defaultRoute, { replace: true });
       }
     } catch (error) {
       toast.error(normalizeError(error));
@@ -3480,7 +3484,7 @@ const OSDetailPage = () => {
                             Li e estou ciente
                           </button>
                     )}
-                    <button onClick={() => window.open(`/biblioteca?view=${doc.id}`, '_blank', 'noopener')} className="text-xs text-blue-400 hover:text-blue-300">Visualizar</button>
+                    <button onClick={() => navigate(`/biblioteca?view=${doc.id}`)} className="text-xs text-blue-400 hover:text-blue-300" data-testid={`view-doc-${doc.id}`}>Visualizar</button>
                   </div>
                 </div>
               );

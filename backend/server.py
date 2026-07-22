@@ -3264,7 +3264,10 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     is_manual = modo == 'manual'
     logo_path = await fetch_file(logo_url, 'logo')
     numero = os_doc.get('numero', os_id[:12])
-    qr_path = make_qr(f"{os.environ.get('APP_URL', '')}/os/{os_id}")
+    # QR da OS: URL absoluta oficial usando PUBLIC_APP_URL (rota autenticada)
+    public_base = os.environ.get('PUBLIC_APP_URL', '').rstrip('/')
+    qr_url = f"{public_base}/os/{os_id}" if public_base else f"/os/{os_id}"
+    qr_path = make_qr(qr_url)
 
     pdf = MaintrixPDF(empresa=empresa, doc_title=f"Ordem de Servico {numero}", logo_path=logo_path, qr_path=qr_path, cor_primaria=cor, modo_manual=is_manual, emissor_nome=user.get('nome', ''), versao='v5.2.0', local_trabalho=local_trabalho)
     # Apply custom layout from OS snapshot or org settings

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useNavigate, Navigate, useLocation } from "react-router-dom";
 import { Plus, Clock, Calendar, Wrench, AlertTriangle, Filter, CheckCircle, XCircle, Activity, Edit, Trash2, Play, Pause, Target, ArrowLeft, Box, Building, ChevronRight, ClipboardCheck, Cog, Copy, Download, Edit3, Factory, FileText, Layers, List, Lock, MapPin, RefreshCw, Save, Search, Shield, Sparkles, Upload, User, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, useAuth } from "../lib/api";
@@ -1256,8 +1256,9 @@ const AdminUsuariosPage = () => {
 
 const ProtectedRoute = ({ children, allow }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Cog size={48} className="text-brand animate-spin" /></div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
   if (allow && !allow.includes(user.role)) {
     return (
       <div>
