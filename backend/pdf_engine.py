@@ -492,15 +492,7 @@ class MaintrixPDF(FPDF):
             self.text_block(str(obs))
             self.line_sep()
 
-        # Observation area for manual filling
-        self.section_title('Observa\u00e7\u00f5es da Execu\u00e7\u00e3o')
-        self.manual_box('Anomalias encontradas, recomenda\u00e7\u00f5es e materiais adicionais:', 35)
-
-        # Signatures at end of last useful page
-        y = self.get_y()
-        if y > 235:
-            self.add_page()
-        self.signature_block([('Executor', ''), ('Supervisor', '')])
+        # Fim do anexo — obs e assinaturas ficam no corpo principal da OS
 
     def _bullet_item(self, text):
         """Render a bullet-pointed item."""
@@ -788,7 +780,7 @@ class MaintrixPDF(FPDF):
 
     def _render_default_header(self):
         self.set_fill_color(15, 23, 42)
-        self.rect(0, 0, 210, 24, 'F')
+        self.rect(0, 0, 210, 26, 'F')
         x = 8
         if self.logo_path:
             try:
@@ -796,30 +788,26 @@ class MaintrixPDF(FPDF):
                 x = 30
             except Exception:
                 pass
-        # Client name (primary)
-        self.set_font('DejaVu', 'B', 14)
+        # Nome da empresa (primário)
+        self.set_font('DejaVu', 'B', 13)
         self.set_text_color(255, 255, 255)
-        self.set_xy(x, 3)
-        self.cell(100, 7, self.empresa)
-        # Local de trabalho (secondary)
+        self.set_xy(x, 2)
+        self.cell(120, 6, self.empresa)
+        # Unidade (secundário)
         if self.local_trabalho and self.local_trabalho != '-':
             self.set_font('DejaVu', '', 8)
-            self.set_xy(x, 11)
-            self.cell(100, 4, self.local_trabalho)
-            self.set_font('DejaVu', '', 7.5)
-            self.set_xy(x, 16)
-            self.cell(100, 4, self.doc_title)
-        else:
-            self.set_font('DejaVu', '', 8)
-            self.set_xy(x, 12)
-            self.cell(100, 5, self.doc_title)
-        if self.qr_path:
-            try:
-                self.image(self.qr_path, 178, 1, 22, 22)
-            except Exception:
-                pass
+            self.set_text_color(200, 210, 220)
+            self.set_xy(x, 9)
+            self.cell(120, 4, f"Unidade: {self.local_trabalho}")
+        # Título do documento (OS nº)
+        self.set_font('DejaVu', 'B', 9)
+        self.set_text_color(self.cor_r, self.cor_g, self.cor_b)
+        y_title = 15 if (self.local_trabalho and self.local_trabalho != '-') else 10
+        self.set_xy(x, y_title)
+        self.cell(120, 5, self.doc_title)
+        # Barra de cor primária
         self.set_fill_color(self.cor_r, self.cor_g, self.cor_b)
-        self.rect(0, 24, 210, 1.5, 'F')
+        self.rect(0, 26, 210, 1.5, 'F')
 
     def _render_custom_header(self, cab):
         self.set_fill_color(15, 23, 42)

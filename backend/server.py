@@ -3285,173 +3285,177 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     # QR da OS: oculto no cabeçalho do PDF (Pré-Piloto). QR de Ativos permanece ativo.
     qr_path = None
 
-    pdf = MaintrixPDF(empresa=empresa, doc_title=f"Ordem de Servico {numero}", logo_path=logo_path, qr_path=None, cor_primaria=cor, modo_manual=is_manual, emissor_nome=user.get('nome', ''), versao='v5.2.0', local_trabalho=local_trabalho)
-    # Apply custom layout from OS snapshot or org settings
-    layout_snap = os_doc.get('layout_snapshot')
-    if layout_snap:
-        if layout_snap.get('cabecalho_snapshot'):
-            pdf.custom_header_from_layout(layout_snap['cabecalho_snapshot'])
-        if layout_snap.get('rodape_snapshot'):
-            pdf.custom_footer_from_layout(layout_snap['rodape_snapshot'])
+    pdf = MaintrixPDF(empresa=empresa, doc_title=f"ORDEM DE SERVICO N. {numero}", logo_path=logo_path, qr_path=None, cor_primaria=cor, modo_manual=is_manual, emissor_nome=user.get('nome', ''), versao='v5.2.0', local_trabalho=local_trabalho)
+    # Pré-Piloto: NÃO aplicar layout_snapshot (contém dados fictícios de teste do Construtor Visual).
+    # Usar header/footer padrão com dados reais da organização.
     pdf.alias_nb_pages()
     pdf.add_page()
 
-    # EQUIPMENT
-    pdf.section_title('Equipamento', 28)
+    # ═══════ TÍTULO DA INTERVENÇÃO (destaque) ═══════
+    pdf.set_font('DejaVu', 'B', 10); pdf.set_text_color(15, 23, 42)
+    pdf.set_xy(10, 30); pdf.cell(190, 5, _safe(os_doc.get('titulo',''), 90))
+    desc = os_doc.get('descricao', '')
+    if desc:
+        pdf.set_y(36)
+        pdf.text_block(desc)
+    pdf.set_y(pdf.get_y() + 1); pdf.line_sep()
+
+    # ═══════ EQUIPAMENTO (compacto, oculta vazios) ═══════
+    pdf.section_title('Equipamento')
     cy = pdf.get_y()
     pdf.field_pair('TAG', (ativo or {}).get('tag'), 10, cy)
     pdf.field_pair('Equipamento', (ativo or {}).get('nome'), 105, cy)
-    cy += 11
-    pdf.field_pair('Tipo', (ativo or {}).get('tipo_equipamento'), 10, cy)
+    cy += 9
+    tipo_equip = (ativo or {}).get('tipo_equipamento')
     sec = (ativo or {}).get('sector', {})
-    pdf.field_pair('Local', sec.get('nome') if isinstance(sec, dict) else str(sec or ''), 105, cy)
-    cy += 11
-    pdf.field_pair('Fabricante', (ativo or {}).get('fabricante'), 10, cy)
-    pdf.field_pair('N\u00ba S\u00e9rie', (ativo or {}).get('numero_serie'), 105, cy)
-    pdf.set_y(cy + 13); pdf.line_sep()
+    local_nome = sec.get('nome') if isinstance(sec, dict) else str(sec or '')
+    if tipo_equip or local_nome:
+        if tipo_equip: pdf.field_pair('Tipo', tipo_equip, 10, cy)
+        if local_nome: pdf.field_pair('Local', local_nome, 105, cy)
+        cy += 9
+    fabricante = (ativo or {}).get('fabricante')
+    num_serie = (ativo or {}).get('numero_serie')
+    if fabricante or num_serie:
+        if fabricante: pdf.field_pair('Fabricante', fabricante, 10, cy)
+        if num_serie: pdf.field_pair('Nº Série', num_serie, 105, cy)
+        cy += 9
+    pdf.set_y(cy + 2); pdf.line_sep()
 
-    # OS INFO
-    pdf.section_title('Informa\u00e7\u00f5es da OS')
+    # ═══════ INFORMAÇÕES DA OS (compacto) ═══════
+    pdf.section_title('Informações da OS')
     cy = pdf.get_y()
-    tipo_map = {'corretiva':'Corretiva','preventiva':'Preventiva','preditiva':'Preditiva','melhoria':'Melhoria','lubrificacao':'Lubrifica\u00e7\u00e3o','limpeza_organizacao':'Limpeza/Org.'}
-    prio_map = {'baixa':'BAIXA','media':'M\u00c9DIA','alta':'ALTA','critica':'CR\u00cdTICA'}
+    tipo_map = {'corretiva':'Corretiva','preventiva':'Preventiva','preditiva':'Preditiva','melhoria':'Melhoria','lubrificacao':'Lubrificação','limpeza_organizacao':'Limpeza/Org.','preparacao_material':'Prep. Material','fabricacao_melhorias':'Fabricação/Melhorias'}
+    prio_map = {'baixa':'BAIXA','media':'MÉDIA','alta':'ALTA','critica':'CRÍTICA','emergencia':'EMERGÊNCIA'}
     pdf.field_pair('Tipo', tipo_map.get(os_doc.get('tipo',''), os_doc.get('tipo','')), 10, cy)
     pdf.field_pair('Prioridade', prio_map.get(os_doc.get('prioridade',''), os_doc.get('prioridade','')), 105, cy)
-    cy += 11
-    pdf.field_pair('Disciplina', (os_doc.get('disciplina') or '').replace('mecanica', 'Mec\u00e2nica').replace('eletrica', 'El\u00e9trica').replace('instrumentacao', 'Instrumenta\u00e7\u00e3o').capitalize(), 10, cy)
+    cy += 9
+    pdf.field_pair('Disciplina', (os_doc.get('disciplina') or '').replace('mecanica', 'Mecânica').replace('eletrica', 'Elétrica').replace('instrumentacao', 'Instrumentação').replace('lubrificacao', 'Lubrificação').capitalize(), 10, cy)
     pdf.field_pair('Status', (os_doc.get('status') or '').replace('_',' ').capitalize(), 105, cy)
-    cy += 11
-    pdf.field_pair('Origem', (os_doc.get('origem') or '').replace('_',' ').capitalize(), 10, cy)
-    pdf.field_pair('Equip. Parado', 'Sim' if os_doc.get('equipamento_parado') else 'N\u00e3o', 105, cy)
-    pdf.set_y(cy + 13); pdf.line_sep()
+    cy += 9
+    pdf.field_pair('Equip. Parado', 'Sim' if os_doc.get('equipamento_parado') else 'Não', 10, cy)
+    da = (os_doc.get('data_abertura') or os_doc.get('created_at') or '')[:16].replace('T',' ')
+    pdf.field_pair('Data Abertura', da, 105, cy)
+    cy += 9
+    dp = (os_doc.get('data_planejada') or '')[:10]
+    di = (os_doc.get('data_inicio') or '')[:16].replace('T',' ')
+    if dp: pdf.field_pair('Data Planejada', dp, 10, cy)
+    if di: pdf.field_pair('Início Execução', di, 105, cy)
+    if dp or di: cy += 9
+    df = (os_doc.get('data_conclusao') or '')[:16].replace('T',' ')
+    tempo = os_doc.get('tempo_execucao_minutos')
+    if df: pdf.field_pair('Conclusão', df, 10, cy)
+    if tempo: pdf.field_pair('Duração', f"{tempo} min", 105, cy)
+    if df or tempo: cy += 9
+    pdf.set_y(cy + 2); pdf.line_sep()
 
-    # TÍTULO DA INTERVENÇÃO (independente do procedimento)
-    pdf.section_title('T\u00edtulo da Interven\u00e7\u00e3o')
-    pdf.set_font('DejaVu', 'B', 9); pdf.set_text_color(15, 23, 42)
-    pdf.set_xy(10, pdf.get_y()); pdf.cell(190, 5, _safe(os_doc.get('titulo',''), 80))
-    pdf.set_y(pdf.get_y() + 6)
-    desc = os_doc.get('descricao', '')
-    if desc: pdf.text_block(desc)
-    elif is_manual: pdf.manual_box('Descri\u00e7\u00e3o do servi\u00e7o:', 20)
-    pdf.line_sep()
-
-    # TEAM
+    # ═══════ EQUIPE (compacto) ═══════
     pdf.section_title('Equipe')
     cy = pdf.get_y()
     resp_nome = responsavel['nome'] if responsavel else ''
-    pdf.field_pair('Respons\u00e1vel', resp_nome, 10, cy)
-    pdf.field_pair('Turno', (responsavel or {}).get('turno'), 105, cy)
-    cy += 11
-    pdf.field_pair('Executantes', ', '.join(u['nome'] for u in equipe_batch) if equipe_batch else '', 10, cy, w=190)
-    pdf.set_y(cy + 13); pdf.line_sep()
+    pdf.field_pair('Responsável', resp_nome if resp_nome else None, 10, cy)
+    turno = (responsavel or {}).get('turno')
+    if turno: pdf.field_pair('Turno', turno, 105, cy)
+    cy += 9
+    equipe_str = ', '.join(u['nome'] for u in equipe_batch) if equipe_batch else ''
+    if equipe_str:
+        pdf.field_pair('Executantes', equipe_str, 10, cy, w=190)
+        cy += 9
+    pdf.set_y(cy + 2); pdf.line_sep()
 
-    # DATES
-    pdf.section_title('Datas e Tempos')
-    cy = pdf.get_y()
-    da = (os_doc.get('data_abertura') or os_doc.get('created_at') or '')[:16].replace('T',' ')
-    di = (os_doc.get('data_inicio') or '')[:16].replace('T',' ')
-    df = (os_doc.get('data_conclusao') or '')[:16].replace('T',' ')
-    pdf.field_pair('Data Abertura', da, 10, cy)
-    pdf.field_pair('Hora Inicial', di if di else None, 105, cy)
-    cy += 11
-    pdf.field_pair('Hora Final', df if df else None, 10, cy)
-    tempo = os_doc.get('tempo_execucao_minutos')
-    pdf.field_pair('Dura\u00e7\u00e3o', f"{tempo} min" if tempo else None, 105, cy)
-    pdf.set_y(cy + 13); pdf.line_sep()
+    # PROCEDURE (inline do corpo da OS — etapas embutidas)
+    if os_doc.get('procedimento'):
+        pdf.procedure_section(os_doc.get('procedimento'), manual=is_manual)
 
-    # PROCEDURE
-    pdf.procedure_section(os_doc.get('procedimento'), manual=is_manual)
+    # SAFETY (inline)
+    if os_doc.get('seguranca'):
+        pdf.safety_section(os_doc.get('seguranca'), manual=is_manual)
 
-    # SAFETY
-    pdf.safety_section(os_doc.get('seguranca'), manual=is_manual)
-
-    # MATERIALS
-    all_mat = (os_doc.get('materiais') or []) + ativo_materiais
-    if all_mat or is_manual:
-        pdf.section_title('Materiais e Pe\u00e7as')
-        if all_mat:
-            cy = pdf.get_y()
-            pdf.set_font('DejaVu', 'B', 7); pdf.set_text_color(100, 116, 139)
-            pdf.set_xy(10, cy); pdf.cell(75, 4, 'Material')
-            pdf.set_xy(85, cy); pdf.cell(20, 4, 'Codigo')
-            pdf.set_xy(110, cy); pdf.cell(15, 4, 'Qtd')
-            cy += 5
-            for m in all_mat[:15]:
-                if cy > 270: pdf.add_page(); cy = 30
-                pdf.set_font('DejaVu', '', 7.5); pdf.set_text_color(30, 41, 59)
-                pdf.set_xy(10, cy); pdf.cell(75, 4, _safe(m.get('nome', m.get('item_nome', '')), 38))
-                pdf.set_xy(85, cy); pdf.cell(20, 4, _safe(m.get('codigo', ''), 12))
-                pdf.set_xy(110, cy); pdf.cell(15, 4, _safe(str(m.get('quantidade', '')), 6))
-                cy += 5
-            pdf.set_y(cy + 2)
-        elif is_manual:
-            pdf.manual_box('Listar materiais utilizados:', 18)
-        pdf.line_sep()
-
-    # PROCEDIMENTO OPERACIONAL (inline summary)
+    # PROCEDIMENTO OPERACIONAL VINCULADO
     proc_id = os_doc.get('procedimento_id')
     proc_snapshot = os_doc.get('procedimento_snapshot')
     proc_for_annex = None
     if proc_id:
-        # Use snapshot if available (preserves version at time of link), else fetch live
         proc_for_annex = proc_snapshot or await db.procedimentos.find_one({"id": proc_id, "deleted_at": None}, {"_id": 0})
         if not proc_for_annex:
             proc_for_annex = await db.procedimentos_padrao.find_one({"id": proc_id, "deleted_at": None}, {"_id": 0})
 
     if proc_for_annex:
-        pdf.section_title('Procedimento Aplic\u00e1vel')
+        pdf.section_title('Procedimento Aplicável')
         pdf.set_font("DejaVu", "B", 9)
         pdf.set_text_color(15, 23, 42)
         titulo_proc = proc_for_annex.get("nome", proc_for_annex.get("titulo", ""))
         codigo_proc = proc_for_annex.get("codigo", "")
-        revisao_proc = proc_for_annex.get("revisao", "01")
+        revisao_proc = proc_for_annex.get("revisao", "")
+        label_proc = f'{codigo_proc} — {titulo_proc}' if codigo_proc else titulo_proc
         pdf.set_xy(10, pdf.get_y())
-        pdf.cell(0, 5, _safe(f'{codigo_proc} \u2014 {titulo_proc}', 100), ln=True)
-        pdf.set_font("DejaVu", "", 7.5)
-        pdf.set_text_color(100, 116, 139)
-        pdf.cell(0, 4, f'Revis\u00e3o: {revisao_proc}', ln=True)
-        pdf.ln(2)
-        # Instruction text
-        pdf.set_font("DejaVu", "I", 8)
+        pdf.cell(0, 5, _safe(label_proc, 100), ln=True)
+        if revisao_proc:
+            pdf.set_font("DejaVu", "", 7.5)
+            pdf.set_text_color(100, 116, 139)
+            pdf.cell(0, 4, f'Revisão: {revisao_proc}', ln=True)
+        pdf.ln(1)
+        pdf.set_font("DejaVu", "I", 7.5)
         pdf.set_text_color(80, 80, 80)
         pdf.set_xy(10, pdf.get_y())
-        pdf.multi_cell(190, 4, 'Ler e seguir integralmente o procedimento apresentado na p\u00e1gina seguinte antes e durante a execu\u00e7\u00e3o.')
+        pdf.multi_cell(190, 4, 'Consultar procedimento completo em anexo.')
         pdf.ln(1)
         pdf.line_sep()
 
-    # PREPARAÇÃO DA INTERVENÇÃO
-    pdf.section_title('Prepara\u00e7\u00e3o da Interven\u00e7\u00e3o')
+    # MATERIAIS (só se existem)
+    all_mat = (os_doc.get('materiais') or []) + ativo_materiais
+    if all_mat:
+        pdf.section_title('Materiais e Peças')
+        cy = pdf.get_y()
+        pdf.set_font('DejaVu', 'B', 7); pdf.set_text_color(100, 116, 139)
+        pdf.set_xy(10, cy); pdf.cell(75, 4, 'Material')
+        pdf.set_xy(85, cy); pdf.cell(20, 4, 'Codigo')
+        pdf.set_xy(110, cy); pdf.cell(15, 4, 'Qtd')
+        cy += 5
+        for m in all_mat[:15]:
+            if cy > 270: pdf.add_page(); cy = 30
+            pdf.set_font('DejaVu', '', 7.5); pdf.set_text_color(30, 41, 59)
+            pdf.set_xy(10, cy); pdf.cell(75, 4, _safe(m.get('nome', m.get('item_nome', '')), 38))
+            pdf.set_xy(85, cy); pdf.cell(20, 4, _safe(m.get('codigo', ''), 12))
+            pdf.set_xy(110, cy); pdf.cell(15, 4, _safe(str(m.get('quantidade', '')), 6))
+            cy += 5
+        pdf.set_y(cy + 1)
+        pdf.line_sep()
+    elif is_manual:
+        pdf.section_title('Materiais e Peças')
+        pdf.manual_box('Listar materiais utilizados:', 14)
+        pdf.line_sep()
+
+    # PREPARAÇÃO DA INTERVENÇÃO (compacto)
+    pdf.section_title('Preparação da Intervenção')
     prep_items = [
-        'Materiais separados',
-        'Ferramentas separadas',
-        'Bloqueio / LOTO dispon\u00edvel',
-        'Permiss\u00e3o de Trabalho emitida',
-        '\u00c1rea liberada',
-        'EPI verificado',
+        'Materiais separados', 'Ferramentas separadas',
+        'Bloqueio / LOTO disponível', 'Permissão de Trabalho emitida',
+        'Área liberada', 'EPI verificado',
     ]
     cy = pdf.get_y()
-    for item in prep_items:
-        if cy > 270:
-            pdf.add_page()
-            cy = 30
-        # Draw checkbox
+    # Renderizar em 2 colunas para economizar espaço
+    for i, item in enumerate(prep_items):
+        col_x = 12 if i % 2 == 0 else 108
+        row_y = cy + (i // 2) * 5
+        if row_y > 270: pdf.add_page(); cy = 30; row_y = cy + (i // 2) * 5
         pdf.set_draw_color(160, 160, 160)
-        pdf.rect(12, cy + 0.5, 3.5, 3.5)
-        pdf.set_font('DejaVu', '', 8)
+        pdf.rect(col_x, row_y + 0.5, 3, 3)
+        pdf.set_font('DejaVu', '', 7.5)
         pdf.set_text_color(30, 41, 59)
-        pdf.set_xy(18, cy)
-        pdf.cell(0, 4.5, item)
-        cy += 6
-    pdf.set_y(cy + 1)
-    pdf.manual_box('Observa\u00e7\u00f5es da prepara\u00e7\u00e3o:', 12)
+        pdf.set_xy(col_x + 4, row_y)
+        pdf.cell(85, 4, item)
+    pdf.set_y(cy + ((len(prep_items) + 1) // 2) * 5 + 2)
+    if is_manual:
+        pdf.manual_box('Obs. da preparação:', 8)
     pdf.line_sep()
 
-    # OBSERVATIONS (enlarged for manual filling)
-    pdf.section_title('Observa\u00e7\u00f5es da Execu\u00e7\u00e3o')
+    # OBSERVAÇÕES DA EXECUÇÃO (compacto)
+    pdf.section_title('Observações da Execução')
     obs = os_doc.get('observacoes') or os_doc.get('servicos_realizados', '')
     if obs:
         pdf.text_block(obs)
-    pdf.manual_box('Anomalias encontradas, recomenda\u00e7\u00f5es e materiais adicionais utilizados:' if is_manual else '', 25)
+    box_h = 18 if is_manual else 12
+    pdf.manual_box('Anomalias, recomendações e materiais adicionais:' if is_manual else '', box_h)
     pdf.line_sep()
 
     # PHOTOS
@@ -3464,7 +3468,7 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     if campos_defs or (is_manual and campos_defs):
         pdf.custom_fields_section(campos_defs, campos_vals, manual=is_manual)
 
-    # SIGNATURES (custom or default)
+    # SIGNATURES (sempre na OS principal)
     ass_dados = os_doc.get('assinaturas_dados', [])
     if ass_dados:
         pdf.custom_signature_blocks(assinaturas_dados=ass_dados)

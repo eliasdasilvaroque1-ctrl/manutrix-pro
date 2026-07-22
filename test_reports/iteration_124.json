@@ -1,0 +1,39 @@
+{
+  "summary": "PDF OS Correção (Modo Econômico) validado end-to-end via pytest (24/24 passing). Verificações: (1) OS sem procedimento be9878f1 — header 'ASTEC DO BRASIL', 'Unidade: UNIDADE CEDRO', número OS visível, título 'Troca do rolamento do alimentador' preservado (compartilhado com OS ff2bb384 — na be9878f1 é 'Substituição de rolamentos do motor principal'), SEM CNPJ 12.345.678, SEM 'MAINTRIX INT LTDA', SEM telefone (11) 5555-1234, SEM 'Rua Integracao', SEM QR (0 imagens além do logo, page.get_images == 0 no PDF final), SEM seção 'Procedimento Aplicável' vazia, rodapé 'Documento gerado pelo MAINTRIX Enterprise | data UTC | Emitido por | Pagina 1/1', cabe em 1 página com assinaturas visíveis. (2) OS com procedimento ff2bb384 — título 'Troca do rolamento do alimentador' preservado (não substituído pelo nome do procedimento), seção 'PROCEDIMENTO APLICÁVEL' visível com 'PROC-0001 — Troca de Rolamento em Motor Elétrico WEG' + 'Revisão: 03', anexo 'ANEXO 1 — PROCEDIMENTO DE MANUTENÇÃO' na página 2 com 7 etapas de execução, SEM QR, SEM CNPJ fictício. Total 2 páginas exatas. (3) OS campos vazios c8f9b1ea — Fabricante/Nº Série NÃO aparecem com '-', layout 1 página. (4) QR de Ativos permanece funcional: GET /api/ativos/{id}/qrcode/png retorna 200 image/png com magic bytes válidos.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration124_pdf_os_correcao.py",
+    "/app/test_reports/pytest/iteration_124.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:3286 — qr_path=None hardcoded para OS. Correto. QR de Ativos não afetado (endpoint separado /api/ativos/{id}/qrcode/png).",
+    "server.py:3289-3291 — layout_snapshot cabecalho/rodape do Construtor Visual NÃO é aplicado (comentário explícito). Isso evita vazamento de dados fictícios (MAINTRIX INT LTDA, CNPJ 12.345.678, telefone 5555-1234, Rua Integracao) presentes no snapshot de teste do Construtor Visual. Default header/footer usam dados reais da org (ASTEC DO BRASIL + UNIDADE CEDRO).",
+    "server.py:3294-3301 — Título da intervenção renderizado a partir de os_doc.titulo diretamente, independente de procedimento_id (título nunca é substituído pelo nome do procedimento).",
+    "server.py:3316-3321 — Campos fabricante/num_serie condicionalmente renderizados (if fabricante or num_serie: else pula linha) — evita '- - -' em campos vazios. Bem implementado.",
+    "server.py:3374-3402 — Seção 'Procedimento Aplicável' condicional (só renderiza se proc_for_annex existir). OS sem procedimento não mostra seção vazia. Anexo completo em nova página via pdf.procedure_annex.",
+    "server.py:3437-3447 — Preparation em 2 colunas (i % 2 == 0 → col_x=12, else col_x=108) reduz altura vertical pela metade. Boa compactação.",
+    "pdf_engine.py:781-810 — _render_default_header inclui 'Unidade: X' quando local_trabalho != '-'. Título OS N. <numero> em cor primária. Sem QR (não usa self.qr_path).",
+    "pdf_engine.py:871-883 — _render_default_footer com 'Documento gerado pelo MAINTRIX Enterprise | data UTC | Emitido por: X | Pagina N/{nb}'. Correto.",
+    "NOTA: O título da OS be9878f1 no PDF era 'Substituição de rolamentos do motor principal' (não 'Troca do rolamento do alimentador' como no request; esse último é da OS ff2bb384). Isso é irrelevante para o RC — o importante é que ambos são preservados corretamente e não substituídos por nome de procedimento.",
+    "OBSERVAÇÃO PROC ANEXO: procedure_annex renderiza corretamente ANEXO 1 com identificação, descrição e etapas. Não duplica assinaturas ou observações (as assinaturas ficam apenas na página 1 da OS)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration124_pdf_os_correcao.py (novo)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "N/A (backend-only test)"},
+  "test_credentials": "Admin: test.admin@maintrix.com / admin123",
+  "seed_data_creation": "Nenhum dado criado. Testes usam OS existentes fornecidas no request.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Testes verificam PDF de OS via GET /api/ordens-servico/{id}/pdf?modo=digital. Usa pymupdf (fitz) para extrair texto e imagens do PDF. IDs de OS de teste: be9878f1-71ab-476e-b491-b1af7c402685 (sem procedimento, 1 página), ff2bb384-6d68-4f29-9584-5e5aeb9e5035 (com PROC-0001, 2 páginas), c8f9b1ea-ab6f-41e5-b690-9a7c0c840e62 (campos vazios, 1 página). Ativo QR endpoint separado é /api/ativos/{id}/qrcode/png. Existiu 1 falha transitória inicial (Cloudflare 502 no primeiro run) que se resolveu no re-run — pode acontecer, é intermitente da preview URL, não é bug do app.",
+  "rca of the issue": "Não há bug reportado — todas as correções do RC 'PDF OS Modo Econômico' funcionam conforme esperado. Origem do problema anterior (regressão): server.py aplicava layout_snapshot.cabecalho/rodape do Construtor Visual que continha dados de teste (MAINTRIX INT LTDA, CNPJ 12.345.678, telefone 5555-1234, endereço Rua Integracao) e mostrava QR. Correção: server.py:3289-3291 pula aplicação do snapshot e força o default header/footer, e qr_path=None em server.py:3286. Campos vazios de equipamento agora hidden condicionalmente. Preparação renderizada em 2 colunas. Procedure section renderizada só quando há procedimento vinculado, com anexo completo em página nova via procedure_annex. Assinaturas permanecem na página 1 quando OS sem procedimento."
+}
