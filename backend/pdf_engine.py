@@ -332,13 +332,10 @@ class MaintrixPDF(FPDF):
     # ===== PROCEDURE ANNEX (full document) =====
     async def procedure_annex(self, proc, proc_index=1, execution_data=None):
         """Render a complete procedure as a full-page annex.
-        proc: procedure document from DB
-        proc_index: 1-based index for multiple procedures
-        execution_data: etapas_executadas dict from procedimento_execucoes
+        Fase 3: Texto sequencial de orientação — sem checkboxes, sem PENDENTE, sem progresso digital.
         """
         if not proc:
             return
-        etapas_exec = (execution_data or {}).get('etapas_executadas', {}) if execution_data else {}
 
         # New page for each procedure annex
         self.add_page()
@@ -349,24 +346,22 @@ class MaintrixPDF(FPDF):
         self.set_font('DejaVu', 'B', 11)
         self.set_text_color(255, 255, 255)
         self.set_xy(12, 16.5)
-        self.cell(0, 7, f'ANEXO {proc_index} — PROCEDIMENTO DE MANUTENÇÃO')
+        self.cell(0, 7, f'ANEXO {proc_index} \u2014 PROCEDIMENTO DE MANUTEN\u00c7\u00c3O')
         self.set_y(30)
 
         # Identification block
-        self.section_title('Identificação do Procedimento')
+        self.section_title('Identifica\u00e7\u00e3o do Procedimento')
         cy = self.get_y()
-        self.field_pair('Título', proc.get('nome', proc.get('titulo', '')), 10, cy, w=190)
+        self.field_pair('T\u00edtulo', proc.get('nome', proc.get('titulo', '')), 10, cy, w=190)
         cy += 11
-        self.field_pair('Código', proc.get('codigo', ''), 10, cy)
-        self.field_pair('Revisão', proc.get('revisao', '01'), 105, cy)
+        self.field_pair('C\u00f3digo', proc.get('codigo', ''), 10, cy)
+        self.field_pair('Revis\u00e3o', proc.get('revisao', '01'), 105, cy)
         cy += 11
-        self.field_pair('Versão', str(proc.get('versao', 1)), 10, cy)
+        self.field_pair('Vers\u00e3o', str(proc.get('versao', 1)), 10, cy)
         data_rev = (proc.get('updated_at') or proc.get('created_at') or '')[:10]
-        self.field_pair('Data da Revisão', data_rev, 105, cy)
+        self.field_pair('Data da Revis\u00e3o', data_rev, 105, cy)
         cy += 11
-        self.field_pair('Responsável Aprovação', proc.get('aprovador', proc.get('responsavel', '-')), 10, cy)
-        status = proc.get('status', 'ativo')
-        self.field_pair('Status', status.capitalize() if status else '-', 105, cy)
+        self.field_pair('Respons\u00e1vel Aprova\u00e7\u00e3o', proc.get('aprovador', proc.get('responsavel', '-')), 10, cy)
         self.set_y(cy + 13)
         self.line_sep()
 
@@ -380,19 +375,42 @@ class MaintrixPDF(FPDF):
         # Description
         descricao = proc.get('descricao', '')
         if descricao:
-            self.section_title('Descrição')
+            self.section_title('Descri\u00e7\u00e3o')
             self.text_block(descricao)
             self.line_sep()
 
         # Prerequisites
         prereqs = proc.get('pre_requisitos', proc.get('prerequisitos', ''))
         if prereqs:
-            self.section_title('Pré-Requisitos')
+            self.section_title('Pr\u00e9-Requisitos')
             if isinstance(prereqs, list):
                 for p in prereqs:
                     self._bullet_item(str(p))
             else:
                 self.text_block(str(prereqs))
+            self.line_sep()
+
+        # Safety alerts from procedure
+        alertas = proc.get('alertas_seguranca', proc.get('seguranca', ''))
+        if alertas:
+            self.section_title('Alertas de Seguran\u00e7a')
+            if isinstance(alertas, str):
+                self.text_block(alertas)
+            elif isinstance(alertas, list):
+                for a in alertas:
+                    self._bullet_item(str(a) if isinstance(a, str) else a.get('descricao', str(a)))
+            self.line_sep()
+
+        # EPIs
+        epis = proc.get('epis', proc.get('epi', []))
+        if epis:
+            self.section_title('Equipamentos de Prote\u00e7\u00e3o Individual (EPI)')
+            if isinstance(epis, list):
+                for e in epis:
+                    name = e.get('nome', str(e)) if isinstance(e, dict) else str(e)
+                    self._bullet_item(name)
+            else:
+                self.text_block(str(epis))
             self.line_sep()
 
         # Tools
@@ -407,104 +425,43 @@ class MaintrixPDF(FPDF):
                 self.text_block(str(ferramentas))
             self.line_sep()
 
-        # EPIs
-        epis = proc.get('epis', proc.get('epi', []))
-        if epis:
-            self.section_title('Equipamentos de Proteção Individual (EPI)')
-            if isinstance(epis, list):
-                for e in epis:
-                    name = e.get('nome', str(e)) if isinstance(e, dict) else str(e)
-                    self._bullet_item(name)
-            else:
-                self.text_block(str(epis))
-            self.line_sep()
-
-        # Risks and control measures
-        riscos = proc.get('riscos', proc.get('analise_risco', []))
-        if riscos:
-            self.section_title('Riscos e Medidas de Controle')
-            if isinstance(riscos, list):
-                for r in riscos:
-                    if isinstance(r, dict):
-                        risco_txt = r.get('risco', r.get('descricao', ''))
-                        medida_txt = r.get('medida', r.get('controle', ''))
-                        self._bullet_item(f"{risco_txt} → {medida_txt}" if medida_txt else risco_txt)
-                    else:
-                        self._bullet_item(str(r))
-            else:
-                self.text_block(str(riscos))
-            self.line_sep()
-
-        # Steps (complete)
+        # Steps — TEXTO SEQUENCIAL FIXO (sem checkbox, sem PENDENTE, sem executado por)
         etapas = proc.get('etapas', [])
         if etapas:
-            self.section_title('Etapas de Execução')
+            self.section_title('Etapas de Execu\u00e7\u00e3o')
             sorted_etapas = sorted(etapas, key=lambda e: e.get('ordem', 0))
             for etapa in sorted_etapas:
                 cy = self.get_y()
-                if cy > 250:
+                # Ensure title + description stay together (min 20mm)
+                if cy > 255:
                     self.add_page()
                     cy = 30
 
-                eid = etapa.get('id', '')
-                ex = etapas_exec.get(eid, {})
-                concluida = ex.get('concluida', False)
                 ordem = etapa.get('ordem', '')
 
-                # Step number + title
-                self.set_font('DejaVu', 'B', 9)
+                # Step number (large, highlighted)
+                self.set_font('DejaVu', 'B', 11)
                 self.set_text_color(self.cor_r, self.cor_g, self.cor_b)
                 self.set_xy(10, cy)
-                self.cell(12, 5, f'{ordem}.')
+                self.cell(12, 6, f'{ordem}.')
+
+                # Step title (bold)
                 self.set_font('DejaVu', 'B', 9)
                 self.set_text_color(15, 23, 42)
                 self.set_xy(22, cy)
-                self.cell(0, 5, _safe(etapa.get('titulo', ''), 80))
-                cy += 7
+                self.cell(0, 6, _safe(etapa.get('titulo', ''), 90))
+                cy += 8
 
-                # Status badge
-                if etapas_exec:
-                    self.set_font('DejaVu', 'B', 7)
-                    if concluida:
-                        self.set_text_color(16, 185, 129)
-                        badge = 'CONCLUÍDA'
-                    else:
-                        self.set_text_color(234, 179, 8)
-                        badge = 'PENDENTE'
-                    obrig = ' (obrigatória)' if etapa.get('obrigatoria') else ''
-                    self.set_xy(22, cy)
-                    self.cell(0, 4, f'{badge}{obrig}')
-                    cy += 5
-
-                # Description
+                # Step description
                 desc = etapa.get('descricao', '')
                 if desc:
-                    self.set_font('DejaVu', '', 8)
+                    self.set_font('DejaVu', '', 8.5)
                     self.set_text_color(50, 50, 50)
                     self.set_xy(22, cy)
-                    self.multi_cell(175, 4, _safe_long(desc, 1000))
+                    self.multi_cell(175, 4.5, _safe_long(desc, 2000))
                     cy = self.get_y() + 1
 
-                # Execution info
-                if ex.get('executado_por_nome'):
-                    self.set_font('DejaVu', 'I', 7)
-                    self.set_text_color(100, 116, 139)
-                    self.set_xy(22, cy)
-                    exec_info = f"Executado por: {ex['executado_por_nome']}"
-                    if ex.get('executado_em'):
-                        exec_info += f" em {str(ex['executado_em'])[:16].replace('T', ' ')}"
-                    self.cell(0, 4, _safe(exec_info, 80))
-                    cy += 5
-
-                # Observation
-                if ex.get('observacao'):
-                    self.set_font('DejaVu', 'I', 7)
-                    self.set_text_color(100, 116, 139)
-                    self.set_xy(22, cy)
-                    self.multi_cell(175, 3.5, f'Obs: {_safe_long(ex["observacao"], 500)}')
-                    cy = self.get_y() + 1
-
-                # Image of step
+                # Step image (if any)
                 img_url = etapa.get('imagem_url', etapa.get('foto_url', ''))
                 if img_url:
                     img_path = await fetch_file(img_url, f'proc_step_{ordem}')
@@ -522,18 +479,28 @@ class MaintrixPDF(FPDF):
                         except Exception:
                             pass
 
-                self.set_y(cy + 2)
-                # Separator between steps
-                self.set_draw_color(230, 230, 230)
+                self.set_y(cy + 1)
+                # Subtle separator between steps
+                self.set_draw_color(220, 220, 220)
                 self.line(22, self.get_y(), 200, self.get_y())
                 self.set_y(self.get_y() + 3)
 
-        # Observations
+        # Observations from procedure
         obs = proc.get('observacoes', proc.get('notas', ''))
         if obs:
-            self.section_title('Observações do Procedimento')
+            self.section_title('Observa\u00e7\u00f5es do Procedimento')
             self.text_block(str(obs))
             self.line_sep()
+
+        # Observation area for manual filling
+        self.section_title('Observa\u00e7\u00f5es da Execu\u00e7\u00e3o')
+        self.manual_box('Anomalias encontradas, recomenda\u00e7\u00f5es e materiais adicionais:', 35)
+
+        # Signatures at end of last useful page
+        y = self.get_y()
+        if y > 235:
+            self.add_page()
+        self.signature_block([('Executor', ''), ('Supervisor', '')])
 
     def _bullet_item(self, text):
         """Render a bullet-pointed item."""

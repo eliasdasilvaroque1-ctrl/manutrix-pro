@@ -1,0 +1,43 @@
+{
+  "summary": "RC Estabilização Fase 3 — Redesenho do PDF da OS: 21/21 pytest passed. Verificado em ambos modos (digital e manual) que o PDF: (1) NÃO contém 'PENDENTE', 'concluídas/concluidas', '0/7' ou 'Executado por' em NENHUMA página; (2) contém 'PROCEDIMENTO APLICÁVEL' com PROC-0001 e Revisão; (3) contém 'Ler e seguir integralmente'; (4) contém 'PREPARAÇÃO DA INTERVENÇÃO' com todos os 6 itens (Materiais separados, Ferramentas separadas, LOTO, Permissão de Trabalho, Área liberada, EPI); (5) contém 'ANEXO 1 — PROCEDIMENTO DE MANUTENÇÃO' com etapas 1..7 numeradas; (6) etapas são texto sequencial (sem badges de estado); (7) assinaturas NÃO isoladas — página contém conteúdo residual >80 chars; (8) acentos preservados (Descrição, Informações, Mecânica, Não, Duração, Observações da Execução); (9) QR decodifica exatamente para https://www.maintrix.com.br/os/211039a2-f616-4231-be4b-ab1338cceb8f (validação via pyzbar); (10) PDF de OS simples (aa42e758) funciona sem procedimento e sem ANEXO 1; (11) Observações da Execução com área ampla para preenchimento manual; (12) regressão do dossiê público AV-01 preservada (endpoint /api/public/equipment/... retorna 200).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration120_pdf_fase3.py",
+    "/app/test_reports/pytest/iteration_120.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "pdf_engine.py:333-503 procedure_annex() — implementação limpa; assinaturas no fim (add_page apenas se y>235) evita página isolada. OK.",
+    "pdf_engine.py:520-560 procedure_section() (backward-compat) — ainda contém colunas 'Executado' e 'Obs' no modo manual. Não é chamado no fluxo atual da OS (server.py 3385+ usa apenas procedure_annex). Considerar remover para evitar confusão futura.",
+    "server.py:3269 fallback qr_url = /os/{id} (path relativo) se PUBLIC_APP_URL não estiver configurado geraria QR não escaneável. Como PUBLIC_APP_URL está configurado no .env, o cenário produtivo está OK, mas seria bom fallback para APP_URL/REACT_APP_BACKEND_URL para robustez.",
+    "server.py:3438 manual_box com label vazio quando não é manual — verificar UX: no modo digital fica um retângulo em branco sem legenda. Aceitável, mas poderia ser condicional apenas em is_manual.",
+    "pdf_engine.py:165 section_title força .upper() — o teste valida versões maiúsculas ('PROCEDIMENTO APLICÁVEL', 'PREPARAÇÃO DA INTERVENÇÃO'). Se main agent quiser mixed case, precisa remover .upper() ou usar cabeçalho customizado."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration120_pdf_fase3.py (novo — 21 testes pytest cobrindo Fase 3)"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "N/A (fase somente backend)"},
+  "test_credentials": "test.admin@maintrix.com / admin123 (validado)",
+  "seed_data_creation": "Nenhum dado seed criado; usados OS 211039a2 (com PROC-0001) e OS aa42e758 (simples) já existentes.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fase 3 do PDF da OS 100% validada. Rota testada: GET /api/ordens-servico/{id}/pdf?modo={digital|manual}. Extração via PyMuPDF (fitz) + decodificação de QR via pyzbar+PIL. QR agora aponta para PUBLIC_APP_URL/os/{id}. Etapas do procedimento renderizadas como texto sequencial (número + título negrito + descrição) — sem checkbox/PENDENTE/ExecutadoPor. Bloco 'PREPARAÇÃO DA INTERVENÇÃO' com 6 checkboxes manuais em ambos modos. Assinaturas no fim da última página útil. Regressão do dossiê público AV-01 OK. Testes anteriores (iteration_119) preservados.",
+  "detailed_test_results": {
+    "TestAusenciaTermosDigitais": "6/6 PASS — PENDENTE, concluídas/0-7, 'Executado por' ausentes em digital e manual",
+    "TestBlocosRedesenhados": "5/5 PASS — Procedimento Aplicável+PROC-0001, Ler e seguir, Preparação com 6 itens, Anexo 1 com 1..7, sem badges",
+    "TestAssinaturasNaoIsoladas": "2/2 PASS — resíduo >80 chars em página com assinaturas (OS com proc e OS simples)",
+    "TestAcentos": "3/3 PASS — Descrição/Informações/Não/Duração/Mecânica presentes com acento",
+    "TestQRCode": "1/1 PASS — QR decodificado = https://www.maintrix.com.br/os/211039a2-f616-4231-be4b-ab1338cceb8f",
+    "TestOSSimples": "2/2 PASS — OS aa42e758 gera PDF válido em ambos modos, sem ANEXO 1",
+    "TestObservacoesAmpliadas": "1/1 PASS — 'OBSERVAÇÕES DA EXECUÇÃO' com dica de anomalias/manual_box ampliada",
+    "TestRegressao": "1/1 PASS — /api/public/equipment/av-01-alimentador/... retorna 200"
+  }
+}

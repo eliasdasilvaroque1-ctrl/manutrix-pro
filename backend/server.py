@@ -3291,39 +3291,39 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     pdf.field_pair('Local', sec.get('nome') if isinstance(sec, dict) else str(sec or ''), 105, cy)
     cy += 11
     pdf.field_pair('Fabricante', (ativo or {}).get('fabricante'), 10, cy)
-    pdf.field_pair('N/Serie', (ativo or {}).get('numero_serie'), 105, cy)
+    pdf.field_pair('N\u00ba S\u00e9rie', (ativo or {}).get('numero_serie'), 105, cy)
     pdf.set_y(cy + 13); pdf.line_sep()
 
     # OS INFO
-    pdf.section_title('Informacoes da OS')
+    pdf.section_title('Informa\u00e7\u00f5es da OS')
     cy = pdf.get_y()
-    tipo_map = {'corretiva':'Corretiva','preventiva':'Preventiva','preditiva':'Preditiva','melhoria':'Melhoria','lubrificacao':'Lubrificacao','limpeza_organizacao':'Limpeza/Org.'}
-    prio_map = {'baixa':'BAIXA','media':'MEDIA','alta':'ALTA','critica':'CRITICA'}
+    tipo_map = {'corretiva':'Corretiva','preventiva':'Preventiva','preditiva':'Preditiva','melhoria':'Melhoria','lubrificacao':'Lubrifica\u00e7\u00e3o','limpeza_organizacao':'Limpeza/Org.'}
+    prio_map = {'baixa':'BAIXA','media':'M\u00c9DIA','alta':'ALTA','critica':'CR\u00cdTICA'}
     pdf.field_pair('Tipo', tipo_map.get(os_doc.get('tipo',''), os_doc.get('tipo','')), 10, cy)
     pdf.field_pair('Prioridade', prio_map.get(os_doc.get('prioridade',''), os_doc.get('prioridade','')), 105, cy)
     cy += 11
-    pdf.field_pair('Disciplina', (os_doc.get('disciplina') or '').capitalize(), 10, cy)
+    pdf.field_pair('Disciplina', (os_doc.get('disciplina') or '').replace('mecanica', 'Mec\u00e2nica').replace('eletrica', 'El\u00e9trica').replace('instrumentacao', 'Instrumenta\u00e7\u00e3o').capitalize(), 10, cy)
     pdf.field_pair('Status', (os_doc.get('status') or '').replace('_',' ').capitalize(), 105, cy)
     cy += 11
     pdf.field_pair('Origem', (os_doc.get('origem') or '').replace('_',' ').capitalize(), 10, cy)
-    pdf.field_pair('Equip. Parado', 'Sim' if os_doc.get('equipamento_parado') else 'Nao', 105, cy)
+    pdf.field_pair('Equip. Parado', 'Sim' if os_doc.get('equipamento_parado') else 'N\u00e3o', 105, cy)
     pdf.set_y(cy + 13); pdf.line_sep()
 
     # DESCRIPTION
-    pdf.section_title('Descricao')
+    pdf.section_title('Descri\u00e7\u00e3o')
     pdf.set_font('DejaVu', 'B', 9); pdf.set_text_color(15, 23, 42)
     pdf.set_xy(10, pdf.get_y()); pdf.cell(190, 5, _safe(os_doc.get('titulo',''), 80))
     pdf.set_y(pdf.get_y() + 6)
     desc = os_doc.get('descricao', '')
     if desc: pdf.text_block(desc)
-    elif is_manual: pdf.manual_box('Descricao do servico:', 20)
+    elif is_manual: pdf.manual_box('Descri\u00e7\u00e3o do servi\u00e7o:', 20)
     pdf.line_sep()
 
     # TEAM
     pdf.section_title('Equipe')
     cy = pdf.get_y()
     resp_nome = responsavel['nome'] if responsavel else ''
-    pdf.field_pair('Responsavel', resp_nome, 10, cy)
+    pdf.field_pair('Respons\u00e1vel', resp_nome, 10, cy)
     pdf.field_pair('Turno', (responsavel or {}).get('turno'), 105, cy)
     cy += 11
     pdf.field_pair('Executantes', ', '.join(u['nome'] for u in equipe_batch) if equipe_batch else '', 10, cy, w=190)
@@ -3340,7 +3340,7 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     cy += 11
     pdf.field_pair('Hora Final', df if df else None, 10, cy)
     tempo = os_doc.get('tempo_execucao_minutos')
-    pdf.field_pair('Duracao', f"{tempo} min" if tempo else None, 105, cy)
+    pdf.field_pair('Dura\u00e7\u00e3o', f"{tempo} min" if tempo else None, 105, cy)
     pdf.set_y(cy + 13); pdf.line_sep()
 
     # PROCEDURE
@@ -3352,7 +3352,7 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     # MATERIALS
     all_mat = (os_doc.get('materiais') or []) + ativo_materiais
     if all_mat or is_manual:
-        pdf.section_title('Materiais e Pecas')
+        pdf.section_title('Materiais e Pe\u00e7as')
         if all_mat:
             cy = pdf.get_y()
             pdf.set_font('DejaVu', 'B', 7); pdf.set_text_color(100, 116, 139)
@@ -3383,29 +3383,59 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
             proc_for_annex = await db.procedimentos_padrao.find_one({"id": proc_id, "deleted_at": None}, {"_id": 0})
 
     if proc_for_annex:
-        execucao = await db.procedimento_execucoes.find_one(
-            {"os_id": os_id, "procedimento_id": proc_id}, {"_id": 0}
-        )
-        etapas_exec = (execucao or {}).get('etapas_executadas', {})
-        sorted_etapas = sorted(proc_for_annex.get('etapas', []), key=lambda e: e.get('ordem', 0))
-        total_e = len(sorted_etapas)
-        done_e = sum(1 for e in sorted_etapas if etapas_exec.get(e.get('id',''), {}).get('concluida'))
-
-        pdf.section_title('Procedimento Operacional')
-        pdf.set_font("DejaVu", "B", 8.5)
+        pdf.section_title('Procedimento Aplic\u00e1vel')
+        pdf.set_font("DejaVu", "B", 9)
         pdf.set_text_color(15, 23, 42)
-        pdf.cell(0, 5, _safe(f'{proc_for_annex.get("codigo","")} - {proc_for_annex.get("nome",proc_for_annex.get("titulo",""))}', 100), ln=True)
-        pdf.set_font("DejaVu", "", 7)
+        titulo_proc = proc_for_annex.get("nome", proc_for_annex.get("titulo", ""))
+        codigo_proc = proc_for_annex.get("codigo", "")
+        revisao_proc = proc_for_annex.get("revisao", "01")
+        pdf.set_xy(10, pdf.get_y())
+        pdf.cell(0, 5, _safe(f'{codigo_proc} \u2014 {titulo_proc}', 100), ln=True)
+        pdf.set_font("DejaVu", "", 7.5)
         pdf.set_text_color(100, 116, 139)
-        pdf.cell(0, 4, f'Revisão: {proc_for_annex.get("revisao","01")} | Etapas: {done_e}/{total_e} concluídas | (Ver Anexo completo ao final)', ln=True)
+        pdf.cell(0, 4, f'Revis\u00e3o: {revisao_proc}', ln=True)
         pdf.ln(2)
+        # Instruction text
+        pdf.set_font("DejaVu", "I", 8)
+        pdf.set_text_color(80, 80, 80)
+        pdf.set_xy(10, pdf.get_y())
+        pdf.multi_cell(190, 4, 'Ler e seguir integralmente o procedimento apresentado na p\u00e1gina seguinte antes e durante a execu\u00e7\u00e3o.')
+        pdf.ln(1)
         pdf.line_sep()
 
-    # OBSERVATIONS
-    pdf.section_title('Observacoes')
+    # PREPARAÇÃO DA INTERVENÇÃO
+    pdf.section_title('Prepara\u00e7\u00e3o da Interven\u00e7\u00e3o')
+    prep_items = [
+        'Materiais separados',
+        'Ferramentas separadas',
+        'Bloqueio / LOTO dispon\u00edvel',
+        'Permiss\u00e3o de Trabalho emitida',
+        '\u00c1rea liberada',
+        'EPI verificado',
+    ]
+    cy = pdf.get_y()
+    for item in prep_items:
+        if cy > 270:
+            pdf.add_page()
+            cy = 30
+        # Draw checkbox
+        pdf.set_draw_color(160, 160, 160)
+        pdf.rect(12, cy + 0.5, 3.5, 3.5)
+        pdf.set_font('DejaVu', '', 8)
+        pdf.set_text_color(30, 41, 59)
+        pdf.set_xy(18, cy)
+        pdf.cell(0, 4.5, item)
+        cy += 6
+    pdf.set_y(cy + 1)
+    pdf.manual_box('Observa\u00e7\u00f5es da prepara\u00e7\u00e3o:', 12)
+    pdf.line_sep()
+
+    # OBSERVATIONS (enlarged for manual filling)
+    pdf.section_title('Observa\u00e7\u00f5es da Execu\u00e7\u00e3o')
     obs = os_doc.get('observacoes') or os_doc.get('servicos_realizados', '')
-    if obs: pdf.text_block(obs)
-    else: pdf.manual_box('' if not is_manual else 'Observacoes do executor:', 18)
+    if obs:
+        pdf.text_block(obs)
+    pdf.manual_box('Anomalias encontradas, recomenda\u00e7\u00f5es e materiais adicionais utilizados:' if is_manual else '', 25)
     pdf.line_sep()
 
     # PHOTOS
@@ -3430,10 +3460,7 @@ async def print_os_pdf(os_id: str, modo: str = "digital", user: Dict = Depends(g
     # ═══════════════════════════════════════════════
     proc_execution_data = None
     if proc_for_annex and proc_id:
-        proc_execution_data = await db.procedimento_execucoes.find_one(
-            {"os_id": os_id, "procedimento_id": proc_id}, {"_id": 0}
-        )
-        await pdf.procedure_annex(proc_for_annex, proc_index=1, execution_data=proc_execution_data)
+        await pdf.procedure_annex(proc_for_annex, proc_index=1)
 
     temp_files = [qr_path, logo_path] + [a.get('_local_path') for a in attachments if a.get('_local_path')]
     buf = pdf.output_bytes()

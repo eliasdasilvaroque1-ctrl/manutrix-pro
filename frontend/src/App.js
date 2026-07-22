@@ -864,7 +864,9 @@ const LoginPage = () => {
         // Restaurar destino original (ex: /os/{id} escaneado via QR)
         const from = location.state?.from;
         const defaultRoute = (userRole === 'visualizador' || userRole === 'viewer') ? '/consulta' : '/';
-        navigate(from || defaultRoute, { replace: true });
+        // Validar que destino é rota interna segura (prevenir open redirect)
+        const safeFrom = from && from.startsWith('/') && !from.startsWith('//') ? from : null;
+        navigate(safeFrom || defaultRoute, { replace: true });
       }
     } catch (error) {
       toast.error(normalizeError(error));
