@@ -4236,8 +4236,8 @@ async def get_audit_logs(
     limit: int = 200,
     user: Dict = Depends(get_current_user)
 ):
-    """Audit logs with filters. Admin, PCM, Gerente can view."""
-    if user.get('role') not in ['master', 'admin', 'gerente', 'pcm', 'supervisor']:
+    """Audit logs with filters. Admin, Gerente e Supervisor podem visualizar."""
+    if user.get('role') not in ['master', 'admin', 'gerente', 'supervisor']:
         raise HTTPException(status_code=403, detail="Sem permissão para visualizar auditoria")
     query = {}
     if user.get('organization_id'):
@@ -4278,7 +4278,7 @@ async def get_audit_logs(
 
 @api_router.get("/admin/audit-logs/stats")
 async def get_audit_stats(user: Dict = Depends(get_current_user)):
-    if user.get('role') not in ['master', 'admin', 'gerente', 'pcm', 'supervisor']:
+    if user.get('role') not in ['master', 'admin', 'gerente', 'supervisor']:
         raise HTTPException(status_code=403, detail="Sem permissão")
     pipeline = [
         {"$group": {"_id": "$entity_type", "count": {"$sum": 1}}},
@@ -4290,7 +4290,7 @@ async def get_audit_stats(user: Dict = Depends(get_current_user)):
 
 @api_router.get("/export/audit")
 async def export_audit(format: str = "excel", user: Dict = Depends(get_current_user)):
-    if user.get('role') not in ['master', 'admin', 'gerente', 'pcm', 'supervisor']:
+    if user.get('role') not in ['master', 'admin', 'gerente', 'supervisor']:
         raise HTTPException(status_code=403, detail="Sem permissão")
     audit_query = {}
     if user.get('organization_id'):
