@@ -1,7 +1,7 @@
 # MAINTRIX ENTERPRISE — PRD
 
-## Status: HOTFIX P0 QR URLs CORRIGIDO — PRONTO PARA HOMOLOGAÇÃO
-## Versao: pilot-astec-v1.2.2-hotfix
+## Status: RC ESTABILIZAÇÃO PRÉ-PILOTO HOMOLOGADA
+## Versao: pilot-astec-v1.3.0-rc
 ## Domínio: https://app.maintrix.com.br
 
 ---
