@@ -5,12 +5,11 @@
  * RBAC: Master/Admin/PCM editam. Demais perfis: somente leitura.
  * Pré-visualização em tempo real respeitando visibilidade.
  */
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Camera, FileText, Upload, Trash2, Save, Eye, EyeOff, AlertTriangle,
-  Shield, Lightbulb, CheckCircle, Info, ChevronDown, ExternalLink,
-  X, Image as ImageIcon, File, Globe, Lock, Users, RefreshCw,
-  MapPin, Zap, Gauge, Weight, Maximize2, Box, Factory, BookOpen
+  Shield, Lightbulb, CheckCircle, Globe, Lock, Users, RefreshCw,
+  MapPin, Zap, Gauge, Factory, BookOpen, File
 } from "lucide-react";
 import { api, useAuth, BACKEND_URL } from "../lib/api";
 import { toast } from "sonner";
@@ -31,18 +30,6 @@ const VISIBILITY_OPTIONS = [
   { value: "authenticated", label: "Autenticado", icon: Users, desc: "Somente usuarios logados da empresa" },
   { value: "restricted", label: "Restrito", icon: Lock, desc: "Somente PCM, Admin e Master" },
   { value: "hidden", label: "Oculto", icon: EyeOff, desc: "Nao exibido em nenhuma visualizacao" },
-];
-
-const VISIBILITY_BLOCKS = [
-  { key: "technical_data", label: "Dados Tecnicos" },
-  { key: "history", label: "Historico Resumido" },
-  { key: "inspections", label: "Ultimas Inspecoes" },
-  { key: "maintenance", label: "Ultimas Manutencoes" },
-  { key: "documents", label: "Documentos" },
-  { key: "curiosity", label: "Voce Sabia?" },
-  { key: "warning", label: "Atencao" },
-  { key: "safety", label: "Seguranca" },
-  { value: "best_practices", label: "Boas Praticas" },
 ];
 
 const DOC_TYPES = [

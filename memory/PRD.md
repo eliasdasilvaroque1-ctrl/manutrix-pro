@@ -101,6 +101,33 @@ QR Codes codificavam URLs internas autenticadas (`/ativos/{id}`) e relativas, fa
 - Nenhum campo obrigatório ✅ | Ativos antigos funcionam ✅ | QR Codes preservados ✅
 - Nenhuma IA ✅ | Nenhum serviço pago ✅
 
+---
+
+## RC P1 — Dossiê Digital v1.0 — FASE 2 CONCLUÍDA (22/07/2026)
+
+### Frontend Edição
+- Tab "Dossiê Digital" no AssetDossierPage com formulário completo
+- Preview em tempo real com seletor de modo (Público/Autenticado/Restrito)
+- Upload foto pública (Supabase) com preview imediato
+- Gestão de documentos (upload, publicar/despublicar, excluir)
+- Status público com indicador colorido
+- Localização extra (linha, ponto de instalação)
+- Dados técnicos adicionais (corrente, frequência)
+- 9 controles de visibilidade (4 níveis: public/authenticated/restricted/hidden)
+- Botão "Visualizar Dossiê" → abre página pública real
+- RBAC: Master/Admin/PCM editam, demais read-only
+- Confirmação ao sair sem salvar (beforeunload)
+
+### Arquivo Criado
+- `frontend/src/pages/DossierEditTab.js` — NOVO (~400 linhas)
+- `frontend/src/pages/AssetDossierPage.js` — Tab adicionada
+
+### Testes: 16/16 PASS (Frontend E2E)
+- Tab renderiza ✅ | Edição + Save ✅ | Preview real-time ✅
+- Seletor de visão ✅ | Botão Visualizar Dossiê ✅ | Upload foto ✅
+- Documentos ✅ | Visibilidade selects ✅ | Toast sucesso ✅
+- Regressão tabs existentes ✅ | Console limpo ✅
+
 - Rota frontend pública sem login ✅
 - Nenhum QR contém blob:, localhost, rota interna ✅
 - Interceptor Axios skip para /api/public/ ✅
