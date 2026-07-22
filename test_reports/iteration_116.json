@@ -1,0 +1,50 @@
+{
+  "summary": "HOTFIX P0 QR URL Absoluta VALIDADO COMPLETAMENTE (backend + frontend). Todos os 15 critérios do problem_statement passam. Bug reportado em iteration_115 (AssetDossierPage.js linha 49 usando window.location.origin) foi corrigido: header QR agora usa a.public_qr_url. Tab QR Code completa (data-testid='qrcode-tab' + qr-public-url + qr-copy-btn + qr-open-btn + qr-download-png/svg + qr-print-simples/etiqueta/placa + qr-regenerate-btn) migrada com sucesso para AssetDossierPage.js. QRs codificam exatamente 'https://www.maintrix.com.br/equipamento/av-01-alimentador/Wb2xZ_y_eeAWO8Q8iLzjQJkH4sa_TuIu' — validado via React fiber (frontend) e pyzbar bit-decoding (backend PNG). Rota pública /equipamento/:slug/:token carrega sem redirect para /login. Interceptor Axios não redireciona /api/public/. Rotas autenticadas (/ativos/:id) continuam OK.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration115_qr_absolute_url.py (regression — 18/18 já validado)",
+    "/app/test_reports/pytest/iteration115_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AssetDossierPage.js:47-51 — header QR agora usa ativo.public_qr_url com guard condicional (não renderiza se ausente). CORRETO.",
+    "AssetDossierPage.js:440-517 — TabQRCode component completo, delega download PNG/SVG e PDF (simples/etiqueta/placa) para endpoints /api/ativos/{id}/qrcode/* que já eram corretos no backend.",
+    "AssetDossierPage.js:543 — Tab 'qrcode' adicionada na lista de tabs, ícone QrCode. Posicionada como 2ª tab logo após 'visao'.",
+    "AssetDossierPage.js:503 — botão qr-regenerate-btn é renderizado condicionalmente para roles master/admin, com confirmação window.confirm antes de POST /qrcode/regenerate. Segurança OK.",
+    "Grep window.location.origin em /app/frontend/src: apenas 1 ocorrência em WhiteLabelDesignerPage.js:510 e é comentário (documentando a diretriz de nunca usar). Não há uso em produção.",
+    "IMPORTANTE: AtivoDetailPage em App.js (linhas 1746-2365, ~620 linhas de dead code) ainda existe e não é referenciada em nenhuma rota. Recomendação para o main agent: remover em iteração de cleanup para reduzir bundle size — não é regressão, apenas dívida técnica."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (endpoints QR PNG/PDF etiqueta/public sem auth revalidados no smoke test — payloads corretos, QR bit-decoded confere URL absoluta)",
+    "frontend": "100% (15/15 critérios do problem_statement passam)"
+  },
+  "test_credentials": "test.admin@maintrix.com / admin123 (admin ASTEC Cedro) — validado via API /auth/login.",
+  "seed_data_creation": "Nenhum — read-only + geração de QR.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "HOTFIX P0 QR URL Absoluta 100% FECHADO. Se houver novas mudanças em AssetDossierPage.js ou routes/assets.py referentes a QR, revalidar: (1) header QR em /ativos/:id via React fiber deve decodificar para https://www.maintrix.com.br/equipamento/{slug}/{token}; (2) tab QR Code data-testid='qrcode-tab' com todos os data-testids esperados; (3) rota pública /equipamento/:slug/:token sem redirect; (4) endpoint /api/public/equipment/{slug}/{token} status 200 sem auth. Para login em Playwright, usar page.request.post + context.add_init_script para injetar sessionStorage (o campo Organização auto-detecta via /api/auth/lookup-email no onBlur do email, mas timing pode ser flaky em testes automatizados — API direta é mais confiável).",
+  "test_evidence": {
+    "header_qr_value": "https://www.maintrix.com.br/equipamento/av-01-alimentador/Wb2xZ_y_eeAWO8Q8iLzjQJkH4sa_TuIu",
+    "tab_qr_value": "https://www.maintrix.com.br/equipamento/av-01-alimentador/Wb2xZ_y_eeAWO8Q8iLzjQJkH4sa_TuIu",
+    "qr_public_url_text": "https://www.maintrix.com.br/equipamento/av-01-alimentador/Wb2xZ_y_eeAWO8Q8iLzjQJkH4sa_TuIu",
+    "qr_open_btn_href": "https://www.maintrix.com.br/equipamento/av-01-alimentador/Wb2xZ_y_eeAWO8Q8iLzjQJkH4sa_TuIu",
+    "backend_png_qr_decoded": "https://www.maintrix.com.br/equipamento/av-01-alimentador/Wb2xZ_y_eeAWO8Q8iLzjQJkH4sa_TuIu (via pyzbar)",
+    "backend_endpoints_smoke": {
+      "GET /api/ativos/{id}/qrcode/png": "200 image/png 3009 bytes",
+      "GET /api/ativos/{id}/qrcode/pdf?modelo=etiqueta": "200 application/pdf 31991 bytes",
+      "GET /api/public/equipment/{slug}/{token} (no auth)": "200"
+    },
+    "public_url_no_login_redirect": "confirmado — após sessionStorage.clear, /equipamento/{slug}/{token} não redireciona para /login",
+    "dead_code_notice": "AtivoDetailPage em App.js:1746-2365 ainda existe mas não é usado; recomendado remover em iteração futura"
+  },
+  "rca of the issue": "Bug crítico do iteration_115 fechado. RCA original: main agent havia implementado TabQRCode em AtivoDetailPage (App.js) mas a rota /ativos/:id renderiza AssetDossierPage (pages/AssetDossierPage.js) — o hotfix tinha sido aplicado no componente errado. FIX aplicado nesta iteração: (a) AssetDossierPage.js:47-51 passou a usar {a.public_qr_url} no QRCodeSVG value (com guard condicional); (b) TabQRCode component (linhas 440-517) foi migrado para AssetDossierPage.js com todos os data-testids esperados; (c) tab 'qrcode' foi adicionada à lista de tabs (linha 543). Validação end-to-end confirmada: header QR e tab QR ambos codificam a URL absoluta pública. Nenhum QR contém blob:, localhost, procure-manutrix.preview.emergentagent.com/ativos/ ou window.location.origin."
+}

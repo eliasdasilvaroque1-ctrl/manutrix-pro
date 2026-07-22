@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Box, Wrench, ClipboardCheck, AlertTriangle, FileText, Clock, BarChart3,
   ChevronRight, Plus, Edit, Download, RefreshCw, Eye, Calendar, Target, Shield, Zap,
-  Activity, TrendingUp, MapPin, Package, QrCode, Printer
+  Activity, TrendingUp, MapPin, Package, QrCode, Printer, ExternalLink, Copy
 } from "lucide-react";
 import { api, useAuth, BACKEND_URL } from "../lib/api";
 import { StatusBadge, PriorityBadge, EmptyState, Loading, PageContainer, Modal, FormInput, Select } from "../components/shared";
@@ -44,9 +44,9 @@ const DossierHeader = ({ ativo, kpis }) => {
         </div>
         {/* KPI Cards + QR */}
         <div className="flex flex-col items-center gap-2 shrink-0">
-          {a.qr_code && (
+          {a.public_qr_url && (
             <div className="bg-white p-1.5 rounded-lg" data-testid="ativo-qr-code">
-              <QRCodeSVG value={`${window.location.origin}/ativos/${a.id}`} size={64} />
+              <QRCodeSVG value={a.public_qr_url} size={64} />
             </div>
           )}
           <div className="grid grid-cols-3 gap-2">
@@ -437,6 +437,85 @@ const TabIndicadores = ({ kpis, os }) => {
   );
 };
 
+// ============== TAB: QR CODE ==============
+const TabQRCode = ({ ativo, ativoId, onRefresh }) => {
+  const { user } = useAuth();
+  if (!ativo) return null;
+
+  const publicUrl = ativo.public_qr_url || '';
+
+  return (
+    <div className="space-y-4" data-testid="qrcode-tab">
+      <div className="glass-card p-5">
+        <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-4">QR Code do Equipamento</h3>
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* QR Preview */}
+          <div className="bg-white p-4 rounded-xl flex flex-col items-center gap-2 shrink-0">
+            {publicUrl ? (
+              <QRCodeSVG value={publicUrl} size={180} level="H" />
+            ) : (
+              <div className="w-[180px] h-[180px] bg-slate-200 rounded flex items-center justify-center"><QrCode size={48} className="text-slate-400" /></div>
+            )}
+            <p className="text-xs text-slate-600 font-mono mt-1">{ativo.tag}</p>
+          </div>
+          {/* Info + Actions */}
+          <div className="flex-1 space-y-4 min-w-0">
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">URL Publica</label>
+              <div className="flex items-center gap-2">
+                <code className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-emerald-400 flex-1 truncate" data-testid="qr-public-url">
+                  {publicUrl || 'QR Code nao gerado'}
+                </code>
+                {publicUrl && (
+                  <button onClick={() => { navigator.clipboard.writeText(publicUrl); toast.success('Link copiado!'); }}
+                    className="btn-secondary text-xs px-3 py-2 flex items-center gap-1" data-testid="qr-copy-btn"><Copy size={12} /> Copiar</button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {publicUrl && (
+                <>
+                  <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="btn-primary text-xs px-3 py-2 inline-flex items-center gap-1.5" data-testid="qr-open-btn">
+                    <ExternalLink size={14} /> Abrir pagina publica
+                  </a>
+                  <button onClick={async () => { try { const res = await api.get(`/ativos/${ativoId}/qrcode/png`, { responseType: 'blob' }); const url = URL.createObjectURL(res.data); const a = document.createElement('a'); a.href = url; a.download = `QR_${ativo.tag}.png`; a.click(); URL.revokeObjectURL(url); toast.success('PNG baixado!'); } catch { toast.error('Erro ao baixar PNG'); } }}
+                    className="btn-secondary text-xs px-3 py-2" data-testid="qr-download-png">Baixar PNG</button>
+                  <button onClick={async () => { try { const res = await api.get(`/ativos/${ativoId}/qrcode/svg`, { responseType: 'blob' }); const url = URL.createObjectURL(res.data); const a = document.createElement('a'); a.href = url; a.download = `QR_${ativo.tag}.svg`; a.click(); URL.revokeObjectURL(url); toast.success('SVG baixado!'); } catch { toast.error('Erro ao baixar SVG'); } }}
+                    className="btn-secondary text-xs px-3 py-2" data-testid="qr-download-svg">Baixar SVG</button>
+                </>
+              )}
+            </div>
+            {/* Print models */}
+            {publicUrl && (
+              <div>
+                <label className="text-xs text-slate-500 block mb-2">Imprimir</label>
+                <div className="flex flex-wrap gap-2">
+                  {[{m:'simples',l:'QR Simples'},{m:'etiqueta',l:'Etiqueta'},{m:'placa',l:'Placa A4'}].map(({m,l}) => (
+                    <button key={m} onClick={async () => { try { const res = await api.get(`/ativos/${ativoId}/qrcode/pdf?modelo=${m}`, { responseType: 'blob' }); const url = URL.createObjectURL(res.data); window.open(url); toast.success(`PDF ${l} gerado!`); } catch { toast.error('Erro ao gerar PDF'); } }}
+                      className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs px-3 py-2 rounded-lg transition-all" data-testid={`qr-print-${m}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Regenerate (Master/Admin only) */}
+            {(user?.role === 'master' || user?.role === 'admin') && (
+              <div className="pt-2 border-t border-slate-800">
+                <button onClick={async () => { if (!window.confirm('Regenerar o QR Code ira invalidar o QR anterior. Continuar?')) return; try { await api.post(`/ativos/${ativoId}/qrcode/regenerate`); toast.success('QR Code regenerado!'); if (onRefresh) onRefresh(); } catch { toast.error('Erro ao regenerar'); } }}
+                  className="text-xs text-amber-500 hover:text-amber-400 font-medium" data-testid="qr-regenerate-btn">
+                  Regenerar QR Code
+                </button>
+                <p className="text-[10px] text-slate-600 mt-1">Isso invalidara imediatamente o QR Code anterior</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ============== MAIN DOSSIER PAGE ==============
 const AssetDossierPage = () => {
   const { id } = useParams();
@@ -461,6 +540,7 @@ const AssetDossierPage = () => {
 
   const tabs = [
     { id: 'visao', label: 'Visao Geral', icon: Eye },
+    { id: 'qrcode', label: 'QR Code', icon: QrCode },
     { id: 'os', label: 'OS', icon: Wrench, count: data?.kpis?.total_os },
     { id: 'planos', label: 'Planos', icon: ClipboardCheck, count: data?.planos?.length },
     { id: 'inspecoes', label: 'Inspecoes', icon: Shield, count: data?.kpis?.total_inspecoes },
@@ -508,6 +588,7 @@ const AssetDossierPage = () => {
       {/* Tab content */}
       <div className="mt-4">
         {activeTab === 'visao' && <TabVisaoGeral kpis={data.kpis} os={data.os} inspecoes={data.inspecoes} solicitacoes={data.solicitacoes} />}
+        {activeTab === 'qrcode' && <TabQRCode ativo={data.ativo} ativoId={id} onRefresh={fetchDossier} />}
         {activeTab === 'os' && <TabOS os={data.os} navigate={navigate} ativoId={id} />}
         {activeTab === 'planos' && <TabPlanos planos={data.planos} />}
         {activeTab === 'inspecoes' && <TabInspecoes inspecoes={data.inspecoes} navigate={navigate} />}
