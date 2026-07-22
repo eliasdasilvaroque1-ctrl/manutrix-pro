@@ -552,6 +552,7 @@ async def master_update_org_config(org_id: str, data: dict, user: Dict = Depends
     ident_fields = [
         "nome_sistema", "nome_empresa", "subtitulo", "rodape",
         "texto_institucional", "texto_login", "mostrar_powered_by",
+        "wallpaper_url", "wallpaper_aplicacao", "wallpaper_intensidade", "wallpaper_blur",
     ]
     for k in ident_fields:
         if k in data:

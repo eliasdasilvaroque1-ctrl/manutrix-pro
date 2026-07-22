@@ -247,8 +247,8 @@ const MainLayout = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { branding } = useBranding() || {};
   const b = branding || {};
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
-  const showWp = b.wallpaper_url && shouldShowWallpaper(b.wallpaper_aplicacao, pathname, true);
+  const location = useLocation();
+  const showWp = b.wallpaper_url && shouldShowWallpaper(b.wallpaper_aplicacao, location.pathname, true);
   return (
     <div className="min-h-screen flex relative" style={{ backgroundColor: b.cor_fundo || 'var(--brand-bg)' }}>
       {showWp && <WallpaperLayer url={b.wallpaper_url} intensidade={b.wallpaper_intensidade} blur={b.wallpaper_blur} corFundo={b.cor_fundo} />}

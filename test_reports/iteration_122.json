@@ -1,0 +1,34 @@
+{
+  "summary": "RC Estabilização Fase 4 — Wallpaper Real do White Label. RETEST after main agent's fixes: CRITICAL BUG FIXED — PUT /api/master/organizations/{org_id}/config now persists wallpaper_aplicacao/wallpaper_intensidade/wallpaper_blur (whitelist updated at routes/org.py:552-556). MainLayout.js now uses useLocation() from react-router (line 250), so wallpaper visibility reacts correctly to SPA navigation. End-to-end verified: PUT master config → GET returns updated values; Dashboard (/), /os, /ativos all render data-testid='wallpaper-layer' when aplicacao='sistema_inteiro'; Login page (no org selected) renders with theme background rgb(2,6,23), NO black-out; UI (sidebar, cards, tables, text) remains fully legible with wallpaper active (opacity=0.1, blur=4px). Backend pytest 9/9 pass. Public QR and public branding regressions confirmed OK.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration121_wallpaper_fase4.py",
+    "/app/test_reports/pytest/iteration_122.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (non-blocking, pre-existing): Multiple 'You provided a `checked` prop to a form field without an onChange handler' warnings appear on /ativos page. Unrelated to wallpaper Fase 4 — likely a checkbox somewhere in AtivosPage/table filter uses `checked` without onChange (should use `defaultChecked` or add onChange). Does not affect functionality but pollutes console."
+  ],
+  "critical_code_review_comments": [
+    "routes/org.py:552-556 — ident_fields whitelist NOW includes wallpaper_url, wallpaper_aplicacao, wallpaper_intensidade, wallpaper_blur. Recommend future-proofing by extracting IDENTIDADE_FIELDS as a shared constant in org_config.py to prevent whitelist drift when adding new identidade fields (both defaults and PUT handler must stay in sync).",
+    "MainLayout.js:250 — Now correctly uses useLocation() from react-router so showWp recomputes on SPA route changes. Good.",
+    "App.js LoginPage — intentionally renders wallpaper whenever branding.wallpaper_url is truthy (no shouldShowWallpaper() check). This is correct because login page always shows wallpaper if configured, regardless of aplicacao setting.",
+    "WallpaperLayer.js:41 — Returns null when opacity===0. Good for wallpaper_intensidade=0 case.",
+    "OPTIONAL: Consider adding basic type/range validation on backend for wallpaper_intensidade (0/5/10/15) and wallpaper_blur (sem/suave/medio/forte) to prevent invalid values being persisted."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (9/9 tests pass)", "frontend": "100% (wallpaper renders on /, /os, /ativos; login page shows theme bg without black-out; no wallpaper-related JS errors)"},
+  "test_credentials": "Used /app/memory/test_credentials.md — master requires organization_id in login body; admin auto-detects org",
+  "seed_data_creation": "Modified wallpaper_aplicacao='sistema_inteiro' temporarily via master PUT for cross-route wallpaper visibility verification. ASTEC (9a232bf2...) already has wallpaper_url configured.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fase 4 Wallpaper Real do White Label is COMPLETE and working end-to-end. Backend PUT persistence bug (iteration 121) is fixed. Frontend renders wallpaper via WallpaperLayer with correct opacity/blur/zIndex on both LoginPage (App.js) and MainLayout.js. Currently wallpaper_aplicacao is set to 'sistema_inteiro' on ASTEC DO BRASIL (9a232bf2...) for verification — the config can be reset via master PUT to 'somente_login' if needed. To retest: login as admin (test.admin@maintrix.com/admin123) → navigate to / → confirm data-testid='wallpaper-layer' present.",
+  "rca of the issue": "Previous iteration 121 identified missing ident_fields whitelist entries. Main agent fixed by appending wallpaper_url, wallpaper_aplicacao, wallpaper_intensidade, wallpaper_blur to the list at routes/org.py:552-556. Additionally MainLayout.js switched from window.location.pathname to useLocation() from react-router-dom (line 250), so wallpaper toggles react to SPA navigation. Verified end-to-end: pytest 9/9 pass, browser test confirms wallpaper renders on multiple routes with correct opacity=0.1, filter=blur(4px), zIndex=0."
+}
