@@ -40,6 +40,7 @@ import { QRLabelModal } from "./pages/WhiteLabelDesignerPage";
 import { AppProviders, BrandingLoader, ConsentGate } from "./app/AppProviders";
 import MainLayout from "./app/MainLayout";
 import PublicErrorBoundary from "./components/PublicErrorBoundary";
+import WallpaperLayer from "./components/WallpaperLayer";
 
 // Lazy-loaded pages (heavy, less frequently accessed)
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -913,8 +914,11 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: branding.cor_login }} data-testid="login-page">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ backgroundColor: branding.cor_login }} data-testid="login-page">
+      {branding.wallpaper_url && (
+        <WallpaperLayer url={branding.wallpaper_url} intensidade={branding.wallpaper_intensidade} blur={branding.wallpaper_blur} />
+      )}
+      <div className="w-full max-w-md relative" style={{ zIndex: 1 }}>
         {/* Branding Header */}
         <div className="text-center mb-8">
           {branding.logo_url ? (

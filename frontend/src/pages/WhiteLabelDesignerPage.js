@@ -74,10 +74,12 @@ const PreviewLogin = ({ cfg }) => {
   const t = cfg.tema || {};
   const i = cfg.identidade || {};
   const wpUrl = i.wallpaper_url ? (i.wallpaper_url.startsWith('http') ? i.wallpaper_url : `${BACKEND_URL}${i.wallpaper_url}`) : null;
+  const wpIntensity = { 0: 0, 5: 0.05, 10: 0.10, 15: 0.15 }[i.wallpaper_intensidade ?? 10] ?? 0.10;
+  const wpBlur = { sem: '0px', suave: '4px', medio: '12px', forte: '24px' }[i.wallpaper_blur || 'sem'] || '0px';
   return (
     <div className="rounded-lg overflow-hidden border border-slate-700 relative" style={{ backgroundColor: t.cor_login || '#020617', minHeight: 200 }}>
-      {wpUrl && (
-        <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: `url(${wpUrl})`, backgroundSize: 'cover' }} />
+      {wpUrl && wpIntensity > 0 && (
+        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: `url(${wpUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', opacity: wpIntensity, filter: wpBlur !== '0px' ? `blur(${wpBlur})` : undefined, transform: wpBlur !== '0px' ? 'scale(1.05)' : undefined }} />
       )}
       <div className="p-4 text-center relative">
         {i.logo_url ? (
@@ -399,6 +401,41 @@ const WhiteLabelDesignerPage = () => {
                 </FormInput>
                 <AssetUploader label="Imagem de Fundo do Login" currentUrl={config.identidade?.wallpaper_url} orgId={selectedOrgId} assetType="wallpaper" onUploaded={url => handleAssetUploaded('wallpaper_url', url)} />
                 <ColorField label="Cor de Fundo do Login" value={config.tema?.cor_login} onChange={v => updateConfig('tema.cor_login', v)} />
+                {/* Configurações do Wallpaper */}
+                {config.identidade?.wallpaper_url && (
+                  <div className="p-4 rounded-lg border border-slate-700 bg-slate-800/30 space-y-4" data-testid="wl-wallpaper-config">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Configuracao do Wallpaper</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-xs text-slate-500 block mb-1">Aplicacao</label>
+                        <select value={config.identidade?.wallpaper_aplicacao || 'somente_login'} onChange={e => updateConfig('identidade.wallpaper_aplicacao', e.target.value)} className="input-industrial w-full px-3 text-sm" data-testid="wl-wp-aplicacao">
+                          <option value="somente_login">Somente Login</option>
+                          <option value="dashboard">Dashboard</option>
+                          <option value="sistema_inteiro">Sistema Inteiro</option>
+                        </select>
+                        <p className="text-[9px] text-slate-600 mt-0.5">Onde o wallpaper sera exibido</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 block mb-1">Intensidade</label>
+                        <select value={config.identidade?.wallpaper_intensidade ?? 10} onChange={e => updateConfig('identidade.wallpaper_intensidade', parseInt(e.target.value))} className="input-industrial w-full px-3 text-sm" data-testid="wl-wp-intensidade">
+                          <option value={0}>0% (invisivel)</option>
+                          <option value={5}>5% (sutil)</option>
+                          <option value={10}>10% (padrao)</option>
+                          <option value={15}>15% (visivel)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 block mb-1">Desfoque</label>
+                        <select value={config.identidade?.wallpaper_blur || 'sem'} onChange={e => updateConfig('identidade.wallpaper_blur', e.target.value)} className="input-industrial w-full px-3 text-sm" data-testid="wl-wp-blur">
+                          <option value="sem">Sem desfoque</option>
+                          <option value="suave">Suave</option>
+                          <option value="medio">Medio</option>
+                          <option value="forte">Forte</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

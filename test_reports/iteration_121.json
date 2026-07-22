@@ -1,0 +1,53 @@
+{
+  "summary": "RC Estabilização Fase 4 — Wallpaper Real do White Label. Structural components (WallpaperLayer, shouldShowWallpaper helper) exist and are wired in App.js (LoginPage) and MainLayout.js (auth area). WhiteLabelDesignerPage exposes wallpaper controls with all required data-testids (wl-wp-aplicacao, wl-wp-intensidade, wl-wp-blur). Backend defaults present in org_config.py. Frontend branding.js loads and merges wallpaper fields (with fallbacks). CRITICAL BUG FOUND: PUT /api/master/organizations/{org_id}/config silently drops wallpaper_aplicacao/wallpaper_intensidade/wallpaper_blur — the endpoint's ident_fields whitelist in routes/org.py (lines 552-555) does NOT include the three new wallpaper settings, so master users cannot persist them. Login page renders correctly with theme background (no black-out), no JS errors, public QR endpoint works, no regressions in public branding/auth routes.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "PUT /api/master/organizations/{org_id}/config",
+        "issue": "Silently drops wallpaper_aplicacao, wallpaper_intensidade, wallpaper_blur. The ident_fields whitelist in routes/org.py:552-555 does not include these fields, so even with 200 OK response the DB is not updated. Verified: PUT with {'wallpaper_aplicacao':'sistema_inteiro','wallpaper_intensidade':15,'wallpaper_blur':'suave'} returns 200 but GET immediately after still shows aplicacao=None, intensidade=None, blur=None.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/public/branding/{org_id}",
+        "issue": "For ASTEC (existing org) identidade returns wallpaper_url='/api/storage/.../61f985da.jpg' but wallpaper_aplicacao/intensidade/blur are None (never persisted because of the PUT bug). Frontend fallback (`?? 10`, `|| 'somente_login'`, `|| 'sem'`) masks this — configuration is effectively frozen at defaults for existing orgs until PUT bug is fixed."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "White Label wallpaper settings save",
+        "issue": "WhiteLabelDesignerPage.handleSave spreads config.identidade into PUT payload (includes wallpaper_aplicacao/intensidade/blur), backend accepts request but ignores these fields → user sees 'Configuração salva com sucesso!' but on reload settings revert. End-to-end feature is broken.",
+        "affected_selectors": ["wl-wp-aplicacao", "wl-wp-intensidade", "wl-wp-blur", "wl-save-btn"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration121_wallpaper_fase4.py",
+    "/app/test_reports/pytest/iteration_121.xml"
+  ],
+  "action_items": [
+    "FIX (main agent): Add 'wallpaper_url', 'wallpaper_aplicacao', 'wallpaper_intensidade', 'wallpaper_blur' to ident_fields list in /app/backend/routes/org.py line 552-555 (master_update_org_config PUT handler). This is a one-line fix that unblocks the entire Fase 4 feature.",
+    "OPTIONAL: Consider adding basic type/range validation for wallpaper_intensidade (0/5/10/15) and wallpaper_blur (sem/suave/medio/forte) at the endpoint to prevent bad values."
+  ],
+  "critical_code_review_comments": [
+    "routes/org.py:552-555 — ident_fields whitelist is incomplete after Fase 4 additions; whenever new identidade fields are added, both org_config.py (defaults) and this PUT handler must be updated in sync. Consider using a Pydantic model or iterating over a shared IDENTIDADE_FIELDS constant to avoid drift.",
+    "App.js:918 — LoginPage renders <WallpaperLayer> whenever branding.wallpaper_url is truthy, but does NOT use shouldShowWallpaper(). This is fine (login always shows wallpaper if configured), but naming/behavior is slightly inconsistent with MainLayout.js which uses the helper. Could add a comment explaining the divergence.",
+    "MainLayout.js:250 — uses window.location.pathname directly instead of useLocation() from react-router. This will not react to client-side navigation (SPA route changes won't recompute showWp). If aplicacao='dashboard', wallpaper will remain visible after navigating away from '/'. Recommend: const location = useLocation(); const pathname = location.pathname.",
+    "branding.js:86 — `ident.wallpaper_intensidade ?? 10` uses nullish coalescing correctly for 0 preservation, but backend currently returns None. Once backend PUT is fixed, verify the value 0 is honored (WallpaperLayer.js:41 already returns null when opacity===0). No change needed here."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration121_wallpaper_fase4.py (new)"
+  ],
+  "success_rate": {"backend": "89% (8/9 tests pass; 1 critical assertion fails on PUT persistence)", "frontend": "structural checks pass — login renders, no JS errors, no black-out, no regressions"},
+  "test_credentials": "Used /app/memory/test_credentials.md — master requires organization_id in login body",
+  "seed_data_creation": "None. ASTEC already has wallpaper_url configured from prior tests. Test resets wallpaper settings to defaults (somente_login/10/sem) at end.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent adds wallpaper_url/aplicacao/intensidade/blur to ident_fields in routes/org.py:552-555, re-run test_iteration121_wallpaper_fase4.py — the test test_put_wallpaper_settings_persist should pass. Frontend verification: log in as master (master@maintrix.com / master123 with ORG_ID), open /master/white-label, section Login, change dropdowns, save, reload — values must persist. Then verify wallpaper appears on system routes based on aplicacao setting.",
+  "rca of the issue": "Root cause: routes/org.py master_update_org_config (PUT handler) uses an explicit whitelist ident_fields = ['nome_sistema','nome_empresa','subtitulo','rodape','texto_institucional','texto_login','mostrar_powered_by']. Reproduction: PUT /api/master/organizations/{org_id}/config with body {'wallpaper_aplicacao':'sistema_inteiro','wallpaper_intensidade':15,'wallpaper_blur':'suave'} → response 200 → GET same endpoint → identidade.wallpaper_aplicacao=None. Mitigation: append the four wallpaper fields (wallpaper_url, wallpaper_aplicacao, wallpaper_intensidade, wallpaper_blur) to ident_fields. wallpaper_url is set via upload endpoint (working), but should also be settable/clearable via PUT for delete/reset flows."
+}
