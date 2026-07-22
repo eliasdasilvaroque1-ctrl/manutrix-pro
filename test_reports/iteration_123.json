@@ -1,0 +1,47 @@
+{
+  "summary": "RC de Correção Pré-Piloto (Modo Econômico) — todos os 9 itens validados. Backend: 7/7 pytest passes (auditoria admin OK, PCM api access by design, nova OS sem causa_falha, sem procedimento, título preservado quando procedimento selecionado, PDF /ordens-servico/{id}/pdf?modo=digital retorna 200 com seção 'TÍTULO DA INTERVENÇÃO' e sem QR no cabeçalho — server.py:3286 qr_path=None, ativos qrcode/png 200). Frontend Playwright: /admin/auditoria renderiza sem React Error #31 (41 logs listados, texto normal, sem 'Minified React error' na página), sidebar Admin mostra Auditoria+Configurações+Construtor Visual, sidebar PCM OCULTA Auditoria/White Label/Construtor Visual/Configurações (mostra apenas Planos de Inspeção e Documentos e Formulários em ADMIN), Nova OS modal: Causa da Falha input required=None (opcional), seção Estimativa de Custo/Financeiro/Custo Peças/Custo Total AUSENTE do modal, título 'Teste Titulo Independente' permaneceu inalterado após selecionar procedimento. Test data fix: usuário test.pcm@maintrix.com estava com deleted_at setado — restaurado via update Mongo.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/audit-logs", "issue": "PCM tem permissão de leitura no backend (server.py:4240 inclui 'pcm'). RC pediu apenas ocultar no sidebar — está OK, mas note que usuário PCM técnico pode acessar via URL direta / call de API. Se o requisito for endurecer, remover 'pcm' da lista."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/os (OSPage)", "issues": ["Console warning (não bloqueante): 'In HTML, span cannot be a child of option. This will cause a hydration error.' — pre-existente, aparece na página OS. Não relacionado ao RC atual."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration123_rc_correcoes.py",
+    "/app/test_reports/pytest/iteration_123.xml"
+  ],
+  "action_items": [
+    "OPCIONAL (não bloqueante): decidir se PCM deve também ser bloqueado no backend /api/admin/audit-logs (hoje aceita PCM por design em server.py:4240).",
+    "TEST-DATA (já corrigido pelo agente de testes): usuário test.pcm@maintrix.com estava soft-deleted (deleted_at != None) — foi restaurado. Considerar adicionar idempotência no seed_demo para reativar/atualizar usuários existentes.",
+    "OPCIONAL: corrigir warning de hydration ('span cannot be a child of option') em algum <select> da OSPage — não relacionado ao RC."
+  ],
+  "critical_code_review_comments": [
+    "ParadasPage.js:1083 — renderiza log.details com typeof/JSON.stringify — corrige React Error #31 para casos objeto. OK.",
+    "MainLayout.js:141-149 — sidebar ADMIN section só aparece se isAdmin||isPCM||isSupervisor; Auditoria só para isAdmin||isSupervisor; Configurações só isAdmin; White Label só isMaster; Construtor Visual só isAdmin||isMaster. PCM não vê nenhum destes. OK.",
+    "App.js ModalNovaOS (398-710) — form.custo_pecas/custo_mao_obra ainda existem no estado inicial e são enviados ao backend com 0, mas não há UI visível para editá-los (seção Financeiro removida linha 679-680). Se o objetivo é 100% remover custos, também remover do payload/state.",
+    "App.js:600 — onChange do procedimento_id apenas seta procedimento_id, sem alterar form.titulo. Título independente confirmado.",
+    "App.js:682-691 — filtro TEST_/DEV_/DEBUG_/TMP_ aplicado tanto no gate quanto no renderer. Bom (mas duplica a lógica — considerar extrair helper).",
+    "server.py:3286-3288 — qr_path=None hardcoded para cabeçalho da OS. QR não aparece no PDF da OS. QR de Ativos permanece ativo em endpoint separado (/ativos/{id}/qrcode/png). OK.",
+    "server.py:3328-3336 — Seção 'TÍTULO DA INTERVENÇÃO' renderiza os_doc.titulo diretamente, independente do procedimento. OK.",
+    "models.py:243 — causa_falha: Optional[str] = None. OK.",
+    "server.py:4240 — /admin/audit-logs permite PCM. Contradição semântica com FE que oculta o menu para PCM. Alinhar (ver action_items)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration123_rc_correcoes.py (novo)",
+    "MongoDB users.test.pcm@maintrix.com: deleted_at=None (restauração de test data)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (9/9 itens do checklist verificados)"},
+  "test_credentials": "Admin: test.admin@maintrix.com/admin123 (auto-org); PCM: test.pcm@maintrix.com/pcm123 (auto-org após restauração de deleted_at)",
+  "seed_data_creation": "Nenhum dado de seed criado. Test OS criadas via API foram deletadas ao final de cada teste. Test data fix: usuário PCM soft-deleted foi restaurado via db.users.update_one deleted_at=None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Todos os 9 itens do RC Correção Pré-Piloto foram validados end-to-end (backend + frontend). PCM user requires 'deleted_at': None in DB — foi restaurado. Se voltar a estar deletado, main agent deve rodar seed idempotente. Backend endpoint /api/admin/audit-logs aceita PCM (por design atual, não bloqueado); a proteção é somente no sidebar (MainLayout.js:146). PDF da OS confirmado sem QR no header via inspeção do texto extraído. OS test ID be9878f1-71ab-476e-b491-b1af7c402685 continua válida.",
+  "rca of the issue": "Não houve bug encontrado nos itens do RC. Único achado colateral: usuário test.pcm@maintrix.com estava soft-deleted no MongoDB (deleted_at='2026-07-22T16:43:16'), impedindo login. Reprodução: POST /api/auth/login com email+password válidos retornava 401 Credenciais inválidas. Causa: query em server.py:450 filtra {deleted_at: None}. Mitigação: restaurar deleted_at=None ou re-seed idempotente."
+}

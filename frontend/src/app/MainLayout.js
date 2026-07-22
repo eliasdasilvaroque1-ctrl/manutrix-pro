@@ -143,7 +143,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       ...(isAdmin || isPCM ? [{ icon: ClipboardCheck, label: 'Planos de Inspeção', path: '/admin/templates' }] : []),
       ...(isAdmin || isPCM ? [{ icon: FileText, label: 'Documentos e Formulários', path: '/config/documentos' }] : []),
       ...(isAdmin || isMaster ? [{ icon: Layers, label: 'Construtor Visual', path: '/config/construtor' }] : []),
-      { icon: Shield, label: 'Auditoria', path: '/admin/auditoria' },
+      ...(isAdmin || isSupervisor ? [{ icon: Shield, label: 'Auditoria', path: '/admin/auditoria' }] : []),
       ...(isAdmin ? [{ icon: Cog, label: 'Configurações', path: '/admin/config' }] : []),
       ...(isMaster ? [{ icon: Palette, label: 'White Label', path: '/master/white-label' }] : []),
       ...(isMaster ? [{ icon: Trash2, label: 'Limpeza', path: '/master/cleanup' }] : []),

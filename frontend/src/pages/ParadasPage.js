@@ -1080,7 +1080,7 @@ const AuditoriaPage = () => {
               <span className="text-[10px] text-slate-500 w-16 shrink-0">{log.user_role}</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded w-20 text-center shrink-0 ${actionColors[log.action] || 'text-slate-400 bg-slate-800'}`}>{log.action}</span>
               <span className="text-xs text-slate-500 w-20 shrink-0">{log.entity_type}</span>
-              <span className="text-xs text-slate-400 flex-1 truncate">{log.details}</span>
+              <span className="text-xs text-slate-400 flex-1 truncate">{typeof log.details === 'string' ? log.details : (log.details == null ? '-' : JSON.stringify(log.details))}</span>
             </div>
           ))}
         </div>

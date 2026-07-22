@@ -605,8 +605,8 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
 
           {/* Campos de Falha */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormInput label={`Causa da Falha${form.tipo === 'corretiva' ? ' *' : ''}`}>
-              <input type="text" value={form.causa_falha || ''} onChange={(e) => setForm({...form, causa_falha: e.target.value})} placeholder="Ex: Desgaste natural" className="input-industrial w-full px-4" required={form.tipo === 'corretiva'} data-testid="os-causa-falha" />
+            <FormInput label="Causa da Falha">
+              <input type="text" value={form.causa_falha || ''} onChange={(e) => setForm({...form, causa_falha: e.target.value})} placeholder="Ex: Desgaste natural (opcional)" className="input-industrial w-full px-4" data-testid="os-causa-falha" />
             </FormInput>
             <FormInput label="Equipamento Parado">
               <div className="flex items-center gap-4 h-10">
@@ -676,48 +676,19 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
           </div>
         </div>
         
-        {/* Financeiro */}
-        <div className="glass-card p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-purple-400 uppercase tracking-wider flex items-center gap-2">
-            <DollarSign size={16} /> Estimativa de Custo
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormInput label="Custo Peças (R$)">
-              <input
-                type="number"
-                step="0.01"
-                value={form.custo_pecas}
-                onChange={(e) => setForm({...form, custo_pecas: e.target.value})}
-                className="input-industrial w-full px-4"
-                min="0"
-              />
-            </FormInput>
-            <FormInput label="Custo Mão de Obra (R$)">
-              <input
-                type="number"
-                step="0.01"
-                value={form.custo_mao_obra}
-                onChange={(e) => setForm({...form, custo_mao_obra: e.target.value})}
-                className="input-industrial w-full px-4"
-                min="0"
-              />
-            </FormInput>
-            <div className="flex items-end">
-              <div className="glass-card p-3 w-full">
-                <p className="text-xs text-slate-500">Custo Total Estimado</p>
-                <p className="text-lg font-bold text-brand">
-                  R$ {((parseFloat(form.custo_pecas) || 0) + (parseFloat(form.custo_mao_obra) || 0)).toFixed(2)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Financeiro — oculto no piloto */}
         
-        {/* Campos Personalizados Dinâmicos */}
-        {camposConfig.length > 0 && (
+        {/* Campos Personalizados Dinâmicos — filtra prefixos de teste */}
+        {camposConfig.filter(c => {
+          const id = (c.identificador || c.nome || '').toUpperCase();
+          return !id.startsWith('TEST_') && !id.startsWith('DEV_') && !id.startsWith('DEBUG_') && !id.startsWith('TMP_');
+        }).length > 0 && (
           <div className="glass-card p-4 space-y-4">
             <DynamicFieldRenderer
-              campos={camposConfig}
+              campos={camposConfig.filter(c => {
+                const id = (c.identificador || c.nome || '').toUpperCase();
+                return !id.startsWith('TEST_') && !id.startsWith('DEV_') && !id.startsWith('DEBUG_') && !id.startsWith('TMP_');
+              })}
               valores={camposValores}
               onChange={(ident, val) => setCamposValores(prev => ({...prev, [ident]: val}))}
               userRole={user?.role}
