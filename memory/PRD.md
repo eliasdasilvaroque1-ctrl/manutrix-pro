@@ -1,55 +1,53 @@
 # MAINTRIX ENTERPRISE — PRD
 
-## Status: RC CORREÇÃO PRÉ-PILOTO HOMOLOGADA + FIX preview_numeracao
-## Versao: pilot-astec-v1.4.1-rc
+## Status: RC CORREÇÃO PDF OS HOMOLOGADA
+## Versao: pilot-astec-v1.4.2-rc
 ## Domínio: https://app.maintrix.com.br
 
 ---
 
-## FIX: Erro 500 preview_numeracao (22/07/2026)
+## CORREÇÃO PDF DA OS — MODO ECONÔMICO (22/07/2026)
 
-### Causa Raiz
-`routes/org.py:218` — `pattern.get("digitos", 5)` trata chave ausente mas não trata `null`, `""`, `0` ou string inválida armazenados no banco. Linha 224 executa `"0" * digitos`, gerando `TypeError` quando `digitos` não é int positivo.
+### Causa Raiz 1 — CNPJ Fictício no Cabeçalho
+O `layout_snapshot` da OS congelava o `cabecalho_snapshot` do Construtor Visual que continha dados de teste:
+- `razao_social: "MAINTRIX INT LTDA"`
+- `cnpj: "12.345.678/0001-99"`
+- `endereco: "Rua Integracao 123 Sao Paulo SP"`
+- `telefone: "(11) 5555-1234"`
+O `_render_custom_header(cab)` no `pdf_engine.py` renderizava esses dados diretamente.
+**Correção**: Pular aplicação do `layout_snapshot` no PDF da OS, usar header padrão com dados reais da organização.
 
-### Correção
-Validação segura com try/except + fallback para 5 (padrão do sistema). Nenhuma alteração no banco.
+### Causa Raiz 2 — QR Ainda Aparecendo
+O `_render_custom_header` verificava `self.qr_path` e renderizava QR independentemente.
+Com o header padrão e `qr_path=None`, QR não aparece mais.
 
-### Testes
-- null → digitos=5 ✅
-- vazio → digitos=5 ✅
-- zero → digitos=5 ✅
-- string inválida → digitos=5 ✅
-- valor válido (4) → digitos=4 ✅
-- API retorna 200 com preview correto ✅
+### Causa Raiz 3 — Rodapé Incorreto
+O `rodape_snapshot` tinha `texto_personalizado: "DOCUMENTO INT CONFIDENCIAL"` com flag `mostrar_identificacao_doc: true` mas sem `doc_code`, resultando em "DOCUMENTO INT CONFIDENCIAL | -".
+**Correção**: Usar rodapé padrão: "Documento gerado pelo MAINTRIX Enterprise | data | emissor | Página X/Y".
+
+### Arquivos Alterados (2)
+1. `backend/server.py` — print_os_pdf: layout_snapshot ignorado, header institucional, layout compacto, campos vazios ocultos, procedimento condicional
+2. `backend/pdf_engine.py` — header padrão melhorado (Unidade + OS nº), procedure_annex sem obs/assinaturas duplicadas
+
+### Testes: 24/24 PASS
+- OS sem procedimento: 1 página, ASTEC + Unidade, sem CNPJ fictício, sem QR ✅
+- OS com procedimento: 2 páginas, título preservado, Procedimento Aplicável visível ✅
+- OS campos vazios: fabricante/série ocultos, 1 página ✅
+- QR de Ativos funcional ✅
 
 ---
 
-## RC CORREÇÃO PRÉ-PILOTO — MODO ECONÔMICO (22/07/2026)
-
-### Correções Implementadas
-- P0 Auditoria (React Error #31) ✅
-- P0 Permissões PCM (Sidebar + API) ✅
-- P0 QR da OS no PDF (oculto cabeçalho) ✅
-- P1 Causa da Falha Opcional ✅
-- P1 Formulário Nova OS Simplificado ✅
-- P1 Título vs Procedimento Independente ✅
-
-### Testes: 16/16 PASS (7 backend + 9 frontend)
-
----
-
-## HISTÓRICO
-- HOTFIX P0.2 — QR Code URL Absoluta ✅
-- RC P1 — Dossiê Digital do Ativo v1.0 — Fases 1-3 ✅
-- RC Estabilização Fases 1-5 ✅
-- HOTFIX P0 — Tela Branca QR Code Público ✅
+## FIX preview_numeracao (22/07/2026) ✅
+## RC CORREÇÃO PRÉ-PILOTO (22/07/2026) ✅
+## RC Estabilização Fases 1-5 ✅
+## RC Dossiê Digital v1.0 ✅
+## HOTFIX QR Code URL Absoluta ✅
 
 ---
 
 ## POST-PILOTO BACKLOG
-1. P2: Inserir CNPJ nos Termos de Uso (aguardando dados oficiais do cliente)
-2. P2: Remover fallback Emergent Storage (ver análise abaixo)
-3. P2: Remover AtivoDetailPage dead code
-4. P1: RC6.1 — Construtor de Seções da OS
-5. P3: Cadastro de colaboradores, Turnos, Equipes, Indicadores
-6. P3: Dossiê de Intervenção, QR Mobile, Relatórios, Power BI, IA
+1. P2: Inserir CNPJ nos Termos de Uso (aguardando dados oficiais)
+2. P2: Remover fallback Emergent Storage
+3. P1: RC6.1 — Construtor de Seções da OS
+4. P3: Cadastro de colaboradores, Turnos, Equipes, Indicadores
+5. P3: Dossiê de Intervenção, QR Mobile, Relatórios, Power BI, IA
