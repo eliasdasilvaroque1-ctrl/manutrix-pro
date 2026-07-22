@@ -3,12 +3,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Box, Wrench, ClipboardCheck, AlertTriangle, FileText, Clock, BarChart3,
   ChevronRight, Plus, Edit, Download, RefreshCw, Eye, Calendar, Target, Shield, Zap,
-  Activity, TrendingUp, MapPin, Package, QrCode, Printer, ExternalLink, Copy
+  Activity, TrendingUp, MapPin, Package, QrCode, Printer, ExternalLink, Copy, BookOpen
 } from "lucide-react";
 import { api, useAuth, BACKEND_URL } from "../lib/api";
 import { StatusBadge, PriorityBadge, EmptyState, Loading, PageContainer, Modal, FormInput, Select } from "../components/shared";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
+import DossierEditTab from "./DossierEditTab";
 
 // ============== HEADER ==============
 const DossierHeader = ({ ativo, kpis }) => {
@@ -540,6 +541,7 @@ const AssetDossierPage = () => {
 
   const tabs = [
     { id: 'visao', label: 'Visao Geral', icon: Eye },
+    { id: 'dossier', label: 'Dossie Digital', icon: BookOpen },
     { id: 'qrcode', label: 'QR Code', icon: QrCode },
     { id: 'os', label: 'OS', icon: Wrench, count: data?.kpis?.total_os },
     { id: 'planos', label: 'Planos', icon: ClipboardCheck, count: data?.planos?.length },
@@ -588,6 +590,7 @@ const AssetDossierPage = () => {
       {/* Tab content */}
       <div className="mt-4">
         {activeTab === 'visao' && <TabVisaoGeral kpis={data.kpis} os={data.os} inspecoes={data.inspecoes} solicitacoes={data.solicitacoes} />}
+        {activeTab === 'dossier' && <DossierEditTab ativo={data.ativo} ativoId={id} onRefresh={fetchDossier} />}
         {activeTab === 'qrcode' && <TabQRCode ativo={data.ativo} ativoId={id} onRefresh={fetchDossier} />}
         {activeTab === 'os' && <TabOS os={data.os} navigate={navigate} ativoId={id} />}
         {activeTab === 'planos' && <TabPlanos planos={data.planos} />}

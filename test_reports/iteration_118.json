@@ -1,0 +1,45 @@
+{
+  "summary": "RC P1 Dossiê Digital v1.0 — FASE 2 (Frontend Edição): testes UI end-to-end concluídos com sucesso. Todos os 16 critérios do review request foram validados. Renderização da tab, preview em tempo real, seletor de modo de visão, edição+save persistindo via PUT /api/ativos/{id}/dossier (verificado via GET), campos de visibilidade, campos de documentos, botão Visualizar Dossiê com href correto (https://www.maintrix.com.br/equipamento/av-01-alimentador/...), regressão das tabs QR Code e Visão Geral OK. Nenhum erro de console. Sem action items críticos.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DossierEditTab.js: constante VISIBILITY_BLOCKS (linhas 36-46) está declarada mas nunca é usada (dead code) — a mesma lista é definida inline no map de visibility. Além disso, a última entrada (linha 45) usa `value: 'best_practices'` ao invés de `key:` (inconsistência com as outras). Sugerido remover a constante ou usá-la e corrigir o typo.",
+    "DossierEditTab.js: imports não utilizados detectáveis (X, ImageIcon, Box, Weight, Maximize2, Info, ChevronDown, ExternalLink) — recomenda-se limpeza para reduzir bundle.",
+    "DossierEditTab.js: hook `useMemo` importado mas não utilizado.",
+    "DossierEditTab.js: função `handlePhotoDelete` usa window.confirm — considerar substituir por Modal shadcn para consistência com o restante do app (mesmo com CTO exigindo simplicidade)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (não testado nesta fase)", "frontend": "100%"},
+  "test_credentials": "test.admin@maintrix.com/admin123 (usado com sucesso via injeção sessionStorage após POST /api/auth/login). Operador tem modal 'Termos e Privacidade' bloqueando primeiro acesso — não testado read-only via UI, mas RBAC verificado via inspeção de código (canEdit retorna true apenas para master/admin/pcm).",
+  "seed_data_creation": "Dados de teste alterados via PUT /api/ativos/0f8972a8-72c6-4941-97af-06cd61171904/dossier: description='TEST_DESC — Editado {timestamp}', technical_data.corrente='99 A'. Persistência verificada via GET.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login via API + injeção sessionStorage funcionou perfeitamente para bypassar o seletor de organização. Padrão: POST /api/auth/login → sessionStorage.setItem('maintrix_token', token) + setItem('maintrix_user', JSON.stringify(user)) → page.goto('/ativos/{id}'). Para testar RBAC read-only em outros perfis (operador/tec/supervisor), lembrar que precisam aceitar 'Termos e Privacidade' antes.",
+  "test_results_detail": {
+    "tab_dossier_renders": "PASS — [data-testid='dossier-tab-dossier'] existe; ao clicar, [data-testid='dossier-edit-tab'] renderiza",
+    "admin_can_edit_all_fields": "PASS — Admin viu e editou description, curiosity, warning, safety, best_practices, corrente, frequencia, linha, ponto_instalacao, public_status",
+    "preview_realtime": "PASS — [data-testid='dossier-preview'] mostra tag, nome, status, localização, descrição, dados técnicos, curiosity/warning/safety/best_practices em tempo real conforme form",
+    "preview_mode_selector": "PASS — preview-mode-public/authenticated/restricted trocam active class (border emerald-500). Como todos os blocos estão com visibility='public', o conteúdo visual é idêntico nos 3 modos (comportamento correto: público é visível em todos os níveis)",
+    "save_button_persists": "PASS — [data-testid='dossier-save-btn'] disabled quando !dirty; após edit habilita; após click salva via PUT (verificado no backend GET que retornou description e corrente novas)",
+    "view_public_href": "PASS — href = https://www.maintrix.com.br/equipamento/av-01-alimentador/Wb2xZ_y_eeAWO8Q8iLzjQJkH4sa_TuIu",
+    "photo_upload_button": "PASS — [data-testid='dossier-photo-upload'] presente quando não há foto",
+    "visibility_selects": "PASS — 9 selects [data-testid='visibility-select'] com 4 opções (public/authenticated/restricted/hidden). Troca funcional testada.",
+    "docs_form": "PASS — [data-testid='doc-title-input'], [data-testid='doc-type-select'] com 6 tipos, [data-testid='doc-upload-btn'] presentes",
+    "get_dossier": "PASS — GET /api/ativos/{id}/dossier retornou 200 e preencheu formulário com dados do ativo AV-01",
+    "put_dossier": "PASS — PUT /api/ativos/{id}/dossier retornou sucesso e persistiu (verificado via GET subsequente)",
+    "qrcode_tab_regression": "PASS — Ao clicar [data-testid='dossier-tab-qrcode'] dossier-edit-tab desaparece e tab QR renderiza",
+    "visao_tab_regression": "PASS — [data-testid='dossier-tab-visao'] click renderiza [data-testid='tab-visao-geral']",
+    "unsaved_indicator": "PASS — Badge 'Nao salvo' amarelo aparece quando dirty=true",
+    "toast_success": "PASS — Toast 'salvo com sucesso' exibido após save",
+    "console_errors": "PASS — Nenhum error/pageerror no console durante toda a sessão"
+  }
+}
