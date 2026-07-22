@@ -1,0 +1,54 @@
+{
+  "summary": "RC P1 Dossiê Digital v1.0 — FASE 3 (Página Pública Evoluída): testes end-to-end concluídos com 100% de sucesso. Backend: 17/17 pytest passed (endpoint público /api/public/equipment/{slug}/{token} sem auth, dados filtrados, sem vazamento de campos sensíveis). Frontend: página pública renderiza corretamente em mobile 360px e desktop 1920px, blocos condicionais (Você Sabia/Atenção/Segurança/Boas Práticas) só renderizam quando há conteúdo, cores distintas (amber/orange/red/emerald), status Operando=verde, localização completa, branding ASTEC Cedro, dados técnicos, inspeções com data DD/MM/YYYY, histórico resumido, rodapé MAINTRIX. QR inválido mostra erro amigável (não tela branca). Refresh direto da URL pública funciona. Regressão OK: login carrega, /ativos redireciona para /login. Nenhum erro de console.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_public_dossier.py",
+    "/app/test_reports/pytest/iteration_119_public_dossier.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PublicEquipmentPage.js:59 — data-testid usa `title.toLowerCase().replace(/\\s/g, '-')` que gera 'voce-sabia?' (com o `?` do título 'Voce Sabia?'). O selector fica correto pois o review request pediu 'block-voce-sabia?', mas seria mais robusto sanitizar caracteres especiais (ex: `.replace(/[^a-z0-9]+/g, '-')`) para evitar selectors CSS inválidos no futuro.",
+    "PublicEquipmentPage.js:28-31 — função safeText() está declarada mas nunca é usada. Como o React já escapa por padrão via JSX, é dead code — remover.",
+    "PublicEquipmentPage.js:311 — condição `history.total_manutencoes || history.total_inspecoes` avalia como falsy se ambos forem 0, o que é correto, mas se algum backend retornar strings ou numbers mistos poderia falhar. Robusto o suficiente para o payload atual.",
+    "Não há prevenção contra 429/rate-limit no endpoint público (rota aberta sem auth). Considerar adicionar rate limit no backend (ex: slowapi) para prevenir scraping/abuse.",
+    "Toda a UI está renderizada em português mas a maior parte do texto foi escrita sem acentos ('Descricao', 'Historico', 'Ultimas Inspecoes', 'Voce Sabia?'). Se a intenção é PT-BR completo, revisar acentuação."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_public_dossier.py (novo — 17 testes pytest)"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (18/18 critérios do review request)"},
+  "test_credentials": "Não foi necessário login (páginas públicas sem auth). Credenciais em /app/memory/test_credentials.md validadas via inspeção.",
+  "seed_data_creation": "Nenhum dado de seed criado nesta iteração. Foram utilizados os dados existentes do AV-01 (dossiê completo) e BB-03 (mínimo).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fase 3 do RC P1 completamente validada. Backend público /api/public/equipment/{slug}/{token} funciona sem auth, retorna dados filtrados (sem _id, organization_id, responsavel, custos, emails). Frontend PublicEquipmentPage renderiza blocos condicionalmente. Testes de regressão: login e /ativos funcionam. Screenshots salvos em /tmp/av01_mobile_360.png, /tmp/av01_desktop_1920.png, /tmp/bb03_mobile.png, /tmp/invalid_qr.png. Único dead code detectado: função safeText() não usada.",
+  "detailed_test_results": {
+    "backend_pytest": "17/17 passed — TestPublicEndpointAccess (3), TestPublicDossierContent (8), TestSensitiveDataFiltered (4), TestMinimalEquipment (2)",
+    "qr_valido_abre_ativo": "PASS — [data-testid=public-equipment-page] + equipment-name = 'ALIMENTADOR'",
+    "qr_invalido_erro_amigavel": "PASS — mostra 'Este equipamento nao possui informacoes publicas disponiveis. / Verifique o QR Code e tente novamente' (sem tela branca)",
+    "public_status_verde": "PASS — [data-testid=public-status] com classe emerald-500, texto 'Operando', bolinha verde",
+    "blocos_informativos_cores": "PASS — block-voce-sabia?/block-atencao/block-seguranca/block-boas-praticas com cores amber/orange/red/emerald",
+    "dados_tecnicos": "PASS — Modelo VGF4216, Tipo ALIMENTADOR VIBRATORIO, Corrente 99 A, Frequencia 60 Hz",
+    "inspecoes_data_formatada": "PASS — data '21/07/2026' (DD/MM/YYYY), max 3 itens",
+    "historico_resumido": "PASS — 'Historico' bloco com total_inspecoes",
+    "localizacao_completa": "PASS — 'PLANTA-03 / Linha 1 / Entrada Britagem' visível",
+    "branding_astec": "PASS — Logo + nome 'ASTEC Cedro' no header",
+    "mobile_360px": "PASS — screenshot /tmp/av01_mobile_360.png confirmando layout mobile-first correto",
+    "desktop_1920px_centralizado": "PASS — container max-w-2xl com width=672px, x=624 (centralizado horizontalmente)",
+    "api_publica_sem_auth": "PASS — 200 sem Authorization header",
+    "sem_dados_sensiveis": "PASS — no HTML rendered nenhum organization_id, _id, responsavel, custo, email detectado",
+    "refresh_direto_funciona": "PASS — page.reload() manteve renderização completa",
+    "console_sem_erros": "PASS — nenhum error/pageerror capturado em 4 sessões",
+    "campos_vazios_sem_cartoes": "PASS — BB-03 (sem public_dossier) NÃO renderiza block-voce-sabia?/atencao/seguranca/boas-praticas/description",
+    "rota_publica_sem_login": "PASS — /equipamento/:slug/:token acessível sem auth",
+    "regressao_login_ativos": "PASS — /login carrega, /ativos redireciona para /login"
+  }
+}
