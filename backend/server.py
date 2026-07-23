@@ -584,6 +584,7 @@ async def admin_reset_password(user_id: str, user: Dict = Depends(get_current_us
     target = await db.users.find_one({"id": user_id, "deleted_at": None}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    verify_org_access(user, target, "Usuário")
     
     # Generate temporary password
     temp_password = secrets.token_urlsafe(8)
@@ -615,6 +616,7 @@ async def admin_update_user(user_id: str, data: dict, user: Dict = Depends(get_c
     target = await db.users.find_one({"id": user_id, "deleted_at": None}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    verify_org_access(user, target, "Usuário")
     
     allowed_fields = {'nome', 'email', 'role', 'telefone', 'active', 'disciplina_principal', 'disciplinas_secundarias', 'turno', 'unidade_ids', 'area_ids', 'force_password_change'}
     update_data = {k: v for k, v in data.items() if k in allowed_fields and v is not None}
@@ -2162,10 +2164,11 @@ async def list_users(role: Optional[UserRole] = None, user: Dict = Depends(get_c
 
 @api_router.get("/users/tecnicos")
 async def list_tecnicos(user: Dict = Depends(get_current_user)):
-    query = {"deleted_at": None, "role": {"$in": ["tecnico", "inspetor", "supervisor"]}}
+    tecnico_roles = ["tecnico", "tec_mecanico", "tec_eletrico", "instrumentista", "lubrificador", "inspetor", "supervisor", "operador"]
+    query = {"deleted_at": None, "active": {"$ne": False}, "role": {"$in": tecnico_roles}}
     if user.get('organization_id'):
         query['organization_id'] = user['organization_id']
-    return await db.users.find(query, {"_id": 0, "id": 1, "nome": 1, "email": 1, "telefone": 1, "role": 1}).to_list(100)
+    return await db.users.find(query, {"_id": 0, "id": 1, "nome": 1, "email": 1, "telefone": 1, "role": 1, "disciplina_principal": 1, "turno": 1}).to_list(200)
 
 
 
@@ -3951,6 +3954,8 @@ async def list_knowledge(
     user: Dict = Depends(get_current_user)
 ):
     query = {}
+    if user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
     if tipo_equipamento:
         query['tipo_equipamento'] = tipo_equipamento
     items = await db.knowledge_base.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
@@ -3979,7 +3984,10 @@ async def create_knowledge(data: KnowledgeBaseCreate, user: Dict = Depends(get_c
 @api_router.delete("/knowledge-base/{kb_id}")
 async def delete_knowledge(kb_id: str, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
-    await db.knowledge_base.delete_one({"id": kb_id})
+    query = {"id": kb_id}
+    if user.get('role') != 'master' and user.get('organization_id'):
+        query['organization_id'] = user['organization_id']
+    await db.knowledge_base.delete_one(query)
     return {"success": True}
 
 # ============== GESTÃO DE USUÁRIOS (ADMIN) ==============
@@ -3997,7 +4005,7 @@ async def admin_list_users(user: Dict = Depends(get_current_user)):
 async def admin_get_user(user_id: str, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
     query = {"id": user_id, "deleted_at": None}
-    if user.get('organization_id'):
+    if user.get('role') != 'master' and user.get('organization_id'):
         query['organization_id'] = user['organization_id']
     target = await db.users.find_one(query, {"_id": 0, "password_hash": 0})
     if not target:
@@ -4009,6 +4017,8 @@ async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_u
     check_admin_only(user)
     email_normalized = data.email.lower().strip()
     target_org = data.organization_id or user.get('organization_id', '')
+    if user.get('role') != 'master' and target_org != user.get('organization_id', ''):
+        raise HTTPException(status_code=403, detail="Admin não pode criar usuário em outra organização")
     
     if not target_org:
         raise HTTPException(status_code=400, detail="organization_id é obrigatório")
@@ -4033,6 +4043,7 @@ async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_u
         "unidade_ids": data.unidade_ids or [],
         "password_hash": hash_password(data.password),
         "force_password_change": True,
+        "active": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "deleted_at": None
     }
@@ -4055,6 +4066,10 @@ async def admin_create_user(data: UserCreate, user: Dict = Depends(get_current_u
 @api_router.delete("/admin/users/{user_id}")
 async def admin_delete_user(user_id: str, user: Dict = Depends(get_current_user)):
     check_admin_only(user)
+    target = await db.users.find_one({"id": user_id, "deleted_at": None}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    verify_org_access(user, target, "Usuário")
     await db.users.update_one({"id": user_id}, {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}})
     return {"success": True}
 
