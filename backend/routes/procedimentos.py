@@ -14,6 +14,29 @@ router = APIRouter(tags=["procedimentos"])
 
 # ==================== CRUD PROCEDIMENTOS ====================
 
+async def get_procedimento_usage_summary(proc_id: str, org_id: str) -> List[dict]:
+    """Return active cross-module references that prevent procedure deletion."""
+    checks = [
+        ("Ordens de Serviço", db.ordens_servico, {"organization_id": org_id, "deleted_at": None, "procedimento_id": proc_id}),
+        ("Execuções", db.procedimento_execucoes, {"organization_id": org_id, "procedimento_id": proc_id}),
+        ("Snapshots de OS", db.ordens_servico, {"organization_id": org_id, "deleted_at": None, "procedimento_snapshot.id": proc_id}),
+        ("Modelos", db.modelos_os, {"organization_id": org_id, "deleted_at": None, "procedimento_id": proc_id}),
+        ("Modelos", db.modelos_inspecao, {"organization_id": org_id, "deleted_at": None, "procedimento_id": proc_id}),
+        ("Documentos", db.documentos_corporativos, {"organization_id": org_id, "deleted_at": None, "$or": [{"procedimento_id": proc_id}, {"procedimento_snapshot.id": proc_id}, {"library_ref_id": proc_id}]}),
+        ("Histórico", db.audit_logs, {"organization_id": org_id, "entity_type": {"$ne": "procedimento"}, "details.procedimento_id": proc_id}),
+    ]
+    grouped = {}
+    for label, collection, query in checks:
+        count = await collection.count_documents(query)
+        if count:
+            grouped[label] = grouped.get(label, 0) + count
+    return [{"tipo": label, "quantidade": count} for label, count in grouped.items()]
+
+
+def format_usage_block_message(usages: List[dict]) -> str:
+    parts = [f"{item['quantidade']} {item['tipo']}" for item in usages]
+    return f"Este procedimento está sendo utilizado por {' e '.join(parts)} e não pode ser removido."
+
 @router.get("/procedimentos")
 async def list_procedimentos(
     status: Optional[str] = None,
@@ -187,6 +210,14 @@ async def delete_procedimento(proc_id: str, user: Dict = Depends(get_current_use
     if not doc:
         raise HTTPException(status_code=404, detail="Procedimento não encontrado")
     verify_org_access(user, doc, "Procedimento")
+    org_id = doc.get('organization_id', user.get('organization_id', ''))
+
+    usages = await get_procedimento_usage_summary(proc_id, org_id)
+    if usages:
+        raise HTTPException(
+            status_code=409,
+            detail={"msg": format_usage_block_message(usages), "references": usages}
+        )
 
     await db.procedimentos.update_one(
         {"id": proc_id},

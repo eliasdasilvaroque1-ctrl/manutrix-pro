@@ -8,12 +8,13 @@ import uuid
 from deps import (
     db, get_current_user, check_admin_only, check_write_permission, check_not_gerente,
     audit_log, criar_notificacao, generate_os_numero, get_scoped_asset_ids, verify_org_access, audit_field_changes,
-    build_visibility_query, build_dashboard_visibility, ROLE_GROUPS
+    build_visibility_query, build_dashboard_visibility, ROLE_GROUPS, logger
 )
 from models import (
     OSCreate, OSUpdate, OSStatus,
     NotificacaoTipo, KanbanMoveBody, ConcluirOSBody
 )
+from data_architecture import rebuild_daily_metrics, rebuild_monthly_metrics
 
 router = APIRouter()
 
@@ -575,6 +576,15 @@ async def concluir_os(os_id: str, body: ConcluirOSBody = ConcluirOSBody(), user:
     if result.modified_count == 0:
         raise HTTPException(status_code=409, detail="OS já foi concluída ou cancelada por outro usuário")
     await audit_log("status_change", "ordens_servico", os_id, user, f"OS #{os_doc.get('numero')} → concluida (tempo: {tempo}min)")
+    try:
+        metric_dt = datetime.fromisoformat(data_conclusao_final.replace('Z', '+00:00'))
+        metric_date = metric_dt.strftime("%Y-%m-%d")
+        participant_ids = set((os_doc.get("equipe") or []) + [os_doc.get("responsavel_id"), user.get("id")])
+        for uid in [uid for uid in participant_ids if uid]:
+            await rebuild_daily_metrics(db, os_doc.get("organization_id", user.get("organization_id", "")), uid, metric_date)
+            await rebuild_monthly_metrics(db, os_doc.get("organization_id", user.get("organization_id", "")), uid, metric_dt.year, metric_dt.month)
+    except Exception as e:
+        logger.warning(f"Metrics rebuild failed after OS conclusion: {e}")
     return {"success": True, "tempo_execucao_minutos": tempo}
 
 

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth, api } from "../lib/api";
-import { normalizeError } from "../lib/constants";
+import { useAuth, api, safeErrorMsg } from "../lib/api";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2, Save, X, ChevronDown, ChevronUp, FileText, CheckCircle, Clock, Search, AlertCircle } from "lucide-react";
 import { PageContainer, PageHeader, SearchInput, EmptyState, Loading, Modal, ConfirmDialog } from "../components/shared";
@@ -17,6 +16,7 @@ const ProcedimentosPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
   const [expanded, setExpanded] = useState(null);
 
   const canWrite = ['admin', 'pcm', 'master'].includes(user?.role);
@@ -28,19 +28,22 @@ const ProcedimentosPage = () => {
       if (statusFilter) params.set('status', statusFilter);
       const res = await api.get(`/procedimentos?${params}`);
       setProcs(res.data);
-    } catch (e) { toast.error(normalizeError(e)); }
+    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao carregar procedimentos')); }
     finally { setLoading(false); }
   }, [search, statusFilter]);
 
   useEffect(() => { fetchProcs(); }, [fetchProcs]);
 
   const handleDelete = async () => {
+    if (!deleting?.id) return;
+    setDeletingBusy(true);
     try {
       await api.delete(`/procedimentos/${deleting.id}`);
       toast.success('Procedimento excluído');
       setDeleting(null);
       fetchProcs();
-    } catch (e) { toast.error(normalizeError(e)); }
+    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao excluir procedimento')); }
+    finally { setDeletingBusy(false); }
   };
 
   if (loading) return <Loading rows={4} />;
@@ -113,7 +116,15 @@ const ProcedimentosPage = () => {
       )}
 
       {showForm && <ProcedimentoForm proc={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSaved={fetchProcs} />}
-      {deleting && <ConfirmDialog title="Excluir Procedimento?" message={`Tem certeza que deseja excluir "${deleting.nome}"?`} onConfirm={handleDelete} onCancel={() => setDeleting(null)} />}
+      <ConfirmDialog
+        isOpen={!!deleting}
+        title="Excluir Procedimento?"
+        message={deletingBusy ? 'Excluindo procedimento...' : `Tem certeza que deseja excluir "${deleting?.nome || ''}"?`}
+        confirmText={deletingBusy ? 'Excluindo...' : 'Excluir'}
+        danger
+        onConfirm={deletingBusy ? undefined : handleDelete}
+        onClose={() => { if (!deletingBusy) setDeleting(null); }}
+      />
     </PageContainer>
   );
 };
@@ -172,7 +183,7 @@ const ProcedimentoForm = ({ proc, onClose, onSaved }) => {
       }
       onSaved();
       onClose();
-    } catch (e) { toast.error(normalizeError(e)); }
+    } catch (e) { toast.error(safeErrorMsg(e)); }
     finally { setSaving(false); }
   };
 
