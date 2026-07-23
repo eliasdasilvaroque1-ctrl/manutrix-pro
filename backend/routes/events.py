@@ -18,7 +18,6 @@ from data_architecture import (
 )
 
 router = APIRouter()
-TEAM_ROLES = list(dict.fromkeys(ROLE_GROUPS["execucao"] + ["supervisor", "operador", "inspetor"]))
 
 
 # ============== OS EVENTOS (Immutable Event Log) ==============
@@ -111,8 +110,6 @@ async def create_hh_registro(os_id: str, data: HHRegistroCreate, user: Dict = De
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     try:
         await rebuild_daily_metrics(db, user.get("organization_id", ""), user["id"], today)
-        now = datetime.now(timezone.utc)
-        await rebuild_monthly_metrics(db, user.get("organization_id", ""), user["id"], now.year, now.month)
     except Exception as e:
         logger.warning(f"Metrics rebuild failed: {e}")
     
@@ -241,13 +238,6 @@ async def create_hh_manual(os_id: str, data: dict, user: Dict = Depends(get_curr
 
     await audit_log("hh_manual", "ordens_servico", os_id, user,
         f"HH manual: {exec_user.get('nome','?') if exec_user else '?'} — {round(minutos/60,1)}h ({descricao})")
-    try:
-        metric_date = data_inicio[:10]
-        metric_dt = datetime.fromisoformat(data_inicio.replace('Z', '+00:00'))
-        await rebuild_daily_metrics(db, org_id, executante_id, metric_date)
-        await rebuild_monthly_metrics(db, org_id, executante_id, metric_dt.year, metric_dt.month)
-    except Exception as e:
-        logger.warning(f"Metrics rebuild failed after HH manual: {e}")
 
     return {"success": True, "minutos": round(minutos, 1)}
 
@@ -396,25 +386,27 @@ async def get_team_metrics(
     """Get metrics for all team members (for ranking/dashboard)."""
     org_id = user.get("organization_id", "")
     now = datetime.now(timezone.utc)
-
-    users = await db.users.find(
-        {"organization_id": org_id, "deleted_at": None, "active": {"$ne": False}, "role": {"$in": TEAM_ROLES}},
-        {"_id": 0, "id": 1, "nome": 1, "role": 1}
-    ).to_list(500)
-    user_map = {u["id"]: u for u in users}
-
-    metrics_by_user = {u["id"]: _empty_team_metric(u) for u in users}
-
-    if periodo == "hoje":
-        today = now.strftime("%Y-%m-%d")
-        dailies = await db.metricas_diarias.find(
-            {"organization_id": org_id, "data": today},
+    
+    if periodo == "mes":
+        mensais = await db.metricas_mensais.find(
+            {"organization_id": org_id, "ano": now.year, "mes": now.month},
             {"_id": 0}
-        ).to_list(500)
-        for d in dailies:
-            if d.get("user_id") in metrics_by_user:
-                metrics_by_user[d["user_id"]].update(d)
-
+        ).to_list(200)
+        
+        # Enrich with user names
+        user_ids = list(set(m.get("user_id") for m in mensais))
+        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "nome": 1, "role": 1}).to_list(200)
+        user_map = {u["id"]: u for u in users}
+        
+        for m in mensais:
+            u = user_map.get(m.get("user_id"), {})
+            m["user_nome"] = u.get("nome", "")
+            m["user_role"] = u.get("role", "")
+        
+        # Sort by os_total descending (ranking)
+        mensais.sort(key=lambda x: x.get("os_total", 0), reverse=True)
+        return mensais
+    
     elif periodo == "semana":
         from datetime import timedelta
         week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
@@ -431,44 +423,23 @@ async def get_team_metrics(
                 by_user[uid] = []
             by_user[uid].append(d)
         
+        result = []
+        user_ids = list(by_user.keys())
+        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "nome": 1, "role": 1}).to_list(200)
+        user_map = {u["id"]: u for u in users}
+        
         for uid, days in by_user.items():
-            if uid in metrics_by_user:
-                metrics_by_user[uid].update(_aggregate_dailies(days))
-
-    elif periodo == "mes":
-        mensais = await db.metricas_mensais.find(
-            {"organization_id": org_id, "ano": now.year, "mes": now.month},
-            {"_id": 0}
-        ).to_list(500)
-        for m in mensais:
-            if m.get("user_id") in metrics_by_user:
-                metrics_by_user[m["user_id"]].update(m)
-
-    elif periodo == "ano":
-        mensais = await db.metricas_mensais.find(
-            {"organization_id": org_id, "ano": now.year},
-            {"_id": 0}
-        ).to_list(5000)
-        by_user = {}
-        for m in mensais:
-            uid = m.get("user_id", "")
-            by_user.setdefault(uid, []).append(m)
-        for uid, months in by_user.items():
-            if uid in metrics_by_user:
-                metrics_by_user[uid].update(_aggregate_monthlies(months))
-
-    else:
-        raise HTTPException(status_code=400, detail="Período inválido")
-
-    result = []
-    for uid, metric in metrics_by_user.items():
-        u = user_map[uid]
-        metric["user_id"] = uid
-        metric["user_nome"] = u.get("nome", "")
-        metric["user_role"] = u.get("role", "")
-        result.append(metric)
-    result.sort(key=lambda x: (x.get("os_total", 0), x.get("hh_liquida_min", 0), x.get("user_nome", "")), reverse=True)
-    return result
+            agg = _aggregate_dailies(days)
+            u = user_map.get(uid, {})
+            agg["user_id"] = uid
+            agg["user_nome"] = u.get("nome", "")
+            agg["user_role"] = u.get("role", "")
+            result.append(agg)
+        
+        result.sort(key=lambda x: x.get("os_total", 0), reverse=True)
+        return result
+    
+    return []
 
 @router.post("/metricas/rebuild")
 async def trigger_metrics_rebuild(
@@ -520,22 +491,6 @@ def _aggregate_dailies(dailies: list) -> dict:
     totals["os_por_tipo"] = tipo_totals
     totals["tempo_medio_os_min"] = round(totals["hh_liquida_min"] / totals["os_total"], 1) if totals["os_total"] > 0 else 0
     return totals
-
-def _empty_team_metric(user_doc: dict) -> dict:
-    return {
-        "user_id": user_doc.get("id", ""),
-        "user_nome": user_doc.get("nome", ""),
-        "user_role": user_doc.get("role", ""),
-        "os_total": 0,
-        "os_solo": 0,
-        "os_compartilhada": 0,
-        "os_por_tipo": {},
-        "hh_bruta_min": 0,
-        "hh_liquida_min": 0,
-        "tempo_parado_min": 0,
-        "tempo_medio_os_min": 0,
-        "inspecoes": 0,
-    }
 
 def _aggregate_monthlies(mensais: list) -> dict:
     """Sum up monthly metrics into a single aggregate."""

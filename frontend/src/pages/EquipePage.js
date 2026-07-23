@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Users, Wrench, Clock, Activity, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
-import { api, useAuth, safeErrorMsg } from "../lib/api";
+import { api, useAuth } from "../lib/api";
 import { toast } from "sonner";
 import { EmptyState, Loading, PageContainer, PageHeader } from "../components/shared";
 
@@ -15,7 +15,7 @@ const EquipePage = () => {
     try {
       const res = await api.get(`/metricas/equipe?periodo=${periodo}`);
       setMetricas(res.data);
-    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao carregar métricas')); }
+    } catch { toast.error('Erro ao carregar métricas'); }
     finally { setLoading(false); }
   };
 
