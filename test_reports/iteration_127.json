@@ -1,0 +1,37 @@
+{
+  "summary": "RC IMPORTAÇÃO INICIAL DE ESTOQUE POR EXCEL — backend + frontend validados. Backend/pytest: 15 passed, 1 skipped (tecnico user inexistente por contexto). Cobertura: template retorna .xlsx válido com Content-Type openxmlformats + aba Estoque; validate rejeita não-.xlsx (400), detecta duplicados na planilha, marca 'existente' para IMP-001/IMP-002, rejeita linhas inválidas (sem código/descrição/valor negativo); confirm importa e persiste (via GET /api/estoque), retorna import_batch_id, com_conferencia=1 e sem_conferencia=1 corretamente (saldo_conferido=true para qtd explícita ou 0 explícito, false para qtd vazia); reimport dos mesmos códigos retorna existentes>=1 e NÃO duplica no banco (verificado por GET /api/estoque count==1); indicadores retornam valor_estimado/total_itens/itens_conferidos/itens_nao_conferidos/cobertura_percentual com aritmética consistente e Δvalor_estimado=+300.00 ao inserir 3×R$100 conferidos; PCM autorizado no validate (200); sem token retorna 401; regressão POST/GET/PUT/DELETE /api/estoque OK. Frontend/Playwright: login admin/PCM ok; /estoque carrega com 3 indicadores no topo (R$ 3.385,70 / 17.6% / 34); botão 'Importar Planilha' visível para admin E PCM (backend permite ambos); modal abre com data-testid=import-info-step, download-template-btn e file-input; filtro Conferidos/Não conferidos/Todos funcional; zero erros JS visíveis na página.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration127_estoque_import.py",
+    "/app/test_reports/pytest/iteration_127.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/estoque_import.py:145 — extensão validada por endswith('.xlsx') apenas; adicional recomendado: validar magic bytes (PK zip) para bloquear arquivo renomeado. Não é bloqueador — openpyxl.load_workbook em try/except já cobre corrupção (linha 156-158).",
+    "routes/estoque_import.py:242-249 — lógica de duplicados-planilha muta iterativamente items[] para reclassificar a primeira ocorrência. Correto, mas o resumo (linha 275-279) conta apenas por status atual, o que resulta em duplicados=2 (ambas as linhas), como esperado. OK.",
+    "routes/estoque_import.py:296 — check_write_permission(user, ['admin','pcm']) — não bloqueia master (bypass admin/master), o que está alinhado com o padrão do projeto (deps.py:241). OK.",
+    "routes/estoque_import.py:414-445 — indicadores dependem do campo saldo_conferido, ausente em itens legados. O contexto informa que isso é intencional (legados contam como não-conferido). Recomendação futura: script de migração para setar saldo_conferido=false explicitamente nos legados para simplificar o pipeline (evitar $eq com null).",
+    "routes/estoque_import.py:319 — batch_id gerado uma única vez e propagado em docs+movs; auditoria também registra batch_id. Excelente rastreabilidade.",
+    "routes/estoque_import.py:_parse_valor — trata formatos BR (1.250,50) e EN (1250.50) com regex compacto; retorna None em falha. Cobertura suficiente.",
+    "pages/EstoquePage.js — todos os data-testid presentes (import-estoque-btn, ind-valor, ind-cobertura, ind-total, filter-conferido, import-info-step, download-template-btn, file-input, go-confirm-btn, confirm-import-btn, close-result-btn). Excelente testabilidade.",
+    "OBS: Regra 'oculto para técnico' não pôde ser validada (sem usuário técnico). Backend nega (403) para roles fora de admin/pcm/master via check_write_permission — cobertura de segurança validada por contrato de rota."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration127_estoque_import.py (novo — 16 testes: template, validate ×5, confirm ×2, indicadores ×2, permissions ×3, estoque regression ×2)"
+  ],
+  "success_rate": {"backend": "100% (15/15, 1 skipped intencional)", "frontend": "100% (todos os cenários pedidos: indicadores, botão importar, modal, filtro conferidos)"},
+  "test_credentials": "Admin: test.admin@maintrix.com / admin123 ; PCM: test.pcm@maintrix.com / pcm123",
+  "seed_data_creation": "Testes criam itens com prefixos NEW-, IT127-, IT127R-, IND-, DUP-, MAN-, PCM-TST- e limpam via DELETE ao final. Deixa 1 item PCM-TST-1 caso já existisse (não removido pois PCM só valida, não confirma). Itens IMP-001..IMP-008 pré-existentes preservados.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RC de importação de estoque por Excel completamente funcional. Endpoints /api/estoque/template (GET), /api/estoque/import-excel/validate (POST multipart), /api/estoque/import-excel/confirm (POST JSON), /api/estoque/indicadores (GET). Frontend em pages/EstoquePage.js:461 (ImportExcelModal) tem 4 steps (info/preview/confirm/result) com data-testid completos. Regra de saldo_conferido: qtd vazia → false; qtd explícita (inclusive 0) → true. Batch_id UUID por importação persiste em itens_estoque.import_batch_id e movimentacoes_estoque.import_batch_id + audit_log 'import_excel'. Indicador valor_estimado = SUM(quantidade*custo_unitario) WHERE saldo_conferido=true. Cobertura = itens_conferidos/total_itens*100. Não há usuário técnico/operador no sistema para testar 403 via UI — backend valida via check_write_permission(['admin','pcm']) em deps.py:238. Ao criar novo teste xlsx use openpyxl.Workbook() e title='Estoque'. PCM É AUTORIZADO — o único role de escrita bloqueado seria tecnico/operador/gerente/visualizador (não existentes no seed).",
+  "rca of the issue": "Nenhuma issue encontrada. RC entregue conforme escopo — funcionalidade aditiva, sem alterações regressivas ao CRUD existente de /api/estoque (POST/GET/PUT/DELETE testados). Todos os requisitos funcionais e não-funcionais atendidos: contagem de status no preview (validos/advertencias/existentes/duplicados/invalidos), bloqueio de duplicidades tanto na planilha quanto no banco (verificado por reimport), marcação conferido/não-conferido correta (unit-testada), auditoria via audit_log('import_excel',...), indicadores calculados apenas sobre conferidos (verificado por delta de valor)."
+}

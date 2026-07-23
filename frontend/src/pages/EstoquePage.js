@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, AlertTriangle, ChevronDown, ChevronUp, Edit3, Trash2, MapPin, Package, DollarSign, Tag, Zap, RefreshCw, Save } from "lucide-react";
+import { Plus, AlertTriangle, ChevronDown, ChevronUp, Edit3, Trash2, MapPin, Package, DollarSign, Tag, Zap, RefreshCw, Save, Upload, Download, FileSpreadsheet, CheckCircle, XCircle, AlertCircle, X, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
-import { api, useAuth } from "../lib/api";
+import { api, useAuth, safeErrorMsg } from "../lib/api";
 import { normalizeError } from "../lib/constants";
 import { EmptyState, Loading, Modal, PageContainer, PageHeader, PageToolbar, SearchInput, FormInput, Select, ConfirmDialog } from "../components/shared";
 import { MaterialThumbnail, MaterialImageModal, MaterialImageUploader } from "../components/widgets/MaterialComponents";
@@ -20,8 +20,12 @@ const EstoquePage = () => {
   const [expandedMovs, setExpandedMovs] = useState([]);
   const [loadingMovs, setLoadingMovs] = useState(false);
   const [viewImage, setViewImage] = useState(null);
+  const [showImport, setShowImport] = useState(false);
+  const [indicadores, setIndicadores] = useState(null);
+  const [filterConferido, setFilterConferido] = useState('todos');
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const canImport = ['master', 'admin', 'pcm'].includes(user?.role);
   
   useEffect(() => {
     if (searchParams.get('critico') === 'true') setShowCritico(true);
@@ -37,9 +41,16 @@ const EstoquePage = () => {
       setLoading(false);
     }
   };
+
+  const fetchIndicadores = useCallback(async () => {
+    try {
+      const res = await api.get('/estoque/indicadores');
+      setIndicadores(res.data);
+    } catch { /* indicadores opcionais */ }
+  }, []);
   
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { fetchData(); }, [showCritico]);
+  useEffect(() => { fetchData(); fetchIndicadores(); }, [showCritico]);
   
   const handleDelete = async () => {
     try {
@@ -52,9 +63,13 @@ const EstoquePage = () => {
     }
   };
   
-  const filtered = search ? items.filter(i => 
+  const filtered = (search ? items.filter(i => 
     i.nome.toLowerCase().includes(search.toLowerCase()) || (i.sku || '').toLowerCase().includes(search.toLowerCase())
-  ) : items;
+  ) : items).filter(i => {
+    if (filterConferido === 'conferidos') return i.saldo_conferido === true;
+    if (filterConferido === 'nao_conferidos') return i.saldo_conferido === false;
+    return true;
+  });
 
   // E1: Toggle expand to show movimentações
   const toggleExpand = async (itemId) => {
@@ -83,13 +98,53 @@ const EstoquePage = () => {
     <PageContainer>
       <PageHeader title="Estoque">
         <ExportButtons entity="estoque" />
+        {canImport && (
+          <button onClick={() => setShowImport(true)} className="btn-secondary flex items-center gap-2" data-testid="import-estoque-btn">
+            <Upload size={18} /> Importar Planilha
+          </button>
+        )}
         <button onClick={() => { setEditItem(null); setShowModal(true); }} className="btn-primary flex items-center gap-2" data-testid="add-estoque-btn">
           <Plus size={20} /> Novo Item
         </button>
       </PageHeader>
+
+      {/* Indicadores */}
+      {indicadores && indicadores.total_itens > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4" data-testid="estoque-indicadores">
+          <div className="glass-card p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign size={16} className="text-emerald-400" />
+              <span className="text-xs text-slate-500 uppercase">Valor Estimado</span>
+            </div>
+            <p className="text-xl font-bold text-emerald-400" data-testid="ind-valor">R$ {(indicadores.valor_estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            <p className="text-[10px] text-slate-600 mt-1">Base: itens com saldo conferido</p>
+          </div>
+          <div className="glass-card p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart3 size={16} className="text-blue-400" />
+              <span className="text-xs text-slate-500 uppercase">Cobertura do Inventário</span>
+            </div>
+            <p className="text-xl font-bold text-blue-400" data-testid="ind-cobertura">{indicadores.cobertura_percentual}%</p>
+            <p className="text-[10px] text-slate-600 mt-1">{indicadores.itens_conferidos} conferidos · {indicadores.itens_nao_conferidos} aguardando</p>
+          </div>
+          <div className="glass-card p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Package size={16} className="text-slate-400" />
+              <span className="text-xs text-slate-500 uppercase">Total de Itens</span>
+            </div>
+            <p className="text-xl font-bold text-slate-200" data-testid="ind-total">{indicadores.total_itens}</p>
+            <p className="text-[10px] text-slate-600 mt-1">Cadastrados no sistema</p>
+          </div>
+        </div>
+      )}
       
       <PageToolbar>
         <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome ou código..." />
+        <select value={filterConferido} onChange={(e) => setFilterConferido(e.target.value)} className="input-industrial px-3 text-sm" data-testid="filter-conferido">
+          <option value="todos">Todos</option>
+          <option value="conferidos">Conferidos</option>
+          <option value="nao_conferidos">Não conferidos</option>
+        </select>
         <button
           onClick={() => setShowCritico(!showCritico)}
           className={`px-4 py-2 rounded-lg flex items-center gap-2 ${showCritico ? 'bg-red-500 text-white' : 'bg-surface text-secondary'}`}
@@ -201,6 +256,7 @@ const EstoquePage = () => {
         danger
       />
       {viewImage && <MaterialImageModal src={viewImage.src} nome={viewImage.nome} onClose={() => setViewImage(null)} />}
+      {showImport && <ImportExcelModal isOpen={showImport} onClose={() => setShowImport(false)} onSuccess={() => { fetchData(); fetchIndicadores(); }} />}
     </PageContainer>
   );
 };
@@ -389,6 +445,213 @@ const ModalNovoEstoque = ({ isOpen, onClose, onSuccess, editData = null }) => {
           </button>
         </div>
       </form>
+    </Modal>
+  );
+};
+
+// ============== IMPORT EXCEL MODAL ==============
+const STATUS_CONFIG = {
+  valido: { icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'Pronto' },
+  advertencia: { icon: AlertCircle, color: 'text-amber-400', bg: 'bg-amber-500/10', label: 'Advertência' },
+  existente: { icon: XCircle, color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Existente' },
+  duplicado_planilha: { icon: XCircle, color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'Duplicado' },
+  invalido: { icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10', label: 'Inválido' },
+};
+
+const ImportExcelModal = ({ isOpen, onClose, onSuccess }) => {
+  const [step, setStep] = useState('info'); // info | preview | confirm | result
+  const [uploading, setUploading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [result, setResult] = useState(null);
+  const fileRef = useCallback(node => { if (node) node.value = ''; }, []);
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await api.get('/estoque/template', { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'MAINTRIX_Modelo_Estoque.xlsx'; a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Modelo baixado!');
+    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao baixar modelo')); }
+  };
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      toast.error('Apenas arquivos .xlsx são aceitos');
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('/estoque/import-excel/validate', formData);
+      setPreview(res.data);
+      setStep('preview');
+    } catch (err) {
+      toast.error(safeErrorMsg(err, 'Erro ao processar planilha'));
+    } finally { setUploading(false); }
+  };
+
+  const handleConfirmImport = async () => {
+    if (importing) return;
+    setImporting(true);
+    try {
+      const res = await api.post('/estoque/import-excel/confirm', {
+        items: preview.items,
+        filename: preview.filename,
+      });
+      setResult(res.data);
+      setStep('result');
+      onSuccess();
+      toast.success(`${res.data.importados} itens importados!`);
+    } catch (err) {
+      toast.error(safeErrorMsg(err, 'Erro na importação'));
+    } finally { setImporting(false); }
+  };
+
+  const handleClose = () => {
+    setStep('info');
+    setPreview(null);
+    setResult(null);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={handleClose} title="Importar Estoque por Planilha" size="lg">
+      {step === 'info' && (
+        <div className="space-y-4" data-testid="import-info-step">
+          <div className="glass-card p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <FileSpreadsheet size={24} className="text-emerald-400 shrink-0 mt-1" />
+              <div className="text-sm text-slate-300 space-y-2">
+                <p>Importe sua lista de materiais utilizando o modelo oficial MAINTRIX.</p>
+                <p className="font-semibold text-slate-200">Dados obrigatórios:</p>
+                <ul className="list-disc list-inside text-slate-400 space-y-0.5">
+                  <li>Código</li>
+                  <li>Descrição</li>
+                  <li>Unidade</li>
+                  <li>Valor unitário</li>
+                </ul>
+                <p className="text-slate-400">A <strong className="text-slate-300">quantidade atual é opcional</strong>.</p>
+                <p className="text-slate-500 text-xs">Quando a quantidade não for informada, o item será cadastrado com saldo zero e ficará marcado como "Não conferido".</p>
+                <p className="text-slate-500 text-xs">Informações como fornecedor, fabricante, fotografia, localização e estoque mínimo poderão ser preenchidas posteriormente.</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button onClick={handleDownloadTemplate} className="btn-secondary flex-1 flex items-center justify-center gap-2" data-testid="download-template-btn">
+              <Download size={16} /> Baixar Modelo
+            </button>
+            <label className={`btn-primary flex-1 flex items-center justify-center gap-2 cursor-pointer ${uploading ? 'opacity-50' : ''}`}>
+              <Upload size={16} /> {uploading ? 'Processando...' : 'Selecionar Planilha'}
+              <input ref={fileRef} type="file" accept=".xlsx" onChange={handleFileSelect} className="hidden" disabled={uploading} data-testid="file-input" />
+            </label>
+          </div>
+          <button onClick={handleClose} className="w-full text-center text-sm text-slate-500 hover:text-slate-300 py-1">Cancelar</button>
+        </div>
+      )}
+
+      {step === 'preview' && preview && (
+        <div className="space-y-4" data-testid="import-preview-step">
+          {/* Resumo */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div className="glass-card p-3 text-center"><p className="text-lg font-bold text-slate-200">{preview.total_linhas}</p><p className="text-[10px] text-slate-500">Linhas</p></div>
+            <div className="glass-card p-3 text-center"><p className="text-lg font-bold text-emerald-400">{preview.validos}</p><p className="text-[10px] text-slate-500">Válidos</p></div>
+            <div className="glass-card p-3 text-center"><p className="text-lg font-bold text-amber-400">{preview.advertencias}</p><p className="text-[10px] text-slate-500">Advertências</p></div>
+            <div className="glass-card p-3 text-center"><p className="text-lg font-bold text-blue-400">{preview.existentes}</p><p className="text-[10px] text-slate-500">Existentes</p></div>
+            <div className="glass-card p-3 text-center"><p className="text-lg font-bold text-red-400">{preview.invalidos + preview.duplicados}</p><p className="text-[10px] text-slate-500">Rejeitados</p></div>
+          </div>
+
+          {/* Tabela preview */}
+          <div className="max-h-[350px] overflow-auto custom-scrollbar border border-slate-800 rounded-lg">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-900 sticky top-0">
+                <tr>
+                  <th className="px-2 py-2 text-left text-slate-500">#</th>
+                  <th className="px-2 py-2 text-left text-slate-500">Código</th>
+                  <th className="px-2 py-2 text-left text-slate-500">Descrição</th>
+                  <th className="px-2 py-2 text-left text-slate-500">Un</th>
+                  <th className="px-2 py-2 text-right text-slate-500">Valor</th>
+                  <th className="px-2 py-2 text-right text-slate-500">Qtd</th>
+                  <th className="px-2 py-2 text-left text-slate-500">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.items.map((item, idx) => {
+                  const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.invalido;
+                  const Icon = cfg.icon;
+                  return (
+                    <tr key={idx} className={`border-b border-slate-800/50 ${cfg.bg}`}>
+                      <td className="px-2 py-1.5 text-slate-600">{item.linha}</td>
+                      <td className="px-2 py-1.5 font-mono text-slate-300">{item.codigo}</td>
+                      <td className="px-2 py-1.5 text-slate-300 max-w-[200px] truncate">{item.descricao}</td>
+                      <td className="px-2 py-1.5 text-slate-400">{item.unidade}</td>
+                      <td className="px-2 py-1.5 text-right text-slate-400">{item.valor_unitario != null ? `R$ ${item.valor_unitario.toFixed(2)}` : '-'}</td>
+                      <td className="px-2 py-1.5 text-right text-slate-400">{item.quantidade}{!item.saldo_conferido && item.status === 'valido' ? ' *' : ''}</td>
+                      <td className="px-2 py-1.5">
+                        <span className={`flex items-center gap-1 ${cfg.color}`}>
+                          <Icon size={12} /> {item.mensagem?.length > 40 ? item.mensagem.slice(0, 40) + '...' : item.mensagem}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-slate-600">* Saldo não conferido</p>
+
+          <div className="flex gap-2">
+            <button onClick={() => setStep('info')} className="btn-secondary flex-1">Voltar</button>
+            <button onClick={() => setStep('confirm')} disabled={preview.validos === 0} className="btn-primary flex-1" data-testid="go-confirm-btn">
+              Revisar e Confirmar ({preview.validos} itens)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'confirm' && preview && (
+        <div className="space-y-4" data-testid="import-confirm-step">
+          <div className="glass-card p-4 text-sm text-slate-300 space-y-2">
+            <p className="font-semibold text-slate-200">Você está prestes a importar {preview.validos} novos itens.</p>
+            <p>Itens existentes, duplicados ou inválidos não serão importados.</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setStep('preview')} className="btn-secondary flex-1">Voltar</button>
+            <button onClick={handleClose} className="btn-secondary">Cancelar</button>
+            <button onClick={handleConfirmImport} disabled={importing} className="btn-primary flex-1 flex items-center justify-center gap-2" data-testid="confirm-import-btn">
+              {importing ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+              {importing ? 'Importando...' : 'Confirmar Importação'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'result' && result && (
+        <div className="space-y-4" data-testid="import-result-step">
+          <div className="text-center py-2">
+            <CheckCircle size={40} className="text-emerald-400 mx-auto mb-2" />
+            <h3 className="text-lg font-bold text-slate-200">Importação Concluída</h3>
+          </div>
+          <div className="glass-card p-4 space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-emerald-400">Itens importados</span><span className="font-bold text-emerald-400">{result.importados}</span></div>
+            <div className="flex justify-between"><span className="text-amber-400">Aguardando conferência</span><span className="font-bold text-amber-400">{result.sem_conferencia}</span></div>
+            <div className="flex justify-between"><span className="text-blue-400">Com saldo conferido</span><span className="font-bold text-blue-400">{result.com_conferencia}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Ignorados (existentes)</span><span className="text-slate-500">{result.ignorados}</span></div>
+            <hr className="border-slate-800" />
+            <div className="flex justify-between text-xs text-slate-600"><span>Usuário</span><span>{result.usuario}</span></div>
+            <div className="flex justify-between text-xs text-slate-600"><span>Data</span><span>{new Date(result.data).toLocaleString('pt-BR')}</span></div>
+            <div className="flex justify-between text-xs text-slate-600"><span>Lote</span><span className="font-mono">{result.import_batch_id?.slice(0, 8)}</span></div>
+          </div>
+          <button onClick={handleClose} className="btn-primary w-full" data-testid="close-result-btn">Fechar</button>
+        </div>
+      )}
     </Modal>
   );
 };

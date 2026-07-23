@@ -56,6 +56,7 @@ from routes.personalizacao import router as personalizacao_router, INDEXES as PE
 from routes.documentos_corporativos import router as docs_corp_router
 from routes.procedimentos import router as procedimentos_router
 from routes.dossier import router as dossier_router
+from routes.estoque_import import router as estoque_import_router
 
 app = FastAPI(title="MAINTRIX API", version="1.0.0")
 api_router = APIRouter(prefix="/api")
@@ -407,6 +408,7 @@ app.include_router(org_router, prefix="/api")
 app.include_router(biblioteca_router, prefix="/api")
 app.include_router(central_router, prefix="/api")
 app.include_router(dossier_router, prefix="/api")
+app.include_router(estoque_import_router, prefix="/api")
 
 # ============== AUTH ROUTES ==============
 
