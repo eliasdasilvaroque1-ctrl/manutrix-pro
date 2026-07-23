@@ -107,7 +107,7 @@ export const Loading = memo(({ rows = 3 }) => (
   </div>
 ));
 
-export const EmptyState = memo(({ icon: Icon = AlertTriangle, title, description, action, actionLabel }) => (
+export const EmptyState = memo(({ icon: Icon, title, description, action, actionLabel }) => (
   <div className="flex flex-col items-center justify-center py-12 text-center">
     <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-4">
       <Icon size={32} className="text-secondary" />

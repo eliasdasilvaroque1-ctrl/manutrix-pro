@@ -4,43 +4,12 @@ import { api, useAuth, safeErrorMsg } from "../lib/api";
 import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "../components/shared";
 import { toast } from "sonner";
 
-const DEFAULT_DOC_CONFIG = { organization_id: '', identidade_doc: {}, os_config: {}, inspecao_config: {}, foto_config: { classificacoes: ['antes', 'durante', 'depois', 'falha', 'componente', 'seguranca', 'outra'], legenda_obrigatoria: false, grid_colunas: 2, max_por_pagina: 4 }, assinatura_config: {} };
-const DOC_CONFIG_ENDPOINTS = [
-  { key: 'config', label: 'Configuração geral', path: '/doc-config', type: 'object' },
-  { key: 'procedimentos', label: 'Procedimentos', path: '/doc-config/procedimentos', type: 'array' },
-  { key: 'segurancas', label: 'Segurança', path: '/doc-config/seguranca', type: 'array' },
-  { key: 'checklists', label: 'Checklists', path: '/doc-config/checklists', type: 'array' },
-  { key: 'modelosInsp', label: 'Modelos de Inspeção', path: '/doc-config/modelos-inspecao', type: 'array' },
-  { key: 'modelosOS', label: 'Modelos de OS', path: '/doc-config/modelos-os', type: 'array' },
-  { key: 'campos', label: 'Campos personalizados', path: '/doc-config/campos', type: 'array' },
-  { key: 'cabecalhos', label: 'Cabeçalhos/Rodapés', path: '/doc-config/cabecalhos-rodapes', type: 'array' },
-  { key: 'assinaturas', label: 'Assinaturas', path: '/doc-config/assinaturas', type: 'array' },
-  { key: 'layouts', label: 'Layouts', path: '/doc-config/layouts', type: 'array' },
-];
-export const normalizeDocConfigArray = (value, sectionLabel = 'Seção') => {
-  if (Array.isArray(value)) return value.filter(item => item && typeof item === 'object');
-  console.warn(`[DocConfig] ${sectionLabel}: resposta inválida; esperado array.`, value);
-  return [];
-};
-export const normalizeDocConfigObject = (value, sectionLabel = 'Configuração') => {
-  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
-  console.warn(`[DocConfig] ${sectionLabel}: resposta inválida; esperado objeto.`, value);
-  return { ...DEFAULT_DOC_CONFIG };
-};
-const hasLinkedMissing = (id, list) => !!id && !normalizeDocConfigArray(list, 'referência').some(item => item.id === id);
-const MissingLinkedItemNotice = ({ label, id }) => id ? <p className="text-xs text-amber-400 mt-1" data-testid="missing-linked-item">{label}: item vinculado não encontrado ({String(id).slice(0, 8)}). Edite este registro para remover ou substituir o vínculo.</p> : null;
-const MissingOption = ({ id }) => id ? <option value={id}>Item vinculado não encontrado ({String(id).slice(0, 8)})</option> : null;
-const SectionLoadWarning = ({ error }) => error ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-100 px-4 py-3 text-sm" data-testid="section-load-warning"><strong>{error.label} indisponível.</strong> {error.message}</div> : null;
-const warnMissingReferences = (section, item, refs) => refs.forEach(({ field, list, label }) => { if (hasLinkedMissing(item?.[field], list)) console.warn(`[DocConfig] ${section}: ${label} ausente`, { id: item.id, field, refId: item[field] }); });
-
-
 // ===== MAIN PAGE =====
 const DocConfigPage = () => {
   const { user } = useAuth();
   const [tab, setTab] = useState('identidade');
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loadErrors, setLoadErrors] = useState({});
   const [procedimentos, setProcedimentos] = useState([]);
   const [segurancas, setSegurancas] = useState([]);
   const [checklists, setChecklists] = useState([]);
@@ -60,35 +29,30 @@ const DocConfigPage = () => {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const results = await Promise.allSettled(DOC_CONFIG_ENDPOINTS.map(endpoint => api.get(endpoint.path)));
-    const nextErrors = {};
-
-    results.forEach((result, idx) => {
-      const endpoint = DOC_CONFIG_ENDPOINTS[idx];
-      if (result.status === 'rejected') {
-        const message = safeErrorMsg(result.reason, 'Erro ao carregar esta seção');
-        nextErrors[endpoint.key] = { label: endpoint.label, message };
-        console.warn(`[DocConfig] Falha ao carregar ${endpoint.path}: ${message}`, result.reason);
-        return;
-      }
-      const data = result.value?.data;
-      if (endpoint.type === 'array' && !Array.isArray(data)) nextErrors[endpoint.key] = { label: endpoint.label, message: 'Resposta inválida do servidor; esperado lista.' };
-      if (endpoint.type === 'object' && (!data || typeof data !== 'object' || Array.isArray(data))) nextErrors[endpoint.key] = { label: endpoint.label, message: 'Resposta inválida do servidor; esperado configuração.' };
-
-      if (endpoint.key === 'config') setConfig(normalizeDocConfigObject(data, endpoint.label));
-      if (endpoint.key === 'procedimentos') setProcedimentos(normalizeDocConfigArray(data, endpoint.label));
-      if (endpoint.key === 'segurancas') setSegurancas(normalizeDocConfigArray(data, endpoint.label));
-      if (endpoint.key === 'checklists') setChecklists(normalizeDocConfigArray(data, endpoint.label));
-      if (endpoint.key === 'modelosInsp') setModelosInsp(normalizeDocConfigArray(data, endpoint.label));
-      if (endpoint.key === 'modelosOS') setModelosOS(normalizeDocConfigArray(data, endpoint.label));
-      if (endpoint.key === 'campos') setCampos(normalizeDocConfigArray(data, endpoint.label));
-      if (endpoint.key === 'cabecalhos') setCabecalhos(normalizeDocConfigArray(data, endpoint.label));
-      if (endpoint.key === 'assinaturas') setAssinaturas(normalizeDocConfigArray(data, endpoint.label));
-      if (endpoint.key === 'layouts') setLayouts(normalizeDocConfigArray(data, endpoint.label));
-    });
-
-    setLoadErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) toast.error('Algumas seções não foram carregadas. Verifique os avisos na tela.');
+    try {
+      const [cfgRes, procRes, segRes, clRes, miRes, moRes, cpRes, cbRes, asRes, lyRes] = await Promise.all([
+        api.get('/doc-config'),
+        api.get('/doc-config/procedimentos'),
+        api.get('/doc-config/seguranca'),
+        api.get('/doc-config/checklists'),
+        api.get('/doc-config/modelos-inspecao'),
+        api.get('/doc-config/modelos-os'),
+        api.get('/doc-config/campos'),
+        api.get('/doc-config/cabecalhos-rodapes'),
+        api.get('/doc-config/assinaturas'),
+        api.get('/doc-config/layouts'),
+      ]);
+      setConfig(cfgRes.data);
+      setProcedimentos(procRes.data);
+      setSegurancas(segRes.data);
+      setChecklists(clRes.data);
+      setModelosInsp(miRes.data);
+      setModelosOS(moRes.data);
+      setCampos(cpRes.data);
+      setCabecalhos(cbRes.data);
+      setAssinaturas(asRes.data);
+      setLayouts(lyRes.data);
+    } catch { toast.error('Erro ao carregar configuracoes'); }
     setLoading(false);
   }, []);
 
@@ -131,16 +95,16 @@ const DocConfigPage = () => {
         ))}
       </div>
 
-      {tab === 'identidade' && <><SectionLoadWarning error={loadErrors.config} /><IdentidadeTab config={config} onSave={saveConfig} canEdit={canEdit} /></>}
-      {tab === 'procedimentos' && <><SectionLoadWarning error={loadErrors.procedimentos} /><ProcedimentosTab items={procedimentos} onRefresh={fetchAll} canEdit={canEdit} editItem={editProc} setEditItem={setEditProc} /></>}
-      {tab === 'seguranca' && <><SectionLoadWarning error={loadErrors.segurancas} /><SegurancaTab items={segurancas} onRefresh={fetchAll} canEdit={canEdit} editItem={editSeg} setEditItem={setEditSeg} /></>}
-      {tab === 'checklists' && <><SectionLoadWarning error={loadErrors.checklists} /><ChecklistsTab items={checklists} onRefresh={fetchAll} canEdit={canEdit} editItem={editCL} setEditItem={setEditCL} /></>}
-      {tab === 'modelos-inspecao' && <><SectionLoadWarning error={loadErrors.modelosInsp} /><ModelosInspecaoTab items={modelosInsp} procedimentos={procedimentos} segurancas={segurancas} checklists={checklists} onRefresh={fetchAll} canEdit={canEdit} editItem={editMI} setEditItem={setEditMI} /></>}
-      {tab === 'modelos-os' && <><SectionLoadWarning error={loadErrors.modelosOS} /><ModelosOSTab items={modelosOS} procedimentos={procedimentos} segurancas={segurancas} checklists={checklists} onRefresh={fetchAll} canEdit={canEdit} editItem={editMO} setEditItem={setEditMO} /></>}
-      {tab === 'campos' && <><SectionLoadWarning error={loadErrors.campos} /><CamposTab items={campos} onRefresh={fetchAll} canEdit={canEdit} /></>}
-      {tab === 'cabecalhos' && <><SectionLoadWarning error={loadErrors.cabecalhos} /><CabecalhosTab items={cabecalhos} onRefresh={fetchAll} canEdit={canEdit} /></>}
-      {tab === 'assinaturas' && <><SectionLoadWarning error={loadErrors.assinaturas} /><AssinaturasTab items={assinaturas} onRefresh={fetchAll} canEdit={canEdit} /></>}
-      {tab === 'layouts' && <><SectionLoadWarning error={loadErrors.layouts} /><LayoutsTab items={layouts} cabecalhos={cabecalhos} campos={campos} assinaturas={assinaturas} onRefresh={fetchAll} canEdit={canEdit} /></>}
+      {tab === 'identidade' && <IdentidadeTab config={config} onSave={saveConfig} canEdit={canEdit} />}
+      {tab === 'procedimentos' && <ProcedimentosTab items={procedimentos} onRefresh={fetchAll} canEdit={canEdit} editItem={editProc} setEditItem={setEditProc} />}
+      {tab === 'seguranca' && <SegurancaTab items={segurancas} onRefresh={fetchAll} canEdit={canEdit} editItem={editSeg} setEditItem={setEditSeg} />}
+      {tab === 'checklists' && <ChecklistsTab items={checklists} onRefresh={fetchAll} canEdit={canEdit} editItem={editCL} setEditItem={setEditCL} />}
+      {tab === 'modelos-inspecao' && <ModelosInspecaoTab items={modelosInsp} procedimentos={procedimentos} segurancas={segurancas} checklists={checklists} onRefresh={fetchAll} canEdit={canEdit} editItem={editMI} setEditItem={setEditMI} />}
+      {tab === 'modelos-os' && <ModelosOSTab items={modelosOS} procedimentos={procedimentos} segurancas={segurancas} checklists={checklists} onRefresh={fetchAll} canEdit={canEdit} editItem={editMO} setEditItem={setEditMO} />}
+      {tab === 'campos' && <CamposTab items={campos} onRefresh={fetchAll} canEdit={canEdit} />}
+      {tab === 'cabecalhos' && <CabecalhosTab items={cabecalhos} onRefresh={fetchAll} canEdit={canEdit} />}
+      {tab === 'assinaturas' && <AssinaturasTab items={assinaturas} onRefresh={fetchAll} canEdit={canEdit} />}
+      {tab === 'layouts' && <LayoutsTab items={layouts} cabecalhos={cabecalhos} campos={campos} assinaturas={assinaturas} onRefresh={fetchAll} canEdit={canEdit} />}
       {tab === 'fotos' && <FotosTab config={config} onSave={saveConfig} canEdit={canEdit} />}
       {tab === 'preview' && <PreviewTab />}
     </PageContainer>
@@ -249,7 +213,7 @@ const ProcedimentosTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) 
 
 // ===== PROCEDIMENTO FORM MODAL =====
 const ProcedimentoForm = ({ item, onClose, onSuccess }) => {
-  const [form, setForm] = useState(item ? { ...item, etapas: normalizeDocConfigArray(item.etapas, 'Etapas'), ferramentas: Array.isArray(item.ferramentas) ? item.ferramentas : [], materiais: Array.isArray(item.materiais) ? item.materiais : [] } : { nome: '', codigo: '', tipo_atividade: '', disciplina: '', objetivo: '', pre_requisitos: '', etapas: [], ferramentas: [], materiais: [], observacoes: '' });
+  const [form, setForm] = useState(item || { nome: '', codigo: '', tipo_atividade: '', disciplina: '', objetivo: '', pre_requisitos: '', etapas: [], ferramentas: [], materiais: [], observacoes: '' });
   const [saving, setSaving] = useState(false);
 
   const addEtapa = () => setForm({...form, etapas: [...form.etapas, { numero: form.etapas.length + 1, descricao: '', observacao: '' }]});
@@ -459,7 +423,7 @@ const ChecklistsTab = ({ items, onRefresh, canEdit, editItem, setEditItem }) => 
 };
 
 const ChecklistForm = ({ item, onClose, onSuccess }) => {
-  const [form, setForm] = useState(item ? { ...item, itens: normalizeDocConfigArray(item.itens, 'Itens do checklist') } : { nome: '', descricao: '', disciplina: '', categoria: '', itens: [], status: 'ativo' });
+  const [form, setForm] = useState(item || { nome: '', descricao: '', disciplina: '', categoria: '', itens: [], status: 'ativo' });
   const [saving, setSaving] = useState(false);
   const addItem = () => setForm({...form, itens: [...form.itens, { descricao: '', tipo: 'boolean', obrigatorio: true, ordem: form.itens.length + 1 }]});
   const updateItem = (idx, field, val) => { const itens = [...form.itens]; itens[idx] = {...itens[idx], [field]: val}; setForm({...form, itens}); };
@@ -540,9 +504,7 @@ const ModelosInspecaoTab = ({ items, procedimentos, segurancas, checklists, onRe
       </div>
       {items.length === 0 ? <EmptyState title="Nenhum modelo de inspeção" /> : (
         <div className="space-y-2">
-          {items.map(m => {
-            warnMissingReferences('Modelos de Inspeção', m, [{ field: 'checklist_id', list: checklists, label: 'checklist' }, { field: 'procedimento_id', list: procedimentos, label: 'procedimento' }, { field: 'seguranca_id', list: segurancas, label: 'segurança' }]);
-            return (
+          {items.map(m => (
             <div key={m.id} className="glass-card p-4 flex items-center justify-between" data-testid={`mi-${m.id}`}>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -557,8 +519,7 @@ const ModelosInspecaoTab = ({ items, procedimentos, segurancas, checklists, onRe
                 {canEdit && <button onClick={() => handleDelete(m.id)} className="text-xs text-red-400 hover:text-red-300"><Trash2 size={14} /></button>}
               </div>
             </div>
-            );
-          })}
+          ))}
         </div>
       )}
       {showForm && <ModeloInspecaoForm item={editItem} procedimentos={procedimentos} segurancas={segurancas} checklists={checklists} onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); onRefresh(); }} />}
@@ -607,27 +568,21 @@ const ModeloInspecaoForm = ({ item, procedimentos, segurancas, checklists, onClo
         <FormInput label="Checklist associado">
           <select value={form.checklist_id || ''} onChange={e => setForm({...form, checklist_id: e.target.value, checklist_snapshot: null})} className="input-industrial w-full px-3">
             <option value="">Nenhum</option>
-            {hasLinkedMissing(form.checklist_id, checklists) && <MissingOption id={form.checklist_id} />}
-            {normalizeDocConfigArray(checklists, 'Checklists').map(c => <option key={c.id} value={c.id}>{c.nome} (v{c.versao})</option>)}
+            {(checklists || []).map(c => <option key={c.id} value={c.id}>{c.nome} (v{c.versao})</option>)}
           </select>
         </FormInput>
         <FormInput label="Procedimento associado">
           <select value={form.procedimento_id || ''} onChange={e => setForm({...form, procedimento_id: e.target.value, procedimento_snapshot: null})} className="input-industrial w-full px-3">
             <option value="">Nenhum</option>
-            {hasLinkedMissing(form.procedimento_id, procedimentos) && <MissingOption id={form.procedimento_id} />}
-            {normalizeDocConfigArray(procedimentos, 'Procedimentos').map(p => <option key={p.id} value={p.id}>{p.nome} (v{p.versao})</option>)}
+            {(procedimentos || []).map(p => <option key={p.id} value={p.id}>{p.nome} (v{p.versao})</option>)}
           </select>
         </FormInput>
         <FormInput label="Segurança associada">
           <select value={form.seguranca_id || ''} onChange={e => setForm({...form, seguranca_id: e.target.value, seguranca_snapshot: null})} className="input-industrial w-full px-3">
             <option value="">Nenhum</option>
-            {hasLinkedMissing(form.seguranca_id, segurancas) && <MissingOption id={form.seguranca_id} />}
-            {normalizeDocConfigArray(segurancas, 'Segurança').map(s => <option key={s.id} value={s.id}>{s.nome} (v{s.versao})</option>)}
+            {(segurancas || []).map(s => <option key={s.id} value={s.id}>{s.nome} (v{s.versao})</option>)}
           </select>
         </FormInput>
-        {hasLinkedMissing(form.checklist_id, checklists) && <MissingLinkedItemNotice label="Checklist associado" id={form.checklist_id} />}
-        {hasLinkedMissing(form.procedimento_id, procedimentos) && <MissingLinkedItemNotice label="Procedimento associado" id={form.procedimento_id} />}
-        {hasLinkedMissing(form.seguranca_id, segurancas) && <MissingLinkedItemNotice label="Segurança associada" id={form.seguranca_id} />}
         <FormInput label="Campos obrigatórios (separar por vírgula)">
           <input value={(form.campos_obrigatorios || []).join(', ')} onChange={e => setForm({...form, campos_obrigatorios: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} className="input-industrial w-full px-3" placeholder="Ex: resultado, observacoes, foto" />
         </FormInput>
@@ -659,9 +614,7 @@ const ModelosOSTab = ({ items, procedimentos, segurancas, checklists, onRefresh,
       </div>
       {items.length === 0 ? <EmptyState title="Nenhum modelo de OS" /> : (
         <div className="space-y-2">
-          {items.map(m => {
-            warnMissingReferences('Modelos de OS', m, [{ field: 'checklist_id', list: checklists, label: 'checklist' }, { field: 'procedimento_id', list: procedimentos, label: 'procedimento' }, { field: 'seguranca_id', list: segurancas, label: 'segurança' }]);
-            return (
+          {items.map(m => (
             <div key={m.id} className="glass-card p-4 flex items-center justify-between" data-testid={`mo-${m.id}`}>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -676,8 +629,7 @@ const ModelosOSTab = ({ items, procedimentos, segurancas, checklists, onRefresh,
                 {canEdit && <button onClick={() => handleDelete(m.id)} className="text-xs text-red-400 hover:text-red-300"><Trash2 size={14} /></button>}
               </div>
             </div>
-            );
-          })}
+          ))}
         </div>
       )}
       {showForm && <ModeloOSForm item={editItem} procedimentos={procedimentos} segurancas={segurancas} checklists={checklists} onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); onRefresh(); }} />}
@@ -725,27 +677,21 @@ const ModeloOSForm = ({ item, procedimentos, segurancas, checklists, onClose, on
         <FormInput label="Procedimento padrão">
           <select value={form.procedimento_id || ''} onChange={e => setForm({...form, procedimento_id: e.target.value, procedimento_snapshot: null})} className="input-industrial w-full px-3">
             <option value="">Nenhum</option>
-            {hasLinkedMissing(form.procedimento_id, procedimentos) && <MissingOption id={form.procedimento_id} />}
-            {normalizeDocConfigArray(procedimentos, 'Procedimentos').map(p => <option key={p.id} value={p.id}>{p.nome} (v{p.versao})</option>)}
+            {(procedimentos || []).map(p => <option key={p.id} value={p.id}>{p.nome} (v{p.versao})</option>)}
           </select>
         </FormInput>
         <FormInput label="Segurança padrão">
           <select value={form.seguranca_id || ''} onChange={e => setForm({...form, seguranca_id: e.target.value, seguranca_snapshot: null})} className="input-industrial w-full px-3">
             <option value="">Nenhum</option>
-            {hasLinkedMissing(form.seguranca_id, segurancas) && <MissingOption id={form.seguranca_id} />}
-            {normalizeDocConfigArray(segurancas, 'Segurança').map(s => <option key={s.id} value={s.id}>{s.nome} (v{s.versao})</option>)}
+            {(segurancas || []).map(s => <option key={s.id} value={s.id}>{s.nome} (v{s.versao})</option>)}
           </select>
         </FormInput>
         <FormInput label="Checklist padrão">
           <select value={form.checklist_id || ''} onChange={e => setForm({...form, checklist_id: e.target.value, checklist_snapshot: null})} className="input-industrial w-full px-3">
             <option value="">Nenhum</option>
-            {hasLinkedMissing(form.checklist_id, checklists) && <MissingOption id={form.checklist_id} />}
-            {normalizeDocConfigArray(checklists, 'Checklists').map(c => <option key={c.id} value={c.id}>{c.nome} (v{c.versao})</option>)}
+            {(checklists || []).map(c => <option key={c.id} value={c.id}>{c.nome} (v{c.versao})</option>)}
           </select>
         </FormInput>
-        {hasLinkedMissing(form.procedimento_id, procedimentos) && <MissingLinkedItemNotice label="Procedimento padrão" id={form.procedimento_id} />}
-        {hasLinkedMissing(form.seguranca_id, segurancas) && <MissingLinkedItemNotice label="Segurança padrão" id={form.seguranca_id} />}
-        {hasLinkedMissing(form.checklist_id, checklists) && <MissingLinkedItemNotice label="Checklist padrão" id={form.checklist_id} />}
         <FormInput label="Campos obrigatórios (separar por vírgula)">
           <input value={(form.campos_obrigatorios || []).join(', ')} onChange={e => setForm({...form, campos_obrigatorios: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} className="input-industrial w-full px-3" placeholder="Ex: procedimento, seguranca, foto" />
         </FormInput>
@@ -998,7 +944,7 @@ const AssinaturasTab = ({ items, onRefresh, canEdit }) => {
 
 const AssinaturaForm = ({ item, onClose, onSuccess }) => {
   const CAMPOS_ASS = ['nome','cargo','matricula','data','papel','assinatura_imagem'];
-  const [form, setForm] = useState(item ? { ...item, campos: normalizeDocConfigArray(item.campos, 'Campos da assinatura') } : { nome:'',papel:'executor',campos:[{campo:'nome',obrigatorio:true,ordem:1},{campo:'cargo',obrigatorio:false,ordem:2},{campo:'data',obrigatorio:true,ordem:3}],matricula_obrigatoria:false,captura_digital:false,status:'ativo' });
+  const [form, setForm] = useState(item || { nome:'',papel:'executor',campos:[{campo:'nome',obrigatorio:true,ordem:1},{campo:'cargo',obrigatorio:false,ordem:2},{campo:'data',obrigatorio:true,ordem:3}],matricula_obrigatoria:false,captura_digital:false,status:'ativo' });
   const [saving, setSaving] = useState(false);
   const toggleCampo = (campo) => {
     const exists = (form.campos||[]).find(c => c.campo === campo);
@@ -1095,7 +1041,7 @@ const LayoutsTab = ({ items, cabecalhos, campos, assinaturas, onRefresh, canEdit
 const BLOCOS = ['equipamento','informacoes','descricao','equipe','datas','procedimento','seguranca','materiais','observacoes','fotos','checklist','historico','assinaturas','campos_personalizados'];
 
 const LayoutForm = ({ item, cabecalhos, campos, assinaturas, onClose, onSuccess }) => {
-  const [form, setForm] = useState(item ? { ...item, blocos_visiveis: Array.isArray(item.blocos_visiveis) ? item.blocos_visiveis : [], campos_personalizados_ids: Array.isArray(item.campos_personalizados_ids) ? item.campos_personalizados_ids : [], assinatura_ids: Array.isArray(item.assinatura_ids) ? item.assinatura_ids : [] } : { nome:'',tipo_documento:'',orientacao:'retrato',tamanho_pagina:'A4',cabecalho_id:'',rodape_id:'',blocos_visiveis:['equipamento','informacoes','descricao','procedimento','seguranca','fotos','assinaturas'],blocos_ocultos:[],campos_personalizados_ids:[],assinatura_ids:[],mostrar_fotos:true,mostrar_materiais:true,mostrar_historico:false,mostrar_checklist:true,mostrar_qr_code:true,colunas:1,status:'ativo' });
+  const [form, setForm] = useState(item || { nome:'',tipo_documento:'',orientacao:'retrato',tamanho_pagina:'A4',cabecalho_id:'',rodape_id:'',blocos_visiveis:['equipamento','informacoes','descricao','procedimento','seguranca','fotos','assinaturas'],blocos_ocultos:[],campos_personalizados_ids:[],assinatura_ids:[],mostrar_fotos:true,mostrar_materiais:true,mostrar_historico:false,mostrar_checklist:true,mostrar_qr_code:true,colunas:1,status:'ativo' });
   const [saving, setSaving] = useState(false);
   const toggleBloco = (b) => {
     const vis = [...(form.blocos_visiveis||[])];
@@ -1136,22 +1082,16 @@ const LayoutForm = ({ item, cabecalhos, campos, assinaturas, onClose, onSuccess 
           <FormInput label="Cabeçalho">
             <select value={form.cabecalho_id||''} onChange={e => setForm({...form, cabecalho_id: e.target.value, cabecalho_snapshot: null})} className="input-industrial w-full px-3">
               <option value="">Padrão</option>
-              {hasLinkedMissing(form.cabecalho_id, cabs) && <MissingOption id={form.cabecalho_id} />}
               {cabs.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </FormInput>
           <FormInput label="Rodapé">
             <select value={form.rodape_id||''} onChange={e => setForm({...form, rodape_id: e.target.value, rodape_snapshot: null})} className="input-industrial w-full px-3">
               <option value="">Padrão</option>
-              {hasLinkedMissing(form.rodape_id, rods) && <MissingOption id={form.rodape_id} />}
               {rods.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
             </select>
           </FormInput>
         </div>
-        {hasLinkedMissing(form.cabecalho_id, cabs) && <MissingLinkedItemNotice label="Cabeçalho" id={form.cabecalho_id} />}
-        {hasLinkedMissing(form.rodape_id, rods) && <MissingLinkedItemNotice label="Rodapé" id={form.rodape_id} />}
-        {form.campos_personalizados_ids?.filter(id => hasLinkedMissing(id, campos)).map(id => <MissingLinkedItemNotice key={`campo-${id}`} label="Campo personalizado" id={id} />)}
-        {form.assinatura_ids?.filter(id => hasLinkedMissing(id, assinaturas)).map(id => <MissingLinkedItemNotice key={`assinatura-${id}`} label="Assinatura" id={id} />)}
         <div>
           <label className="text-xs font-medium text-slate-400 mb-2 block">Blocos visíveis</label>
           <div className="flex flex-wrap gap-2">
