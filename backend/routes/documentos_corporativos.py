@@ -523,6 +523,7 @@ async def upload_document_file(doc_id: str, file: UploadFile = File(...), user=D
     file_hash = hashlib.sha256(content).hexdigest()[:16]
 
     # Try object storage first, fallback to local
+    storage_path = None
     try:
         from server import objstore, UPLOAD_DIR
         if objstore.is_available():
@@ -544,6 +545,25 @@ async def upload_document_file(doc_id: str, file: UploadFile = File(...), user=D
             await f.write(content)
         file_url = f"/api/uploads/{filename}"
 
+    # Private tenant-scoped registration is required by /api/storage and /api/uploads.
+    # Without this registry entry, the security layer denies the file after upload.
+    registry_data = {
+        "url": file_url,
+        "organization_id": org_id,
+        "uploaded_by": user_id,
+        "is_public": False,
+        "category": "corporate_document",
+        "document_id": doc_id,
+        "registered_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if storage_path:
+        registry_data["storage_path"] = storage_path
+    await db.file_registry.update_one(
+        {"url": file_url},
+        {"$set": registry_data},
+        upsert=True,
+    )
+
     # Archive old file info before updating
     old_file = {k: doc.get(k) for k in ('file_url', 'file_name', 'file_type', 'file_size') if doc.get(k)}
     if old_file:
@@ -563,7 +583,13 @@ async def upload_document_file(doc_id: str, file: UploadFile = File(...), user=D
     )
     await _audit_log(org_id, user_id, "upload", doc_id, {"file_name": safe_name, "file_size": len(content), "file_hash": file_hash})
 
-    return {"file_url": file_url, "file_name": safe_name, "file_size": len(content), "status": "uploaded"}
+    return {
+        "file_url": file_url,
+        "file_name": safe_name,
+        "file_type": mime or ext,
+        "file_size": len(content),
+        "status": "uploaded",
+    }
 
 
 # ============== MISSÃO 2: VÍNCULO AUTOMÁTICO ==============
