@@ -2,14 +2,29 @@
 Procedimentos Operacionais — CRUD + Execução + Auditoria
 RC5.2 — Piloto ASTEC
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Dict, Optional, List
 from datetime import datetime, timezone
 import uuid
 
 from deps import db, get_current_user, check_write_permission, verify_org_access
+from procedure_catalog import (
+    build_procedure_catalog,
+    find_active_procedure,
+    find_procedure,
+)
 
 router = APIRouter(tags=["procedimentos"])
+PROCEDURE_READ_ROLES = {
+    'master', 'admin', 'pcm', 'supervisor', 'gerente',
+    'tec_mecanico', 'tec_eletrico', 'instrumentista', 'lubrificador',
+    'tecnico', 'inspetor', 'operador',
+}
+
+
+def _require_procedure_reader(user: Dict):
+    if user.get('role') not in PROCEDURE_READ_ROLES:
+        raise HTTPException(status_code=403, detail="Sem permissão para visualizar procedimentos")
 
 
 # ==================== CRUD PROCEDIMENTOS ====================
@@ -18,19 +33,20 @@ router = APIRouter(tags=["procedimentos"])
 async def list_procedimentos(
     status: Optional[str] = None,
     search: Optional[str] = None,
+    include_meta: bool = Query(False),
     user: Dict = Depends(get_current_user)
 ):
+    _require_procedure_reader(user)
     org_id = user.get('organization_id', '')
-    query = {"organization_id": org_id, "deleted_at": None}
-    if status:
-        query["status"] = status
-    if search:
-        query["$or"] = [
-            {"nome": {"$regex": search, "$options": "i"}},
-            {"codigo": {"$regex": search, "$options": "i"}},
-        ]
-    docs = await db.procedimentos.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return docs
+    catalog = await build_procedure_catalog(
+        db,
+        org_id,
+        user,
+        status=status,
+        search=search,
+    )
+    # Preserve the historical array response for existing API consumers.
+    return catalog if include_meta else catalog["items"]
 
 
 @router.post("/procedimentos")
@@ -111,10 +127,16 @@ async def create_procedimento(data: dict, user: Dict = Depends(get_current_user)
 
 @router.get("/procedimentos/{proc_id}")
 async def get_procedimento(proc_id: str, user: Dict = Depends(get_current_user)):
-    doc = await db.procedimentos.find_one({"id": proc_id, "deleted_at": None}, {"_id": 0})
+    _require_procedure_reader(user)
+    catalog = await build_procedure_catalog(
+        db,
+        user.get('organization_id', ''),
+        user,
+        status="todos",
+    )
+    doc = next((item for item in catalog["items"] if item.get("id") == proc_id), None)
     if not doc:
         raise HTTPException(status_code=404, detail="Procedimento não encontrado")
-    verify_org_access(user, doc, "Procedimento")
     return doc
 
 
@@ -180,6 +202,49 @@ async def update_procedimento(proc_id: str, data: dict, user: Dict = Depends(get
     return updated
 
 
+@router.patch("/procedimentos/{proc_id}/status")
+async def change_legacy_procedure_status(proc_id: str, data: dict, user: Dict = Depends(get_current_user)):
+    """Change a legacy procedure status without duplicating or deleting its history."""
+    check_write_permission(user, ['admin', 'pcm', 'master'])
+    org_id = user.get('organization_id', '')
+    doc = await db.procedimentos.find_one({
+        "id": proc_id,
+        "organization_id": org_id,
+        "deleted_at": None,
+    })
+    if not doc:
+        raise HTTPException(status_code=404, detail="Procedimento não encontrado")
+
+    new_status = data.get("status")
+    if new_status not in {"rascunho", "aprovado", "inativo"}:
+        raise HTTPException(status_code=400, detail="Status inválido")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.procedimentos.update_one(
+        {"id": proc_id, "organization_id": org_id},
+        {"$set": {
+            "status": new_status,
+            "updated_at": now,
+            "updated_by": user.get('id', ''),
+        }},
+    )
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "organization_id": org_id,
+        "user_id": user.get('id', ''),
+        "user_name": user.get('nome', ''),
+        "action": "status_change",
+        "entity_type": "procedimento",
+        "entity_id": proc_id,
+        "details": {
+            "status_anterior": doc.get("status"),
+            "status_novo": new_status,
+        },
+        "created_at": now,
+    })
+    return {"status": new_status, "previous": doc.get("status")}
+
+
 @router.delete("/procedimentos/{proc_id}")
 async def delete_procedimento(proc_id: str, user: Dict = Depends(get_current_user)):
     check_write_permission(user, ['admin', 'pcm', 'master'])
@@ -187,6 +252,20 @@ async def delete_procedimento(proc_id: str, user: Dict = Depends(get_current_use
     if not doc:
         raise HTTPException(status_code=404, detail="Procedimento não encontrado")
     verify_org_access(user, doc, "Procedimento")
+
+    used_by_os = await db.ordens_servico.find_one({
+        "organization_id": user.get('organization_id', ''),
+        "procedimento_id": proc_id,
+    })
+    used_by_execution = await db.procedimento_execucoes.find_one({
+        "organization_id": user.get('organization_id', ''),
+        "procedimento_id": proc_id,
+    })
+    if used_by_os or used_by_execution or doc.get("status") == "aprovado":
+        raise HTTPException(
+            status_code=409,
+            detail="Procedimento aprovado ou utilizado não pode ser excluído. Altere o status para Inativo.",
+        )
 
     await db.procedimentos.update_one(
         {"id": proc_id},
@@ -213,6 +292,7 @@ async def delete_procedimento(proc_id: str, user: Dict = Depends(get_current_use
 @router.get("/ordens-servico/{os_id}/procedimento-execucao")
 async def get_procedimento_execucao(os_id: str, user: Dict = Depends(get_current_user)):
     """Get procedure execution state for a work order."""
+    _require_procedure_reader(user)
     os_doc = await db.ordens_servico.find_one({"id": os_id, "deleted_at": None})
     if not os_doc:
         raise HTTPException(status_code=404, detail="OS não encontrada")
@@ -222,7 +302,7 @@ async def get_procedimento_execucao(os_id: str, user: Dict = Depends(get_current
     if not proc_id:
         return {"procedimento": None, "execucao": None}
 
-    proc = await db.procedimentos.find_one({"id": proc_id, "deleted_at": None}, {"_id": 0})
+    proc = await find_procedure(db, proc_id, user.get('organization_id', ''), user)
     if not proc:
         return {"procedimento": None, "execucao": None}
 
@@ -313,10 +393,9 @@ async def vincular_procedimento(os_id: str, data: dict, user: Dict = Depends(get
     proc_id = data.get('procedimento_id')  # None to unlink
 
     if proc_id:
-        proc = await db.procedimentos.find_one({"id": proc_id, "deleted_at": None})
+        proc = await find_active_procedure(db, proc_id, user.get('organization_id', ''), user)
         if not proc:
             raise HTTPException(status_code=404, detail="Procedimento não encontrado")
-        verify_org_access(user, proc, "Procedimento")
 
     now = datetime.now(timezone.utc).isoformat()
     old_proc_id = os_doc.get('procedimento_id')
@@ -344,9 +423,15 @@ async def vincular_procedimento(os_id: str, data: dict, user: Dict = Depends(get
 @router.get("/procedimentos-select")
 async def list_procedimentos_select(user: Dict = Depends(get_current_user)):
     """Light list for select dropdowns — only approved procedures."""
+    _require_procedure_reader(user)
     org_id = user.get('organization_id', '')
-    docs = await db.procedimentos.find(
-        {"organization_id": org_id, "status": "aprovado", "deleted_at": None},
-        {"_id": 0, "id": 1, "codigo": 1, "nome": 1, "revisao": 1, "tempo_estimado_minutos": 1}
-    ).sort("codigo", 1).to_list(200)
-    return docs
+    catalog = await build_procedure_catalog(db, org_id, user)
+    docs = [{
+        "id": item.get("id"),
+        "codigo": item.get("codigo"),
+        "nome": item.get("nome"),
+        "revisao": item.get("revisao"),
+        "tempo_estimado_minutos": item.get("tempo_estimado_minutos"),
+        "source": item.get("source"),
+    } for item in catalog["items"]]
+    return sorted(docs, key=lambda item: (item.get("codigo") or "", item.get("nome") or ""))

@@ -3950,7 +3950,7 @@ function App() {
             <Route path="/config/documentos" element={<ProtectedRoute allow={['master','admin','pcm']}><AppLayout><DocConfigPage /></AppLayout></ProtectedRoute>} />
             <Route path="/config/construtor" element={<ProtectedRoute allow={['master','admin']}><AppLayout><LayoutBuilderPage /></AppLayout></ProtectedRoute>} />
             <Route path="/biblioteca" element={<ProtectedRoute><AppLayout><BibliotecaCorporativaPage /></AppLayout></ProtectedRoute>} />
-            <Route path="/procedimentos" element={<ProtectedRoute allow={['master','admin','pcm','supervisor']}><AppLayout><ProcedimentosPage /></AppLayout></ProtectedRoute>} />
+            <Route path="/procedimentos" element={<ProtectedRoute allow={ROLES_EXCEPT_VIEWER}><AppLayout><ProcedimentosPage /></AppLayout></ProtectedRoute>} />
             <Route path="/admin/auditoria" element={<ProtectedRoute allow={['master','admin','gerente','supervisor']}><AppLayout><AuditoriaPage /></AppLayout></ProtectedRoute>} />
             <Route path="/setores" element={<ProtectedRoute><AppLayout><SetoresPage /></AppLayout></ProtectedRoute>} />
             <Route path="/plantas" element={<ProtectedRoute><AppLayout><UnidadesPage /></AppLayout></ProtectedRoute>} />
@@ -3977,4 +3977,3 @@ function App() {
 }
 
 export default App;
-

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Save, Trash2, Search, Filter, History, Eye, Shield, FileText, ChevronLeft, ChevronRight, RotateCcw, Archive, Send, Edit, Upload, Download, X } from "lucide-react";
 import { api, useAuth, safeErrorMsg } from "../lib/api";
 import {
@@ -39,6 +40,7 @@ const DISCIPLINES = ['mecanica', 'eletrica', 'instrumentacao', 'civil', 'produca
 // ===== MAIN COMPONENT =====
 const BibliotecaCorporativaPage = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -52,6 +54,7 @@ const BibliotecaCorporativaPage = () => {
   const [versionItem, setVersionItem] = useState(null);
   const [stats, setStats] = useState(null);
   const canEdit = ['master', 'admin', 'pcm'].includes(user?.role);
+  const clearRequestedAction = useCallback(() => setSearchParams({}, { replace: true }), [setSearchParams]);
 
   const fetchDocs = useCallback(async () => {
     setLoading(true);
@@ -75,6 +78,40 @@ const BibliotecaCorporativaPage = () => {
   }, [page, search, filters]);
 
   useEffect(() => { fetchDocs(); }, [fetchDocs]);
+
+  useEffect(() => {
+    const requestedNew = searchParams.get('new');
+    const requestedEdit = searchParams.get('edit');
+    const requestedView = searchParams.get('view');
+
+    if (requestedNew === 'procedure' && canEdit) {
+      setEditItem(null);
+      setShowForm(true);
+      return;
+    }
+
+    const requestedId = requestedEdit || requestedView;
+    if (!requestedId) return;
+
+    let active = true;
+    api.get(`/documentos-corporativos/${requestedId}`)
+      .then(response => {
+        if (!active) return;
+        if (requestedEdit && canEdit) {
+          setEditItem(response.data);
+          setShowForm(true);
+        } else {
+          setViewItem(response.data);
+        }
+      })
+      .catch(error => {
+        if (active) {
+          toast.error(safeErrorMsg(error, 'Documento não encontrado'));
+          clearRequestedAction();
+        }
+      });
+    return () => { active = false; };
+  }, [canEdit, clearRequestedAction, searchParams]);
 
   const handleDelete = async (id, title) => {
     if (!window.confirm(`Excluir "${title}"?\nEsta ação pode ser revertida.`)) return;
@@ -165,7 +202,7 @@ const BibliotecaCorporativaPage = () => {
                   {canEdit && doc.status === 'rascunho' && <button onClick={() => handleStatusChange(doc.id, 'publicado', 'Publicação')} className="p-1.5 text-slate-500 hover:text-emerald-400" title="Publicar"><Send size={14} /></button>}
                   {canEdit && doc.status === 'publicado' && <button onClick={() => handleStatusChange(doc.id, 'arquivado', 'Arquivamento')} className="p-1.5 text-slate-500 hover:text-blue-400" title="Arquivar"><Archive size={14} /></button>}
                   {canEdit && <button onClick={() => { setEditItem(doc); setShowForm(true); }} className="p-1.5 text-slate-500 hover:text-blue-400" title="Editar"><Edit size={14} /></button>}
-                  {canEdit && <button onClick={() => handleDelete(doc.id, doc.title)} className="p-1.5 text-slate-500 hover:text-red-400" title="Excluir"><Trash2 size={14} /></button>}
+                  {canEdit && doc.status === 'rascunho' && <button onClick={() => handleDelete(doc.id, doc.title)} className="p-1.5 text-slate-500 hover:text-red-400" title="Excluir rascunho"><Trash2 size={14} /></button>}
                 </div>
               </div>
             );
@@ -183,8 +220,8 @@ const BibliotecaCorporativaPage = () => {
       )}
 
       {/* Modals */}
-      {showForm && <DocForm item={editItem} onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); fetchDocs(); }} />}
-      {viewItem && <DocViewer doc={viewItem} onClose={() => setViewItem(null)} onEdit={canEdit ? () => { setEditItem(viewItem); setViewItem(null); setShowForm(true); } : null} />}
+      {showForm && <DocForm item={editItem} onClose={() => { setShowForm(false); clearRequestedAction(); }} onSuccess={() => { setShowForm(false); clearRequestedAction(); fetchDocs(); }} />}
+      {viewItem && <DocViewer doc={viewItem} onClose={() => { setViewItem(null); clearRequestedAction(); }} onEdit={canEdit ? () => { setEditItem(viewItem); setViewItem(null); setShowForm(true); } : null} />}
       {versionItem && <VersionModal docId={versionItem.id} docTitle={versionItem.title} onClose={() => setVersionItem(null)} onRestore={fetchDocs} canRestore={canEdit} />}
     </PageContainer>
   );

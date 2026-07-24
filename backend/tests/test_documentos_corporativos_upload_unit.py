@@ -76,3 +76,54 @@ async def test_upload_registers_private_file_for_document_organization(monkeypat
     assert args[1]["$set"]["document_id"] == "doc-1"
     assert args[1]["$set"]["is_public"] is False
     assert kwargs["upsert"] is True
+
+
+@pytest.mark.asyncio
+async def test_published_document_must_be_archived_instead_of_deleted(monkeypatch):
+    document = {
+        "id": "doc-1",
+        "organization_id": "org-1",
+        "status": "publicado",
+        "deleted_at": None,
+    }
+    fake_db = SimpleNamespace(
+        documentos_corporativos=FakeCollection(find_result=document),
+    )
+    monkeypatch.setattr(route, "db", fake_db)
+
+    with pytest.raises(route.HTTPException) as error:
+        await route.delete_documento(
+            "doc-1",
+            {"id": "user-1", "role": "admin", "organization_id": "org-1"},
+        )
+
+    assert error.value.status_code == 409
+    assert "Arquive" in error.value.detail
+    assert fake_db.documentos_corporativos.updates == []
+
+
+@pytest.mark.asyncio
+async def test_used_draft_cannot_be_deleted(monkeypatch):
+    document = {
+        "id": "doc-1",
+        "organization_id": "org-1",
+        "status": "rascunho",
+        "deleted_at": None,
+    }
+    fake_db = SimpleNamespace(
+        documentos_corporativos=FakeCollection(find_result=document),
+        ordens_servico=FakeCollection(find_result={"id": "os-1"}),
+        confirmacoes_leitura=FakeCollection(find_result=None),
+        procedimento_execucoes=FakeCollection(find_result=None),
+    )
+    monkeypatch.setattr(route, "db", fake_db)
+
+    with pytest.raises(route.HTTPException) as error:
+        await route.delete_documento(
+            "doc-1",
+            {"id": "user-1", "role": "admin", "organization_id": "org-1"},
+        )
+
+    assert error.value.status_code == 409
+    assert "utilizado" in error.value.detail
+    assert fake_db.documentos_corporativos.updates == []

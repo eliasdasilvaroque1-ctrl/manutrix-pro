@@ -1,22 +1,55 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth, api } from "../lib/api";
 import { normalizeError } from "../lib/constants";
+import { downloadCorporateDocumentFile } from "../lib/corporateDocuments";
+import { emptyProcedureTotals, normalizeProcedureResponse, searchTextFromChange } from "../lib/procedureCatalog";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, Save, X, ChevronDown, ChevronUp, FileText, CheckCircle, Clock, Search, AlertCircle } from "lucide-react";
+import { Plus, Edit, Trash2, Save, X, ChevronDown, ChevronUp, FileText, Clock, Archive, Shield, Download, Library } from "lucide-react";
 import { PageContainer, PageHeader, SearchInput, EmptyState, Loading, Modal, ConfirmDialog } from "../components/shared";
 
-const STATUS_LABELS = { rascunho: 'Rascunho', aprovado: 'Aprovado', inativo: 'Inativo' };
-const STATUS_COLORS = { rascunho: 'bg-amber-500/20 text-amber-400', aprovado: 'bg-emerald-500/20 text-emerald-400', inativo: 'bg-slate-500/20 text-slate-400' };
+const STATUS_LABELS = {
+  rascunho: 'Rascunho',
+  em_revisao: 'Em revisão',
+  aprovado: 'Aprovado',
+  publicado: 'Publicado',
+  inativo: 'Inativo',
+  arquivado: 'Arquivado',
+  obsoleto: 'Obsoleto',
+};
+const STATUS_COLORS = {
+  rascunho: 'bg-amber-500/20 text-amber-400',
+  em_revisao: 'bg-blue-500/20 text-blue-400',
+  aprovado: 'bg-emerald-500/20 text-emerald-400',
+  publicado: 'bg-emerald-500/20 text-emerald-400',
+  inativo: 'bg-slate-500/20 text-slate-400',
+  arquivado: 'bg-slate-500/20 text-slate-400',
+  obsoleto: 'bg-red-500/20 text-red-400',
+};
+const TYPE_LABELS = {
+  procedimento_operacional: 'Procedimento operacional',
+  procedimento_manutencao: 'Procedimento de manutenção',
+  procedimento_legado: 'Procedimento legado',
+};
+
+const formatDate = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('pt-BR');
+};
 
 const ProcedimentosPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [procs, setProcs] = useState([]);
+  const [totals, setTotals] = useState(emptyProcedureTotals);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [archiving, setArchiving] = useState(null);
   const [expanded, setExpanded] = useState(null);
 
   const canWrite = ['admin', 'pcm', 'master'].includes(user?.role);
@@ -24,10 +57,13 @@ const ProcedimentosPage = () => {
   const fetchProcs = useCallback(async () => {
     try {
       const params = new URLSearchParams();
+      params.set('include_meta', 'true');
       if (search) params.set('search', search);
       if (statusFilter) params.set('status', statusFilter);
       const res = await api.get(`/procedimentos?${params}`);
-      setProcs(res.data);
+      const catalog = normalizeProcedureResponse(res.data);
+      setProcs(catalog.items);
+      setTotals(catalog.totals);
     } catch (e) { toast.error(normalizeError(e)); }
     finally { setLoading(false); }
   }, [search, statusFilter]);
@@ -36,27 +72,62 @@ const ProcedimentosPage = () => {
 
   const handleDelete = async () => {
     try {
-      await api.delete(`/procedimentos/${deleting.id}`);
+      const endpoint = deleting.source === 'biblioteca_corporativa'
+        ? `/documentos-corporativos/${deleting.id}`
+        : `/procedimentos/${deleting.id}`;
+      await api.delete(endpoint);
       toast.success('Procedimento excluído');
       setDeleting(null);
       fetchProcs();
     } catch (e) { toast.error(normalizeError(e)); }
   };
 
+  const handleArchive = async () => {
+    try {
+      if (archiving.source === 'biblioteca_corporativa') {
+        await api.patch(`/documentos-corporativos/${archiving.id}/status`, {
+          status: 'arquivado',
+          motivo: 'Arquivamento pela visão de Procedimentos',
+        });
+      } else {
+        await api.patch(`/procedimentos/${archiving.id}/status`, { status: 'inativo' });
+      }
+      toast.success('Procedimento arquivado');
+      setArchiving(null);
+      fetchProcs();
+    } catch (e) { toast.error(normalizeError(e)); }
+  };
+
+  const handleDownload = async (proc) => {
+    try {
+      await downloadCorporateDocumentFile(proc.file_url, proc.file_name);
+    } catch (e) {
+      toast.error(e?.message || normalizeError(e));
+    }
+  };
+
   if (loading) return <Loading rows={4} />;
 
   return (
     <PageContainer>
-      <PageHeader title="Procedimentos Operacionais" subtitle={`${procs.length} procedimento(s)`}>
-        {canWrite && <button onClick={() => { setEditing(null); setShowForm(true); }} className="btn-primary flex items-center gap-2" data-testid="proc-create-btn"><Plus size={16} /> Novo Procedimento</button>}
+      <PageHeader
+        title="Procedimentos Operacionais"
+        subtitle={`${totals.filtered} exibido(s) • ${totals.published} publicado(s)/ativo(s) • ${totals.archived} arquivado(s)/inativo(s)`}
+      >
+        {canWrite && <button onClick={() => navigate('/biblioteca?new=procedure')} className="btn-primary flex items-center gap-2" data-testid="proc-create-btn"><Plus size={16} /> Novo Procedimento</button>}
       </PageHeader>
 
       <div className="flex flex-wrap gap-3 mb-4" data-testid="proc-filters">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nome ou código..." />
+        <SearchInput value={search} onChange={event => setSearch(searchTextFromChange(event))} placeholder="Buscar título, código, tipo, disciplina, área ou tag..." />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="input-field w-auto text-sm" data-testid="proc-status-filter">
-          <option value="">Todos os status</option>
+          <option value="">Publicados/ativos</option>
+          <option value="todos">Todos os status</option>
           <option value="rascunho">Rascunho</option>
+          <option value="em_revisao">Em revisão</option>
+          <option value="publicado">Publicado/ativo</option>
           <option value="aprovado">Aprovado</option>
+          <option value="arquivado">Arquivado</option>
+          <option value="obsoleto">Obsoleto</option>
           <option value="inativo">Inativo</option>
         </select>
       </div>
@@ -65,55 +136,118 @@ const ProcedimentosPage = () => {
         <EmptyState icon={FileText} title="Nenhum procedimento encontrado" subtitle={canWrite ? "Crie o primeiro procedimento operacional" : "Nenhum procedimento cadastrado"} />
       ) : (
         <div className="space-y-3" data-testid="proc-list">
-          {procs.map(p => (
-            <div key={p.id} className="glass-card overflow-hidden" data-testid={`proc-card-${p.id}`}>
-              <div className="p-4 flex items-center gap-4 cursor-pointer" onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-mono bg-slate-700/50 px-2 py-0.5 rounded">{p.codigo}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[p.status] || ''}`}>{STATUS_LABELS[p.status] || p.status}</span>
-                    {p.tempo_estimado_minutos && <span className="text-xs text-slate-400 flex items-center gap-1"><Clock size={12} />{p.tempo_estimado_minutos} min</span>}
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-100 truncate">{p.nome}</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Rev. {p.revisao} | v{p.versao} | {(p.etapas || []).length} etapa(s)</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {canWrite && (
-                    <>
-                      <button onClick={e => { e.stopPropagation(); setEditing(p); setShowForm(true); }} className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg" data-testid={`proc-edit-${p.id}`}><Edit size={16} /></button>
-                      <button onClick={e => { e.stopPropagation(); setDeleting(p); }} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg" data-testid={`proc-delete-${p.id}`}><Trash2 size={16} /></button>
-                    </>
-                  )}
-                  {expanded === p.id ? <ChevronUp size={18} className="text-slate-400" /> : <ChevronDown size={18} className="text-slate-400" />}
-                </div>
-              </div>
-              {expanded === p.id && (
-                <div className="border-t border-slate-700/50 p-4 bg-slate-800/30">
-                  {p.descricao && <p className="text-xs text-slate-300 mb-3">{p.descricao}</p>}
-                  {(p.etapas || []).length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Etapas</p>
-                      {p.etapas.map((et, i) => (
-                        <div key={et.id} className="flex items-start gap-3 p-2 rounded-lg bg-slate-700/20">
-                          <span className="text-xs font-bold text-slate-500 mt-0.5 w-6">{et.ordem}.</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-slate-200">{et.titulo} {et.obrigatoria && <span className="text-red-400 text-xs">*</span>}</p>
-                            {et.descricao && <p className="text-xs text-slate-400 mt-0.5">{et.descricao}</p>}
-                          </div>
-                        </div>
-                      ))}
+          {procs.map(p => {
+            const isCorporate = p.source === 'biblioteca_corporativa';
+            const isDraft = p.status === 'rascunho';
+            const isCurrent = ['publicado', 'aprovado'].includes(p.status);
+            const typeLabel = TYPE_LABELS[p.document_type] || p.document_type || 'Procedimento';
+            return (
+              <div key={p.id} className="glass-card overflow-hidden" data-testid={`proc-card-${p.id}`}>
+                <div className="p-4 flex items-center gap-4 cursor-pointer" onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      {p.codigo && <span className="text-xs font-mono bg-slate-700/50 px-2 py-0.5 rounded">{p.codigo}</span>}
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[p.status] || ''}`}>{STATUS_LABELS[p.status] || p.status}</span>
+                      <span className="text-xs text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded">{typeLabel}</span>
+                      {isCorporate && <span className="text-xs text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded flex items-center gap-1"><Library size={11} /> Biblioteca</span>}
+                      {p.safety_document && <span className="text-xs text-amber-400 flex items-center gap-1"><Shield size={12} /> Segurança</span>}
+                      {p.tempo_estimado_minutos && <span className="text-xs text-slate-400 flex items-center gap-1"><Clock size={12} />{p.tempo_estimado_minutos} min</span>}
                     </div>
-                  ) : <p className="text-xs text-slate-500 italic">Nenhuma etapa cadastrada</p>}
-                  {p.observacoes && <p className="text-xs text-slate-400 mt-3 italic">Obs: {p.observacoes}</p>}
+                    <h3 className="text-sm font-semibold text-slate-100 truncate">{p.nome}</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {p.discipline || 'Disciplina não informada'} • Rev. {p.revisao} • v{p.versao}
+                      {!isCorporate && ` • ${(p.etapas || []).length} etapa(s)`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {canWrite && (
+                      <>
+                        <button
+                          onClick={event => {
+                            event.stopPropagation();
+                            if (isCorporate) navigate(`/biblioteca?edit=${p.id}`);
+                            else { setEditing(p); setShowForm(true); }
+                          }}
+                          className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg"
+                          title={isCorporate ? 'Editar na Biblioteca' : 'Editar'}
+                          data-testid={`proc-edit-${p.id}`}
+                        >
+                          <Edit size={16} />
+                        </button>
+                        {isCurrent && (
+                          <button
+                            onClick={event => { event.stopPropagation(); setArchiving(p); }}
+                            className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg"
+                            title="Arquivar"
+                            data-testid={`proc-archive-${p.id}`}
+                          >
+                            <Archive size={16} />
+                          </button>
+                        )}
+                        {isDraft && (
+                          <button
+                            onClick={event => { event.stopPropagation(); setDeleting(p); }}
+                            className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                            title="Excluir rascunho"
+                            data-testid={`proc-delete-${p.id}`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {expanded === p.id ? <ChevronUp size={18} className="text-slate-400" /> : <ChevronDown size={18} className="text-slate-400" />}
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+                {expanded === p.id && (
+                  <div className="border-t border-slate-700/50 p-4 bg-slate-800/30">
+                    {p.descricao && <p className="text-sm text-slate-300 mb-3">{p.descricao}</p>}
+                    {isCorporate ? (
+                      <div className="space-y-3">
+                        {p.content && <div className="text-sm text-slate-300 whitespace-pre-wrap rounded-lg bg-slate-900/30 p-3">{p.content}</div>}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs text-slate-400">
+                          <span>Publicado: {formatDate(p.published_at)}</span>
+                          <span>Última revisão: {formatDate(p.updated_at)}</span>
+                          <span>Responsável: {p.responsavel || '-'}</span>
+                          <span>Áreas/tags: {[...(p.areas || []), ...(p.tags || [])].join(', ') || '-'}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {p.file_url && (
+                            <button onClick={() => handleDownload(p)} className="btn-secondary text-xs flex items-center gap-2" data-testid={`proc-download-${p.id}`}>
+                              <Download size={14} /> {p.file_name || 'Baixar arquivo'}
+                            </button>
+                          )}
+                          <button onClick={() => navigate(`/biblioteca?view=${p.id}`)} className="btn-secondary text-xs flex items-center gap-2">
+                            <Library size={14} /> Abrir na Biblioteca
+                          </button>
+                        </div>
+                      </div>
+                    ) : (p.etapas || []).length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Etapas</p>
+                        {p.etapas.map(et => (
+                          <div key={et.id} className="flex items-start gap-3 p-2 rounded-lg bg-slate-700/20">
+                            <span className="text-xs font-bold text-slate-500 mt-0.5 w-6">{et.ordem}.</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-slate-200">{et.titulo} {et.obrigatoria && <span className="text-red-400 text-xs">*</span>}</p>
+                              {et.descricao && <p className="text-xs text-slate-400 mt-0.5">{et.descricao}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="text-xs text-slate-500 italic">Nenhuma etapa cadastrada</p>}
+                    {p.observacoes && <p className="text-xs text-slate-400 mt-3 italic">Obs: {p.observacoes}</p>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
       {showForm && <ProcedimentoForm proc={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSaved={fetchProcs} />}
-      {deleting && <ConfirmDialog title="Excluir Procedimento?" message={`Tem certeza que deseja excluir "${deleting.nome}"?`} onConfirm={handleDelete} onCancel={() => setDeleting(null)} />}
+      {deleting && <ConfirmDialog title="Excluir rascunho?" message={`Excluir "${deleting.nome}"? A operação só será aceita se não houver utilização.`} onConfirm={handleDelete} onCancel={() => setDeleting(null)} />}
+      {archiving && <ConfirmDialog title="Arquivar procedimento?" message={`Arquivar "${archiving.nome}" preservando versões, vínculos e auditoria?`} onConfirm={handleArchive} onCancel={() => setArchiving(null)} />}
     </PageContainer>
   );
 };
