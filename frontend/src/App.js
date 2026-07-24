@@ -731,6 +731,7 @@ const LoginPage = () => {
   const [showEmpresaDropdown, setShowEmpresaDropdown] = useState(false);
   const { login } = useAuth();
   const { branding, organizations, selectOrg, orgId, loadOrganizations } = useBranding();
+  const safeOrganizations = useMemo(() => (Array.isArray(organizations) ? organizations : []), [organizations]);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -751,8 +752,8 @@ const LoginPage = () => {
     const parts = hostname.split('.');
     const sub = parts.length >= 3 ? parts[0].toLowerCase() : null;
     const isCustomer = sub && sub !== 'www' && sub !== 'app' && !['localhost','127.0.0.1','preview','emergentagent','vercel','railway','netlify'].some(p => hostname.includes(p));
-    if (isCustomer && organizations.length > 0) {
-      const matchOrg = organizations.find(o => (o.subdominio || '').toLowerCase() === sub || (o.nome || '').toLowerCase().includes(sub));
+    if (isCustomer && safeOrganizations.length > 0) {
+      const matchOrg = safeOrganizations.find(o => (o.subdominio || '').toLowerCase() === sub || (o.nome || '').toLowerCase().includes(sub));
       if (matchOrg) {
         selectOrg(matchOrg.id);
         setEmpresaBusca(matchOrg.nome);
@@ -763,7 +764,7 @@ const LoginPage = () => {
     // Then localStorage
     const saved = localStorage.getItem('maintrix_last_org');
     if (saved) {
-      const org = organizations.find(o => o.id === saved);
+      const org = safeOrganizations.find(o => o.id === saved);
       if (org) {
         selectOrg(org.id);
         setEmpresaBusca(org.nome);
@@ -772,12 +773,12 @@ const LoginPage = () => {
       }
     }
     // Single org
-    if (organizations.length === 1) {
-      selectOrg(organizations[0].id);
-      setEmpresaBusca(organizations[0].nome);
+    if (safeOrganizations.length === 1) {
+      selectOrg(safeOrganizations[0].id);
+      setEmpresaBusca(safeOrganizations[0].nome);
       setOrgSource('single');
     }
-  }, [organizations, orgId, selectOrg]);
+  }, [safeOrganizations, orgId, selectOrg]);
 
   const handleSelectEmpresa = (org) => {
     selectOrg(org.id);
@@ -817,7 +818,7 @@ const LoginPage = () => {
     } finally { setAutoOrgLoading(false); }
   };
 
-  const filteredOrgs = organizations.filter(o =>
+  const filteredOrgs = safeOrganizations.filter(o =>
     !empresaBusca || (o.nome || '').toLowerCase().includes(empresaBusca.toLowerCase())
   );
 
@@ -915,7 +916,7 @@ const LoginPage = () => {
                   {orgSource === 'subdomain' ? 'Ambiente' : 'Organização'}
                 </p>
                 <div className="flex items-center gap-3 p-3 rounded-lg border border-surface" style={{ backgroundColor: 'var(--brand-surface)' }}>
-                  {(() => { const selOrg = organizations.find(o => o.id === orgId); return selOrg?.logo_url ? (
+                  {(() => { const selOrg = safeOrganizations.find(o => o.id === orgId); return selOrg?.logo_url ? (
                     <img src={selOrg.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-800 p-0.5" />
                   ) : (
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: branding.cor_primaria }}>

@@ -29,6 +29,14 @@ const SKIP_SUBDOMAIN_PATTERNS = [
   'localhost', '127.0.0.1', 'preview', 'emergentagent', 'vercel', 'railway', 'netlify',
 ];
 
+
+export function normalizeOrganizations(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.organizations)) return payload.organizations;
+  return [];
+}
+
 function isCustomerSubdomain(hostname) {
   const parts = hostname.split('.');
   if (parts.length < 3) return false;
@@ -53,7 +61,7 @@ export const BrandingProvider = ({ children }) => {
   const loadOrganizations = useCallback(async () => {
     try {
       const res = await api.get('/public/organizations');
-      setOrganizations(res.data || []);
+      setOrganizations(normalizeOrganizations(res.data));
     } catch { setOrganizations([]); }
   }, []);
 
