@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Save, Trash2, Search, Filter, History, Eye, Shield, FileText, ChevronLeft, ChevronRight, RotateCcw, Archive, Send, Edit } from "lucide-react";
+import { Plus, Save, Trash2, Search, Filter, History, Eye, Shield, FileText, ChevronLeft, ChevronRight, RotateCcw, Archive, Send, Edit, Upload, Download, X } from "lucide-react";
 import { api, useAuth, safeErrorMsg } from "../lib/api";
+import {
+  CORPORATE_DOCUMENT_ACCEPT,
+  downloadCorporateDocumentFile,
+  formatFileSize,
+  uploadCorporateDocumentFile,
+  validateCorporateDocumentFile,
+} from "../lib/corporateDocuments";
 import { PageContainer, PageHeader, Loading, EmptyState, Modal, FormInput } from "../components/shared";
 import { toast } from "sonner";
 
@@ -213,22 +220,64 @@ const DocForm = ({ item, onClose, onSuccess }) => {
     revision: '', motivo_alteracao: '',
   });
   const [saving, setSaving] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [savedDocId, setSavedDocId] = useState(item?.id || null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const sections = ['Identificação', 'Classificação', 'Aplicabilidade', 'Conteúdo', 'Segurança', 'Vigência', 'Versionamento'];
 
   const handleSave = async () => {
     if (!form.title.trim()) { toast.error('Título obrigatório'); return; }
     setSaving(true);
+    setUploadProgress(0);
+    let documentSaved = false;
     try {
-      if (item?.id) await api.put(`/documentos-corporativos/${item.id}`, form);
-      else await api.post('/documentos-corporativos', form);
-      toast.success(item ? 'Documento atualizado' : 'Documento criado');
+      let docId = savedDocId;
+      if (docId) {
+        await api.put(`/documentos-corporativos/${docId}`, form);
+      } else {
+        const response = await api.post('/documentos-corporativos', form);
+        docId = response.data.id;
+        setSavedDocId(docId);
+      }
+      documentSaved = true;
+
+      if (selectedFile) {
+        await uploadCorporateDocumentFile(docId, selectedFile, setUploadProgress);
+      }
+
+      toast.success(selectedFile
+        ? 'Documento e arquivo salvos'
+        : (item || savedDocId ? 'Documento atualizado' : 'Documento criado'));
       onSuccess();
-    } catch (e) { toast.error(safeErrorMsg(e, 'Erro ao salvar')); }
-    setSaving(false);
+    } catch (e) {
+      toast.error(documentSaved
+        ? `Documento salvo, mas o arquivo não foi enviado: ${safeErrorMsg(e, 'tente novamente')}`
+        : safeErrorMsg(e, 'Erro ao salvar'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const setF = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const selectFile = (file) => {
+    try {
+      validateCorporateDocumentFile(file);
+      setSelectedFile(file);
+      setUploadProgress(0);
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      await downloadCorporateDocumentFile(form.file_url, form.file_name);
+    } catch (e) {
+      toast.error(safeErrorMsg(e, 'Não foi possível baixar o arquivo'));
+    }
+  };
 
   return (
     <Modal isOpen onClose={onClose} title={item ? `Editar: ${item.title}` : 'Novo Documento Corporativo'} size="xl">
@@ -290,9 +339,57 @@ const DocForm = ({ item, onClose, onSuccess }) => {
           <FormInput label="Conteúdo do documento">
             <textarea value={form.content} onChange={e => setF('content', e.target.value)} className="input-industrial w-full px-3 h-40 font-mono text-xs" placeholder="Conteúdo do procedimento, instrução ou norma..." />
           </FormInput>
-          <div className="flex items-center gap-2 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-            <FileText size={16} className="text-slate-500" />
-            <span className="text-xs text-slate-500">Upload de arquivos — disponível na Missão 2</span>
+          <div className="space-y-2">
+            <label
+              className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-600 bg-slate-800/40 p-4 text-center transition-colors hover:border-brand hover:bg-brand/5"
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault();
+                selectFile(e.dataTransfer.files?.[0]);
+              }}
+              data-testid="corporate-document-upload"
+            >
+              <Upload size={22} className="text-brand" />
+              <span className="text-sm text-slate-300">Clique ou arraste um arquivo</span>
+              <span className="text-xs text-slate-500">PDF, DOCX, XLSX, PNG ou JPG — até 25 MB</span>
+              <input
+                type="file"
+                className="hidden"
+                accept={CORPORATE_DOCUMENT_ACCEPT}
+                disabled={saving}
+                onChange={e => {
+                  selectFile(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+                data-testid="corporate-document-file-input"
+              />
+            </label>
+
+            {selectedFile && (
+              <div className="flex items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 p-3" data-testid="selected-document-file">
+                <FileText size={18} className="shrink-0 text-brand" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-slate-200">{selectedFile.name}</p>
+                  <p className="text-xs text-slate-500">{formatFileSize(selectedFile.size)}{saving && uploadProgress > 0 ? ` — ${uploadProgress}%` : ''}</p>
+                </div>
+                <button type="button" onClick={() => setSelectedFile(null)} disabled={saving} className="p-1 text-slate-500 hover:text-red-400" title="Remover arquivo">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
+            {!selectedFile && form.file_url && (
+              <div className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                <FileText size={18} className="shrink-0 text-slate-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-slate-300">{form.file_name || 'Arquivo anexado'}</p>
+                  <p className="text-xs text-slate-500">{item?.file_size ? formatFileSize(item.file_size) : 'Arquivo atual'}</p>
+                </div>
+                <button type="button" onClick={handleDownload} className="flex items-center gap-1 text-xs text-brand hover:text-blue-300">
+                  <Download size={14} /> Baixar
+                </button>
+              </div>
+            )}
           </div>
         </div>}
 
@@ -335,7 +432,7 @@ const DocForm = ({ item, onClose, onSuccess }) => {
         <div className="flex-1" />
         {step < sections.length - 1 && <button onClick={() => setStep(s => s + 1)} className="btn-secondary">Próximo</button>}
         <button onClick={handleSave} disabled={saving} className="btn-primary flex items-center gap-2" data-testid="save-doc-btn">
-          <Save size={16} /> {saving ? 'Salvando...' : 'Salvar'}
+          <Save size={16} /> {saving ? (uploadProgress > 0 ? `Enviando ${uploadProgress}%` : 'Salvando...') : 'Salvar'}
         </button>
       </div>
     </Modal>
@@ -346,6 +443,13 @@ const DocForm = ({ item, onClose, onSuccess }) => {
 const DocViewer = ({ doc, onClose, onEdit }) => {
   const st = STATUS_MAP[doc.status] || STATUS_MAP.rascunho;
   const typeLabel = DOC_TYPES.find(t => t.value === doc.document_type)?.label || doc.document_type;
+  const handleDownload = async () => {
+    try {
+      await downloadCorporateDocumentFile(doc.file_url, doc.file_name);
+    } catch (e) {
+      toast.error(safeErrorMsg(e, 'Não foi possível baixar o arquivo'));
+    }
+  };
   return (
     <Modal isOpen onClose={onClose} title={doc.title} size="xl">
       <div className="max-h-[70vh] overflow-y-auto space-y-4">
@@ -366,6 +470,16 @@ const DocViewer = ({ doc, onClose, onEdit }) => {
         </div>
         {(doc.tags || []).length > 0 && <div className="flex flex-wrap gap-1">{doc.tags.map(t => <span key={t} className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded">{t}</span>)}</div>}
         {doc.content && <div className="bg-slate-900/60 rounded-lg p-4"><pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono">{doc.content}</pre></div>}
+        {doc.file_url && (
+          <button onClick={handleDownload} className="flex w-full items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 p-3 text-left hover:bg-brand/10" data-testid="download-document-file">
+            <FileText size={20} className="shrink-0 text-brand" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm text-slate-200">{doc.file_name || 'Arquivo anexado'}</span>
+              <span className="block text-xs text-slate-500">{doc.file_size ? formatFileSize(doc.file_size) : 'Clique para baixar'}</span>
+            </span>
+            <Download size={18} className="shrink-0 text-brand" />
+          </button>
+        )}
       </div>
       <div className="flex gap-3 mt-4">
         <button onClick={onClose} className="btn-secondary flex-1">Fechar</button>
