@@ -23,8 +23,15 @@ export const safeErrorMsg = (err, fallback = 'Erro ao processar operação') => 
 };
 
 
-export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
-export const API = `${BACKEND_URL}/api`;
+export const resolveApiBaseUrl = (env = process.env) => {
+  const raw = (env.REACT_APP_API_URL || env.REACT_APP_BACKEND_URL || '').trim();
+  if (!raw || raw === 'undefined' || raw === 'null') return '';
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  return withProtocol.replace(/\/+$/, '');
+};
+
+export const BACKEND_URL = resolveApiBaseUrl();
+export const API = BACKEND_URL ? `${BACKEND_URL}/api` : '/api';
 
 // Auth Context
 export const AuthContext = createContext(null);
