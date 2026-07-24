@@ -718,7 +718,7 @@ const ModalNovaOS = ({ isOpen, onClose, onSuccess, ativos = [], tecnicos = [], e
 // ============== PAGES ==============
 
 // Login
-const LoginPage = () => {
+export const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -731,6 +731,7 @@ const LoginPage = () => {
   const [showEmpresaDropdown, setShowEmpresaDropdown] = useState(false);
   const { login } = useAuth();
   const { branding, organizations, selectOrg, orgId, loadOrganizations } = useBranding();
+  const safeOrganizations = useMemo(() => (Array.isArray(organizations) ? organizations : []), [organizations]);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -751,8 +752,8 @@ const LoginPage = () => {
     const parts = hostname.split('.');
     const sub = parts.length >= 3 ? parts[0].toLowerCase() : null;
     const isCustomer = sub && sub !== 'www' && sub !== 'app' && !['localhost','127.0.0.1','preview','emergentagent','vercel','railway','netlify'].some(p => hostname.includes(p));
-    if (isCustomer && organizations.length > 0) {
-      const matchOrg = organizations.find(o => (o.subdominio || '').toLowerCase() === sub || (o.nome || '').toLowerCase().includes(sub));
+    if (isCustomer && safeOrganizations.length > 0) {
+      const matchOrg = safeOrganizations.find(o => (o.subdominio || '').toLowerCase() === sub || (o.nome || '').toLowerCase().includes(sub));
       if (matchOrg) {
         selectOrg(matchOrg.id);
         setEmpresaBusca(matchOrg.nome);
@@ -763,7 +764,7 @@ const LoginPage = () => {
     // Then localStorage
     const saved = localStorage.getItem('maintrix_last_org');
     if (saved) {
-      const org = organizations.find(o => o.id === saved);
+      const org = safeOrganizations.find(o => o.id === saved);
       if (org) {
         selectOrg(org.id);
         setEmpresaBusca(org.nome);
@@ -772,12 +773,12 @@ const LoginPage = () => {
       }
     }
     // Single org
-    if (organizations.length === 1) {
-      selectOrg(organizations[0].id);
-      setEmpresaBusca(organizations[0].nome);
+    if (safeOrganizations.length === 1) {
+      selectOrg(safeOrganizations[0].id);
+      setEmpresaBusca(safeOrganizations[0].nome);
       setOrgSource('single');
     }
-  }, [organizations, orgId, selectOrg]);
+  }, [safeOrganizations, orgId, selectOrg]);
 
   const handleSelectEmpresa = (org) => {
     selectOrg(org.id);
@@ -801,7 +802,7 @@ const LoginPage = () => {
     if (!email || orgId) return;
     setAutoOrgLoading(true);
     try {
-      const res = await axios.post(`${API}/auth/lookup-email`, { email: email.trim() });
+      const res = await api.post(`/auth/lookup-email`, { email: email.trim() });
       if (res.data.is_master) {
         setIsMasterUser(true);
         setShowOrgSelector(true);
@@ -817,7 +818,7 @@ const LoginPage = () => {
     } finally { setAutoOrgLoading(false); }
   };
 
-  const filteredOrgs = organizations.filter(o =>
+  const filteredOrgs = safeOrganizations.filter(o =>
     !empresaBusca || (o.nome || '').toLowerCase().includes(empresaBusca.toLowerCase())
   );
 
@@ -826,7 +827,7 @@ const LoginPage = () => {
     if (!orgId) { toast.error('Selecione uma empresa'); return; }
     setLoading(true);
     try {
-      const response = await axios.post(`${API}/auth/login`, { email, password, organization_id: orgId });
+      const response = await api.post(`/auth/login`, { email, password, organization_id: orgId });
       if (response.data.user?.force_password_change) {
         setTempToken(response.data.access_token);
         setView('forceChange');
@@ -852,7 +853,7 @@ const LoginPage = () => {
     if (!email) { toast.error('Informe seu email'); return; }
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/auth/forgot-password`, { email, organization_id: orgId });
+      const res = await api.post(`/auth/forgot-password`, { email, organization_id: orgId });
       setResetToken(res.data.token || '');
       setView('reset');
       toast.success(res.data.message || 'Token de redefinição gerado!');
@@ -866,7 +867,7 @@ const LoginPage = () => {
     if (newPassword !== confirmPassword) { toast.error('As senhas não coincidem'); return; }
     setLoading(true);
     try {
-      await axios.post(`${API}/auth/reset-password`, { token: resetToken, new_password: newPassword });
+      await api.post(`/auth/reset-password`, { token: resetToken, new_password: newPassword });
       toast.success('Senha redefinida! Faça login.');
       setView('login'); setNewPassword(''); setConfirmPassword('');
     } catch (error) { toast.error(normalizeError(error)); }
@@ -879,7 +880,7 @@ const LoginPage = () => {
     if (newPassword !== confirmPassword) { toast.error('As senhas não coincidem'); return; }
     setLoading(true);
     try {
-      await axios.post(`${API}/auth/change-password`, { new_password: newPassword }, { headers: { Authorization: `Bearer ${tempToken}` } });
+      await api.post(`/auth/change-password`, { new_password: newPassword }, { headers: { Authorization: `Bearer ${tempToken}` } });
       toast.success('Senha alterada! Faça login com a nova senha.');
       setView('login'); setPassword(''); setNewPassword(''); setConfirmPassword('');
     } catch (error) { toast.error(normalizeError(error)); }
@@ -915,7 +916,7 @@ const LoginPage = () => {
                   {orgSource === 'subdomain' ? 'Ambiente' : 'Organização'}
                 </p>
                 <div className="flex items-center gap-3 p-3 rounded-lg border border-surface" style={{ backgroundColor: 'var(--brand-surface)' }}>
-                  {(() => { const selOrg = organizations.find(o => o.id === orgId); return selOrg?.logo_url ? (
+                  {(() => { const selOrg = safeOrganizations.find(o => o.id === orgId); return selOrg?.logo_url ? (
                     <img src={selOrg.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-800 p-0.5" />
                   ) : (
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: branding.cor_primaria }}>
