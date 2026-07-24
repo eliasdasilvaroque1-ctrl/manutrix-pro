@@ -15,6 +15,7 @@ import logging
 import hashlib
 
 from deps import db, get_current_user
+from procedure_catalog import FIELD_ROLES, can_view_document_security, normalized_token
 from routes.doc_config import archive_version
 
 router = APIRouter()
@@ -172,7 +173,7 @@ async def list_documentos(
     query = {"organization_id": org_id, "deleted_at": None}
 
     # Técnico only sees published
-    if role == 'tecnico':
+    if normalized_token(role) in FIELD_ROLES:
         query["status"] = "publicado"
         query["is_active"] = True
 
@@ -186,7 +187,7 @@ async def list_documentos(
         query["category"] = category
     if discipline:
         query["discipline"] = discipline
-    if status and role != 'tecnico':
+    if status and normalized_token(role) not in FIELD_ROLES:
         query["status"] = status
     if safety_document is not None:
         query["safety_document"] = safety_document
@@ -224,8 +225,12 @@ async def get_documento(doc_id: str, user=Depends(get_current_user)):
     if not doc:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
 
-    # Técnico only sees published
-    if role == 'tecnico' and doc.get('status') != 'publicado':
+    # Field users only see current published documents.
+    if normalized_token(role) in FIELD_ROLES and (
+        doc.get('status') != 'publicado' or not doc.get('is_active', True)
+    ):
+        raise HTTPException(status_code=403, detail="Documento não disponível")
+    if not can_view_document_security(doc, user):
         raise HTTPException(status_code=403, detail="Documento não disponível")
 
     return doc
@@ -316,9 +321,21 @@ async def change_status(doc_id: str, body: StatusChange, user=Depends(get_curren
     if body.status == 'publicado' and role == 'pcm':
         pass  # PCM allowed to publish per CTO spec
 
+    now = datetime.now(timezone.utc).isoformat()
+    status_updates = {
+        "status": body.status,
+        "is_active": body.status not in ("arquivado", "obsoleto"),
+        "updated_at": now,
+        "updated_by": user_id,
+    }
+    if body.status == "publicado":
+        status_updates["published_at"] = now
+    if body.status in ("arquivado", "obsoleto"):
+        status_updates["archived_at"] = now
+
     await db.documentos_corporativos.update_one(
         {"id": doc_id, "organization_id": org_id},
-        {"$set": {"status": body.status, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user_id}}
+        {"$set": status_updates},
     )
 
     updated_doc = await db.documentos_corporativos.find_one({"id": doc_id}, {"_id": 0})
@@ -332,12 +349,39 @@ async def change_status(doc_id: str, body: StatusChange, user=Depends(get_curren
 
 @router.delete("/documentos-corporativos/{doc_id}")
 async def delete_documento(doc_id: str, user=Depends(get_current_user)):
-    """Soft-delete a document."""
+    """Soft-delete an unused draft; published/history-bearing docs must be archived."""
     org_id, user_id = _require_editor(user)
 
     existing = await db.documentos_corporativos.find_one({"id": doc_id, "organization_id": org_id, "deleted_at": None})
     if not existing:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    if existing.get("status") != "rascunho":
+        raise HTTPException(
+            status_code=409,
+            detail="Somente rascunhos sem utilização podem ser excluídos. Arquive ou torne obsoleto para preservar a rastreabilidade.",
+        )
+
+    used_by_os = await db.ordens_servico.find_one({
+        "organization_id": org_id,
+        "$or": [
+            {"procedimento_id": doc_id},
+            {"documentos_snapshot.documento_id": doc_id},
+        ],
+    })
+    acknowledged = await db.confirmacoes_leitura.find_one({
+        "organization_id": org_id,
+        "documento_id": doc_id,
+    })
+    executed = await db.procedimento_execucoes.find_one({
+        "organization_id": org_id,
+        "procedimento_id": doc_id,
+    })
+    if used_by_os or acknowledged or executed:
+        raise HTTPException(
+            status_code=409,
+            detail="Documento utilizado não pode ser excluído. Arquive-o para preservar o histórico.",
+        )
 
     await archive_version("documento_corporativo", existing, user_id, "Exclusão")
     await db.documentos_corporativos.update_one(
@@ -625,6 +669,8 @@ async def get_documentos_vinculados(os_id: str, user=Depends(get_current_user)):
     # Filter by applicability
     matched = []
     for doc in all_docs:
+        if not can_view_document_security(doc, user):
+            continue
         score = 0
         app_types = doc.get("applicable_work_order_types", [])
         app_assets = doc.get("applicable_asset_types", [])

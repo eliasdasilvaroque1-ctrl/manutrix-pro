@@ -120,6 +120,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       ...(isOperacional ? [{ icon: Wrench, label: 'Minhas OS', path: '/os' }] : []),
       ...(!isOperacional ? [{ icon: Wrench, label: 'Ordens de Serviço', path: '/os' }] : []),
       { icon: ClipboardCheck, label: 'Inspeções', path: '/inspecoes' },
+      ...(role !== 'visualizador' && role !== 'viewer' ? [{ icon: FileText, label: 'Procedimentos', path: '/procedimentos' }] : []),
       ...(isOperacional ? [{ icon: AlertCircle, label: 'Solicitar Serviço', path: '/solicitar' }] : []),
       ...(isOperacional ? [{ icon: QrCode, label: 'Scanner', path: '/scanner' }] : []),
       ...(isOperacional ? [{ icon: Target, label: 'Ronda', path: '/ronda' }] : []),
@@ -135,7 +136,6 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     ] },
     ...(['admin','master','pcm','supervisor'].includes(role) ? [{ label: 'PCM', items: [
       ...(['admin','master','pcm'].includes(role) ? [{ icon: BookOpen, label: 'Biblioteca Corporativa', path: '/biblioteca' }] : []),
-      ...(['admin','master','pcm'].includes(role) ? [{ icon: FileText, label: 'Procedimentos', path: '/procedimentos' }] : []),
       { icon: FileText, label: 'Dossiê / Pesquisa', path: '/dossie' },
     ] }] : []),
     ...(isAdmin || isPCM || isSupervisor ? [{ label: 'ADMIN', items: [

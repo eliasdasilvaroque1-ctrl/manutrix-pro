@@ -14,6 +14,7 @@ from models import (
     OSCreate, OSUpdate, OSStatus,
     NotificacaoTipo, KanbanMoveBody, ConcluirOSBody
 )
+from procedure_catalog import find_active_procedure
 
 router = APIRouter()
 
@@ -284,10 +285,8 @@ async def create_os(data: OSCreate, user: Dict = Depends(get_current_user)):
 
     # Validate procedimento_id if provided
     if data.procedimento_id:
-        proc = await db.procedimentos.find_one({"id": data.procedimento_id, "deleted_at": None}, {"_id": 0, "organization_id": 1})
+        proc = await find_active_procedure(db, data.procedimento_id, org_id, user)
         if not proc:
-            raise HTTPException(status_code=404, detail="Procedimento não encontrado")
-        if proc.get('organization_id') != org_id:
             raise HTTPException(status_code=404, detail="Procedimento não encontrado")
 
     numero = await generate_os_numero(org_id)
@@ -427,8 +426,8 @@ async def update_os(os_id: str, data: OSUpdate, user: Dict = Depends(get_current
     if update_data.get('procedimento_id'):
         pid = update_data['procedimento_id']
         org_id = existing.get('organization_id', user.get('organization_id', ''))
-        proc = await db.procedimentos.find_one({"id": pid, "deleted_at": None}, {"_id": 0, "organization_id": 1})
-        if not proc or proc.get('organization_id') != org_id:
+        proc = await find_active_procedure(db, pid, org_id, user)
+        if not proc:
             raise HTTPException(status_code=404, detail="Procedimento não encontrado")
 
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
